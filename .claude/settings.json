@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"var d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{var f=JSON.parse(d).tool_input.file_path;if(f)require('child_process').execSync('npx prettier --write --ignore-unknown --ignore-path .prettierignore \\\"'+f+'\\\"',{stdio:'inherit'})})\"",
+            "statusMessage": "Formatting with Prettier..."
+          }
+        ]
+      }
+    ]
+  }
+}

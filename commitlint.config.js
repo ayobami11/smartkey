@@ -16,7 +16,7 @@ module.exports = {
         'ci',
         'chore',
         'revert',
-        'setup'
+        'setup',
       ],
     ],
     'subject-max-length': [2, 'always', 72],
