@@ -22,6 +22,8 @@
 
 # misc
 .DS_Store
+Thumbs.db
+desktop.ini
 *.pem
 
 # debug
@@ -35,6 +37,7 @@ yarn-error.log*
 
 # claude code local settings (personal overrides, not for team sharing)
 .claude/settings.local.json
+CLAUDE.local.md
 
 # vercel
 .vercel
