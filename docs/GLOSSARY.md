@@ -1,0 +1,23 @@
+# Glossary
+
+Terms specific to SmartKey or to UNILAG operations.
+
+| Term                    | Meaning                                                                                                                                                                    |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Senate Building**     | The administrative building at UNILAG that houses departmental offices. Two zones: New Senate and Old Senate.                                                              |
+| **CSO**                 | Chief Security Officer. Senior administrator with system-wide oversight.                                                                                                   |
+| **HOD**                 | Head of Department. Faculty member responsible for authorising key collectors for their department.                                                                        |
+| **Verifier**            | Security personnel on duty at the Senate Building security desk. Two officers per shift, 24/7.                                                                             |
+| **Requester**           | University staff member requesting access to a room key.                                                                                                                   |
+| **Authorisation slot**  | One of three positions per key where an HOD can whitelist a staff member. Maximum 3 authorised collectors per key.                                                         |
+| **Code**                | The 6-digit numeric verification code generated when a request is approved. Valid 10 minutes. Required at the desk to collect a key.                                       |
+| **Risk tier**           | Low / Medium / High. Computed at request time by the rule-based engine. Visible to verifiers.                                                                              |
+| **Shift handover**      | Process at the start of every 8-hour shift where the incoming officer acknowledges all outstanding keys from the previous shift.                                           |
+| **Outstanding key**     | A key that has been issued but not yet returned.                                                                                                                           |
+| **Overdue key**         | An outstanding key past its return deadline (typically 17:00 EOD).                                                                                                         |
+| **Weekend access**      | A separate request type requiring HOD approval before a code can be generated.                                                                                             |
+| **Memo**                | The (formerly paper) document by which an HOD authorised a collector or approved weekend access. In SmartKey, replaced by digital approvals signed by reference signature. |
+| **Signature reference** | The HOD's onboarded signature image, post-Sharp processing. Used for pixel-level matching of subsequent approvals.                                                         |
+| **Anomaly**             | An event flagged by the system as unusual: out-of-hours activity, signature mismatch, etc. Surfaced on the CSO dashboard.                                                  |
+| **Audit log**           | The append-only table of every operationally significant event. The system's evidentiary backbone.                                                                         |
+| **Zone**                | One of two physical areas of the Senate Building: New Senate or Old Senate. Each has its own operational hours and key inventory.                                          |

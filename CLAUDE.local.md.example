@@ -1,0 +1,15 @@
+# Personal Claude overrides
+
+> This file is gitignored. Copy to `CLAUDE.local.md` and add personal preferences that you don't want to share with the team.
+> Claude reads both `CLAUDE.md` (team) and `CLAUDE.local.md` (you) at session start.
+
+## Personal preferences
+
+- Use pnpm exclusively (project uses pnpm; this just reminds Claude not to suggest npm or yarn).
+- When asking me a question, prefer a multiple-choice format over open-ended.
+- Always show me the plan before writing code. Default to plan mode.
+
+## Local environment
+
+- Supabase is running on http://localhost:54321.
+- Dev server defaults to port 3000.

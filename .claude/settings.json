@@ -1,4 +1,35 @@
 {
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(npm install)",
+      "Bash(npm run dev)",
+      "Bash(npm run build)",
+      "Bash(npm test)",
+      "Bash(npm run test:e2e)",
+      "Bash(npm run test:e2e:headed)",
+      "Bash(npm run lint)",
+      "Bash(npm run lint:fix)",
+      "Bash(npm run typecheck)",
+      "Bash(npm run format)",
+      "Bash(npm run db:migrate)",
+      "Bash(npm run db:reset)",
+      "Bash(npm run design:lint)",
+      "Bash(npm run design:export)",
+      "Bash(npx shadcn@latest add *)",
+      "Bash(npx @google/design.md *)",
+      "Bash(git status)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git branch *)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(git push --force *)",
+      "Bash(git reset --hard *)",
+      "Bash(supabase db reset)"
+    ]
+  },
   "hooks": {
     "PostToolUse": [
       {
