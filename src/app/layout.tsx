@@ -4,6 +4,8 @@ import './globals.css';
 import { cn } from '@/lib/utils';
 import { QueryProvider } from '../providers/query-provider';
 
+import { TooltipProvider } from '@/components/ui/tooltip';
+
 const dmSans = DM_Sans({
   subsets: ['latin'],
   variable: '--font-sans',
@@ -42,7 +44,9 @@ export default function RootLayout({
       )}
     >
       <body className="min-h-full flex flex-col">
-        <QueryProvider>{children}</QueryProvider>
+        <TooltipProvider>
+          <QueryProvider>{children}</QueryProvider>
+        </TooltipProvider>
       </body>
     </html>
   );
