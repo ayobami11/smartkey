@@ -84,7 +84,7 @@ const Toggle = ({
       defaultChecked={defaultChecked}
       className="peer sr-only"
     />
-    <div className="peer h-6 w-11 rounded-full bg-muted after:absolute after:start-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition-all after:content-[''] peer-checked:bg-primary peer-checked:after:translate-x-full peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ring" />
+    <div className="peer h-6 w-11 rounded-full bg-muted after:absolute after:inset-s-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition-all after:content-[''] peer-checked:bg-primary peer-checked:after:translate-x-full peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ring" />
   </label>
 );
 
@@ -493,7 +493,7 @@ export default function SettingsPage() {
                 {(['System', 'Light', 'Dark'] as const).map((theme, idx) => (
                   <label
                     key={theme}
-                    className="flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm has-[:checked]:border-primary has-[:checked]:bg-primary/10"
+                    className="flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm has-checked:border-primary has-checked:bg-primary/10"
                   >
                     <input
                       type="radio"
