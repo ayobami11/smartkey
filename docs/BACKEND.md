@@ -506,7 +506,34 @@ Backend development is organized into five Agile sprints, each producing a worki
 | Sprint 4   | LLM Integration & Signature Verification | Gemini API call + template fallback; sharp + pixelmatch verification module; signature storage pipeline                           | Gemini output quality reviewed; pixelmatch threshold calibrated with real HOD signature samples    |
 | Sprint 5   | CSO Dashboard & Background Jobs          | Building Pulse Realtime subscriptions; overdue check Edge Function; daily shift summary Edge Function; full audit log API         | End-to-end CSO workflow tested; Edge Function cron timing verified; performance metrics captured   |
 
-# 14\. Conclusion
+# 14\. Implementation Status
+
+Track progress here after every merged PR. Update the status column; link the PR.
+
+| Component | Status | PR |
+| --- | --- | --- |
+| Supabase project setup + packages | ⬜ Not started | — |
+| Database schema (all 11 tables) | ⬜ Not started | — |
+| RLS policies | ⬜ Not started | — |
+| Postgres RPCs (10 functions) | ⬜ Not started | — |
+| Supabase client utilities + logger + audit writer | ⬜ Not started | — |
+| Auth middleware (role gating) | ⬜ Not started | — |
+| Auth API routes (login, OTP, register, activate) | ⬜ Not started | — |
+| Request management API routes | ⬜ Not started | — |
+| Key transaction + admin API routes | ⬜ Not started | — |
+| Supabase Realtime subscriptions | ⬜ Not started | — |
+| Rule-based risk scoring engine + unit tests | ⬜ Not started | — |
+| Risk tier UI (RiskTierBadge, RiskFactorPopover) | ⬜ Not started | — |
+| Gemini shift report generation | ⬜ Not started | — |
+| Signature verification (Sharp + Pixelmatch) | ⬜ Not started | — |
+| Supabase Storage (photos, signatures, letters) | ⬜ Not started | — |
+| Shift handover + incident + report API routes | ⬜ Not started | — |
+| Edge Functions (overdue check + daily summary) | ⬜ Not started | — |
+| CI/CD pipeline (GitHub Actions) | ⬜ Not started | — |
+
+Statuses: `⬜ Not started` → `🔄 In progress` → `✅ Done`
+
+# 15\. Conclusion
 
 The SmartKey backend is designed as a coherent, purposefully assembled system in which every component addresses a specific, demonstrated requirement of the university access-control domain. The architecture collapses what would typically require five or more separate services - a backend server, a database, an authentication service, a file storage service, and a WebSocket server - into two managed platforms: Next.js on Vercel and Supabase Cloud.
 

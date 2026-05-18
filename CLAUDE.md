@@ -156,4 +156,5 @@ Six domain skills in `.claude/skills/` load automatically when the task matches:
 - Testing strategy: @docs/TESTING.md
 - Screen checklist for new screens: @docs/SCREEN_CHECKLIST.md
 - Glossary of project terms: @docs/GLOSSARY.md
+- GitHub workflow (labels, milestones, issues, branches, PR template): @docs/GITHUB.md
 - Architectural decision records: @docs/adr/

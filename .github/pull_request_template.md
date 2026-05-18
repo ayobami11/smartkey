@@ -1,13 +1,32 @@
-What this PR does:
+## Summary
+<!-- One sentence: what this PR delivers. -->
 
-Why we need it:
+## Related issue
+Closes #
 
-Which issue(s) this PR fixes:
+## Milestone
+<!-- M1 Foundation / M2 Request Workflow / M3 AI Risk / M4 LLM+Sig / M5 CSO+Jobs -->
 
-Fixes #
+## Changes
+<!-- Mirror the issue checklist. Cross off what's done. -->
+- [ ]
+- [ ]
 
-Does this PR introduce a user-facing change?:
+## How to verify
+<!-- Exact steps: commands to run, browser actions, expected output. -->
+```bash
+npm run typecheck && npm run lint && npm run test
+```
 
-How are users affected by this change:
-Is this breaking change:
-How to migrate (if breaking change):
+## Docs updated
+- [ ] `docs/BACKEND.md` §14 status table updated
+- [ ] `docs/CHANGELOG.md` entry added
+
+## Checklist
+- [ ] `npm run typecheck` passes
+- [ ] `npm run lint` passes
+- [ ] `npm run test` passes (if unit tests exist for this change)
+- [ ] All routes return `{ data, error, status }` envelope
+- [ ] No `console.log` — uses `src/lib/logger.ts`
+- [ ] Mutations go through an RPC (no raw `.from().update()` for audit-triggering ops)
+- [ ] No stack traces or Supabase error messages in response bodies
