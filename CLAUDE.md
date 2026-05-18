@@ -147,6 +147,7 @@ Six domain skills in `.claude/skills/` load automatically when the task matches:
 
 - Domain and product context: @docs/PRODUCT.md
 - Architecture decisions: @docs/ARCHITECTURE.md
+- Full backend system design (API routes, RPCs, AI, auth, jobs): @docs/BACKEND.md
 - Design system: @design-system/DESIGN.md and @design-system/screens.md
 - Per-screen specs and prompt templates: @design-system/prompts/README.md
 - Database schema: @docs/DATABASE.md
