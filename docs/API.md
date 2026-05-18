@@ -1,0 +1,581 @@
+# SmartKey — API Route Catalogue
+
+This file is the single reference for every server-side route in SmartKey. It mirrors what `design-system/screens.md` does for UI screens: a spec-level view of what exists, who can call it, what it expects, and what it returns — distinct from the implementation in `src/app/api/`.
+
+**Keep this file up to date on every route addition or change.**
+
+---
+
+## How to read this file
+
+Each route entry shows:
+
+- **Method + path** — the HTTP verb and URL.
+- **File** — the `route.ts` that implements it under `src/app/api/`.
+- **Roles** — which roles are permitted (`CSO` | `HOD` | `VERIFIER` | `REQUESTER` | `ALL` | `SYSTEM`).
+- **Request** — required body fields with their Zod-equivalent types.
+- **Response** — the `data` payload on success.
+- **Errors** — expected non-200 codes and the conditions that trigger them.
+- **RPC** — the Postgres function called for mutations (see `docs/DATABASE.md`).
+
+---
+
+## Response envelope
+
+Every route returns this shape. The status field mirrors the HTTP status code.
+
+```typescript
+type ApiResponse<T> =
+  | { data: T; error: null; status: number }
+  | { data: null; error: string; status: number }
+```
+
+Error strings are user-facing. Stack traces and Supabase error messages never appear in the response body — they are logged server-side with a correlation reference that is included in the error string.
+
+---
+
+## Auth conventions
+
+- All routes except `/api/auth/login` and `/api/auth/reset-password` require a valid Supabase session JWT (verified via `getUser()`, never `getSession()`).
+- Role is read from `profiles.role` after the session is confirmed, not from the JWT claim alone.
+- RLS is the authoritative enforcement layer; route-level role checks are defence-in-depth.
+- The service-role key is used only in Edge Functions, never in browser-reachable routes.
+
+---
+
+## 1. Authentication
+
+### POST /api/auth/login
+**File**: `src/app/api/auth/login/route.ts`
+**Roles**: ALL (unauthenticated)
+
+| Field | Type | Required |
+|---|---|---|
+| `email` | `string` (email) | yes |
+| `password` | `string` | yes |
+
+**Response `data`**:
+```json
+{ "session": "<jwt>", "role": "VERIFIER", "mfa_required": true }
+```
+If `mfa_required` is `true`, the client must complete `/api/auth/verify-otp` before the session is usable. Supabase Auth handles OTP delivery.
+
+**Errors**: `401` invalid credentials · `422` schema validation
+
+---
+
+### POST /api/auth/verify-otp
+**File**: `src/app/api/auth/verify-otp/route.ts`
+**Roles**: HOD, VERIFIER, REQUESTER (new device)
+
+| Field | Type | Required |
+|---|---|---|
+| `otp` | `string` (6 digits) | yes |
+
+**Response `data`**: `{ "session": "<jwt>" }` — full session after MFA.
+
+**Errors**: `401` invalid or expired OTP · `422` schema validation
+
+---
+
+### POST /api/auth/register
+**File**: `src/app/api/auth/register/route.ts`
+**Roles**: REQUESTER (invite link only)
+
+Completes requester registration. Token from the invite link is validated before any write.
+
+| Field | Type | Required |
+|---|---|---|
+| `token` | `string` | yes |
+| `password` | `string` (min 12, mixed, symbol) | yes |
+| `passport_photo` | `File` (image) | yes |
+
+**Response `data`**: `{ "profile_id": "<uuid>" }`
+
+**Errors**: `400` expired/invalid token · `422` weak password or missing photo
+
+---
+
+### POST /api/auth/activate-hod
+**File**: `src/app/api/auth/activate-hod/route.ts`
+**Roles**: HOD (invite link only)
+
+One-time HOD onboarding. Validates token, sets password, stores signature and stamp references, enables MFA.
+
+| Field | Type | Required |
+|---|---|---|
+| `token` | `string` | yes |
+| `password` | `string` | yes |
+| `signature` | `File` (image) | yes |
+| `stamp` | `File` (image) | yes |
+
+**Response `data`**: `{ "profile_id": "<uuid>", "redirect": "/hod" }`
+
+**Errors**: `400` invalid token · `422` validation · `413` image too large
+
+---
+
+### POST /api/auth/logout
+**File**: `src/app/api/auth/logout/route.ts`
+**Roles**: ALL
+
+No request body. Invalidates the current Supabase session.
+
+**Response `data`**: `null`
+
+---
+
+### POST /api/auth/reset-password
+**File**: `src/app/api/auth/reset-password/route.ts`
+**Roles**: ALL (unauthenticated)
+
+| Field | Type | Required |
+|---|---|---|
+| `email` | `string` (email) | yes |
+
+Triggers a Supabase Auth password-reset email. Always returns 200 (no email enumeration).
+
+**Response `data`**: `null`
+
+---
+
+## 2. Requests
+
+### POST /api/requests/submit
+**File**: `src/app/api/requests/submit/route.ts`
+**Roles**: REQUESTER
+**RPC**: `create_request(key_id, return_time, type, weekend_date?)`
+
+| Field | Type | Required |
+|---|---|---|
+| `key_id` | `string` (uuid) | yes |
+| `type` | `'WEEKDAY' \| 'WEEKEND'` | yes |
+| `return_deadline` | `string` (ISO timestamptz) | yes |
+| `weekend_date` | `string` (ISO date) | WEEKEND only |
+
+The RPC runs the risk engine, generates the code, and writes the audit entry atomically.
+
+**Response `data`**:
+```json
+{ "request_id": "<uuid>", "code": "123456", "code_expires_at": "<iso>", "risk_tier": "LOW" }
+```
+
+**Errors**: `403` requester not authorised for this key · `409` active request already exists for this key · `422` outside operational hours (weekend requests) · `500` RPC failure
+
+---
+
+### GET /api/requests/my
+**File**: `src/app/api/requests/my/route.ts`
+**Roles**: REQUESTER
+
+**Query params**: `status` (optional, comma-separated enum values) · `limit` · `cursor`
+
+**Response `data`**: `{ "requests": [...], "next_cursor": "<opaque>" }`
+
+---
+
+### GET /api/requests/pending
+**File**: `src/app/api/requests/pending/route.ts`
+**Roles**: HOD
+
+Returns requests for the HOD's department with `status = 'PENDING_HOD'`.
+
+**Response `data`**: `{ "requests": [...] }`
+
+---
+
+### POST /api/requests/hod-decision
+**File**: `src/app/api/requests/hod-decision/route.ts`
+**Roles**: HOD
+**RPC**: `approve_weekend(request_id, hod_id, note?)` or `decline_weekend(request_id, hod_id, note?)`
+
+| Field | Type | Required |
+|---|---|---|
+| `request_id` | `string` (uuid) | yes |
+| `decision` | `'APPROVED' \| 'DECLINED'` | yes |
+| `note` | `string` | no |
+
+For approvals, the RPC runs signature verification. If the mismatch exceeds the threshold, the request is held and a CSO alert is raised — this is not a route-level error.
+
+**Response `data`**: `{ "request_id": "<uuid>", "status": "CODE_ISSUED" }`
+
+**Errors**: `403` request not in HOD's department · `409` already decided · `422` validation
+
+---
+
+### GET /api/requests/cso-queue
+**File**: `src/app/api/requests/cso-queue/route.ts`
+**Roles**: CSO
+
+Returns escalated requests (risk HIGH or restricted-zone) with `status = 'PENDING_CSO'`.
+
+**Response `data`**: `{ "requests": [...] }`
+
+---
+
+### POST /api/requests/cso-decision
+**File**: `src/app/api/requests/cso-decision/route.ts`
+**Roles**: CSO
+
+| Field | Type | Required |
+|---|---|---|
+| `request_id` | `string` (uuid) | yes |
+| `decision` | `'APPROVED' \| 'DECLINED'` | yes |
+| `note` | `string` | no |
+
+**Response `data`**: `{ "request_id": "<uuid>", "status": "CODE_ISSUED" }`
+
+**Errors**: `409` already decided · `422` validation
+
+---
+
+### GET /api/requests/live-queue
+**File**: `src/app/api/requests/live-queue/route.ts`
+**Roles**: VERIFIER
+
+Returns all requests with `status = 'CODE_ISSUED'`, ordered by `created_at` ascending. This is the initial load for the verifier dashboard; ongoing updates come via Supabase Realtime.
+
+**Response `data`**: `{ "requests": [...] }`
+
+---
+
+### POST /api/requests/collect
+**File**: `src/app/api/requests/collect/route.ts`
+**Roles**: VERIFIER
+**RPC**: `issue_key(request_id, verifier_id)`
+
+| Field | Type | Required |
+|---|---|---|
+| `code` | `string` (6 digits) | yes |
+| `verifier_id` | `string` (uuid) | yes |
+
+The RPC looks up the request by code, validates it, marks the key issued, clears the code, and writes the audit entry.
+
+**Response `data`**:
+```json
+{
+  "request_id": "<uuid>",
+  "requester": { "full_name": "Dr. Bakare", "photo_url": "<url>" },
+  "key": { "code": "NS-304", "room_name": "Senate Hall A" },
+  "issued_at": "<iso>"
+}
+```
+
+**Errors**: `404` code not found or expired · `409` key already issued · `422` validation
+
+---
+
+### POST /api/requests/cancel
+**File**: `src/app/api/requests/cancel/route.ts`
+**Roles**: REQUESTER
+
+| Field | Type | Required |
+|---|---|---|
+| `request_id` | `string` (uuid) | yes |
+
+Only cancellable when `status = 'CODE_ISSUED'` (before key collection). Writes audit entry.
+
+**Response `data`**: `{ "request_id": "<uuid>", "status": "CANCELLED" }`
+
+**Errors**: `403` not the requester's own request · `409` request not in cancellable state
+
+---
+
+## 3. Keys
+
+### POST /api/keys/return
+**File**: `src/app/api/keys/return/route.ts`
+**Roles**: VERIFIER
+**RPC**: `return_key(request_id, verifier_id, returner_id?)`
+
+| Field | Type | Required |
+|---|---|---|
+| `request_id` | `string` (uuid) | yes |
+| `verifier_id` | `string` (uuid) | yes |
+| `returner_id` | `string` (uuid) | no — if returner differs from original requester |
+
+**Response `data`**: `{ "request_id": "<uuid>", "returned_at": "<iso>" }`
+
+**Errors**: `404` transaction not found · `409` already returned
+
+---
+
+### GET /api/keys/out
+**File**: `src/app/api/keys/out/route.ts`
+**Roles**: CSO, VERIFIER
+
+Returns all requests with `status = 'KEY_ISSUED'` or `status = 'KEY_OVERDUE'`, joined with requester and key details.
+
+**Query params**: `zone` (`NEW_SENATE | OLD_SENATE`) · `overdue_only` (`boolean`)
+
+**Response `data`**: `{ "outstanding": [...] }`
+
+---
+
+### GET /api/keys/history
+**File**: `src/app/api/keys/history/route.ts`
+**Roles**: CSO, HOD
+
+**Query params**: `key_id` · `requester_id` · `from` (ISO date) · `to` (ISO date) · `limit` · `cursor`
+
+HOD sees only their department's keys (RLS enforced). CSO sees all.
+
+**Response `data`**: `{ "transactions": [...], "next_cursor": "<opaque>" }`
+
+---
+
+### POST /api/keys/mark-lost
+**File**: `src/app/api/keys/mark-lost/route.ts`
+**Roles**: CSO
+
+| Field | Type | Required |
+|---|---|---|
+| `key_id` | `string` (uuid) | yes |
+| `note` | `string` | yes |
+
+Sets key `status = 'RETIRED'`, creates an incident log entry of type `MISSING_KEY`, severity `HIGH`. Writes audit entry.
+
+**Response `data`**: `{ "key_id": "<uuid>", "incident_id": "<uuid>" }`
+
+---
+
+## 4. User Administration
+
+### POST /api/admin/users
+**File**: `src/app/api/admin/users/route.ts`
+**Roles**: CSO
+**RPC**: `provision_user(name, email, role, department_id?)`
+
+| Field | Type | Required |
+|---|---|---|
+| `full_name` | `string` | yes |
+| `institutional_email` | `string` (email) | yes |
+| `role` | `'HOD' \| 'VERIFIER' \| 'REQUESTER'` | yes |
+| `department_id` | `string` (uuid) | HOD and REQUESTER |
+
+Creates the profile, generates a 24-hour activation token, queues the invite email via Resend, and writes the audit entry — all inside the RPC.
+
+**Response `data`**: `{ "profile_id": "<uuid>", "status": "PENDING_ACTIVATION" }`
+
+**Errors**: `409` email already registered · `422` validation
+
+---
+
+### GET /api/admin/users
+**File**: `src/app/api/admin/users/route.ts`
+**Roles**: CSO
+
+**Query params**: `role` · `department_id` · `status` (`PENDING_ACTIVATION | ACTIVE | DEACTIVATED`) · `limit` · `cursor`
+
+**Response `data`**: `{ "users": [...], "next_cursor": "<opaque>" }`
+
+---
+
+### PATCH /api/admin/users/[id]/revoke
+**File**: `src/app/api/admin/users/[id]/revoke/route.ts`
+**Roles**: CSO
+
+No request body. Sets `profiles.status = 'DEACTIVATED'`. Supabase Auth session is invalidated immediately. Writes audit entry.
+
+**Response `data`**: `{ "profile_id": "<uuid>", "status": "DEACTIVATED" }`
+
+**Errors**: `404` user not found · `409` already deactivated
+
+---
+
+### POST /api/admin/authorisations
+**File**: `src/app/api/admin/authorisations/route.ts`
+**Roles**: HOD
+
+Submits a collector nomination. Enforces the max-3-per-key constraint at the DB level (`UNIQUE(key_id, slot_number)`).
+
+| Field | Type | Required |
+|---|---|---|
+| `key_id` | `string` (uuid) | yes |
+| `requester_id` | `string` (uuid) | yes |
+
+**Response `data`**: `{ "authorisation_id": "<composite>", "slot_number": 2 }`
+
+**Errors**: `403` key not in HOD's department · `409` three slots already filled · `409` requester already authorised for this key
+
+---
+
+### DELETE /api/admin/authorisations/[key_id]/[requester_id]
+**File**: `src/app/api/admin/authorisations/[key_id]/[requester_id]/route.ts`
+**Roles**: HOD
+
+Removes a collector from a slot. Writes audit entry.
+
+**Response `data`**: `null` (204)
+
+**Errors**: `403` key not in HOD's department · `404` authorisation not found
+
+---
+
+## 5. Shifts and Handover
+
+### GET /api/shifts/current
+**File**: `src/app/api/shifts/current/route.ts`
+**Roles**: VERIFIER, CSO
+
+Returns the active shift record with officer identities and elapsed time.
+
+**Response `data`**: `{ "shift": { "id": "<uuid>", "shift_number": 2, "started_at": "<iso>", "primary_officer": {...} } }`
+
+---
+
+### POST /api/shifts/handover
+**File**: `src/app/api/shifts/handover/route.ts`
+**Roles**: VERIFIER
+**RPC**: `acknowledge_shift_handover(outgoing_shift_id, key_ids, bulk)`
+
+| Field | Type | Required |
+|---|---|---|
+| `outgoing_shift_id` | `string` (uuid) | yes |
+| `key_ids` | `string[]` (uuid array) | yes — all outstanding key IDs |
+| `bulk` | `boolean` | yes |
+
+If `bulk = true`, all keys are acknowledged in one confirmation. Audit entry written per key.
+
+**Response `data`**: `{ "handover_id": "<uuid>", "acknowledged_count": 3 }`
+
+**Errors**: `409` handover already completed for this shift · `422` key_ids does not match actual outstanding keys
+
+---
+
+## 6. Reports and Incidents
+
+### GET /api/reports
+**File**: `src/app/api/reports/route.ts`
+**Roles**: CSO
+
+**Query params**: `shift_id` · `from` (ISO date) · `to` (ISO date) · `limit` · `cursor`
+
+**Response `data`**: `{ "reports": [...], "next_cursor": "<opaque>" }`
+
+---
+
+### POST /api/reports/generate
+**File**: `src/app/api/reports/generate/route.ts`
+**Roles**: CSO
+**RPC**: `generate_shift_report(shift_id)`
+
+| Field | Type | Required |
+|---|---|---|
+| `shift_id` | `string` (uuid) | yes |
+
+The RPC collects audit events for the shift, calls the Gemini API with the structured prompt, stores the result as an immutable `shift_reports` row, and writes an audit entry. Falls back to a template if Gemini is unavailable.
+
+**Response `data`**: `{ "report_id": "<uuid>", "generated_at": "<iso>" }`
+
+**Errors**: `409` report already generated for this shift · `503` Gemini and fallback both failed (rare)
+
+---
+
+### POST /api/reports/[id]/comments
+**File**: `src/app/api/reports/[id]/comments/route.ts`
+**Roles**: CSO
+**RPC**: `add_report_comment(report_id, text)`
+
+| Field | Type | Required |
+|---|---|---|
+| `text` | `string` | yes |
+
+Comment is immutable after insert.
+
+**Response `data`**: `{ "comment_id": "<uuid>", "created_at": "<iso>" }`
+
+---
+
+### GET /api/incidents
+**File**: `src/app/api/incidents/route.ts`
+**Roles**: CSO
+
+Read-only. No update or delete endpoint exists — the incident log is append-only.
+
+**Query params**: `type` · `severity` · `status` · `from` · `to` · `limit` · `cursor`
+
+**Response `data`**: `{ "incidents": [...], "next_cursor": "<opaque>" }`
+
+---
+
+### POST /api/incidents
+**File**: `src/app/api/incidents/route.ts`
+**Roles**: CSO, VERIFIER
+
+| Field | Type | Required |
+|---|---|---|
+| `type` | `'MISSING_KEY' \| 'SUSPICIOUS_ACTIVITY' \| 'EQUIPMENT_FAULT' \| 'PROCEDURAL' \| 'OTHER'` | yes |
+| `severity` | `'LOW' \| 'MEDIUM' \| 'HIGH'` | yes |
+| `description` | `string` | yes |
+| `related_key_id` | `string` (uuid) | no |
+| `related_person_id` | `string` (uuid) | no |
+| `occurred_at` | `string` (ISO timestamptz) | yes |
+
+If `severity = 'HIGH'`, the AI shift-report generation is triggered immediately and a CSO dashboard alert is raised via Realtime.
+
+**Response `data`**: `{ "incident_id": "<uuid>", "reference": "INC-2026-0042" }`
+
+---
+
+## 7. AI
+
+### GET /api/ai/risk-alerts
+**File**: `src/app/api/ai/risk-alerts/route.ts`
+**Roles**: CSO
+
+Returns active high-risk access patterns: requests with `risk_tier = 'HIGH'` in the last 24 hours that have not been resolved. Read-only; the risk engine runs at request-submit time, not on this endpoint.
+
+**Response `data`**: `{ "alerts": [...] }`
+
+---
+
+### POST /api/ai/verify-signature
+**File**: `src/app/api/ai/verify-signature/route.ts`
+**Roles**: SYSTEM (called internally from `approve_weekend` RPC callback, not directly by clients)
+
+| Field | Type | Required |
+|---|---|---|
+| `hod_id` | `string` (uuid) | yes |
+| `submitted_signature_url` | `string` | yes |
+
+Retrieves the HOD's reference signature from Supabase Storage, runs Sharp preprocessing on both, and runs Pixelmatch. Returns the mismatch ratio.
+
+**Response `data`**: `{ "mismatch_ratio": 0.04, "passed": true }`
+
+If `passed = false`, the caller raises a CSO alert and holds the approval.
+
+---
+
+## RPC cross-reference
+
+| RPC | Called by route | Also writes audit entry |
+|---|---|---|
+| `create_request` | POST /api/requests/submit | yes |
+| `issue_key` | POST /api/requests/collect | yes |
+| `return_key` | POST /api/keys/return | yes |
+| `approve_weekend` | POST /api/requests/hod-decision | yes |
+| `decline_weekend` | POST /api/requests/hod-decision | yes |
+| `acknowledge_shift_handover` | POST /api/shifts/handover | yes — per key |
+| `generate_shift_report` | POST /api/reports/generate | yes |
+| `add_report_comment` | POST /api/reports/[id]/comments | yes |
+| `provision_user` | POST /api/admin/users | yes |
+
+All RPCs are defined in `supabase/migrations/`. See `docs/DATABASE.md` for parameter signatures.
+
+---
+
+## Error code reference
+
+| Code | Meaning in SmartKey |
+|---|---|
+| 200 | Success with body |
+| 201 | Resource created (POST that inserts) |
+| 204 | Success, no body (DELETE) |
+| 401 | No valid session — redirect to login |
+| 403 | Wrong role or RLS violation |
+| 404 | Resource not found |
+| 409 | State conflict (already issued, already cancelled, slots full) |
+| 422 | Zod validation failure — `error` field lists the failing fields |
+| 500 | RPC or internal failure — `error` field contains a correlation reference |
+| 503 | External dependency unavailable (Gemini quota exhausted with no fallback) |
