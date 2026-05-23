@@ -8,6 +8,11 @@ const nextConfig: NextConfig = {
         destination: '/cso/dashboard',
         permanent: true,
       },
+      {
+        source: '/hod',
+        destination: '/hod/dashboard',
+        permanent: true,
+      },
     ];
   },
 };
