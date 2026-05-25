@@ -12,11 +12,9 @@ Generate a commit message for the current staged changes (or all tracked changes
 
 ```
 <type>[(<scope>)][!]: <subject>
-
-[body]
-
-[footer(s)]
 ```
+
+No body. No footer. Subject line only.
 
 **type** — choose exactly one (no others allowed):
 
@@ -38,10 +36,6 @@ Generate a commit message for the current staged changes (or all tracked changes
 **!** — append after type/scope when the change is a breaking change.
 
 **subject** — imperative mood, sentence-case or lower-case (never Title Case, PascalCase, or ALL CAPS). No period at the end. Maximum **72 characters**.
-
-**body** — optional. Must be separated from the subject by a **blank line**. Explain _what_ and _why_, not _how_.
-
-**footer(s)** — optional. Must be separated from the body (or subject if no body) by a **blank line**. Use git trailer format: `Token: value` or `Token #value`. Breaking changes must include a `BREAKING CHANGE: <description>` footer (in addition to, or instead of, `!`).
 
 ## Output
 
