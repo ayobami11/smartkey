@@ -1,6 +1,4 @@
--- =============================================================================
 -- Migration: Postgres RPCs (10 transactional stored procedures)
--- =============================================================================
 -- Every RPC in this file:
 --   1. Runs as SECURITY DEFINER so it can bypass RLS and write audit_log.
 --   2. Writes an audit_log entry in the same transaction as the state change.
@@ -14,14 +12,10 @@
 --   USER_PROVISIONED, REQUEST_CREATED, KEY_ISSUED, KEY_RETURNED,
 --   HOD_APPROVED, HOD_DECLINED, HANDOVER_KEY_ACKNOWLEDGED,
 --   SHIFT_REPORT_INITIATED, REPORT_COMMENT_ADDED, KEY_OVERDUE
--- =============================================================================
 
--- ---------------------------------------------------------------------------
 -- Helper: write a single audit_log row
--- ---------------------------------------------------------------------------
 -- This private helper is called by every RPC below. It is not exposed as a
 -- public function — only the named RPCs below are callable from the app.
--- ---------------------------------------------------------------------------
 
 create or replace function public._write_audit(
   p_event       text,
@@ -60,9 +54,7 @@ $$;
 revoke execute on function public._write_audit(text, uuid, public.user_role, text, uuid, jsonb)
   from public, anon, authenticated;
 
--- =============================================================================
 -- 1. provision_user
--- =============================================================================
 -- Creates a profiles row for a user that was already invited via Supabase Auth
 -- (auth.users row exists). Returns the new profile id and a single-use
 -- activation token (stored as a field on the profile for the activate route).
@@ -72,7 +64,6 @@ revoke execute on function public._write_audit(text, uuid, public.user_role, tex
 -- migration. The TypeScript activate route reads it from there.
 -- To keep it simple we store it in an activation_token column — we ALTER
 -- profiles here to add it if not present.
--- =============================================================================
 
 -- Add activation_token column to profiles (idempotent via IF NOT EXISTS check).
 do $$
@@ -191,14 +182,11 @@ begin
 end;
 $$;
 
--- =============================================================================
 -- 2. create_request
--- =============================================================================
 -- Creates a key access request after validating that the requester is
 -- authorised for the key and has no conflicting active request.
 -- Risk tier is passed as LOW; the TypeScript risk engine computes the real
 -- tier and updates the row immediately after this call returns.
--- =============================================================================
 
 create or replace function public.create_request(
   p_key_id          uuid,
@@ -331,13 +319,10 @@ begin
 end;
 $$;
 
--- =============================================================================
 -- 3. issue_key
--- =============================================================================
 -- Called by the verifier after confirming the requester's identity.
 -- Validates the code is active, flips the request to KEY_ISSUED, clears the
 -- code to prevent replay, and sets the key status to ISSUED.
--- =============================================================================
 
 create or replace function public.issue_key(
   p_request_id uuid,
@@ -420,13 +405,10 @@ begin
 end;
 $$;
 
--- =============================================================================
 -- 4. return_key
--- =============================================================================
 -- Called by the verifier when a key is physically handed back.
 -- Validates the key is currently issued, records the return, and makes the
 -- key available again.
--- =============================================================================
 
 create or replace function public.return_key(
   p_request_id  uuid,
@@ -504,15 +486,12 @@ begin
 end;
 $$;
 
--- =============================================================================
 -- 5. approve_weekend
--- =============================================================================
 -- HOD approves a weekend access request.
 -- Signature verification runs in TypeScript before this is called; the result
 -- is passed via p_signature_verified and p_signature_mismatch_pct.
 -- Generates the 6-digit code, creates the hod_decisions row, and links it to
 -- the request.
--- =============================================================================
 
 create or replace function public.approve_weekend(
   p_request_id              uuid,
@@ -621,12 +600,9 @@ begin
 end;
 $$;
 
--- =============================================================================
 -- 6. decline_weekend
--- =============================================================================
 -- HOD declines a weekend access request. Creates the hod_decisions row and
 -- moves the request to DECLINED. No code is generated.
--- =============================================================================
 
 create or replace function public.decline_weekend(
   p_request_id uuid,
@@ -708,9 +684,7 @@ begin
 end;
 $$;
 
--- =============================================================================
 -- 7. acknowledge_shift_handover
--- =============================================================================
 -- Called by the incoming verifier at the start of their shift. Validates that
 -- no handover has already been recorded for the outgoing shift, then inserts a
 -- shift_handovers row and writes one audit_log entry per key acknowledged.
@@ -718,7 +692,6 @@ $$;
 -- The incoming shift must already exist (the schedule / clock creates it).
 -- For simplicity, if no active incoming shift is found, one is created using
 -- the calling officer as primary_officer.
--- =============================================================================
 
 create or replace function public.acknowledge_shift_handover(
   p_outgoing_shift_id uuid,
@@ -835,14 +808,11 @@ begin
 end;
 $$;
 
--- =============================================================================
 -- 8. generate_shift_report
--- =============================================================================
 -- Creates a placeholder shift_reports row with markdown='PENDING_GENERATION'.
 -- The actual Gemini API call and markdown update happen in the TypeScript route
 -- (POST /api/reports/generate) which updates the row directly after Gemini
 -- responds. This RPC only guarantees the audit trail and uniqueness.
--- =============================================================================
 
 create or replace function public.generate_shift_report(
   p_shift_id uuid
@@ -921,12 +891,9 @@ begin
 end;
 $$;
 
--- =============================================================================
 -- 9. add_report_comment
--- =============================================================================
 -- Appends an immutable comment to a shift report. Only the CSO may call this
 -- (enforced by the calling route; the RPC itself trusts auth.uid()).
--- =============================================================================
 
 create or replace function public.add_report_comment(
   p_report_id uuid,
@@ -1002,9 +969,7 @@ begin
 end;
 $$;
 
--- =============================================================================
 -- 10. mark_key_overdue
--- =============================================================================
 -- Designed to be called by the Supabase Edge Function on an hourly cron.
 -- Finds all KEY_ISSUED requests whose return_deadline has passed and marks
 -- the corresponding key as OVERDUE. The request row itself stays KEY_ISSUED
@@ -1013,7 +978,6 @@ $$;
 --
 -- This function requires no auth.uid() because it is called by the service
 -- role inside an Edge Function — not by a human user session.
--- =============================================================================
 
 create or replace function public.mark_key_overdue()
 returns table(updated_count int)
@@ -1079,13 +1043,10 @@ begin
 end;
 $$;
 
--- =============================================================================
 -- Grant execute permissions
--- =============================================================================
 -- Public-facing RPCs are callable by the authenticated role.
 -- The private helper (_write_audit) remains restricted.
 -- mark_key_overdue is called only by the service role (Edge Function).
--- =============================================================================
 
 grant execute on function public.provision_user(text, text, text, uuid)
   to authenticated;
