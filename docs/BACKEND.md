@@ -512,21 +512,21 @@ Track progress here after every merged PR. Update the status column; link the PR
 
 | Component | Status | PR |
 | --- | --- | --- |
-| Supabase project setup + packages | 🔄 In progress | #9 |
-| Database schema (all 11 tables) | ⬜ Not started | — |
-| RLS policies | ⬜ Not started | — |
-| Postgres RPCs (10 functions) | ⬜ Not started | — |
-| Supabase client utilities + logger + audit writer | ⬜ Not started | — |
-| Auth middleware (role gating) | ⬜ Not started | — |
-| Auth API routes (login, OTP, register, activate) | ⬜ Not started | — |
-| Request management API routes | ⬜ Not started | — |
+| Supabase project setup + packages | ✅ Done | #26 |
+| Database schema (all 12 tables) | ✅ Done | #27 |
+| RLS policies | ✅ Done | #30 |
+| Postgres RPCs (10 functions) | ✅ Done | #31 |
+| Supabase client utilities + logger + audit writer | ✅ Done | #29 |
+| Auth middleware (role gating) | ✅ Done | #28 |
+| Auth API routes (login, OTP, register, activate) | 🔄 In review | #32 |
+| Request management API routes | 🔄 In review | #33 |
 | Key transaction + admin API routes | ⬜ Not started | — |
 | Supabase Realtime subscriptions | ⬜ Not started | — |
 | Rule-based risk scoring engine + unit tests | ⬜ Not started | — |
 | Risk tier UI (RiskTierBadge, RiskFactorPopover) | ⬜ Not started | — |
 | Gemini shift report generation | ⬜ Not started | — |
 | Signature verification (Sharp + Pixelmatch) | ⬜ Not started | — |
-| Supabase Storage (photos, signatures, letters) | ⬜ Not started | — |
+| Supabase Storage (photos, signatures, letters) | 🔄 In review | #32 |
 | Shift handover + incident + report API routes | ⬜ Not started | — |
 | Edge Functions (overdue check + daily summary) | ⬜ Not started | — |
 | CI/CD pipeline (GitHub Actions) | ⬜ Not started | — |
