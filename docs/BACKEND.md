@@ -512,7 +512,7 @@ Track progress here after every merged PR. Update the status column; link the PR
 
 | Component | Status | PR |
 | --- | --- | --- |
-| Supabase project setup + packages | ⬜ Not started | — |
+| Supabase project setup + packages | 🔄 In progress | #9 |
 | Database schema (all 11 tables) | ⬜ Not started | — |
 | RLS policies | ⬜ Not started | — |
 | Postgres RPCs (10 functions) | ⬜ Not started | — |

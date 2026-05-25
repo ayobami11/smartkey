@@ -1,0 +1,3 @@
+-- SmartKey seed data for local development
+-- Populated in Issue #10 (schema migrations).
+-- This file is intentionally empty until the schema migrations are written.
