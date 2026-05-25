@@ -1,6 +1,4 @@
--- =============================================================================
 -- Migration: audit_log
--- =============================================================================
 -- The audit log is the evidentiary backbone of SmartKey. Every operationally
 -- significant event — key issued, key returned, request created, user
 -- provisioned, shift acknowledged, report generated, incident logged — writes
@@ -19,11 +17,8 @@
 -- payload is a jsonb object whose schema is validated by the Zod schemas in
 -- src/lib/audit/ before the write RPC is called. Never assume the payload
 -- shape without reading those schemas.
--- =============================================================================
 
--- ---------------------------------------------------------------------------
 -- audit_log
--- ---------------------------------------------------------------------------
 
 create table public.audit_log (
   id          uuid              primary key default gen_random_uuid(),

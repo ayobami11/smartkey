@@ -1,6 +1,4 @@
--- =============================================================================
 -- Migration: enums, profiles, departments
--- =============================================================================
 -- Creates all custom enum types used across the schema, then the two
 -- foundational tables — departments and profiles — which have a circular
 -- foreign-key dependency that is resolved by:
@@ -8,11 +6,8 @@
 --   2. Creating profiles (FK → departments, FK → auth.users).
 --   3. ALTER departments ADD COLUMN hod_id (FK → profiles).
 -- Also installs an updated_at trigger on profiles.
--- =============================================================================
 
--- ---------------------------------------------------------------------------
 -- Enums
--- ---------------------------------------------------------------------------
 
 create type public.user_role as enum ('CSO', 'HOD', 'VERIFIER', 'REQUESTER');
 
@@ -59,9 +54,7 @@ create type public.incident_severity as enum ('LOW', 'MEDIUM', 'HIGH');
 
 create type public.incident_status as enum ('OPEN', 'RESOLVED', 'ESCALATED');
 
--- ---------------------------------------------------------------------------
 -- departments (hod_id added after profiles is created)
--- ---------------------------------------------------------------------------
 
 create table public.departments (
   id   uuid primary key default gen_random_uuid(),
@@ -70,9 +63,7 @@ create table public.departments (
 
 alter table public.departments enable row level security;
 
--- ---------------------------------------------------------------------------
 -- profiles
--- ---------------------------------------------------------------------------
 
 create table public.profiles (
   id                  uuid primary key references auth.users(id) on delete cascade,
@@ -96,9 +87,7 @@ create index idx_profiles_role on public.profiles(role);
 -- Index: department lookups (HOD sees all dept members)
 create index idx_profiles_department_id on public.profiles(department_id);
 
--- ---------------------------------------------------------------------------
 -- updated_at trigger for profiles
--- ---------------------------------------------------------------------------
 
 create or replace function public.handle_updated_at()
 returns trigger
@@ -115,9 +104,7 @@ create trigger profiles_updated_at
   for each row
   execute function public.handle_updated_at();
 
--- ---------------------------------------------------------------------------
 -- ALTER departments: add hod_id (FK → profiles, circular dep resolved)
--- ---------------------------------------------------------------------------
 
 alter table public.departments
   add column hod_id uuid references public.profiles(id) on delete set null;

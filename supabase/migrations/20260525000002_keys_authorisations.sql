@@ -1,17 +1,12 @@
--- =============================================================================
 -- Migration: keys, authorisations
--- =============================================================================
 -- keys: physical key inventory per zone and department.
 -- authorisations: which requesters are whitelisted for each key (max 3 per key).
 --   The three-slot limit is enforced by a BEFORE INSERT trigger so that no
 --   application bug or race condition can ever insert a 4th authorisation for
 --   the same key_id. The composite PK (key_id, profile_id) also prevents the
 --   same person from being whitelisted twice for the same key.
--- =============================================================================
 
--- ---------------------------------------------------------------------------
 -- keys
--- ---------------------------------------------------------------------------
 
 create table public.keys (
   id            uuid              primary key default gen_random_uuid(),
@@ -32,9 +27,7 @@ create index idx_keys_department_id on public.keys(department_id);
 -- Index: status filter (outstanding, overdue, available)
 create index idx_keys_status on public.keys(status);
 
--- ---------------------------------------------------------------------------
 -- authorisations
--- ---------------------------------------------------------------------------
 
 create table public.authorisations (
   -- Composite PK prevents duplicate authorisations for the same person+key
@@ -53,9 +46,7 @@ create index idx_authorisations_profile_id on public.authorisations(profile_id);
 -- Index: look up all authorised requesters for a key
 create index idx_authorisations_key_id on public.authorisations(key_id);
 
--- ---------------------------------------------------------------------------
 -- Trigger: enforce max 3 authorisations per key
--- ---------------------------------------------------------------------------
 -- This runs BEFORE INSERT so the constraint can never be bypassed by a race
 -- condition or a direct SQL call that skips application-level checks.
 

@@ -1,6 +1,4 @@
--- =============================================================================
 -- Migration: shifts, shift_handovers
--- =============================================================================
 -- shifts records each 8-hour security officer shift (up to 3 per day).
 -- shift_handovers records the incoming officer's acknowledgement of all
 -- outstanding keys at the moment of shift change — the digital equivalent
@@ -9,11 +7,8 @@
 -- The handover screen locks the verifier dashboard until the incoming officer
 -- acknowledges every outstanding key (individually or bulk). This table stores
 -- the complete record of what was acknowledged and by whom.
--- =============================================================================
 
--- ---------------------------------------------------------------------------
 -- shifts
--- ---------------------------------------------------------------------------
 
 create table public.shifts (
   id                   uuid        primary key default gen_random_uuid(),
@@ -34,9 +29,7 @@ create index idx_shifts_primary_officer_id on public.shifts(primary_officer_id);
 -- Index: chronological order for CSO reporting
 create index idx_shifts_started_at on public.shifts(started_at desc);
 
--- ---------------------------------------------------------------------------
 -- shift_handovers
--- ---------------------------------------------------------------------------
 
 create table public.shift_handovers (
   id                  uuid        primary key default gen_random_uuid(),

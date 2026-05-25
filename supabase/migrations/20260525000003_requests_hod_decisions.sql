@@ -1,6 +1,4 @@
--- =============================================================================
 -- Migration: requests, hod_decisions
--- =============================================================================
 -- requests tracks the full lifecycle of every key access request, from
 -- submission through code generation, key issue, and return.
 -- hod_decisions records the HOD's approve/decline decision on weekend requests,
@@ -13,11 +11,8 @@
 --
 -- The 6-digit code is stored directly on the request and cleared (set to NULL)
 -- once the key is physically issued to prevent replay attacks.
--- =============================================================================
 
--- ---------------------------------------------------------------------------
 -- requests
--- ---------------------------------------------------------------------------
 
 create table public.requests (
   id              uuid                    primary key default gen_random_uuid(),
@@ -59,9 +54,7 @@ create index idx_requests_type_status on public.requests(type, status);
 -- Index: created_at for chronological queues
 create index idx_requests_created_at on public.requests(created_at desc);
 
--- ---------------------------------------------------------------------------
 -- hod_decisions
--- ---------------------------------------------------------------------------
 
 create table public.hod_decisions (
   id                     uuid                 primary key default gen_random_uuid(),
@@ -82,9 +75,7 @@ create index idx_hod_decisions_request_id on public.hod_decisions(request_id);
 -- Index: HOD's own decision history
 create index idx_hod_decisions_hod_id on public.hod_decisions(hod_id);
 
--- ---------------------------------------------------------------------------
 -- ALTER requests: add hod_decision_id (FK → hod_decisions, circular dep resolved)
--- ---------------------------------------------------------------------------
 
 alter table public.requests
   add column hod_decision_id uuid references public.hod_decisions(id) on delete set null;
