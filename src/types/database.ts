@@ -352,62 +352,76 @@ export type Database = {
     Functions: {
       create_request: {
         Args: {
-          key_id: string;
-          return_time: string;
-          type: Database['public']['Enums']['request_type'];
-          weekend_date?: string;
+          p_key_id: string;
+          p_type: string;
+          p_return_deadline: string;
+          p_weekend_date?: string | null;
         };
         Returns: {
           request_id: string;
           code: string;
           code_expires_at: string;
-          risk_tier: Database['public']['Enums']['risk_tier'];
-        };
+          status: string;
+        }[];
       };
       issue_key: {
-        Args: { request_id: string; verifier_id: string };
-        Returns: { request_id: string; issued_at: string };
+        Args: { p_request_id: string; p_verifier_id: string };
+        Returns: { request_id: string; issued_at: string }[];
       };
       return_key: {
-        Args: { request_id: string; verifier_id: string; returner_id?: string };
-        Returns: { request_id: string; returned_at: string };
+        Args: {
+          p_request_id: string;
+          p_verifier_id: string;
+          p_returner_id?: string | null;
+        };
+        Returns: { request_id: string; returned_at: string }[];
       };
       approve_weekend: {
-        Args: { request_id: string; hod_id: string; note?: string };
-        Returns: { request_id: string; status: string };
+        Args: {
+          p_request_id: string;
+          p_hod_id: string;
+          p_note?: string | null;
+          p_signature_verified?: boolean;
+          p_signature_mismatch_pct?: number | null;
+        };
+        Returns: { request_id: string; code: string; decision_id: string }[];
       };
       decline_weekend: {
-        Args: { request_id: string; hod_id: string; note?: string };
-        Returns: { request_id: string; status: string };
+        Args: {
+          p_request_id: string;
+          p_hod_id: string;
+          p_note?: string | null;
+        };
+        Returns: { request_id: string; decision_id: string }[];
       };
       acknowledge_shift_handover: {
         Args: {
-          outgoing_shift_id: string;
-          key_ids: string[];
-          bulk: boolean;
+          p_outgoing_shift_id: string;
+          p_key_ids: string[];
+          p_bulk: boolean;
         };
-        Returns: { handover_id: string; acknowledged_count: number };
+        Returns: { handover_id: string; acknowledged_count: number }[];
       };
       generate_shift_report: {
-        Args: { shift_id: string };
-        Returns: { report_id: string; generated_at: string };
+        Args: { p_shift_id: string };
+        Returns: { report_id: string }[];
       };
       add_report_comment: {
-        Args: { report_id: string; text: string };
-        Returns: { comment_id: string; created_at: string };
+        Args: { p_report_id: string; p_text: string };
+        Returns: { comment_id: string; created_at: string }[];
       };
       provision_user: {
         Args: {
-          name: string;
-          email: string;
-          role: Database['public']['Enums']['user_role'];
-          department_id?: string;
+          p_full_name: string;
+          p_email: string;
+          p_role: string;
+          p_department_id?: string | null;
         };
-        Returns: { profile_id: string; status: string };
+        Returns: { profile_id: string; activation_token: string }[];
       };
       mark_key_overdue: {
         Args: Record<string, never>;
-        Returns: { updated_count: number };
+        Returns: { updated_count: number }[];
       };
     };
     Enums: {
