@@ -34,6 +34,12 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.local.example
+
+# supabase local dev artifacts
+supabase/.branches
+supabase/.temp
+supabase/volumes
 
 # claude code local settings (personal overrides, not for team sharing)
 .claude/settings.local.json

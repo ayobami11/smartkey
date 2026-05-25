@@ -697,32 +697,14 @@ backend/feat/{issue-number}-{kebab-description}
 backend/setup/{issue-number}-{kebab-description}
 ```
 
-Examples:
-```
-backend/setup/7-supabase-init
-backend/feat/8-schema-migrations
-backend/feat/9-rls-policies
-backend/feat/10-rpcs
-backend/feat/11-supabase-client
-backend/feat/12-middleware
-backend/feat/13-auth-routes
-backend/feat/14-request-routes
-backend/feat/15-key-admin-routes
-backend/feat/16-realtime
-backend/feat/17-risk-engine
-backend/feat/18-risk-ui
-backend/feat/19-gemini-reports
-backend/feat/20-signature-storage
-backend/feat/21-shift-incident-routes
-backend/feat/22-edge-functions
-backend/feat/23-ci-cd
-```
+> **Note on issue numbers**: GitHub assigns issue numbers automatically based on how many issues already exist in the repo. The numbers shown in Section 3 (7–23) are illustrative — your actual numbers will depend on existing frontend issues. After running `gh issue create`, use the number GitHub prints (e.g. `https://github.com/.../issues/42` → branch is `backend/feat/42-schema-migrations`).
 
 Create a branch and link it to an issue:
 
 ```bash
-git checkout -b backend/feat/8-schema-migrations
-git push -u origin backend/feat/8-schema-migrations
+# Replace N with the actual issue number GitHub assigned
+git checkout -b backend/feat/N-schema-migrations
+git push -u origin backend/feat/N-schema-migrations
 # Then go to the GitHub issue and set this branch as the development branch (right sidebar)
 ```
 
