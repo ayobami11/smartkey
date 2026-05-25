@@ -11,7 +11,7 @@
 -- SECURITY DEFINER so they run as the function owner, avoiding recursive RLS
 -- on profiles when called from within another policy.
 
-CREATE OR REPLACE FUNCTION auth.user_role()
+CREATE OR REPLACE FUNCTION public.user_role()
   RETURNS text
   LANGUAGE sql
   STABLE
@@ -21,7 +21,7 @@ AS $$
   SELECT role::text FROM public.profiles WHERE id = auth.uid();
 $$;
 
-CREATE OR REPLACE FUNCTION auth.user_department_id()
+CREATE OR REPLACE FUNCTION public.user_department_id()
   RETURNS uuid
   LANGUAGE sql
   STABLE
@@ -32,8 +32,8 @@ AS $$
 $$;
 
 -- Grant execute to authenticated role so policies can call them
-GRANT EXECUTE ON FUNCTION auth.user_role() TO authenticated;
-GRANT EXECUTE ON FUNCTION auth.user_department_id() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.user_role() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.user_department_id() TO authenticated;
 
 -- 1. profiles
 
@@ -51,7 +51,7 @@ CREATE POLICY profiles_select_cso_all
   ON public.profiles
   FOR SELECT
   TO authenticated
-  USING (auth.user_role() = 'CSO');
+  USING (public.user_role() = 'CSO');
 
 -- SELECT: HOD reads profiles in the same department
 CREATE POLICY profiles_select_hod_dept
@@ -59,8 +59,8 @@ CREATE POLICY profiles_select_hod_dept
   FOR SELECT
   TO authenticated
   USING (
-    auth.user_role() = 'HOD'
-    AND department_id = auth.user_department_id()
+    public.user_role() = 'HOD'
+    AND department_id = public.user_department_id()
   );
 
 -- INSERT: blocked for all authenticated users.
@@ -80,8 +80,8 @@ CREATE POLICY profiles_update_cso_any
   ON public.profiles
   FOR UPDATE
   TO authenticated
-  USING (auth.user_role() = 'CSO')
-  WITH CHECK (auth.user_role() = 'CSO');
+  USING (public.user_role() = 'CSO')
+  WITH CHECK (public.user_role() = 'CSO');
 
 -- DELETE: blocked for all (profiles are deactivated, never deleted)
 
@@ -101,22 +101,22 @@ CREATE POLICY departments_insert_cso
   ON public.departments
   FOR INSERT
   TO authenticated
-  WITH CHECK (auth.user_role() = 'CSO');
+  WITH CHECK (public.user_role() = 'CSO');
 
 -- UPDATE: CSO only
 CREATE POLICY departments_update_cso
   ON public.departments
   FOR UPDATE
   TO authenticated
-  USING (auth.user_role() = 'CSO')
-  WITH CHECK (auth.user_role() = 'CSO');
+  USING (public.user_role() = 'CSO')
+  WITH CHECK (public.user_role() = 'CSO');
 
 -- DELETE: CSO only
 CREATE POLICY departments_delete_cso
   ON public.departments
   FOR DELETE
   TO authenticated
-  USING (auth.user_role() = 'CSO');
+  USING (public.user_role() = 'CSO');
 
 -- 3. keys
 
@@ -135,15 +135,15 @@ CREATE POLICY keys_insert_cso
   ON public.keys
   FOR INSERT
   TO authenticated
-  WITH CHECK (auth.user_role() = 'CSO');
+  WITH CHECK (public.user_role() = 'CSO');
 
 -- UPDATE: CSO only (e.g. retiring a key, changing room_name)
 CREATE POLICY keys_update_cso
   ON public.keys
   FOR UPDATE
   TO authenticated
-  USING (auth.user_role() = 'CSO')
-  WITH CHECK (auth.user_role() = 'CSO');
+  USING (public.user_role() = 'CSO')
+  WITH CHECK (public.user_role() = 'CSO');
 
 -- DELETE: blocked for all (keys are retired via status update, never deleted)
 
@@ -166,12 +166,12 @@ CREATE POLICY authorisations_insert_hod_dept
   FOR INSERT
   TO authenticated
   WITH CHECK (
-    auth.user_role() = 'HOD'
+    public.user_role() = 'HOD'
     AND EXISTS (
       SELECT 1
       FROM public.keys k
       WHERE k.id = authorisations.key_id
-        AND k.department_id = auth.user_department_id()
+        AND k.department_id = public.user_department_id()
     )
   );
 
@@ -181,12 +181,12 @@ CREATE POLICY authorisations_delete_hod_dept
   FOR DELETE
   TO authenticated
   USING (
-    auth.user_role() = 'HOD'
+    public.user_role() = 'HOD'
     AND EXISTS (
       SELECT 1
       FROM public.keys k
       WHERE k.id = authorisations.key_id
-        AND k.department_id = auth.user_department_id()
+        AND k.department_id = public.user_department_id()
     )
   );
 
@@ -202,7 +202,7 @@ CREATE POLICY requests_select_own
   FOR SELECT
   TO authenticated
   USING (
-    auth.user_role() = 'REQUESTER'
+    public.user_role() = 'REQUESTER'
     AND requester_id = auth.uid()
   );
 
@@ -212,12 +212,12 @@ CREATE POLICY requests_select_hod_dept
   FOR SELECT
   TO authenticated
   USING (
-    auth.user_role() = 'HOD'
+    public.user_role() = 'HOD'
     AND EXISTS (
       SELECT 1
       FROM public.keys k
       WHERE k.id = requests.key_id
-        AND k.department_id = auth.user_department_id()
+        AND k.department_id = public.user_department_id()
     )
   );
 
@@ -226,14 +226,14 @@ CREATE POLICY requests_select_verifier_all
   ON public.requests
   FOR SELECT
   TO authenticated
-  USING (auth.user_role() = 'VERIFIER');
+  USING (public.user_role() = 'VERIFIER');
 
 -- SELECT: CSO sees all requests
 CREATE POLICY requests_select_cso_all
   ON public.requests
   FOR SELECT
   TO authenticated
-  USING (auth.user_role() = 'CSO');
+  USING (public.user_role() = 'CSO');
 
 -- INSERT: REQUESTER only, via create_request RPC.
 -- Direct inserts from the client are blocked by requiring the row's requester_id
@@ -243,7 +243,7 @@ CREATE POLICY requests_insert_requester
   FOR INSERT
   TO authenticated
   WITH CHECK (
-    auth.user_role() = 'REQUESTER'
+    public.user_role() = 'REQUESTER'
     AND requester_id = auth.uid()
   );
 
@@ -263,13 +263,13 @@ CREATE POLICY hod_decisions_select_hod_dept
   FOR SELECT
   TO authenticated
   USING (
-    auth.user_role() = 'HOD'
+    public.user_role() = 'HOD'
     AND EXISTS (
       SELECT 1
       FROM public.requests r
       JOIN public.keys k ON k.id = r.key_id
       WHERE r.id = hod_decisions.request_id
-        AND k.department_id = auth.user_department_id()
+        AND k.department_id = public.user_department_id()
     )
   );
 
@@ -278,7 +278,7 @@ CREATE POLICY hod_decisions_select_cso_all
   ON public.hod_decisions
   FOR SELECT
   TO authenticated
-  USING (auth.user_role() = 'CSO');
+  USING (public.user_role() = 'CSO');
 
 -- INSERT: blocked directly — done via approve_weekend / decline_weekend RPCs
 -- UPDATE: blocked
@@ -293,14 +293,14 @@ CREATE POLICY shifts_select_verifier
   ON public.shifts
   FOR SELECT
   TO authenticated
-  USING (auth.user_role() = 'VERIFIER');
+  USING (public.user_role() = 'VERIFIER');
 
 -- SELECT: CSO sees all shifts
 CREATE POLICY shifts_select_cso
   ON public.shifts
   FOR SELECT
   TO authenticated
-  USING (auth.user_role() = 'CSO');
+  USING (public.user_role() = 'CSO');
 
 -- INSERT: blocked directly (managed by system / Edge Functions via service role)
 -- UPDATE: blocked
@@ -315,14 +315,14 @@ CREATE POLICY shift_handovers_select_verifier
   ON public.shift_handovers
   FOR SELECT
   TO authenticated
-  USING (auth.user_role() = 'VERIFIER');
+  USING (public.user_role() = 'VERIFIER');
 
 -- SELECT: CSO sees all handover records
 CREATE POLICY shift_handovers_select_cso
   ON public.shift_handovers
   FOR SELECT
   TO authenticated
-  USING (auth.user_role() = 'CSO');
+  USING (public.user_role() = 'CSO');
 
 -- INSERT: blocked directly — done via acknowledge_shift_handover RPC
 -- UPDATE: blocked
@@ -337,7 +337,7 @@ CREATE POLICY shift_reports_select_cso
   ON public.shift_reports
   FOR SELECT
   TO authenticated
-  USING (auth.user_role() = 'CSO');
+  USING (public.user_role() = 'CSO');
 
 -- INSERT: blocked directly — done via generate_shift_report RPC (immutable after insert)
 -- UPDATE: blocked (immutability enforced at both RLS and RPC layer)
@@ -352,7 +352,7 @@ CREATE POLICY shift_report_comments_select_cso
   ON public.shift_report_comments
   FOR SELECT
   TO authenticated
-  USING (auth.user_role() = 'CSO');
+  USING (public.user_role() = 'CSO');
 
 -- INSERT: blocked directly — done via add_report_comment RPC (immutable after insert)
 -- UPDATE: blocked
@@ -367,7 +367,7 @@ CREATE POLICY incidents_select_cso
   ON public.incidents
   FOR SELECT
   TO authenticated
-  USING (auth.user_role() = 'CSO');
+  USING (public.user_role() = 'CSO');
 
 -- SELECT: VERIFIER sees incidents logged during their own shifts.
 -- Joins through shifts to find incidents where the verifier is the primary officer
@@ -377,7 +377,7 @@ CREATE POLICY incidents_select_verifier_own_shift
   FOR SELECT
   TO authenticated
   USING (
-    auth.user_role() = 'VERIFIER'
+    public.user_role() = 'VERIFIER'
     AND EXISTS (
       SELECT 1
       FROM public.shifts s
@@ -394,7 +394,7 @@ CREATE POLICY incidents_insert_cso_verifier
   ON public.incidents
   FOR INSERT
   TO authenticated
-  WITH CHECK (auth.user_role() IN ('CSO', 'VERIFIER'));
+  WITH CHECK (public.user_role() IN ('CSO', 'VERIFIER'));
 
 -- UPDATE: blocked for ALL roles including service role.
 -- Enforced by explicit denial policy so even a service-role bypass cannot update.
@@ -424,7 +424,7 @@ CREATE POLICY audit_log_select_cso
   ON public.audit_log
   FOR SELECT
   TO authenticated
-  USING (auth.user_role() = 'CSO');
+  USING (public.user_role() = 'CSO');
 
 -- INSERT: blocked directly for authenticated users.
 -- All inserts go through service-role RPCs (SECURITY DEFINER functions) that
@@ -453,7 +453,7 @@ REVOKE UPDATE, DELETE ON public.audit_log FROM authenticated;
 --   hod_decisions, shifts, shift_handovers, shift_reports,
 --   shift_report_comments, incidents, audit_log
 --
--- Helper functions: auth.user_role(), auth.user_department_id()
+-- Helper functions: public.user_role(), public.user_department_id()
 -- Both are SECURITY DEFINER to avoid recursive RLS on profiles.
 --
 -- Append-only tables: incidents, audit_log, shift_reports, shift_report_comments
