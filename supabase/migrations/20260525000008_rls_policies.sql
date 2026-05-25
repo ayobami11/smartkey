@@ -1,4 +1,3 @@
--- =============================================================================
 -- SmartKey — Row Level Security Policies
 -- Migration: 20260525000008_rls_policies.sql
 --
@@ -7,13 +6,10 @@
 --
 -- Role values: 'CSO' | 'HOD' | 'VERIFIER' | 'REQUESTER'
 -- Role source:  public.profiles.role  (never the JWT claim directly)
--- =============================================================================
 
--- ---------------------------------------------------------------------------
 -- Auth helper functions
 -- SECURITY DEFINER so they run as the function owner, avoiding recursive RLS
 -- on profiles when called from within another policy.
--- ---------------------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION auth.user_role()
   RETURNS text
@@ -39,9 +35,7 @@ $$;
 GRANT EXECUTE ON FUNCTION auth.user_role() TO authenticated;
 GRANT EXECUTE ON FUNCTION auth.user_department_id() TO authenticated;
 
--- =============================================================================
 -- 1. profiles
--- =============================================================================
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
@@ -91,9 +85,7 @@ CREATE POLICY profiles_update_cso_any
 
 -- DELETE: blocked for all (profiles are deactivated, never deleted)
 
--- =============================================================================
 -- 2. departments
--- =============================================================================
 
 ALTER TABLE public.departments ENABLE ROW LEVEL SECURITY;
 
@@ -126,9 +118,7 @@ CREATE POLICY departments_delete_cso
   TO authenticated
   USING (auth.user_role() = 'CSO');
 
--- =============================================================================
 -- 3. keys
--- =============================================================================
 
 ALTER TABLE public.keys ENABLE ROW LEVEL SECURITY;
 
@@ -157,9 +147,7 @@ CREATE POLICY keys_update_cso
 
 -- DELETE: blocked for all (keys are retired via status update, never deleted)
 
--- =============================================================================
 -- 4. authorisations
--- =============================================================================
 
 ALTER TABLE public.authorisations ENABLE ROW LEVEL SECURITY;
 
@@ -204,9 +192,7 @@ CREATE POLICY authorisations_delete_hod_dept
 
 -- UPDATE: blocked (slot reassignment requires delete + insert to maintain integrity)
 
--- =============================================================================
 -- 5. requests
--- =============================================================================
 
 ALTER TABLE public.requests ENABLE ROW LEVEL SECURITY;
 
@@ -267,9 +253,7 @@ CREATE POLICY requests_insert_requester
 
 -- DELETE: blocked for all
 
--- =============================================================================
 -- 6. hod_decisions
--- =============================================================================
 
 ALTER TABLE public.hod_decisions ENABLE ROW LEVEL SECURITY;
 
@@ -300,9 +284,7 @@ CREATE POLICY hod_decisions_select_cso_all
 -- UPDATE: blocked
 -- DELETE: blocked
 
--- =============================================================================
 -- 7. shifts
--- =============================================================================
 
 ALTER TABLE public.shifts ENABLE ROW LEVEL SECURITY;
 
@@ -324,9 +306,7 @@ CREATE POLICY shifts_select_cso
 -- UPDATE: blocked
 -- DELETE: blocked
 
--- =============================================================================
 -- 8. shift_handovers
--- =============================================================================
 
 ALTER TABLE public.shift_handovers ENABLE ROW LEVEL SECURITY;
 
@@ -348,9 +328,7 @@ CREATE POLICY shift_handovers_select_cso
 -- UPDATE: blocked
 -- DELETE: blocked
 
--- =============================================================================
 -- 9. shift_reports
--- =============================================================================
 
 ALTER TABLE public.shift_reports ENABLE ROW LEVEL SECURITY;
 
@@ -365,9 +343,7 @@ CREATE POLICY shift_reports_select_cso
 -- UPDATE: blocked (immutability enforced at both RLS and RPC layer)
 -- DELETE: blocked
 
--- =============================================================================
 -- 10. shift_report_comments
--- =============================================================================
 
 ALTER TABLE public.shift_report_comments ENABLE ROW LEVEL SECURITY;
 
@@ -382,9 +358,7 @@ CREATE POLICY shift_report_comments_select_cso
 -- UPDATE: blocked
 -- DELETE: blocked
 
--- =============================================================================
 -- 11. incidents
--- =============================================================================
 
 ALTER TABLE public.incidents ENABLE ROW LEVEL SECURITY;
 
@@ -441,9 +415,7 @@ CREATE POLICY incidents_delete_denied
 -- (belt-and-suspenders: RLS + privilege revocation)
 REVOKE UPDATE, DELETE ON public.incidents FROM authenticated;
 
--- =============================================================================
 -- 12. audit_log
--- =============================================================================
 
 ALTER TABLE public.audit_log ENABLE ROW LEVEL SECURITY;
 
@@ -475,9 +447,7 @@ CREATE POLICY audit_log_delete_denied
 -- Also revoke UPDATE and DELETE at the privilege level (belt-and-suspenders)
 REVOKE UPDATE, DELETE ON public.audit_log FROM authenticated;
 
--- =============================================================================
 -- Summary
--- =============================================================================
 -- Tables with RLS enabled: 12
 --   profiles, departments, keys, authorisations, requests,
 --   hod_decisions, shifts, shift_handovers, shift_reports,
@@ -489,4 +459,3 @@ REVOKE UPDATE, DELETE ON public.audit_log FROM authenticated;
 -- Append-only tables: incidents, audit_log, shift_reports, shift_report_comments
 -- For incidents and audit_log: UPDATE/DELETE blocked via both RLS policy (USING false)
 -- and REVOKE at the privilege level to prevent any bypass.
--- =============================================================================
