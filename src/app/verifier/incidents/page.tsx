@@ -1,0 +1,251 @@
+'use client';
+
+import { useState } from 'react';
+import { CheckCircleIcon, SirenIcon } from 'lucide-react';
+
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+
+// ── Types ──────────────────────────────────────────────────────────────────
+
+type IncidentType =
+  | 'MISSING_KEY'
+  | 'SUSPICIOUS_ACTIVITY'
+  | 'EQUIPMENT_FAULT'
+  | 'PROCEDURAL'
+  | 'OTHER';
+
+type IncidentSeverity = 'LOW' | 'MEDIUM' | 'HIGH';
+
+type FormStep = 'form' | 'submitting' | 'success';
+
+// ── Constants ──────────────────────────────────────────────────────────────
+
+const INCIDENT_TYPES: { value: IncidentType; label: string }[] = [
+  { value: 'MISSING_KEY', label: 'Missing key' },
+  { value: 'SUSPICIOUS_ACTIVITY', label: 'Suspicious activity' },
+  { value: 'EQUIPMENT_FAULT', label: 'Equipment fault' },
+  { value: 'PROCEDURAL', label: 'Procedural issue' },
+  { value: 'OTHER', label: 'Other' },
+];
+
+const SEVERITIES: { value: IncidentSeverity; label: string; hint: string }[] = [
+  { value: 'LOW', label: 'Low', hint: 'Minor issue, no immediate risk' },
+  {
+    value: 'MEDIUM',
+    label: 'Medium',
+    hint: 'Requires follow-up before end of shift',
+  },
+  {
+    value: 'HIGH',
+    label: 'High',
+    hint: 'Requires immediate CSO attention',
+  },
+];
+
+// ── Component ──────────────────────────────────────────────────────────────
+
+export default function IncidentsPage() {
+  const [type, setType] = useState<IncidentType | ''>('');
+  const [severity, setSeverity] = useState<IncidentSeverity | ''>('');
+  const [description, setDescription] = useState('');
+  const [step, setStep] = useState<FormStep>('form');
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [incidentRef, setIncidentRef] = useState<string | null>(null);
+
+  const canSubmit =
+    type !== '' && severity !== '' && description.trim().length > 0;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canSubmit) return;
+    setStep('submitting');
+    setSubmitError(null);
+    try {
+      const res = await fetch('/api/incidents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type,
+          severity,
+          description: description.trim(),
+          occurred_at: new Date().toISOString(),
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSubmitError(
+          (json as { error?: string }).error ??
+            'Failed to log incident. Please try again.'
+        );
+        setStep('form');
+        return;
+      }
+      const ref = (json as { data?: { reference?: string } }).data?.reference;
+      setIncidentRef(ref ?? null);
+      setStep('success');
+    } catch {
+      setSubmitError('Network error. Check your connection and try again.');
+      setStep('form');
+    }
+  };
+
+  const handleReset = () => {
+    setType('');
+    setSeverity('');
+    setDescription('');
+    setSubmitError(null);
+    setIncidentRef(null);
+    setStep('form');
+  };
+
+  return (
+    <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
+      <div className="flex items-center gap-3">
+        <div className="flex size-8 items-center justify-center rounded-lg bg-muted">
+          <SirenIcon
+            className="size-4 text-muted-foreground"
+            aria-hidden="true"
+          />
+        </div>
+        <div>
+          <h1 className="text-sm font-semibold text-foreground">Incidents</h1>
+          <p className="text-xs text-muted-foreground">
+            Log an incident that occurred during your shift.
+          </p>
+        </div>
+      </div>
+
+      <div className="mx-auto w-full max-w-lg">
+        {/* Success state */}
+        {step === 'success' && (
+          <div className="flex flex-col items-center gap-4 rounded-lg border border-emerald-200 bg-emerald-50 p-8 text-center dark:border-emerald-900 dark:bg-emerald-950/30">
+            <CheckCircleIcon
+              className="size-10 text-emerald-600"
+              aria-hidden="true"
+            />
+            <div>
+              <p className="font-medium text-foreground">Incident logged</p>
+              {incidentRef && (
+                <p className="mt-1 font-mono text-sm text-muted-foreground">
+                  Reference: {incidentRef}
+                </p>
+              )}
+              <p className="mt-1 text-sm text-muted-foreground">
+                {severity === 'HIGH'
+                  ? 'The CSO has been notified.'
+                  : 'The incident has been recorded in the audit log.'}
+              </p>
+            </div>
+            <Button variant="outline" onClick={handleReset}>
+              Log another incident
+            </Button>
+          </div>
+        )}
+
+        {/* Form */}
+        {step !== 'success' && (
+          <form
+            onSubmit={handleSubmit}
+            className="flex flex-col gap-6 rounded-lg border border-border bg-card p-6 shadow-[0_2px_4px_rgba(15,23,42,0.06)]"
+            aria-label="Log incident form"
+          >
+            {/* Type */}
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="incident-type">Incident type</Label>
+              <Select
+                value={type}
+                onValueChange={(v) => setType(v as IncidentType)}
+                disabled={step === 'submitting'}
+              >
+                <SelectTrigger id="incident-type" aria-required="true">
+                  <SelectValue placeholder="Select type…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {INCIDENT_TYPES.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>
+                      {t.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Severity */}
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="incident-severity">Severity</Label>
+              <Select
+                value={severity}
+                onValueChange={(v) => setSeverity(v as IncidentSeverity)}
+                disabled={step === 'submitting'}
+              >
+                <SelectTrigger id="incident-severity" aria-required="true">
+                  <SelectValue placeholder="Select severity…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {SEVERITIES.map((s) => (
+                    <SelectItem key={s.value} value={s.value}>
+                      <span>{s.label}</span>
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        — {s.hint}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {severity === 'HIGH' && (
+                <p className="text-xs text-destructive">
+                  High severity incidents notify the CSO immediately.
+                </p>
+              )}
+            </div>
+
+            {/* Description */}
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="incident-description">Description</Label>
+              <Textarea
+                id="incident-description"
+                placeholder="Describe what happened, who was involved, and any actions already taken…"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                disabled={step === 'submitting'}
+                rows={5}
+                aria-required="true"
+                aria-describedby="description-hint"
+              />
+              <p
+                id="description-hint"
+                className="text-xs text-muted-foreground"
+              >
+                Be specific. This entry is immutable once submitted.
+              </p>
+            </div>
+
+            {submitError && (
+              <p className="text-xs text-destructive" role="alert">
+                {submitError}
+              </p>
+            )}
+
+            <Button
+              type="submit"
+              disabled={!canSubmit || step === 'submitting'}
+              aria-busy={step === 'submitting'}
+              className="w-full"
+            >
+              {step === 'submitting' ? 'Logging incident…' : 'Log incident'}
+            </Button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}

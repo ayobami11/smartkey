@@ -13,6 +13,16 @@ const nextConfig: NextConfig = {
         destination: '/hod/dashboard',
         permanent: true,
       },
+      {
+        source: '/verifier',
+        destination: '/verifier/dashboard',
+        permanent: true,
+      },
+      {
+        source: '/requester',
+        destination: '/requester/dashboard',
+        permanent: true,
+      },
     ];
   },
 };
