@@ -58,31 +58,36 @@ export const ActiveRequestBanner = () => {
   // ── Fetch ────────────────────────────────────────────────────────────────
 
   const fetchActive = async () => {
-    const supabase = createBrowserClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
+    try {
+      const supabase = createBrowserClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      const { data } = await supabase
+        .from('requests')
+        .select(
+          'id, status, code, code_expires_at, return_deadline, key:keys!key_id(code, room_name)'
+        )
+        .eq('requester_id', user.id)
+        .in('status', ['CODE_ISSUED', 'KEY_ISSUED'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      setRequest(data as ActiveRequest | null);
+      if (data?.code_expires_at) {
+        setCountdown(secondsRemaining(data.code_expires_at));
+      }
+    } catch {
+      // fail silently — banner is non-critical; page remains usable
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const { data } = await supabase
-      .from('requests')
-      .select(
-        'id, status, code, code_expires_at, return_deadline, key:keys!key_id(code, room_name)'
-      )
-      .eq('requester_id', user.id)
-      .in('status', ['CODE_ISSUED', 'KEY_ISSUED'])
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    setRequest(data as ActiveRequest | null);
-    if (data?.code_expires_at) {
-      setCountdown(secondsRemaining(data.code_expires_at));
-    }
-    setLoading(false);
   };
 
   useEffect(() => {

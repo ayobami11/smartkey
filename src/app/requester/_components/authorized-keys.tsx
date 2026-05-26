@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   CalendarIcon,
   CheckCircleIcon,
@@ -165,37 +165,38 @@ export const AuthorizedKeys = () => {
 
   // ── Fetch authorized keys ─────────────────────────────────────────────────
 
-  const fetchKeys = async () => {
-    const supabase = createBrowserClient();
-    // All synchronous state updates happen AFTER the first await so the
-    // react-hooks/set-state-in-effect lint rule is not triggered.
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
+  const fetchKeys = useCallback(async () => {
+    try {
+      const supabase = createBrowserClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+      setUserId(user.id);
+      setFetchError(null);
+
+      const { data, error } = await supabase
+        .from('authorisations')
+        .select('key:keys!key_id(id, code, zone, room_name, status)')
+        .eq('profile_id', user.id);
+
+      if (error) {
+        setFetchError('Failed to load your authorised keys.');
+      } else {
+        setKeys((data ?? []) as AuthorisedKey[]);
+      }
+    } catch {
+      setFetchError(
+        'Failed to load your authorised keys. Check your connection.'
+      );
+    } finally {
       setLoading(false);
-      return;
     }
-    setUserId(user.id);
-    setFetchError(null);
-
-    const { data, error } = await supabase
-      .from('authorisations')
-      .select('key:keys!key_id(id, code, zone, room_name, status)')
-      .eq('profile_id', user.id);
-
-    if (error) {
-      setFetchError('Failed to load your authorised keys.');
-    } else {
-      setKeys((data ?? []) as AuthorisedKey[]);
-    }
-    setLoading(false);
-  };
+  }, []); // setState setters are stable refs — no deps needed
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchKeys();
-  }, []);
+  }, [fetchKeys]);
 
   // ── Countdown timer ───────────────────────────────────────────────────────
 
