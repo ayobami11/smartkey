@@ -46,13 +46,15 @@ export const middleware = async (request: NextRequest): Promise<NextResponse> =>
   }
 
   // Role read from DB, not JWT claim — JWT claim may be stale
-  const { data: profile } = await supabase
+  const { data: profileData } = await supabase
     .from('profiles')
     .select('role')
     .eq('id', user.id)
     .single();
 
-  const userRole = profile?.role as UserRole | undefined;
+  // Cast required: Supabase narrows the select-string type to `never` when it
+  // can't statically parse the column list against the schema.
+  const userRole = (profileData as { role: UserRole } | null)?.role;
 
   if (isPublicOnly) {
     return redirectTo(request, userRole ? (ROLE_DASHBOARD[userRole] ?? '/') : '/');

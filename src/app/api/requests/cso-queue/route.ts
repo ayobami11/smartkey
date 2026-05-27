@@ -35,8 +35,7 @@ export const GET = async () => {
       risk_factors,
       created_at,
       requester:profiles!requester_id(id, full_name, photo_url, institutional_email),
-      key:keys!key_id(id, code, room_name, zone, department_id,
-        department:departments!department_id(name))
+      key:keys!key_id(id, code, room_name, zone, department_id)
     `,
     )
     .eq('risk_tier', 'HIGH')
