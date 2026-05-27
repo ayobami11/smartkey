@@ -31,13 +31,13 @@ export const POST = async (request: NextRequest) => {
     return NextResponse.json(err('Invalid credentials', 401), { status: 401 });
   }
 
-  const { data: profile } = await supabase
+  const { data: profileData } = await supabase
     .from('profiles')
     .select('role')
     .eq('id', authData.user.id)
     .single();
 
-  const role = profile?.role ?? null;
+  const role = (profileData as { role: string } | null)?.role ?? null;
   const mfaRequired = role ? MFA_ROLES.has(role) : false;
 
   if (mfaRequired) {
