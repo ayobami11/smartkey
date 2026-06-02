@@ -56,6 +56,7 @@ export const LoginForm = () => {
   const router = useRouter();
   const [step, setStep] = useState<'credentials' | 'otp'>('credentials');
   const [pendingEmail, setPendingEmail] = useState('');
+  const [pendingRole, setPendingRole] = useState<string | null>(null);
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -89,6 +90,7 @@ export const LoginForm = () => {
 
       if (json.data.mfa_required) {
         setPendingEmail(data.email);
+        setPendingRole(json.data.role);
         setStep('otp');
         return;
       }
@@ -118,7 +120,7 @@ export const LoginForm = () => {
       }
 
       router.refresh();
-      router.push(ROLE_DASHBOARD['CSO'] ?? '/');
+      router.push(ROLE_DASHBOARD[pendingRole ?? ''] ?? '/');
     } catch {
       setServerError('Unable to reach the server. Check your connection.');
     }
