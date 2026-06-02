@@ -5,7 +5,8 @@ import { createServerClient } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { err, ok } from '@/types/api';
 
-const MFA_ROLES = new Set(['CSO', 'HOD', 'VERIFIER']);
+// OTP MFA temporarily disabled — re-enable once SMTP (Resend) is configured
+const MFA_ROLES = new Set<string>();
 
 const bodySchema = z.object({
   email: z.string().email(),
