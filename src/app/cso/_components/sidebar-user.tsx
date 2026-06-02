@@ -15,6 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   SidebarMenu,
   SidebarMenuButton,
@@ -25,7 +26,8 @@ import {
 const getInitials = (name: string) =>
   name
     .split(' ')
-    .map((n) => n[0])
+    .filter(Boolean)
+    .map((n) => n[0] ?? '')
     .slice(0, 2)
     .join('')
     .toUpperCase();
@@ -37,6 +39,7 @@ export const SidebarUser = ({
     name: string;
     email: string;
     avatar: string;
+    loading?: boolean;
   };
 }) => {
   const { isMobile } = useSidebar();
@@ -60,17 +63,29 @@ export const SidebarUser = ({
               size="lg"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
-              <Avatar className="h-8 w-8 rounded-lg">
-                <AvatarImage src={user.avatar} alt={user.name} />
-                <AvatarFallback className="rounded-lg">
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">{user.name}</span>
-                <span className="truncate text-xs">{user.email}</span>
-              </div>
-              <ChevronsUpDown className="ml-auto size-4" />
+              {user.loading ? (
+                <>
+                  <Skeleton className="h-8 w-8 rounded-lg" />
+                  <div className="grid flex-1 gap-1">
+                    <Skeleton className="h-3 w-24" />
+                    <Skeleton className="h-2 w-32" />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <Avatar className="h-8 w-8 rounded-lg">
+                    <AvatarImage src={user.avatar} alt={user.name} />
+                    <AvatarFallback className="rounded-lg">
+                      {initials}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="grid flex-1 text-left text-sm leading-tight">
+                    <span className="truncate font-medium">{user.name}</span>
+                    <span className="truncate text-xs">{user.email}</span>
+                  </div>
+                  <ChevronsUpDown className="ml-auto size-4" />
+                </>
+              )}
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
