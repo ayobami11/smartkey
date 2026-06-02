@@ -1,6 +1,6 @@
 import { createServerClient } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
-import type { UserRole } from '@/types/database';
+import type { Json, UserRole } from '@/types/database';
 
 export type AuditEntryParams = {
   /** The event name — must match the `AuditEvent` union defined in `src/types/`. */
@@ -14,7 +14,7 @@ export type AuditEntryParams = {
   /** UUID of the entity affected. */
   targetId: string;
   /** Structured payload — validated by zod schema in the caller before passing here. */
-  payload: Record<string, unknown>;
+  payload: Json;
 };
 
 /**
@@ -28,7 +28,9 @@ export type AuditEntryParams = {
  *
  * @throws When the database write fails.
  */
-export const writeAuditEntry = async (params: AuditEntryParams): Promise<void> => {
+export const writeAuditEntry = async (
+  params: AuditEntryParams
+): Promise<void> => {
   const { event, actorId, actorRole, targetType, targetId, payload } = params;
 
   const supabase = await createServerClient();
@@ -52,8 +54,16 @@ export const writeAuditEntry = async (params: AuditEntryParams): Promise<void> =
       code: error.code,
     });
 
-    throw new Error(`Audit log write failed for event "${event}": ${error.message}`);
+    throw new Error(
+      `Audit log write failed for event "${event}": ${error.message}`
+    );
   }
 
-  logger.info('Audit entry written', { event, actorId, actorRole, targetType, targetId });
+  logger.info('Audit entry written', {
+    event,
+    actorId,
+    actorRole,
+    targetType,
+    targetId,
+  });
 };
