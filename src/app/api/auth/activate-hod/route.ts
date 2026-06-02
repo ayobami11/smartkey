@@ -50,11 +50,13 @@ export const POST = async (request: NextRequest) => {
   const userId = sessionData.user.id;
 
   // Confirm this is an HOD profile
-  const { data: profile } = await supabase
+  const { data: profileData } = await supabase
     .from('profiles')
     .select('role')
     .eq('id', userId)
     .single();
+
+  const profile = profileData as { role: string } | null;
 
   if (!profile || profile.role !== 'HOD') {
     return NextResponse.json(err('Forbidden', 403), { status: 403 });

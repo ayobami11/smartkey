@@ -8,6 +8,31 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-06-02 — Shift handover, incidents, reports, and AI risk-alerts routes (PR #37, branch: backend/feat/23-shift-incident-routes)
+
+- Implemented shift, incident, report, and AI risk-alert route handlers.
+- `GET /api/shifts/current` — returns the active shift record with officer identities and elapsed time.
+- `POST /api/shifts/handover` → calls `acknowledge_shift_handover` RPC; supports per-key and bulk acknowledgement.
+- `GET /api/incidents` — paginated, read-only incident log (no update/delete endpoint; log is append-only).
+- `POST /api/incidents` — appends a new incident entry; HIGH severity incidents trigger an immediate CSO Realtime alert.
+- `GET /api/reports` — paginated list of generated shift reports for CSO.
+- `POST /api/reports/generate` → calls `generate_shift_report` RPC; Gemini client not yet wired — route exists with placeholder response pending AI integration.
+- `POST /api/reports/[id]/comments` → calls `add_report_comment` RPC; comment is immutable after insert.
+- `GET /api/ai/risk-alerts` — returns HIGH risk_tier requests from the last 24 hours for the CSO alert feed.
+
+### 2026-06-02 — Key transaction and user admin API routes (PR #36, branch: backend/feat/17-key-admin-routes)
+
+- Implemented all key transaction and user administration route handlers.
+- `POST /api/keys/return` → calls `return_key` RPC; logs return with verifier and optional returner identity.
+- `GET /api/keys/out` — returns all KEY_ISSUED and KEY_OVERDUE requests; supports zone and overdue_only filters.
+- `GET /api/keys/history` — paginated transaction history for CSO and HOD; HOD view is dept-scoped via RLS.
+- `POST /api/keys/mark-lost` — sets key status to RETIRED, creates a MISSING_KEY HIGH-severity incident, writes audit entry.
+- `POST /api/admin/users` → calls `provision_user` RPC; creates profile, generates activation token, queues invite email.
+- `GET /api/admin/users` — paginated user list with role, department, and status filters.
+- `PATCH /api/admin/users/[id]/revoke` — sets profile status to DEACTIVATED and invalidates the Supabase Auth session immediately.
+- `POST /api/admin/authorisations` — nominates a collector for a key slot; enforces max-3-per-key constraint at DB level.
+- `DELETE /api/admin/authorisations/[key_id]/[requester_id]` — removes a collector from a slot; writes audit entry.
+
 ### 2026-05-25 — Auth API routes (PR #32, branch: backend/feat/15-auth-routes)
 
 - Implemented all 6 auth route handlers under `src/app/api/auth/`.

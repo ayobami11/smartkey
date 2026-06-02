@@ -1,6 +1,12 @@
 // Auto-generated placeholder — run `npm run db:types` after applying migrations
 
-export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[];
 
 export type Database = {
   public: {
@@ -45,6 +51,7 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       departments: {
         Row: {
@@ -62,6 +69,7 @@ export type Database = {
           name?: string;
           hod_id?: string | null;
         };
+        Relationships: [];
       };
       keys: {
         Row: {
@@ -91,6 +99,7 @@ export type Database = {
           status?: Database['public']['Enums']['key_status'];
           retired_at?: string | null;
         };
+        Relationships: [];
       };
       authorisations: {
         Row: {
@@ -111,6 +120,7 @@ export type Database = {
           authorised_by?: string;
           authorised_at?: string;
         };
+        Relationships: [];
       };
       requests: {
         Row: {
@@ -167,6 +177,7 @@ export type Database = {
           returned_at?: string | null;
           created_at?: string;
         };
+        Relationships: [];
       };
       hod_decisions: {
         Row: {
@@ -199,6 +210,7 @@ export type Database = {
           signature_mismatch_pct?: number | null;
           decided_at?: string;
         };
+        Relationships: [];
       };
       shifts: {
         Row: {
@@ -225,6 +237,7 @@ export type Database = {
           primary_officer_id?: string;
           secondary_officer_id?: string | null;
         };
+        Relationships: [];
       };
       shift_handovers: {
         Row: {
@@ -254,6 +267,7 @@ export type Database = {
           bulk_acknowledged?: boolean;
           acknowledged_at?: string;
         };
+        Relationships: [];
       };
       shift_reports: {
         Row: {
@@ -272,7 +286,15 @@ export type Database = {
           metadata?: Json;
           generated_at?: string;
         };
-        Update: never;
+        Update: {
+          id?: string;
+          shift_id?: string;
+          markdown?: string;
+          timeline?: Json;
+          metadata?: Json;
+          generated_at?: string;
+        };
+        Relationships: [];
       };
       shift_report_comments: {
         Row: {
@@ -289,13 +311,20 @@ export type Database = {
           text: string;
           created_at?: string;
         };
-        Update: never;
+        Update: {
+          id?: string;
+          report_id?: string;
+          author_id?: string;
+          text?: string;
+          created_at?: string;
+        };
+        Relationships: [];
       };
       incidents: {
         Row: {
           id: string;
           reference: string;
-          shift_id: string;
+          shift_id: string | null;
           logged_by: string;
           type: Database['public']['Enums']['incident_type'];
           severity: Database['public']['Enums']['incident_severity'];
@@ -310,7 +339,7 @@ export type Database = {
         Insert: {
           id?: string;
           reference?: string;
-          shift_id: string;
+          shift_id?: string | null;
           logged_by: string;
           type: Database['public']['Enums']['incident_type'];
           severity: Database['public']['Enums']['incident_severity'];
@@ -322,7 +351,22 @@ export type Database = {
           occurred_at: string;
           logged_at?: string;
         };
-        Update: never;
+        Update: {
+          id?: string;
+          reference?: string;
+          shift_id?: string | null;
+          logged_by?: string;
+          type?: Database['public']['Enums']['incident_type'];
+          severity?: Database['public']['Enums']['incident_severity'];
+          description?: string;
+          related_key_id?: string | null;
+          related_person_id?: string | null;
+          photo_url?: string | null;
+          status?: Database['public']['Enums']['incident_status'];
+          occurred_at?: string;
+          logged_at?: string;
+        };
+        Relationships: [];
       };
       audit_log: {
         Row: {
@@ -345,7 +389,17 @@ export type Database = {
           payload: Json;
           occurred_at?: string;
         };
-        Update: never;
+        Update: {
+          id?: string;
+          event?: string;
+          actor_id?: string;
+          actor_role?: Database['public']['Enums']['user_role'];
+          target_type?: string;
+          target_id?: string;
+          payload?: Json;
+          occurred_at?: string;
+        };
+        Relationships: [];
       };
     };
     Views: Record<string, never>;

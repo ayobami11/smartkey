@@ -18,6 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { createServerClient } from '@/lib/supabase/server';
 
 type Role = 'CSO' | 'HOD' | 'Verifier' | 'Requester';
 type Status = 'Active' | 'Pending' | 'Deactivated';
@@ -51,113 +52,6 @@ const statusConfig: Record<Status, { label: string; class: string }> = {
   },
 };
 
-const users: User[] = [
-  {
-    id: 'u-001',
-    name: 'Adekunle Balogun',
-    email: 'a.balogun@unilag.edu.ng',
-    role: 'CSO',
-    status: 'Active',
-    lastSignIn: '14 May 2026, 08:02',
-  },
-  {
-    id: 'u-002',
-    name: 'Prof. Chidi Adeleke',
-    email: 'c.adeleke@unilag.edu.ng',
-    role: 'HOD',
-    department: 'Faculty of Sciences',
-    status: 'Active',
-    lastSignIn: '14 May 2026, 09:15',
-  },
-  {
-    id: 'u-003',
-    name: 'Prof. Fatima Suleiman',
-    email: 'f.suleiman@unilag.edu.ng',
-    role: 'HOD',
-    department: 'Faculty of Engineering',
-    status: 'Active',
-    lastSignIn: '13 May 2026, 14:30',
-  },
-  {
-    id: 'u-004',
-    name: 'Prof. Yetunde Bello',
-    email: 'y.bello@unilag.edu.ng',
-    role: 'HOD',
-    department: 'Faculty of Medicine',
-    status: 'Active',
-    lastSignIn: '14 May 2026, 11:00',
-  },
-  {
-    id: 'u-005',
-    name: 'Dr. Aisha Mohammed',
-    email: 'a.mohammed@unilag.edu.ng',
-    role: 'HOD',
-    department: 'Faculty of Law',
-    status: 'Pending',
-    lastSignIn: '—',
-  },
-  {
-    id: 'u-006',
-    name: 'Officer Musa Lawal',
-    email: 'm.lawal@unilag.edu.ng',
-    role: 'Verifier',
-    status: 'Active',
-    lastSignIn: '14 May 2026, 16:00',
-  },
-  {
-    id: 'u-007',
-    name: 'Officer Ibrahim Fashola',
-    email: 'i.fashola@unilag.edu.ng',
-    role: 'Verifier',
-    status: 'Active',
-    lastSignIn: '14 May 2026, 08:00',
-  },
-  {
-    id: 'u-008',
-    name: 'Officer Ngozi Adeleke',
-    email: 'n.adeleke@unilag.edu.ng',
-    role: 'Verifier',
-    status: 'Pending',
-    lastSignIn: '—',
-  },
-  {
-    id: 'u-009',
-    name: 'Dr. Emeka Bakare',
-    email: 'e.bakare@unilag.edu.ng',
-    role: 'Requester',
-    department: 'Faculty of Sciences',
-    status: 'Active',
-    lastSignIn: '14 May 2026, 16:12',
-  },
-  {
-    id: 'u-010',
-    name: 'Mrs. Chidinma Nwosu',
-    email: 'c.nwosu@unilag.edu.ng',
-    role: 'Requester',
-    department: 'Faculty of Engineering',
-    status: 'Active',
-    lastSignIn: '14 May 2026, 14:55',
-  },
-  {
-    id: 'u-011',
-    name: 'Mr. Babatunde Okafor',
-    email: 'b.okafor@unilag.edu.ng',
-    role: 'Requester',
-    department: 'Faculty of Arts',
-    status: 'Active',
-    lastSignIn: '12 May 2026, 10:00',
-  },
-  {
-    id: 'u-012',
-    name: 'Mr. Femi Okonkwo',
-    email: 'f.okonkwo@unilag.edu.ng',
-    role: 'Requester',
-    department: 'Faculty of Sciences',
-    status: 'Deactivated',
-    lastSignIn: '01 Apr 2026, 09:30',
-  },
-];
-
 const filterChips = [
   'All',
   'Active',
@@ -169,7 +63,46 @@ const filterChips = [
   'Requester',
 ];
 
-export default function UsersPage() {
+const ROLE_LABEL: Record<string, Role> = {
+  CSO: 'CSO',
+  HOD: 'HOD',
+  VERIFIER: 'Verifier',
+  REQUESTER: 'Requester',
+};
+
+const STATUS_LABEL: Record<string, Status> = {
+  ACTIVE: 'Active',
+  PENDING_ACTIVATION: 'Pending',
+  DEACTIVATED: 'Deactivated',
+};
+
+export default async function UsersPage() {
+  const supabase = await createServerClient();
+
+  const { data: profileRows } = await supabase
+    .from('profiles')
+    .select(
+      'id, full_name, institutional_email, role, status, department_id, created_at, department:departments!department_id(name)'
+    )
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  const users: User[] = (profileRows ?? []).map(
+    (p: Record<string, unknown>) => {
+      const dept = p.department as Record<string, unknown> | null;
+      return {
+        id: p.id as string,
+        name: p.full_name as string,
+        email: p.institutional_email as string,
+        role: (ROLE_LABEL[p.role as string] ?? (p.role as string)) as Role,
+        department: (dept?.name as string | undefined) ?? undefined,
+        status: (STATUS_LABEL[p.status as string] ??
+          (p.status as string)) as Status,
+        lastSignIn: '—',
+      };
+    }
+  );
+
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -286,7 +219,7 @@ export default function UsersPage() {
 
       <div className="flex flex-col items-center gap-3">
         <p className="text-xs text-muted-foreground">
-          Showing 1–10 of 12 users
+          Showing {users.length} users
         </p>
         <Pagination>
           <PaginationContent>
@@ -301,9 +234,6 @@ export default function UsersPage() {
               <PaginationLink href="#" isActive>
                 1
               </PaginationLink>
-            </PaginationItem>
-            <PaginationItem>
-              <PaginationLink href="#">2</PaginationLink>
             </PaginationItem>
             <PaginationItem>
               <PaginationNext href="#" />
