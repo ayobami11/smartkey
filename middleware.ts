@@ -11,14 +11,9 @@ const PROTECTED_ROUTES: Array<{ prefix: string; role: UserRole }> = [
   { prefix: '/me', role: 'REQUESTER' },
 ];
 
-// Paths that should redirect authenticated users straight to their dashboard
-const PUBLIC_ONLY_PREFIXES = [
-  '/',
-  '/login',
-  '/activate',
-  '/forgot-password',
-  '/help',
-];
+// Paths where authenticated users should be sent to their dashboard instead
+const PUBLIC_ONLY_EXACT = new Set(['/', '/login', '/help']);
+const PUBLIC_ONLY_PREFIXES = ['/activate', '/forgot-password'];
 
 const ROLE_DASHBOARD: Record<UserRole, string> = {
   CSO: '/cso/dashboard',
@@ -59,9 +54,9 @@ export const middleware = async (
     const matchedProtected = PROTECTED_ROUTES.find(({ prefix }) =>
       pathname.startsWith(prefix)
     );
-    const isPublicOnly = PUBLIC_ONLY_PREFIXES.some((prefix) =>
-      pathname.startsWith(prefix)
-    );
+    const isPublicOnly =
+      PUBLIC_ONLY_EXACT.has(pathname) ||
+      PUBLIC_ONLY_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 
     if (!user) {
       if (matchedProtected) return redirectTo(request, '/login');
