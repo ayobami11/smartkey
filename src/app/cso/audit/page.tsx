@@ -16,12 +16,12 @@ import { Input } from '@/components/ui/input';
 import {
   Pagination,
   PaginationContent,
-  PaginationEllipsis,
   PaginationItem,
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
 } from '@/components/ui/pagination';
+import { createServerClient } from '@/lib/supabase/server';
 
 type AuditEventType =
   | 'REQUEST'
@@ -81,115 +81,6 @@ const eventConfig: Record<
   },
 };
 
-const entries: AuditEntry[] = [
-  {
-    id: 'evt-001',
-    type: 'LOGIN',
-    actor: 'Officer Musa',
-    actorRole: 'Verifier',
-    description: 'Signed in at the start of Shift 3',
-    timestamp: '2026-05-14 16:00',
-  },
-  {
-    id: 'evt-002',
-    type: 'HANDOVER',
-    actor: 'Officer Musa',
-    actorRole: 'Verifier',
-    description: 'Shift handover acknowledged — 3 outstanding keys confirmed',
-    timestamp: '2026-05-14 16:03',
-  },
-  {
-    id: 'evt-003',
-    type: 'REQUEST',
-    actor: 'Dr. Emeka Bakare',
-    actorRole: 'Requester',
-    description: 'Requested key Senate-304 (New Senate Room 304)',
-    keyCode: 'NS-304',
-    timestamp: '2026-05-14 16:12',
-  },
-  {
-    id: 'evt-004',
-    type: 'ANOMALY',
-    actor: 'System',
-    actorRole: 'System',
-    description:
-      'High-risk flag on NS-304 — request submitted outside operational hours',
-    keyCode: 'NS-304',
-    timestamp: '2026-05-14 16:12',
-  },
-  {
-    id: 'evt-005',
-    type: 'ISSUE',
-    actor: 'Officer Musa',
-    actorRole: 'Verifier',
-    description:
-      'Issued key Senate-304 to Dr. Emeka Bakare — high-risk acknowledged',
-    keyCode: 'NS-304',
-    timestamp: '2026-05-14 16:14',
-  },
-  {
-    id: 'evt-006',
-    type: 'SIGNATURE',
-    actor: 'System',
-    actorRole: 'System',
-    description:
-      'Signature verified for HOD approval — Prof. Adeleke (match: 96.4%)',
-    timestamp: '2026-05-14 15:47',
-  },
-  {
-    id: 'evt-007',
-    type: 'RETURN',
-    actor: 'Officer Adeleke',
-    actorRole: 'Verifier',
-    description: 'Received returned key Senate-211 from Prof. Yetunde Bello',
-    keyCode: 'NS-211',
-    timestamp: '2026-05-14 15:33',
-  },
-  {
-    id: 'evt-008',
-    type: 'REQUEST',
-    actor: 'Mrs. Chidinma Nwosu',
-    actorRole: 'Requester',
-    description: 'Requested key Old Senate-107 (Old Senate Room 107)',
-    keyCode: 'OS-107',
-    timestamp: '2026-05-14 14:55',
-  },
-  {
-    id: 'evt-009',
-    type: 'ISSUE',
-    actor: 'Officer Ibrahim',
-    actorRole: 'Verifier',
-    description: 'Issued key Old Senate-107 to Mrs. Chidinma Nwosu',
-    keyCode: 'OS-107',
-    timestamp: '2026-05-14 14:57',
-  },
-  {
-    id: 'evt-010',
-    type: 'SETTINGS',
-    actor: 'CSO Admin',
-    actorRole: 'CSO',
-    description: 'Updated return deadline to 17:30 (was 17:00)',
-    timestamp: '2026-05-14 09:14',
-  },
-  {
-    id: 'evt-011',
-    type: 'LOGIN',
-    actor: 'Officer Ibrahim',
-    actorRole: 'Verifier',
-    description: 'Signed in at the start of Shift 2',
-    timestamp: '2026-05-14 08:00',
-  },
-  {
-    id: 'evt-012',
-    type: 'RETURN',
-    actor: 'Officer Fashola',
-    actorRole: 'Verifier',
-    description: 'Received returned key Senate-118 from Dr. Okonkwo',
-    keyCode: 'NS-118',
-    timestamp: '2026-05-14 07:52',
-  },
-];
-
 const typeChips: { label: string; type?: AuditEventType }[] = [
   { label: 'All types' },
   { label: 'Request', type: 'REQUEST' },
@@ -212,7 +103,62 @@ const actorRoleClass: Record<string, string> = {
   System: 'bg-muted text-muted-foreground',
 };
 
-export default function AuditLogPage() {
+const ROLE_LABEL: Record<string, string> = {
+  CSO: 'CSO',
+  HOD: 'HOD',
+  VERIFIER: 'Verifier',
+  REQUESTER: 'Requester',
+};
+
+const EVENT_TYPE_MAP: Record<string, AuditEventType> = {
+  key_issued: 'ISSUE',
+  key_returned: 'RETURN',
+  request_created: 'REQUEST',
+  shift_handover_acknowledged: 'HANDOVER',
+  user_provisioned: 'SETTINGS',
+};
+
+export default async function AuditLogPage() {
+  const supabase = await createServerClient();
+
+  const { data: auditRows } = await supabase
+    .from('audit_log')
+    .select(
+      'id, event, actor_id, actor_role, target_type, target_id, payload, occurred_at'
+    )
+    .order('occurred_at', { ascending: false })
+    .limit(50);
+
+  const entries: AuditEntry[] = (auditRows ?? []).map(
+    (e: Record<string, unknown>) => {
+      const payload =
+        typeof e.payload === 'object' && e.payload !== null
+          ? (e.payload as Record<string, unknown>)
+          : {};
+      const eventName = e.event as string | undefined;
+      const eventType: AuditEventType =
+        EVENT_TYPE_MAP[eventName ?? ''] ?? 'SETTINGS';
+      return {
+        id: e.id as string,
+        type: eventType,
+        actor:
+          (payload.actor_name as string | undefined) ??
+          (e.actor_id as string).slice(0, 8),
+        actorRole:
+          ROLE_LABEL[e.actor_role as string] ?? (e.actor_role as string),
+        description: eventName?.replace(/_/g, ' ') ?? 'Event',
+        keyCode: payload.key_code as string | undefined,
+        timestamp: new Date(e.occurred_at as string).toLocaleString('en-GB', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+      };
+    }
+  );
+
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -339,7 +285,7 @@ export default function AuditLogPage() {
 
       <div className="flex flex-col items-center gap-3">
         <p className="text-xs text-muted-foreground">
-          Showing 1–20 of 1,247 events
+          Showing {entries.length} events
         </p>
         <Pagination>
           <PaginationContent>
@@ -354,18 +300,6 @@ export default function AuditLogPage() {
               <PaginationLink href="#" isActive>
                 1
               </PaginationLink>
-            </PaginationItem>
-            <PaginationItem>
-              <PaginationLink href="#">2</PaginationLink>
-            </PaginationItem>
-            <PaginationItem>
-              <PaginationLink href="#">3</PaginationLink>
-            </PaginationItem>
-            <PaginationItem>
-              <PaginationEllipsis />
-            </PaginationItem>
-            <PaginationItem>
-              <PaginationLink href="#">63</PaginationLink>
             </PaginationItem>
             <PaginationItem>
               <PaginationNext href="#" />

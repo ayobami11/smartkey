@@ -15,75 +15,9 @@ import {
 import type { LucideIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-
-const zones = [
-  { name: 'New Senate', issued: 12, total: 47, trend: +2 },
-  { name: 'Old Senate', issued: 8, total: 31, trend: -1 },
-];
-
-const anomalies = [
-  {
-    id: 1,
-    severity: 'HIGH' as const,
-    title: 'Signature mismatch on weekend approval',
-    description: 'Prof. Adeleke, Faculty of Sciences — 78% mismatch detected.',
-    time: '14:22',
-  },
-  {
-    id: 2,
-    severity: 'MEDIUM' as const,
-    title: 'Outstanding key past return deadline',
-    description: 'Old Senate Room 12, Dr. Bakare — issued 09:15 yesterday.',
-    time: '17:05',
-  },
-  {
-    id: 3,
-    severity: 'MEDIUM' as const,
-    title: 'Request frequency exceeds rolling window',
-    description: 'New Senate Room 304 — 4 requests in 24 hours.',
-    time: '12:40',
-  },
-];
+import { createServerClient } from '@/lib/supabase/server';
 
 type EventType = 'ISSUED' | 'RETURNED' | 'FLAGGED' | 'HANDOVER';
-
-const events: {
-  id: number;
-  type: EventType;
-  key?: string;
-  label: string;
-  time: string;
-}[] = [
-  {
-    id: 1,
-    type: 'ISSUED',
-    key: 'Senate 304',
-    label: 'Key issued',
-    time: '13:48',
-  },
-  {
-    id: 2,
-    type: 'RETURNED',
-    key: 'Senate 211',
-    label: 'Key returned',
-    time: '13:22',
-  },
-  {
-    id: 3,
-    type: 'FLAGGED',
-    key: 'Senate 304',
-    label: 'High-risk request flagged',
-    time: '12:40',
-  },
-  { id: 4, type: 'HANDOVER', label: 'Shift handover completed', time: '12:00' },
-  {
-    id: 5,
-    type: 'ISSUED',
-    key: 'Senate 211',
-    label: 'Key issued',
-    time: '11:05',
-  },
-];
 
 const severityConfig: Record<
   'HIGH' | 'MEDIUM',
@@ -111,7 +45,107 @@ const eventConfig: Record<EventType, { icon: LucideIcon; iconClass: string }> =
     HANDOVER: { icon: ArrowLeftRightIcon, iconClass: 'text-muted-foreground' },
   };
 
-export default function CsoDashboardPage() {
+export default async function CsoDashboardPage() {
+  const supabase = await createServerClient();
+
+  const { data: allKeys } = await supabase
+    .from('keys')
+    .select('zone, status')
+    .neq('status', 'RETIRED');
+
+  type ZoneStat = {
+    name: string;
+    issued: number;
+    total: number;
+    trend: number;
+  };
+  const zoneMap: Record<string, ZoneStat> = {
+    NEW_SENATE: { name: 'New Senate', issued: 0, total: 0, trend: 0 },
+    OLD_SENATE: { name: 'Old Senate', issued: 0, total: 0, trend: 0 },
+  };
+  (allKeys ?? []).forEach((k) => {
+    if (k.zone in zoneMap) {
+      zoneMap[k.zone].total++;
+      if (k.status === 'ISSUED' || k.status === 'OVERDUE')
+        zoneMap[k.zone].issued++;
+    }
+  });
+  const zones = Object.values(zoneMap);
+
+  // eslint-disable-next-line react-hooks/purity
+  const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { data: riskRequests } = await supabase
+    .from('requests')
+    .select(
+      'id, risk_tier, risk_factors, created_at, key:keys!key_id(code, room_name), requester:profiles!requester_id(full_name)'
+    )
+    .eq('risk_tier', 'HIGH')
+    .gte('created_at', since24h)
+    .order('created_at', { ascending: false })
+    .limit(5);
+
+  const anomalies = (riskRequests ?? []).map(
+    (r: Record<string, unknown>, i: number) => {
+      const key = r.key as Record<string, unknown> | null;
+      const requester = r.requester as Record<string, unknown> | null;
+      const factors = Array.isArray(r.risk_factors)
+        ? (r.risk_factors as Record<string, unknown>[])
+            .map((f) => (f.rule as string | undefined) ?? String(f))
+            .join(', ')
+        : 'risk factors detected';
+      return {
+        id: i + 1,
+        severity: 'HIGH' as const,
+        title: `High-risk request — ${(key?.room_name as string | undefined) ?? 'unknown room'}`,
+        description: `${(requester?.full_name as string | undefined) ?? 'Unknown user'} — ${factors}`,
+        time: new Date(r.created_at as string).toLocaleTimeString('en-GB', {
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+      };
+    }
+  );
+
+   
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const { data: auditRows } = await supabase
+    .from('audit_log')
+    .select(
+      'id, event, actor_role, target_type, target_id, payload, occurred_at'
+    )
+    .gte('occurred_at', todayStart.toISOString())
+    .order('occurred_at', { ascending: false })
+    .limit(20);
+
+  const EVENT_MAP: Record<string, EventType> = {
+    key_issued: 'ISSUED',
+    key_returned: 'RETURNED',
+    shift_handover_acknowledged: 'HANDOVER',
+  };
+  const events = (auditRows ?? []).map(
+    (e: Record<string, unknown>, i: number) => {
+      const eventName = e.event as string | undefined;
+      const eventType: EventType =
+        EVENT_MAP[eventName ?? ''] ??
+        (eventName?.includes('risk') ? 'FLAGGED' : 'ISSUED');
+      const payload =
+        typeof e.payload === 'object' && e.payload !== null
+          ? (e.payload as Record<string, unknown>)
+          : {};
+      return {
+        id: i + 1,
+        type: eventType,
+        key: payload.key_code as string | undefined,
+        label: eventName?.replace(/_/g, ' ') ?? 'Event',
+        time: new Date(e.occurred_at as string).toLocaleTimeString('en-GB', {
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+      };
+    }
+  );
+
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
       {/* Quick actions */}
