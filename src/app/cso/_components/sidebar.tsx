@@ -25,9 +25,9 @@ import { SidebarBrand } from './sidebar-brand';
 
 const data = {
   user: {
-    name: 'shadcn',
-    email: 'm@example.com',
-    avatar: '/avatars/shadcn.jpg',
+    name: 'Chief Security Officer',
+    email: 'cso@unilag.edu.ng',
+    avatar: '',
   },
   team: {
     name: 'SmartKey',

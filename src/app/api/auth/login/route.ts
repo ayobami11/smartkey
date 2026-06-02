@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { createServerClient } from '@/lib/supabase/server';
+import { logger } from '@/lib/logger';
 import { err, ok } from '@/types/api';
 
-const MFA_ROLES = new Set(['CSO', 'HOD', 'VERIFIER']);
+// OTP MFA temporarily disabled — re-enable once SMTP (Resend) is configured
+const MFA_ROLES = new Set<string>();
 
 const bodySchema = z.object({
   email: z.string().email(),
@@ -22,10 +24,11 @@ export const POST = async (request: NextRequest) => {
 
   const { email, password } = parsed.data;
 
-  const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
+  const { data: authData, error: authError } =
+    await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
   if (authError || !authData.session) {
     return NextResponse.json(err('Invalid credentials', 401), { status: 401 });
@@ -43,7 +46,15 @@ export const POST = async (request: NextRequest) => {
   if (mfaRequired) {
     const { error: otpError } = await supabase.auth.signInWithOtp({ email });
     if (otpError) {
-      return NextResponse.json(err('Failed to send OTP', 500), { status: 500 });
+      logger.error('OTP send failed', {
+        email,
+        error: otpError.message,
+        code: otpError.status,
+      });
+      return NextResponse.json(
+        err(`Failed to send OTP: ${otpError.message}`, 500),
+        { status: 500 }
+      );
     }
   }
 
@@ -52,6 +63,6 @@ export const POST = async (request: NextRequest) => {
       session: mfaRequired ? null : authData.session,
       role,
       mfa_required: mfaRequired,
-    }),
+    })
   );
 };

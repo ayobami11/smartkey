@@ -106,7 +106,6 @@ export default async function CsoDashboardPage() {
     }
   );
 
-   
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const { data: auditRows } = await supabase
@@ -163,7 +162,7 @@ export default async function CsoDashboardPage() {
           </Link>
         </Button>
         <Button asChild variant="outline">
-          <Link href="/cso/logs">
+          <Link href="/cso/audit">
             <SirenIcon className="size-4" aria-hidden="true" />
             View incidents
           </Link>
