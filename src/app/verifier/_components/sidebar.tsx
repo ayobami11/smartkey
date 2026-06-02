@@ -18,16 +18,13 @@ import {
   SidebarRail,
 } from '@/components/ui/sidebar';
 
+import { useProfile } from '@/hooks/use-profile';
+
 import { NavMain } from './sidebar-main';
 import { SidebarBrand } from './sidebar-brand';
 import { SidebarUser } from './sidebar-user';
 
 const data = {
-  user: {
-    name: 'Officer',
-    email: 'officer@unilag.edu.ng',
-    avatar: '',
-  },
   team: {
     name: 'SmartKey',
     logo: GalleryVerticalEnd,
@@ -49,6 +46,7 @@ const data = {
 export const AppSidebar = ({
   ...props
 }: React.ComponentProps<typeof Sidebar>) => {
+  const user = useProfile();
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
@@ -58,7 +56,7 @@ export const AppSidebar = ({
         <NavMain items={data.navMain} />
       </SidebarContent>
       <SidebarFooter>
-        <SidebarUser user={data.user} />
+        <SidebarUser user={user} />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
