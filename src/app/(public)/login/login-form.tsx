@@ -13,6 +13,7 @@ import {
   ShieldIcon,
 } from 'lucide-react';
 import { Controller, useForm } from 'react-hook-form';
+import { toast } from 'sonner';
 import * as z from 'zod';
 
 import { Button } from '@/components/ui/button';
@@ -71,8 +72,6 @@ export const LoginForm = () => {
   const [pendingEmail, setPendingEmail] = useState('');
   const [pendingRole, setPendingRole] = useState('');
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
-  const [serverError, setServerError] = useState<string | null>(null);
-
   const credentialsForm = useForm<CredentialsValues>({
     resolver: zodResolver(credentialsSchema),
     defaultValues: { email: '', password: '' },
@@ -88,7 +87,6 @@ export const LoginForm = () => {
   // ── Step 1: credentials ───────────────────────────────────────────────────
 
   const handleCredentialsSubmit = async (data: CredentialsValues) => {
-    setServerError(null);
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
@@ -97,7 +95,7 @@ export const LoginForm = () => {
       });
       const json = await res.json();
       if (!res.ok) {
-        setServerError(json.error ?? 'Sign in failed. Please try again.');
+        toast.error(json.error ?? 'Sign in failed. Please try again.');
         return;
       }
       const { role, mfa_required } = json.data as {
@@ -112,14 +110,13 @@ export const LoginForm = () => {
       }
       router.push(ROLE_REDIRECTS[role] ?? '/');
     } catch {
-      setServerError('Unable to reach the server. Check your connection.');
+      toast.error('Unable to reach the server. Check your connection.');
     }
   };
 
   // ── Step 2: OTP ───────────────────────────────────────────────────────────
 
   const handleOtpSubmit = async (data: OtpValues) => {
-    setServerError(null);
     try {
       const res = await fetch('/api/auth/verify-otp', {
         method: 'POST',
@@ -128,14 +125,14 @@ export const LoginForm = () => {
       });
       const json = await res.json();
       if (!res.ok) {
-        setServerError(
+        toast.error(
           json.error ?? 'Invalid code. Check your email and try again.'
         );
         return;
       }
       router.push(ROLE_REDIRECTS[pendingRole] ?? '/');
     } catch {
-      setServerError('Unable to reach the server. Check your connection.');
+      toast.error('Unable to reach the server. Check your connection.');
     }
   };
 
@@ -184,12 +181,6 @@ export const LoginForm = () => {
             )}
           />
 
-          {serverError && (
-            <p role="alert" className="text-sm text-destructive">
-              {serverError}
-            </p>
-          )}
-
           <Button
             type="submit"
             size="lg"
@@ -205,7 +196,6 @@ export const LoginForm = () => {
             className="w-full text-center text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
             onClick={() => {
               setStep('credentials');
-              setServerError(null);
               otpForm.reset();
             }}
           >
@@ -290,12 +280,6 @@ export const LoginForm = () => {
             </Field>
           )}
         />
-
-        {serverError && (
-          <p role="alert" className="text-sm text-destructive">
-            {serverError}
-          </p>
-        )}
 
         <Button
           type="submit"
