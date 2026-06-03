@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
+import { sendInviteEmail } from '@/lib/email';
 import { logger } from '@/lib/logger';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
@@ -63,34 +64,50 @@ export const POST = async (request: NextRequest) => {
     );
   }
 
-  // Send a Supabase Auth invite email so the user receives an activation link.
-  // inviteUserByEmail creates the auth.users row AND delivers the email.
-  // If the user was already invited, Supabase returns "already been registered"
-  // which we ignore so re-provisioning after a failed first attempt still works.
+  // Generate an invite link via the admin API (no email sent by Supabase).
+  // We deliver the email ourselves via Resend to avoid Supabase's 2 emails/hour
+  // free-tier rate limit. generateLink also creates the auth.users row.
   const siteUrl =
     process.env.NEXT_PUBLIC_SITE_URL ?? 'https://smartkey-ochre.vercel.app';
   const activationPath = role === 'HOD' ? '/hod/onboarding' : '/activate';
 
   const adminClient = createAdminClient();
-  const { error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
-    institutional_email,
-    {
-      redirectTo: `${siteUrl}/api/auth/callback?next=${activationPath}`,
-    }
-  );
+  const { data: linkData, error: linkError } =
+    await adminClient.auth.admin.generateLink({
+      type: 'invite',
+      email: institutional_email,
+      options: {
+        redirectTo: `${siteUrl}/api/auth/callback?next=${activationPath}`,
+      },
+    });
 
   if (
-    inviteError &&
-    !inviteError.message.toLowerCase().includes('already been registered')
+    linkError &&
+    !linkError.message.toLowerCase().includes('already been registered')
   ) {
     const ref = crypto.randomUUID();
-    logger.error('provision_user: invite failed', {
-      err: inviteError.message,
+    logger.error('provision_user: generateLink failed', {
+      err: linkError.message,
       ref,
     });
     return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
       status: 500,
     });
+  }
+
+  if (linkData?.properties?.action_link) {
+    const { error: emailError } = await sendInviteEmail({
+      to: institutional_email,
+      fullName: full_name,
+      role,
+      activationLink: linkData.properties.action_link,
+    });
+    if (emailError) {
+      logger.error('provision_user: failed to send invite email', {
+        err: emailError.message,
+        email: institutional_email,
+      });
+    }
   }
 
   const { data: rpcData, error: rpcError } = await supabase.rpc(
