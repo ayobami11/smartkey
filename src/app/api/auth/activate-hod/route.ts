@@ -16,38 +16,44 @@ export const POST = async (request: NextRequest) => {
     return NextResponse.json(err('Invalid form data', 422), { status: 422 });
   }
 
-  const token = formData.get('token');
   const password = formData.get('password');
   const signature = formData.get('signature');
   const stamp = formData.get('stamp');
 
-  if (!token || typeof token !== 'string') {
-    return NextResponse.json(err('Activation token is required', 400), { status: 400 });
-  }
   if (!password || typeof password !== 'string' || password.length < 8) {
-    return NextResponse.json(err('Password must be at least 8 characters', 422), { status: 422 });
+    return NextResponse.json(
+      err('Password must be at least 8 characters', 422),
+      { status: 422 }
+    );
   }
   if (!signature || !(signature instanceof File)) {
-    return NextResponse.json(err('Signature image is required', 422), { status: 422 });
+    return NextResponse.json(err('Signature image is required', 422), {
+      status: 422,
+    });
   }
   if (!stamp || !(stamp instanceof File)) {
-    return NextResponse.json(err('Stamp image is required', 422), { status: 422 });
+    return NextResponse.json(err('Stamp image is required', 422), {
+      status: 422,
+    });
   }
   if (signature.size > MAX_IMAGE_BYTES || stamp.size > MAX_IMAGE_BYTES) {
-    return NextResponse.json(err('Images must be under 5 MB each', 413), { status: 413 });
+    return NextResponse.json(err('Images must be under 5 MB each', 413), {
+      status: 413,
+    });
   }
 
-  // Exchange activation token for a session
-  const { data: sessionData, error: sessionError } = await supabase.auth.verifyOtp({
-    token_hash: token,
-    type: 'invite',
-  });
-
-  if (sessionError || !sessionData.user) {
-    return NextResponse.json(err('Invalid or expired activation token', 400), { status: 400 });
+  // Session is established by /api/auth/callback after the invite link is clicked.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json(
+      err('No active session — please click the invite link again', 401),
+      { status: 401 }
+    );
   }
 
-  const userId = sessionData.user.id;
+  const userId = user.id;
 
   // Confirm this is an HOD profile
   const { data: profileData } = await supabase
@@ -65,8 +71,13 @@ export const POST = async (request: NextRequest) => {
   // Update password
   const { error: pwError } = await supabase.auth.updateUser({ password });
   if (pwError) {
-    logger.error('activate-hod: password update failed', { userId, err: pwError.message });
-    return NextResponse.json(err('Failed to set password', 500), { status: 500 });
+    logger.error('activate-hod: password update failed', {
+      userId,
+      err: pwError.message,
+    });
+    return NextResponse.json(err('Failed to set password', 500), {
+      status: 500,
+    });
   }
 
   // Upload signature
@@ -79,8 +90,13 @@ export const POST = async (request: NextRequest) => {
     .upload(sigPath, sigBytes, { contentType: signature.type, upsert: true });
 
   if (sigUploadError) {
-    logger.error('activate-hod: signature upload failed', { userId, err: sigUploadError.message });
-    return NextResponse.json(err('Signature upload failed', 500), { status: 500 });
+    logger.error('activate-hod: signature upload failed', {
+      userId,
+      err: sigUploadError.message,
+    });
+    return NextResponse.json(err('Signature upload failed', 500), {
+      status: 500,
+    });
   }
 
   // Upload stamp
@@ -93,12 +109,19 @@ export const POST = async (request: NextRequest) => {
     .upload(stampPath, stampBytes, { contentType: stamp.type, upsert: true });
 
   if (stampUploadError) {
-    logger.error('activate-hod: stamp upload failed', { userId, err: stampUploadError.message });
+    logger.error('activate-hod: stamp upload failed', {
+      userId,
+      err: stampUploadError.message,
+    });
     return NextResponse.json(err('Stamp upload failed', 500), { status: 500 });
   }
 
-  const { data: sigUrlData } = supabase.storage.from('hod-signatures').getPublicUrl(sigPath);
-  const { data: stampUrlData } = supabase.storage.from('hod-signatures').getPublicUrl(stampPath);
+  const { data: sigUrlData } = supabase.storage
+    .from('hod-signatures')
+    .getPublicUrl(sigPath);
+  const { data: stampUrlData } = supabase.storage
+    .from('hod-signatures')
+    .getPublicUrl(stampPath);
 
   // Save references to profile
   const { error: profileError } = await supabase
@@ -111,9 +134,16 @@ export const POST = async (request: NextRequest) => {
     .eq('id', userId);
 
   if (profileError) {
-    logger.error('activate-hod: profile update failed', { userId, err: profileError.message });
-    return NextResponse.json(err('Profile update failed', 500), { status: 500 });
+    logger.error('activate-hod: profile update failed', {
+      userId,
+      err: profileError.message,
+    });
+    return NextResponse.json(err('Profile update failed', 500), {
+      status: 500,
+    });
   }
 
-  return NextResponse.json(ok({ profile_id: userId, redirect: '/hod' }), { status: 201 });
+  return NextResponse.json(ok({ profile_id: userId, redirect: '/hod' }), {
+    status: 201,
+  });
 };

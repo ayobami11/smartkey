@@ -63,23 +63,29 @@ export const POST = async (request: NextRequest) => {
     );
   }
 
-  // Ensure an auth.users row exists for this email before calling the RPC.
-  // The RPC requires the row to already exist (it looks up the user by email).
-  // We attempt createUser and silently ignore the "already exists" error so
-  // the call is idempotent — re-provisioning after a failed first attempt works.
+  // Send a Supabase Auth invite email so the user receives an activation link.
+  // inviteUserByEmail creates the auth.users row AND delivers the email.
+  // If the user was already invited, Supabase returns "already been registered"
+  // which we ignore so re-provisioning after a failed first attempt still works.
+  const siteUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ?? 'https://smartkey-ochre.vercel.app';
+  const activationPath = role === 'HOD' ? '/hod/onboarding' : '/activate';
+
   const adminClient = createAdminClient();
-  const { error: createAuthError } = await adminClient.auth.admin.createUser({
-    email: institutional_email,
-    email_confirm: true,
-  });
+  const { error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
+    institutional_email,
+    {
+      redirectTo: `${siteUrl}/api/auth/callback?next=${activationPath}`,
+    }
+  );
 
   if (
-    createAuthError &&
-    !createAuthError.message.includes('already been registered')
+    inviteError &&
+    !inviteError.message.toLowerCase().includes('already been registered')
   ) {
     const ref = crypto.randomUUID();
-    logger.error('provision_user: auth user creation failed', {
-      err: createAuthError.message,
+    logger.error('provision_user: invite failed', {
+      err: inviteError.message,
       ref,
     });
     return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
