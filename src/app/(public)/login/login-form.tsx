@@ -18,11 +18,11 @@ import * as z from 'zod';
 
 import { Button } from '@/components/ui/button';
 import {
-  Field,
-  FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
+  Field,
+  FieldDescription,
 } from '@/components/ui/field';
 import {
   InputGroup,
@@ -30,7 +30,6 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from '@/components/ui/input-group';
-import { Input } from '@/components/ui/input';
 import { email, password } from '@/lib/validation/primitives';
 
 // ── Schemas ───────────────────────────────────────────────────────────────
@@ -70,15 +69,13 @@ export const LoginForm = () => {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [isResending, setIsResending] = useState(false);
+  const [otpValue, setOtpValue] = useState('');
+  const [otpError, setOtpError] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const credentialsForm = useForm<CredentialsValues>({
     resolver: zodResolver(credentialsSchema),
     defaultValues: { email: '', password: '' },
-  });
-
-  const otpForm = useForm<OtpValues>({
-    resolver: zodResolver(otpSchema),
-    defaultValues: { otp: '' },
   });
 
   const handleTogglePassword = () => setIsPasswordVisible((prev) => !prev);
@@ -131,23 +128,32 @@ export const LoginForm = () => {
 
   // ── Step 2: OTP ───────────────────────────────────────────────────────────
 
-  const handleOtpSubmit = async (data: OtpValues) => {
+  const handleOtpSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (otpValue.length !== 6) {
+      setOtpError('Enter the 6-digit code from your email.');
+      return;
+    }
+    setOtpError('');
+    setIsVerifying(true);
     try {
       const res = await fetch('/api/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: pendingEmail, otp: data.otp }),
+        body: JSON.stringify({ email: pendingEmail, otp: otpValue }),
       });
       const json = await res.json();
       if (!res.ok) {
-        toast.error(
+        setOtpError(
           json.error ?? 'Invalid code. Check your email and try again.'
         );
         return;
       }
       router.push(ROLE_REDIRECTS[pendingRole] ?? '/');
     } catch {
-      toast.error('Unable to reach the server. Check your connection.');
+      setOtpError('Unable to reach the server. Check your connection.');
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -173,7 +179,7 @@ export const LoginForm = () => {
 
   if (step === 'otp') {
     return (
-      <form onSubmit={otpForm.handleSubmit(handleOtpSubmit)}>
+      <form onSubmit={handleOtpSubmit} noValidate>
         <FieldGroup>
           <div className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground">
             <ShieldIcon className="size-4 shrink-0" aria-hidden="true" />
@@ -183,49 +189,44 @@ export const LoginForm = () => {
             </span>
           </div>
 
-          <Controller
-            name="otp"
-            control={otpForm.control}
-            render={({ field, fieldState }) => (
-              <Field data-invalid={fieldState.invalid}>
-                <FieldLabel htmlFor="otp">Verification code</FieldLabel>
-                <Input
-                  id="otp"
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  maxLength={6}
-                  placeholder="000000"
-                  aria-invalid={fieldState.invalid}
-                  autoFocus
-                  className="text-center font-mono text-2xl tracking-[0.5em]"
-                  {...field}
-                  onChange={(e) => {
-                    const digits = e.target.value
-                      .replace(/\D/g, '')
-                      .slice(0, 6);
-                    field.onChange(digits);
-                  }}
-                />
-                {fieldState.invalid ? (
-                  <FieldError errors={[fieldState.error]} />
-                ) : (
-                  <FieldDescription>
-                    Check your inbox — the code expires in 10 minutes.
-                  </FieldDescription>
-                )}
-              </Field>
+          <div className="flex flex-col gap-1.5">
+            <label
+              htmlFor="otp"
+              className="text-sm font-medium text-foreground"
+            >
+              Verification code
+            </label>
+            <input
+              id="otp"
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              placeholder="000000"
+              autoFocus
+              value={otpValue}
+              onChange={(e) =>
+                setOtpValue(e.target.value.replace(/\D/g, '').slice(0, 6))
+              }
+              className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-center font-mono text-2xl tracking-[0.5em] text-foreground shadow-xs outline-none ring-offset-background placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/50"
+            />
+            {otpError ? (
+              <p className="text-sm text-destructive">{otpError}</p>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Check your inbox — the code expires in 10 minutes.
+              </p>
             )}
-          />
+          </div>
 
           <Button
             type="submit"
             size="lg"
             className="w-full"
-            disabled={otpForm.formState.isSubmitting}
-            aria-disabled={otpForm.formState.isSubmitting}
+            disabled={isVerifying}
+            aria-disabled={isVerifying}
           >
-            {otpForm.formState.isSubmitting ? 'Verifying…' : 'Verify code'}
+            {isVerifying ? 'Verifying…' : 'Verify code'}
           </Button>
 
           <div className="flex flex-col items-center gap-1">
@@ -246,7 +247,8 @@ export const LoginForm = () => {
               className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
               onClick={() => {
                 setStep('credentials');
-                otpForm.reset();
+                setOtpValue('');
+                setOtpError('');
               }}
             >
               Back to sign in
