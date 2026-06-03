@@ -7,7 +7,12 @@ import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { UserPlusIcon } from 'lucide-react';
 import { Controller, useForm } from 'react-hook-form';
-import * as z from 'zod';
+import { toast } from 'sonner';
+
+import {
+  provisionUserSchema,
+  type ProvisionUserInput,
+} from '@/lib/validation/schemas';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -36,14 +41,7 @@ import {
 
 const ROLES = ['HOD', 'VERIFIER', 'REQUESTER'] as const;
 
-const schema = z.object({
-  full_name: z.string().min(1, 'Name is required'),
-  institutional_email: z.email('Enter a valid email'),
-  role: z.enum(ROLES, { error: 'Select a role' }),
-  department_id: z.string().optional(),
-});
-
-type FormValues = z.infer<typeof schema>;
+type FormValues = ProvisionUserInput;
 
 type Department = { id: string; name: string };
 
@@ -53,11 +51,10 @@ export const ProvisionUserDialog = ({ onSuccess }: Props) => {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [serverError, setServerError] = useState('');
   const [success, setSuccess] = useState('');
 
   const form = useForm<FormValues>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(provisionUserSchema),
     defaultValues: {
       full_name: '',
       institutional_email: '',
@@ -77,15 +74,7 @@ export const ProvisionUserDialog = ({ onSuccess }: Props) => {
   }, [open]);
 
   async function onSubmit(data: FormValues) {
-    setServerError('');
     setSuccess('');
-
-    if (needsDept && !data.department_id) {
-      form.setError('department_id', {
-        message: 'Department is required for this role',
-      });
-      return;
-    }
 
     const res = await fetch('/api/admin/users', {
       method: 'POST',
@@ -101,7 +90,7 @@ export const ProvisionUserDialog = ({ onSuccess }: Props) => {
     const json = await res.json();
 
     if (!res.ok) {
-      setServerError(json.error ?? 'Something went wrong. Try again.');
+      toast.error(json.error ?? 'Something went wrong. Try again.');
       return;
     }
 
@@ -121,7 +110,6 @@ export const ProvisionUserDialog = ({ onSuccess }: Props) => {
   function handleOpenChange(next: boolean) {
     if (!next) {
       form.reset();
-      setServerError('');
       setSuccess('');
     }
     setOpen(next);
@@ -152,12 +140,6 @@ export const ProvisionUserDialog = ({ onSuccess }: Props) => {
         ) : (
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <FieldGroup className="py-2">
-              {serverError && (
-                <p role="alert" className="text-sm text-destructive">
-                  {serverError}
-                </p>
-              )}
-
               <Controller
                 name="full_name"
                 control={form.control}
