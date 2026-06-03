@@ -14,6 +14,7 @@ import {
   LockIcon,
 } from 'lucide-react';
 import { Controller, useForm } from 'react-hook-form';
+import { toast } from 'sonner';
 import * as z from 'zod';
 
 import { Button } from '@/components/ui/button';
@@ -52,8 +53,6 @@ export const ResetPasswordForm = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [done, setDone] = useState(false);
-  const [serverError, setServerError] = useState('');
-
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { password: '', confirmPassword: '' },
@@ -62,13 +61,12 @@ export const ResetPasswordForm = () => {
   const { isSubmitting } = form.formState;
 
   async function onSubmit(data: FormValues) {
-    setServerError('');
     const supabase = createBrowserClient();
     const { error } = await supabase.auth.updateUser({
       password: data.password,
     });
     if (error) {
-      setServerError(error.message);
+      toast.error(error.message);
       return;
     }
     setDone(true);
@@ -129,12 +127,6 @@ export const ResetPasswordForm = () => {
 
       <form onSubmit={form.handleSubmit(onSubmit)}>
         <FieldGroup>
-          {serverError && (
-            <p role="alert" className="text-sm text-destructive">
-              {serverError}
-            </p>
-          )}
-
           <Controller
             name="password"
             control={form.control}

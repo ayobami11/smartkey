@@ -27,15 +27,28 @@ export const resetPasswordSchema = z.object({
 
 // ── User management (CSO) ─────────────────────────────────────────────────────
 
-export const provisionUserSchema = z.object({
-  full_name: z.string().min(1, 'Full name is required'),
-  institutional_email: z.email('Enter a valid email address'),
-  role: z.enum(['HOD', 'VERIFIER', 'REQUESTER'], {
-    error: 'Select a role',
-  }),
-  /** Required when role is HOD or REQUESTER. UUID from GET /api/admin/departments. */
-  department_id: z.string().optional(),
-});
+export const provisionUserSchema = z
+  .object({
+    full_name: z.string().trim().min(1, 'Full name is required'),
+    institutional_email: z.email('Enter a valid email address'),
+    role: z.enum(['HOD', 'VERIFIER', 'REQUESTER'], {
+      error: 'Select a role',
+    }),
+    /** Required when role is HOD or REQUESTER. UUID from GET /api/admin/departments. */
+    department_id: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (
+      (data.role === 'HOD' || data.role === 'REQUESTER') &&
+      !data.department_id
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Department is required for this role',
+        path: ['department_id'],
+      });
+    }
+  });
 
 export const authoriseCollectorSchema = z.object({
   /** UUID of the key to authorise the requester for. */
