@@ -1,6 +1,6 @@
-import { MoreHorizontalIcon, SearchIcon, UserPlusIcon } from 'lucide-react';
+import { MoreHorizontalIcon, SearchIcon } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
+import { ProvisionUserDialog } from '@/app/cso/users/_components/provision-user-dialog';
 import { Input } from '@/components/ui/input';
 import {
   Pagination,
@@ -112,10 +112,7 @@ export default async function UsersPage() {
             Manage SmartKey accounts across all roles.
           </p>
         </div>
-        <Button>
-          <UserPlusIcon className="size-4" aria-hidden="true" />
-          Provision new user
-        </Button>
+        <ProvisionUserDialog />
       </div>
 
       <div className="flex flex-wrap items-center gap-2">

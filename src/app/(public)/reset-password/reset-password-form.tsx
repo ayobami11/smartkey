@@ -30,41 +30,51 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from '@/components/ui/input-group';
+import { createBrowserClient } from '@/lib/supabase/client';
 import { password } from '@/lib/validation/primitives';
 
-const resetPasswordFormSchema = z
-  .object({
-    password: password,
-    confirmPassword: password,
-  })
-  .refine((data) => data.password === data.confirmPassword, {
+const schema = z
+  .object({ password, confirmPassword: password })
+  .refine((d) => d.password === d.confirmPassword, {
     message: 'Passwords do not match.',
     path: ['confirmPassword'],
   });
 
-type ResetPasswordValues = z.infer<typeof resetPasswordFormSchema>;
+type FormValues = z.infer<typeof schema>;
 
 export const ResetPasswordForm = () => {
   const searchParams = useSearchParams();
-  const token = searchParams.get('token');
+  // The callback route (/api/auth/callback) exchanges the Supabase PKCE code
+  // for a session before redirecting here, so the user is authenticated by the
+  // time this form renders. The `error` param is set if the link expired.
+  const linkError = searchParams.get('error');
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [done, setDone] = useState(false);
+  const [serverError, setServerError] = useState('');
 
-  const form = useForm<ResetPasswordValues>({
-    resolver: zodResolver(resetPasswordFormSchema),
+  const form = useForm<FormValues>({
+    resolver: zodResolver(schema),
     defaultValues: { password: '', confirmPassword: '' },
   });
 
   const { isSubmitting } = form.formState;
 
-  async function onSubmit(_data: ResetPasswordValues) {
-    // API call using token will go here
+  async function onSubmit(data: FormValues) {
+    setServerError('');
+    const supabase = createBrowserClient();
+    const { error } = await supabase.auth.updateUser({
+      password: data.password,
+    });
+    if (error) {
+      setServerError(error.message);
+      return;
+    }
     setDone(true);
   }
 
-  if (!token) {
+  if (linkError === 'expired') {
     return (
       <div className="flex flex-col items-center gap-4 py-2 text-center">
         <AlertCircleIcon
@@ -73,11 +83,11 @@ export const ResetPasswordForm = () => {
         />
         <div>
           <h2 className="text-lg font-semibold text-foreground">
-            Invalid or expired link
+            Link expired
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            This password reset link is missing or has expired. Request a new
-            one to continue.
+            This password reset link has expired or already been used. Request a
+            new one to continue.
           </p>
         </div>
         <Button asChild size="lg" className="mt-2 w-full">
@@ -93,7 +103,7 @@ export const ResetPasswordForm = () => {
         <CheckCircle2Icon className="size-10 text-primary" aria-hidden="true" />
         <div>
           <h2 className="text-lg font-semibold text-foreground">
-            Password reset
+            Password updated
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Your password has been updated. Sign in with your new password.
@@ -119,6 +129,12 @@ export const ResetPasswordForm = () => {
 
       <form onSubmit={form.handleSubmit(onSubmit)}>
         <FieldGroup>
+          {serverError && (
+            <p role="alert" className="text-sm text-destructive">
+              {serverError}
+            </p>
+          )}
+
           <Controller
             name="password"
             control={form.control}
@@ -211,7 +227,7 @@ export const ResetPasswordForm = () => {
             className="w-full"
             disabled={isSubmitting}
           >
-            {isSubmitting ? 'Resetting…' : 'Reset password'}
+            {isSubmitting ? 'Updating…' : 'Update password'}
           </Button>
         </FieldGroup>
       </form>
