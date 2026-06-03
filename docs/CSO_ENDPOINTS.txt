@@ -1,0 +1,138 @@
+SMARTKEY — CSO API ENDPOINTS
+
+Base URL: https://smartkey-ochre.vercel.app
+All responses return: { data, error, status }
+Auth: Supabase session cookie (set automatically after login)
+
+
+AUTH
+
+POST /api/auth/login
+  Body:    { email: string, password: string }
+  Returns: { session, role, mfa_required: boolean }
+
+POST /api/auth/logout
+  Body:    none
+  Returns: null
+
+POST /api/auth/reset-password
+  Body:    { email: string }
+  Returns: null (always 200, no email enumeration)
+
+
+USER MANAGEMENT  (/cso/users)
+
+GET /api/admin/departments
+  Query:   none
+  Returns: { departments: [{ id, name, hod_id }] }
+  Note:    Use department.id as department_id when creating HOD or REQUESTER accounts
+
+GET /api/admin/users
+  Query:   role, department_id, status, limit, cursor
+  Returns: { users: [...], next_cursor }
+
+POST /api/admin/users
+  Body:    { full_name, institutional_email, role: "HOD"|"VERIFIER"|"REQUESTER", department_id? }
+  Note:    department_id required for HOD and REQUESTER — get valid IDs from GET /api/admin/departments
+  Returns: { profile_id, status: "PENDING_ACTIVATION" }
+  Errors:  409 email already registered | 422 validation
+
+PATCH /api/admin/users/:id/revoke
+  Body:    none
+  Returns: { profile_id, status: "DEACTIVATED" }
+  Errors:  404 not found | 409 already deactivated
+
+
+KEYS  (/cso/keys)
+
+GET /api/keys/out
+  Query:   zone ("NEW_SENATE"|"OLD_SENATE"), overdue_only (boolean)
+  Returns: { outstanding: [...] }
+
+GET /api/keys/history
+  Query:   key_id, requester_id, from (ISO date), to (ISO date), limit, cursor
+  Returns: { transactions: [...], next_cursor }
+
+POST /api/keys/mark-lost
+  Body:    { key_id: uuid, note: string }
+  Returns: { key_id, incident_id }
+  Errors:  404 key not found
+
+
+HIGH-RISK REQUEST QUEUE  (/cso/dashboard)
+
+GET /api/requests/cso-queue
+  Query:   none
+  Returns: { requests: [...] }
+  Note:    Returns PENDING_CSO requests from the last 24 hours
+
+POST /api/requests/cso-decision
+  Body:    { request_id: uuid, decision: "APPROVED"|"DECLINED", note? }
+  Returns: { request_id, status: "CODE_ISSUED"|"DECLINED" }
+  Errors:  409 already decided | 422 validation
+
+
+RISK ALERTS  (/cso/dashboard)
+
+GET /api/ai/risk-alerts
+  Query:   none
+  Returns: { alerts: [...] }
+  Note:    Returns HIGH-tier requests from the last 24 hours
+
+
+INCIDENTS  (/cso/audit)
+
+GET /api/incidents
+  Query:   type, severity, status, from, to, limit, cursor
+  Returns: { incidents: [...], next_cursor }
+
+POST /api/incidents
+  Body:    {
+             type: "MISSING_KEY"|"SUSPICIOUS_ACTIVITY"|"EQUIPMENT_FAULT"|"PROCEDURAL"|"OTHER",
+             severity: "LOW"|"MEDIUM"|"HIGH",
+             description: string,
+             occurred_at: ISO timestamptz,
+             related_key_id?: uuid,
+             related_person_id?: uuid
+           }
+  Returns: { incident_id, reference: "INC-2026-XXXX" }
+
+
+SHIFT REPORTS  (/cso/reports)
+
+GET /api/reports
+  Query:   shift_id, from (ISO date), to (ISO date), limit, cursor
+  Returns: { reports: [...], next_cursor }
+
+POST /api/reports/generate
+  Body:    { shift_id: uuid }
+  Returns: { report_id, generated_at }
+  Errors:  409 report already exists for this shift
+  Note:    Uses template fallback if Gemini is unavailable
+
+POST /api/reports/:id/comments
+  Body:    { text: string }
+  Returns: { comment_id, created_at }
+  Note:    Comments are immutable after insert
+
+
+ERROR CODES
+
+200  Success
+201  Resource created
+204  Success, no body
+401  No valid session — redirect to /login
+403  Wrong role or insufficient permissions
+404  Resource not found
+409  State conflict (already exists, already revoked, slots full)
+422  Validation failed — error field lists failing fields
+500  Server or RPC error — error field contains a reference ID
+
+
+NOT YET READY (do not integrate)
+
+- Risk scoring engine: requests all return risk_tier = "LOW" (placeholder)
+- Gemini reports: works but returns template text, not AI-generated prose
+- Signature verification: route exists, image pipeline not implemented
+- Realtime subscriptions: useRealtime hook not wired to any dashboard yet
+- GET /api/shifts/current: implemented but no active shift record in DB yet
