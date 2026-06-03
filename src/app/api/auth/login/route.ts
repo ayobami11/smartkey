@@ -9,7 +9,7 @@ import { err, ok } from '@/types/api';
 const MFA_ROLES = new Set<string>();
 
 const bodySchema = z.object({
-  email: z.string().email(),
+  email: z.email(),
   password: z.string().min(1),
 });
 

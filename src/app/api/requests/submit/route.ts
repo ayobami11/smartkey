@@ -6,7 +6,7 @@ import { createServerClient } from '@/lib/supabase/server';
 import { err, ok } from '@/types/api';
 
 const bodySchema = z.object({
-  key_id: z.string().uuid(),
+  key_id: z.uuid(),
   type: z.enum(['WEEKDAY', 'WEEKEND']),
   return_deadline: z.string().min(1),
   weekend_date: z

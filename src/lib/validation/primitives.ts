@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 export const email = z.email('Please provide a valid email address.');
 
+export const uuid = z.uuid();
+
 export const password = z
   .string()
   .min(8, {

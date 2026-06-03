@@ -5,7 +5,7 @@ import { createServerClient } from '@/lib/supabase/server';
 import { ok } from '@/types/api';
 
 const bodySchema = z.object({
-  email: z.string().email(),
+  email: z.email(),
 });
 
 export const POST = async (request: NextRequest) => {

@@ -6,7 +6,7 @@ import { createServerClient } from '@/lib/supabase/server';
 import { err, ok } from '@/types/api';
 
 const bodySchema = z.object({
-  key_id: z.string().uuid(),
+  key_id: z.uuid(),
   note: z.string().min(1),
 });
 

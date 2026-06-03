@@ -1,12 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import {
-  MoreHorizontalIcon,
-  SearchIcon,
-  UserPlusIcon,
-  UsersIcon,
-} from 'lucide-react';
+import { MoreHorizontalIcon, SearchIcon, UsersIcon } from 'lucide-react';
 
 import {
   AlertDialog,
@@ -33,23 +28,6 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Sheet,
-  SheetClose,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
@@ -59,7 +37,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { createBrowserClient } from '@/lib/supabase/client';
+import { ProvisionUserDialog } from './_components/provision-user-dialog';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -74,8 +52,6 @@ type User = {
   department?: string;
   status: UserStatus;
 };
-
-type Department = { id: string; name: string };
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
@@ -135,18 +111,6 @@ export default function UsersPage() {
   const [roleFilter, setRoleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
-  // Provision sheet
-  const [provisionOpen, setProvisionOpen] = useState(false);
-  const [departments, setDepartments] = useState<Department[]>([]);
-  const [pName, setPName] = useState('');
-  const [pEmail, setPEmail] = useState('');
-  const [pRole, setPRole] = useState<'HOD' | 'VERIFIER' | 'REQUESTER'>(
-    'REQUESTER'
-  );
-  const [pDeptId, setPDeptId] = useState('');
-  const [provisioning, setProvisioning] = useState(false);
-  const [provisionError, setProvisionError] = useState<string | null>(null);
-
   // Revoke dialog
   const [revokeTarget, setRevokeTarget] = useState<{
     id: string;
@@ -201,61 +165,6 @@ export default function UsersPage() {
     fetchUsers(true);
   }, [roleFilter, statusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Fetch departments ─────────────────────────────────────────────────────
-
-  const fetchDepartments = async () => {
-    const supabase = createBrowserClient();
-    const { data } = await supabase
-      .from('departments')
-      .select('id, name')
-      .order('name');
-    setDepartments(data ?? []);
-  };
-
-  const handleOpenProvision = () => {
-    setProvisionOpen(true);
-    setPName('');
-    setPEmail('');
-    setPRole('REQUESTER');
-    setPDeptId('');
-    setProvisionError(null);
-    fetchDepartments();
-  };
-
-  // ── Provision user ────────────────────────────────────────────────────────
-
-  const handleProvision = async () => {
-    setProvisioning(true);
-    setProvisionError(null);
-    try {
-      const body: Record<string, string> = {
-        full_name: pName,
-        institutional_email: pEmail,
-        role: pRole,
-      };
-      if ((pRole === 'HOD' || pRole === 'REQUESTER') && pDeptId) {
-        body.department_id = pDeptId;
-      }
-      const res = await fetch('/api/admin/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        setProvisionError(json.error ?? 'Failed to provision user.');
-        return;
-      }
-      setProvisionOpen(false);
-      // Refetch to show the new user
-      fetchUsers(true);
-    } catch {
-      setProvisionError('Something went wrong. Check your connection.');
-    } finally {
-      setProvisioning(false);
-    }
-  };
-
   // ── Revoke access ─────────────────────────────────────────────────────────
 
   const handleRevoke = async () => {
@@ -307,10 +216,7 @@ export default function UsersPage() {
             Manage SmartKey accounts across all roles.
           </p>
         </div>
-        <Button>
-          <UserPlusIcon className="size-4" aria-hidden="true" />
-          Provision new user
-        </Button>
+        <ProvisionUserDialog onSuccess={() => fetchUsers(true)} />
       </div>
 
       {/* Search + filters */}
@@ -541,95 +447,6 @@ export default function UsersPage() {
           </div>
         </>
       )}
-
-      {/* Provision user Sheet */}
-      <Sheet open={provisionOpen} onOpenChange={setProvisionOpen}>
-        <SheetContent
-          side="right"
-          className="flex flex-col gap-0 p-0 sm:max-w-md"
-        >
-          <SheetHeader className="border-b border-border p-6">
-            <SheetTitle>Provision new user</SheetTitle>
-            <SheetDescription>
-              Create a new SmartKey account. An activation link will be sent to
-              the user&apos;s institutional email.
-            </SheetDescription>
-          </SheetHeader>
-          <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-6">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="p-name">Full name</Label>
-              <Input
-                id="p-name"
-                value={pName}
-                onChange={(e) => setPName(e.target.value)}
-                placeholder="e.g. Dr. Adebayo Okafor"
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="p-email">Institutional email</Label>
-              <Input
-                id="p-email"
-                type="email"
-                value={pEmail}
-                onChange={(e) => setPEmail(e.target.value)}
-                placeholder="name@unilag.edu.ng"
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="p-role">Role</Label>
-              <Select
-                value={pRole}
-                onValueChange={(v) =>
-                  setPRole(v as 'HOD' | 'VERIFIER' | 'REQUESTER')
-                }
-              >
-                <SelectTrigger id="p-role">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="HOD">HOD</SelectItem>
-                  <SelectItem value="VERIFIER">Verifier</SelectItem>
-                  <SelectItem value="REQUESTER">Requester</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {(pRole === 'HOD' || pRole === 'REQUESTER') && (
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="p-dept">Department</Label>
-                <Select value={pDeptId} onValueChange={setPDeptId}>
-                  <SelectTrigger id="p-dept">
-                    <SelectValue placeholder="Select a department…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {departments.map((d) => (
-                      <SelectItem key={d.id} value={d.id}>
-                        {d.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            {provisionError && (
-              <p className="text-sm text-destructive" role="alert">
-                {provisionError}
-              </p>
-            )}
-          </div>
-          <SheetFooter className="border-t border-border p-6">
-            <SheetClose asChild>
-              <Button variant="outline">Cancel</Button>
-            </SheetClose>
-            <Button
-              disabled={!pName.trim() || !pEmail.trim() || provisioning}
-              aria-busy={provisioning}
-              onClick={handleProvision}
-            >
-              {provisioning ? 'Provisioning…' : 'Provision user'}
-            </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
 
       {/* Revoke access AlertDialog */}
       <AlertDialog

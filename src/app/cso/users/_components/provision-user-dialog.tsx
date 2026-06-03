@@ -35,11 +35,10 @@ import {
 } from '@/components/ui/select';
 
 const ROLES = ['HOD', 'VERIFIER', 'REQUESTER'] as const;
-type Role = (typeof ROLES)[number];
 
 const schema = z.object({
   full_name: z.string().min(1, 'Name is required'),
-  institutional_email: z.string().email('Enter a valid email'),
+  institutional_email: z.email('Enter a valid email'),
   role: z.enum(ROLES, { error: 'Select a role' }),
   department_id: z.string().optional(),
 });
@@ -48,7 +47,9 @@ type FormValues = z.infer<typeof schema>;
 
 type Department = { id: string; name: string };
 
-export const ProvisionUserDialog = () => {
+type Props = { onSuccess?: () => void };
+
+export const ProvisionUserDialog = ({ onSuccess }: Props) => {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -109,6 +110,7 @@ export const ProvisionUserDialog = () => {
     );
     form.reset();
     router.refresh();
+    onSuccess?.();
 
     setTimeout(() => {
       setOpen(false);

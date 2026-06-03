@@ -9,9 +9,9 @@ import type { ProfileStatus, UserRole } from '@/types/database';
 
 const postBodySchema = z.object({
   full_name: z.string().min(1),
-  institutional_email: z.string().email(),
+  institutional_email: z.email(),
   role: z.enum(['HOD', 'VERIFIER', 'REQUESTER']),
-  department_id: z.string().uuid().optional(),
+  department_id: z.uuid().optional(),
 });
 
 const mapRpcError = (msg: string): { status: number; message: string } => {

@@ -6,9 +6,9 @@ import { createServerClient } from '@/lib/supabase/server';
 import { err, ok } from '@/types/api';
 
 const bodySchema = z.object({
-  request_id: z.string().uuid(),
-  verifier_id: z.string().uuid(),
-  returner_id: z.string().uuid().optional(),
+  request_id: z.uuid(),
+  verifier_id: z.uuid(),
+  returner_id: z.uuid().optional(),
 });
 
 const mapRpcError = (msg: string): { status: number; message: string } => {

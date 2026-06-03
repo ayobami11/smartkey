@@ -5,8 +5,11 @@ import { createServerClient } from '@/lib/supabase/server';
 import { err, ok } from '@/types/api';
 
 const bodySchema = z.object({
-  email: z.string().email(),
-  otp: z.string().length(6).regex(/^\d{6}$/),
+  email: z.email(),
+  otp: z
+    .string()
+    .length(6)
+    .regex(/^\d{6}$/),
 });
 
 export const POST = async (request: NextRequest) => {
@@ -27,7 +30,9 @@ export const POST = async (request: NextRequest) => {
   });
 
   if (error || !data.session) {
-    return NextResponse.json(err('Invalid or expired OTP', 401), { status: 401 });
+    return NextResponse.json(err('Invalid or expired OTP', 401), {
+      status: 401,
+    });
   }
 
   return NextResponse.json(ok({ session: data.session }));

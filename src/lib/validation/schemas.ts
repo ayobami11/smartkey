@@ -17,19 +17,19 @@ import { z } from 'zod';
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
 export const loginSchema = z.object({
-  email: z.string().email('Enter a valid email address'),
+  email: z.email('Enter a valid email address'),
   password: z.string().min(1, 'Password is required'),
 });
 
 export const resetPasswordSchema = z.object({
-  email: z.string().email('Enter a valid email address'),
+  email: z.email('Enter a valid email address'),
 });
 
 // ── User management (CSO) ─────────────────────────────────────────────────────
 
 export const provisionUserSchema = z.object({
   full_name: z.string().min(1, 'Full name is required'),
-  institutional_email: z.string().email('Enter a valid email address'),
+  institutional_email: z.email('Enter a valid email address'),
   role: z.enum(['HOD', 'VERIFIER', 'REQUESTER'], {
     error: 'Select a role',
   }),

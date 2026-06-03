@@ -20,8 +20,8 @@ const postBodySchema = z.object({
   ]),
   severity: z.enum(['LOW', 'MEDIUM', 'HIGH']),
   description: z.string().min(1),
-  related_key_id: z.string().uuid().optional(),
-  related_person_id: z.string().uuid().optional(),
+  related_key_id: z.uuid().optional(),
+  related_person_id: z.uuid().optional(),
   occurred_at: z.string().min(1),
 });
 
