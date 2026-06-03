@@ -196,7 +196,7 @@ async function run() {
   }
 
   // ── 5. POST /api/keys/mark-lost ───────────────────────────────────────────
-  // Seeded keys use non-standard UUIDs (version 0) that Zod v4 z.string().uuid()
+  // Seeded keys use non-standard UUIDs (version 0) that Zod v4 z.uuid()
   // rejects. Insert a temp key with a proper gen_random_uuid() for this test.
   {
     const dept = await dbFirst('departments');

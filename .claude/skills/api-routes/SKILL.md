@@ -22,21 +22,21 @@ Every route returns the same shape. No exceptions.
 // src/types/api.ts
 type ApiResponse<T> =
   | { data: T; error: null; status: number }
-  | { data: null; error: string; status: number }
+  | { data: null; error: string; status: number };
 ```
 
 ```typescript
 // Success
 return NextResponse.json(
   { data: result, error: null, status: 200 },
-  { status: 200 },
-)
+  { status: 200 }
+);
 
 // Error
 return NextResponse.json(
   { data: null, error: 'Request not found.', status: 404 },
-  { status: 404 },
-)
+  { status: 404 }
+);
 ```
 
 Never return a bare object, never nest `{ success: true }`, never mix shapes between routes.
@@ -46,21 +46,21 @@ Never return a bare object, never nest `{ success: true }`, never mix shapes bet
 Every protected route validates the session via the server Supabase client before any other logic.
 
 ```typescript
-import { createServerClient } from '@/lib/supabase/server'
+import { createServerClient } from '@/lib/supabase/server';
 
 export async function POST(req: NextRequest) {
-  const supabase = await createServerClient()
+  const supabase = await createServerClient();
 
   const {
     data: { user },
     error: authError,
-  } = await supabase.auth.getUser()
+  } = await supabase.auth.getUser();
 
   if (authError || !user) {
     return NextResponse.json(
       { data: null, error: 'Unauthenticated.', status: 401 },
-      { status: 401 },
-    )
+      { status: 401 }
+    );
   }
 
   // Continue with user.id available
@@ -78,13 +78,13 @@ const { data: profile } = await supabase
   .from('profiles')
   .select('role')
   .eq('id', user.id)
-  .single()
+  .single();
 
 if (!profile || profile.role !== 'VERIFIER') {
   return NextResponse.json(
     { data: null, error: 'Forbidden.', status: 403 },
-    { status: 403 },
-  )
+    { status: 403 }
+  );
 }
 ```
 
@@ -95,18 +95,18 @@ Route-level role checks are a defence-in-depth layer. RLS is the authoritative e
 Parse and validate the request body before any database call. Never pass unvalidated input to Supabase.
 
 ```typescript
-import { z } from 'zod'
+import { z } from 'zod';
 
 const issueKeySchema = z.object({
-  requestId: z.string().uuid(),
-  verifierId: z.string().uuid(),
-})
+  requestId: z.uuid(),
+  verifierId: z.uuid(),
+});
 
 export async function POST(req: NextRequest) {
   // ... auth check above ...
 
-  const body = await req.json()
-  const parsed = issueKeySchema.safeParse(body)
+  const body = await req.json();
+  const parsed = issueKeySchema.safeParse(body);
 
   if (!parsed.success) {
     return NextResponse.json(
@@ -115,11 +115,11 @@ export async function POST(req: NextRequest) {
         error: parsed.error.issues.map((i) => i.message).join('; '),
         status: 422,
       },
-      { status: 422 },
-    )
+      { status: 422 }
+    );
   }
 
-  const { requestId, verifierId } = parsed.data
+  const { requestId, verifierId } = parsed.data;
   // safe to use
 }
 ```
@@ -133,16 +133,16 @@ Any operation that changes more than one row — including all operations that w
 const { data, error } = await supabase.rpc('issue_key', {
   p_request_id: requestId,
   p_verifier_id: verifierId,
-})
+});
 
 if (error) {
   return NextResponse.json(
     { data: null, error: 'Failed to issue key.', status: 500 },
-    { status: 500 },
-  )
+    { status: 500 }
+  );
 }
 
-return NextResponse.json({ data, error: null, status: 200 }, { status: 200 })
+return NextResponse.json({ data, error: null, status: 200 }, { status: 200 });
 ```
 
 ```typescript
@@ -155,15 +155,15 @@ See `src/lib/audit/` for the audit writer and `docs/DATABASE.md` for all availab
 
 ## Status codes
 
-| Situation | Code |
-|-----------|------|
-| Success with body | 200 |
-| Created (POST that inserts) | 201 |
-| Unauthenticated | 401 |
-| Authenticated but wrong role | 403 |
-| Resource not found | 404 |
-| Zod validation failure | 422 |
-| RPC or Supabase error | 500 |
+| Situation                    | Code |
+| ---------------------------- | ---- |
+| Success with body            | 200  |
+| Created (POST that inserts)  | 201  |
+| Unauthenticated              | 401  |
+| Authenticated but wrong role | 403  |
+| Resource not found           | 404  |
+| Zod validation failure       | 422  |
+| RPC or Supabase error        | 500  |
 
 Do not use 200 for errors and do not use 500 for validation failures.
 
@@ -172,30 +172,34 @@ Do not use 200 for errors and do not use 500 for validation failures.
 Never expose Supabase error messages, stack traces, or database details to the client. Log them server-side via `src/lib/logger.ts` and return a correlation ID.
 
 ```typescript
-import { logger } from '@/lib/logger'
-import { randomUUID } from 'crypto'
+import { logger } from '@/lib/logger';
+import { randomUUID } from 'crypto';
 
 if (error) {
-  const ref = randomUUID().slice(0, 8)
-  logger.error('issue_key RPC failed', { ref, supabaseError: error.message })
+  const ref = randomUUID().slice(0, 8);
+  logger.error('issue_key RPC failed', { ref, supabaseError: error.message });
   return NextResponse.json(
-    { data: null, error: `Something went wrong. Reference: ${ref}`, status: 500 },
-    { status: 500 },
-  )
+    {
+      data: null,
+      error: `Something went wrong. Reference: ${ref}`,
+      status: 500,
+    },
+    { status: 500 }
+  );
 }
 ```
 
 ## What must never appear in a route
 
-| Forbidden | Reason |
-|-----------|--------|
-| `supabase.auth.getSession()` for auth decisions | Client-controllable; use `getUser()` |
-| Service-role key in any browser-reachable route | Bypasses RLS; server-only |
-| Raw `fetch` to Supabase REST | Use the typed client from `src/lib/supabase/server` |
-| `console.log` | Use `src/lib/logger.ts` |
-| Direct `INSERT` into `audit_log` | Go through `src/lib/audit/` |
-| Unvalidated `req.body` passed to Supabase | Validate with Zod first |
-| Two separate writes where an RPC exists | Non-atomic; audit integrity at risk |
+| Forbidden                                       | Reason                                              |
+| ----------------------------------------------- | --------------------------------------------------- |
+| `supabase.auth.getSession()` for auth decisions | Client-controllable; use `getUser()`                |
+| Service-role key in any browser-reachable route | Bypasses RLS; server-only                           |
+| Raw `fetch` to Supabase REST                    | Use the typed client from `src/lib/supabase/server` |
+| `console.log`                                   | Use `src/lib/logger.ts`                             |
+| Direct `INSERT` into `audit_log`                | Go through `src/lib/audit/`                         |
+| Unvalidated `req.body` passed to Supabase       | Validate with Zod first                             |
+| Two separate writes where an RPC exists         | Non-atomic; audit integrity at risk                 |
 
 ## Route checklist
 
