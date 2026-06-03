@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -72,6 +72,9 @@ export const LoginForm = () => {
   const [pendingEmail, setPendingEmail] = useState('');
   const [pendingRole, setPendingRole] = useState('');
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [isResending, setIsResending] = useState(false);
+  const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const credentialsForm = useForm<CredentialsValues>({
     resolver: zodResolver(credentialsSchema),
     defaultValues: { email: '', password: '' },
@@ -83,6 +86,21 @@ export const LoginForm = () => {
   });
 
   const handleTogglePassword = () => setIsPasswordVisible((prev) => !prev);
+
+  const startCooldown = (seconds: number) => {
+    setResendCooldown(seconds);
+    cooldownRef.current = setInterval(() => {
+      setResendCooldown((prev) => {
+        if (prev <= 1) {
+          clearInterval(cooldownRef.current!);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  useEffect(() => () => clearInterval(cooldownRef.current!), []);
 
   // ── Step 1: credentials ───────────────────────────────────────────────────
 
@@ -106,6 +124,7 @@ export const LoginForm = () => {
         setPendingEmail(data.email);
         setPendingRole(role);
         setStep('otp');
+        startCooldown(60);
         return;
       }
       router.push(ROLE_REDIRECTS[role] ?? '/');
@@ -121,7 +140,7 @@ export const LoginForm = () => {
       const res = await fetch('/api/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ otp: data.otp }),
+        body: JSON.stringify({ email: pendingEmail, otp: data.otp }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -133,6 +152,24 @@ export const LoginForm = () => {
       router.push(ROLE_REDIRECTS[pendingRole] ?? '/');
     } catch {
       toast.error('Unable to reach the server. Check your connection.');
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (resendCooldown > 0 || isResending) return;
+    setIsResending(true);
+    try {
+      await fetch('/api/auth/resend-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: pendingEmail }),
+      });
+      toast.success('New code sent — check your inbox.');
+      startCooldown(60);
+    } catch {
+      toast.error('Could not resend. Try again in a moment.');
+    } finally {
+      setIsResending(false);
     }
   };
 
@@ -191,16 +228,30 @@ export const LoginForm = () => {
             {otpForm.formState.isSubmitting ? 'Verifying…' : 'Verify code'}
           </Button>
 
-          <button
-            type="button"
-            className="w-full text-center text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-            onClick={() => {
-              setStep('credentials');
-              otpForm.reset();
-            }}
-          >
-            Back to sign in
-          </button>
+          <div className="flex flex-col items-center gap-1">
+            <button
+              type="button"
+              className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline disabled:pointer-events-none disabled:opacity-50"
+              onClick={handleResendOtp}
+              disabled={resendCooldown > 0 || isResending}
+            >
+              {isResending
+                ? 'Sending…'
+                : resendCooldown > 0
+                  ? `Resend code in ${resendCooldown}s`
+                  : "Didn't receive a code? Resend"}
+            </button>
+            <button
+              type="button"
+              className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+              onClick={() => {
+                setStep('credentials');
+                otpForm.reset();
+              }}
+            >
+              Back to sign in
+            </button>
+          </div>
         </FieldGroup>
       </form>
     );
