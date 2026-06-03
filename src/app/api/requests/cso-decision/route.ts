@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
+import { writeAuditEntry } from '@/lib/audit';
 import { logger } from '@/lib/logger';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
@@ -56,6 +57,25 @@ export const POST = async (request: NextRequest) => {
         status: 500,
       });
     }
+  }
+
+  try {
+    await writeAuditEntry({
+      event:
+        decision === 'DECLINED'
+          ? 'REQUEST_DECLINED_CSO'
+          : 'REQUEST_APPROVED_CSO',
+      actorId: user.id,
+      actorRole: 'CSO',
+      targetType: 'request',
+      targetId: request_id,
+      payload: { decision },
+    });
+  } catch (auditErr) {
+    logger.error('cso-decision: audit write failed', {
+      err: String(auditErr),
+      request_id,
+    });
   }
 
   return NextResponse.json(

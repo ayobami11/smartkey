@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { writeAuditEntry } from '@/lib/audit';
 import { logger } from '@/lib/logger';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
@@ -73,6 +74,19 @@ export const PATCH = async (
       err: banError.message,
     });
     // Non-fatal — profile is already deactivated; RLS will block access.
+  }
+
+  try {
+    await writeAuditEntry({
+      event: 'USER_DEACTIVATED',
+      actorId: user.id,
+      actorRole: 'CSO',
+      targetType: 'profile',
+      targetId: id,
+      payload: { deactivated_by: user.id },
+    });
+  } catch (auditErr) {
+    logger.error('revoke: audit write failed', { err: String(auditErr), id });
   }
 
   return NextResponse.json(ok({ profile_id: id, status: 'DEACTIVATED' }), {

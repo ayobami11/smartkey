@@ -1,4 +1,4 @@
-import { createServerClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { logger } from '@/lib/logger';
 import type { Json, UserRole } from '@/types/database';
 
@@ -33,7 +33,10 @@ export const writeAuditEntry = async (
 ): Promise<void> => {
   const { event, actorId, actorRole, targetType, targetId, payload } = params;
 
-  const supabase = await createServerClient();
+  // The audit_log table has no INSERT policy for the authenticated role —
+  // RLS blocks direct inserts. Use the service-role admin client so the
+  // write bypasses RLS (the RPCs do the same via SECURITY DEFINER).
+  const supabase = createAdminClient();
 
   const { error } = await supabase.from('audit_log').insert({
     event,

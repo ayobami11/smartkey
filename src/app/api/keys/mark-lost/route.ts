@@ -16,15 +16,18 @@ export const POST = async (request: NextRequest) => {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json(err('Unauthorized', 401), { status: 401 });
+  if (!user)
+    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
 
   const { data: profile } = await supabase
     .from('profiles')
     .select('role, department_id')
     .eq('id', user.id)
     .single();
-  if (!profile) return NextResponse.json(err('Unauthorized', 401), { status: 401 });
-  if (profile.role !== 'CSO') return NextResponse.json(err('Forbidden', 403), { status: 403 });
+  if (!profile)
+    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
+  if (profile.role !== 'CSO')
+    return NextResponse.json(err('Forbidden', 403), { status: 403 });
 
   const body = await request.json().catch(() => null);
   const parsed = bodySchema.safeParse(body);
@@ -46,7 +49,9 @@ export const POST = async (request: NextRequest) => {
   }
 
   if (key.status === 'RETIRED') {
-    return NextResponse.json(err('Key is already retired', 409), { status: 409 });
+    return NextResponse.json(err('Key is already retired', 409), {
+      status: 409,
+    });
   }
 
   // Retire the key.
@@ -57,23 +62,21 @@ export const POST = async (request: NextRequest) => {
 
   if (updateError) {
     const ref = crypto.randomUUID();
-    logger.error('mark-lost: key update failed', { key_id, err: updateError.message, ref });
-    return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), { status: 500 });
+    logger.error('mark-lost: key update failed', {
+      key_id,
+      err: updateError.message,
+      ref,
+    });
+    return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
+      status: 500,
+    });
   }
 
-  // Log an incident entry.
-  const year = new Date().getFullYear();
-  const { data: incidentCount } = await supabase
-    .from('incidents')
-    .select('id', { count: 'exact', head: true });
-
-  const count = (incidentCount as unknown as number) ?? 0;
-  const reference = `INC-${year}-${String(count + 1).padStart(4, '0')}`;
-
+  // Log an incident entry. Do not pass `reference` — the DB generates it
+  // atomically via incident_reference_seq to avoid race conditions.
   const { data: incident, error: incidentError } = await supabase
     .from('incidents')
     .insert({
-      reference,
       logged_by: user.id,
       type: 'MISSING_KEY',
       severity: 'HIGH',
@@ -87,12 +90,17 @@ export const POST = async (request: NextRequest) => {
 
   if (incidentError || !incident) {
     const ref = crypto.randomUUID();
-    logger.error('mark-lost: incident insert failed', { key_id, err: incidentError?.message, ref });
-    return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), { status: 500 });
+    logger.error('mark-lost: incident insert failed', {
+      key_id,
+      err: incidentError?.message,
+      ref,
+    });
+    return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
+      status: 500,
+    });
   }
 
-  return NextResponse.json(
-    ok({ key_id, incident_id: incident.id }),
-    { status: 200 },
-  );
+  return NextResponse.json(ok({ key_id, incident_id: incident.id }), {
+    status: 200,
+  });
 };
