@@ -64,16 +64,15 @@ export const PATCH = async (
     });
   }
 
-  // Invalidate the user's Supabase Auth session. admin.deleteUser requires
-  // the service-role key — use the admin client, not the session client.
+  // Ban the auth user so they cannot log in again. We use ban_duration rather
+  // than deleteUser so the profiles row (and all audit history) is preserved.
   const adminClient = createAdminClient();
-  const { error: banError } = await adminClient.auth.admin.deleteUser(id);
+  const { error: banError } = await adminClient.auth.admin.updateUserById(id, {
+    ban_duration: '876000h', // ~100 years — effectively permanent
+  });
   if (banError) {
-    logger.error('revoke: auth session invalidation failed', {
-      id,
-      err: banError.message,
-    });
-    // Non-fatal — profile is already deactivated; RLS will block access.
+    logger.error('revoke: auth ban failed', { id, err: banError.message });
+    // Non-fatal — profile is already DEACTIVATED; RLS will block data access.
   }
 
   try {
