@@ -127,13 +127,6 @@ export const POST = async (request: NextRequest) => {
     occurred_at,
   } = parsed.data;
 
-  const year = new Date().getFullYear();
-  const { count: existingCount } = await supabase
-    .from('incidents')
-    .select('*', { count: 'exact', head: true });
-
-  const reference = `INC-${year}-${String((existingCount ?? 0) + 1).padStart(4, '0')}`;
-
   // Get current active shift for linking.
   const { data: currentShift } = await supabase
     .from('shifts')
@@ -143,10 +136,11 @@ export const POST = async (request: NextRequest) => {
     .limit(1)
     .maybeSingle();
 
+  // Do not pass `reference` — the DB generates it atomically via
+  // incident_reference_seq, avoiding the race condition of a manual count.
   const { data: incident, error: insertError } = await supabase
     .from('incidents')
     .insert({
-      reference,
       shift_id: currentShift?.id ?? null,
       logged_by: user.id,
       type,

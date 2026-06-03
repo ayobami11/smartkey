@@ -16,15 +16,18 @@ export const POST = async (request: NextRequest) => {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json(err('Unauthorized', 401), { status: 401 });
+  if (!user)
+    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
 
   const { data: profile } = await supabase
     .from('profiles')
     .select('role, department_id')
     .eq('id', user.id)
     .single();
-  if (!profile) return NextResponse.json(err('Unauthorized', 401), { status: 401 });
-  if (profile.role !== 'HOD') return NextResponse.json(err('Forbidden', 403), { status: 403 });
+  if (!profile)
+    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
+  if (profile.role !== 'HOD')
+    return NextResponse.json(err('Forbidden', 403), { status: 403 });
 
   const body = await request.json().catch(() => null);
   const parsed = bodySchema.safeParse(body);
@@ -42,17 +45,22 @@ export const POST = async (request: NextRequest) => {
     .single();
 
   if (!key || key.department_id !== profile.department_id) {
-    return NextResponse.json(err('Key not in your department', 403), { status: 403 });
+    return NextResponse.json(err('Key not in your department', 403), {
+      status: 403,
+    });
   }
 
-  // Check slot count.
+  // Check slot count — select a minimal column, no need to fetch all fields.
   const { count } = await supabase
     .from('authorisations')
-    .select('*', { count: 'exact', head: true })
+    .select('key_id', { count: 'exact', head: true })
     .eq('key_id', key_id);
 
   if ((count ?? 0) >= 3) {
-    return NextResponse.json(err('Three authorisation slots are already filled', 409), { status: 409 });
+    return NextResponse.json(
+      err('Three authorisation slots are already filled', 409),
+      { status: 409 }
+    );
   }
 
   // Check duplicate.
@@ -64,7 +72,10 @@ export const POST = async (request: NextRequest) => {
     .maybeSingle();
 
   if (existing) {
-    return NextResponse.json(err('Requester is already authorised for this key', 409), { status: 409 });
+    return NextResponse.json(
+      err('Requester is already authorised for this key', 409),
+      { status: 409 }
+    );
   }
 
   const { error: insertError } = await supabase.from('authorisations').insert({
@@ -75,18 +86,26 @@ export const POST = async (request: NextRequest) => {
 
   if (insertError) {
     const ref = crypto.randomUUID();
-    logger.error('authorisations: insert failed', { err: insertError.message, ref });
-    return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), { status: 500 });
+    logger.error('authorisations: insert failed', {
+      err: insertError.message,
+      ref,
+    });
+    return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
+      status: 500,
+    });
   }
 
   // Return the slot number for the newly added authorisation.
   const { count: newCount } = await supabase
     .from('authorisations')
-    .select('*', { count: 'exact', head: true })
+    .select('key_id', { count: 'exact', head: true })
     .eq('key_id', key_id);
 
   return NextResponse.json(
-    ok({ authorisation_id: `${key_id}:${requester_id}`, slot_number: newCount ?? 1 }),
-    { status: 201 },
+    ok({
+      authorisation_id: `${key_id}:${requester_id}`,
+      slot_number: newCount ?? 1,
+    }),
+    { status: 201 }
   );
 };

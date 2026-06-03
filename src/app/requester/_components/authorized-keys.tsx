@@ -183,7 +183,10 @@ export const AuthorizedKeys = () => {
       if (error) {
         setFetchError('Failed to load your authorised keys.');
       } else {
-        setKeys((data ?? []) as AuthorisedKey[]);
+        // Generated types have Relationships:[] for authorisations, so the
+        // nested select type resolves to SelectQueryError. The runtime query
+        // is correct; cast through unknown until types are regenerated.
+        setKeys((data ?? []) as unknown as AuthorisedKey[]);
       }
     } catch {
       setFetchError(

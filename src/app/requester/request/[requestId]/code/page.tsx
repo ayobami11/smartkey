@@ -107,7 +107,7 @@ export default function CodeDisplayPage() {
       if (!data) {
         setNotFound(true);
       } else {
-        setRequest(data as RequestDetail);
+        setRequest(data as unknown as RequestDetail);
         if (data.code_expires_at) {
           setCountdown(secondsRemaining(data.code_expires_at));
         }
