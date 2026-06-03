@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { logger } from '@/lib/logger';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
 import { err, ok } from '@/types/api';
 
@@ -17,15 +18,18 @@ export const POST = async (request: NextRequest) => {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json(err('Unauthorized', 401), { status: 401 });
+  if (!user)
+    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
 
   const { data: profile } = await supabase
     .from('profiles')
     .select('role, department_id')
     .eq('id', user.id)
     .single();
-  if (!profile) return NextResponse.json(err('Unauthorized', 401), { status: 401 });
-  if (profile.role !== 'CSO') return NextResponse.json(err('Forbidden', 403), { status: 403 });
+  if (!profile)
+    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
+  if (profile.role !== 'CSO')
+    return NextResponse.json(err('Forbidden', 403), { status: 403 });
 
   const body = await request.json().catch(() => null);
   const parsed = bodySchema.safeParse(body);
@@ -36,7 +40,10 @@ export const POST = async (request: NextRequest) => {
   const { request_id, decision } = parsed.data;
 
   if (decision === 'DECLINED') {
-    const { error } = await supabase
+    // RLS blocks direct UPDATE on requests for authenticated users — use the
+    // service-role admin client to perform this status transition.
+    const adminClient = createAdminClient();
+    const { error } = await adminClient
       .from('requests')
       .update({ status: 'CANCELLED' })
       .eq('id', request_id)
@@ -45,7 +52,9 @@ export const POST = async (request: NextRequest) => {
     if (error) {
       const ref = crypto.randomUUID();
       logger.error('cso-decision cancel failed', { err: error.message, ref });
-      return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), { status: 500 });
+      return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
+        status: 500,
+      });
     }
   }
 
@@ -53,6 +62,6 @@ export const POST = async (request: NextRequest) => {
     ok({
       request_id,
       status: decision === 'DECLINED' ? 'CANCELLED' : 'CODE_ISSUED',
-    }),
+    })
   );
 };

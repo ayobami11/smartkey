@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { logger } from '@/lib/logger';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
 import { err, ok } from '@/types/api';
 
@@ -10,10 +11,13 @@ const bodySchema = z.object({
 });
 
 const mapRpcError = (msg: string): { status: number; message: string } => {
-  if (msg.includes('NOT_AUTHENTICATED')) return { status: 401, message: 'Not authenticated' };
+  if (msg.includes('NOT_AUTHENTICATED'))
+    return { status: 401, message: 'Not authenticated' };
   if (msg.includes('FORBIDDEN')) return { status: 403, message: 'Forbidden' };
-  if (msg.includes('NOT_FOUND')) return { status: 404, message: 'Shift not found' };
-  if (msg.includes('CONFLICT')) return { status: 409, message: 'Report already generated for this shift' };
+  if (msg.includes('NOT_FOUND'))
+    return { status: 404, message: 'Shift not found' };
+  if (msg.includes('CONFLICT'))
+    return { status: 409, message: 'Report already generated for this shift' };
   return { status: 500, message: 'Internal error' };
 };
 
@@ -45,15 +49,18 @@ export const POST = async (request: NextRequest) => {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json(err('Unauthorized', 401), { status: 401 });
+  if (!user)
+    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
 
   const { data: profile } = await supabase
     .from('profiles')
     .select('role, department_id')
     .eq('id', user.id)
     .single();
-  if (!profile) return NextResponse.json(err('Unauthorized', 401), { status: 401 });
-  if (profile.role !== 'CSO') return NextResponse.json(err('Forbidden', 403), { status: 403 });
+  if (!profile)
+    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
+  if (profile.role !== 'CSO')
+    return NextResponse.json(err('Forbidden', 403), { status: 403 });
 
   const body = await request.json().catch(() => null);
   const parsed = bodySchema.safeParse(body);
@@ -64,25 +71,37 @@ export const POST = async (request: NextRequest) => {
   const { shift_id } = parsed.data;
 
   // Create the placeholder shift_reports row via RPC (handles uniqueness + audit entry).
-  const { data: rpcData, error: rpcError } = await supabase.rpc('generate_shift_report', {
-    p_shift_id: shift_id,
-  });
+  const { data: rpcData, error: rpcError } = await supabase.rpc(
+    'generate_shift_report',
+    {
+      p_shift_id: shift_id,
+    }
+  );
 
   if (rpcError) {
     const mapped = mapRpcError(rpcError.message);
     if (mapped.status === 500) {
       const ref = crypto.randomUUID();
-      logger.error('generate_shift_report RPC failed', { err: rpcError.message, ref });
-      return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), { status: 500 });
+      logger.error('generate_shift_report RPC failed', {
+        err: rpcError.message,
+        ref,
+      });
+      return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
+        status: 500,
+      });
     }
-    return NextResponse.json(err(mapped.message, mapped.status), { status: mapped.status });
+    return NextResponse.json(err(mapped.message, mapped.status), {
+      status: mapped.status,
+    });
   }
 
   const result = Array.isArray(rpcData) ? rpcData[0] : rpcData;
   if (!result?.report_id) {
     const ref = crypto.randomUUID();
     logger.error('generate_shift_report RPC returned empty result', { ref });
-    return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), { status: 500 });
+    return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
+      status: 500,
+    });
   }
 
   const reportId: string = result.report_id;
@@ -94,8 +113,12 @@ export const POST = async (request: NextRequest) => {
     .gte(
       'occurred_at',
       (
-        await supabase.from('shifts').select('started_at').eq('id', shift_id).single()
-      ).data?.started_at ?? new Date(0).toISOString(),
+        await supabase
+          .from('shifts')
+          .select('started_at')
+          .eq('id', shift_id)
+          .single()
+      ).data?.started_at ?? new Date(0).toISOString()
     )
     .order('occurred_at', { ascending: true });
 
@@ -132,15 +155,19 @@ export const POST = async (request: NextRequest) => {
             contents: [{ parts: [{ text: prompt }] }],
             generationConfig: { responseMimeType: 'application/json' },
           }),
-        },
+        }
       );
 
       if (geminiResponse.ok) {
         const geminiJson = await geminiResponse.json();
         const rawText: string =
           geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-        const parsed = JSON.parse(rawText) as { markdown?: string; timeline?: unknown[] };
-        markdown = parsed.markdown ?? buildTemplateFallback(shift_id, events ?? []);
+        const parsed = JSON.parse(rawText) as {
+          markdown?: string;
+          timeline?: unknown[];
+        };
+        markdown =
+          parsed.markdown ?? buildTemplateFallback(shift_id, events ?? []);
         timeline = parsed.timeline ?? [];
       } else {
         logger.error('Gemini API error', { status: geminiResponse.status });
@@ -155,20 +182,24 @@ export const POST = async (request: NextRequest) => {
   }
 
   // Update the shift_reports row with the generated content.
-  // The RPC created the row with SECURITY DEFINER, which allows the subsequent
-  // UPDATE here via the service route context.
+  // RLS blocks direct UPDATE for authenticated users — use the service-role
+  // admin client so this write succeeds regardless of session role.
+  const adminClient = createAdminClient();
   const generatedAt = new Date().toISOString();
-  await supabase
+  await adminClient
     .from('shift_reports')
     .update({
       markdown,
       timeline: timeline as never,
-      metadata: { generated_at: generatedAt, source: geminiKey ? 'gemini' : 'template' },
+      metadata: {
+        generated_at: generatedAt,
+        source: geminiKey ? 'gemini' : 'template',
+      },
     })
     .eq('id', reportId);
 
   return NextResponse.json(
     ok({ report_id: reportId, generated_at: generatedAt }),
-    { status: 201 },
+    { status: 201 }
   );
 };

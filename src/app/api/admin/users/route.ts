@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { logger } from '@/lib/logger';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
 import { err, ok } from '@/types/api';
 import type { ProfileStatus, UserRole } from '@/types/database';
@@ -60,6 +61,30 @@ export const POST = async (request: NextRequest) => {
       err('department_id is required for HOD and REQUESTER roles', 422),
       { status: 422 }
     );
+  }
+
+  // Ensure an auth.users row exists for this email before calling the RPC.
+  // The RPC requires the row to already exist (it looks up the user by email).
+  // We attempt createUser and silently ignore the "already exists" error so
+  // the call is idempotent — re-provisioning after a failed first attempt works.
+  const adminClient = createAdminClient();
+  const { error: createAuthError } = await adminClient.auth.admin.createUser({
+    email: institutional_email,
+    email_confirm: true,
+  });
+
+  if (
+    createAuthError &&
+    !createAuthError.message.includes('already been registered')
+  ) {
+    const ref = crypto.randomUUID();
+    logger.error('provision_user: auth user creation failed', {
+      err: createAuthError.message,
+      ref,
+    });
+    return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
+      status: 500,
+    });
   }
 
   const { data: rpcData, error: rpcError } = await supabase.rpc(
