@@ -93,7 +93,7 @@ export const POST = async (request: NextRequest) => {
       p_full_name: full_name,
       p_email: institutional_email,
       p_role: role,
-      p_department_id: department_id ?? null,
+      p_department_id: department_id ?? undefined,
     }
   );
 

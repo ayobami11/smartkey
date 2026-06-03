@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -17,12 +16,16 @@ const bodySchema = z.object({
 });
 
 const mapRpcError = (msg: string): { status: number; message: string } => {
-  if (msg.includes('NOT_AUTHENTICATED')) return { status: 401, message: 'Not authenticated' };
+  if (msg.includes('NOT_AUTHENTICATED'))
+    return { status: 401, message: 'Not authenticated' };
   if (msg.includes('FORBIDDEN')) return { status: 403, message: 'Forbidden' };
   if (msg.includes('NOT_FOUND')) return { status: 404, message: 'Not found' };
-  if (msg.includes('CONFLICT')) return { status: 409, message: msg.split(': ')[1] ?? 'Conflict' };
-  if (msg.includes('NOT_AUTHORISED')) return { status: 403, message: 'Not authorised for this key' };
-  if (msg.includes('EXPIRED_CODE')) return { status: 404, message: 'Code has expired' };
+  if (msg.includes('CONFLICT'))
+    return { status: 409, message: msg.split(': ')[1] ?? 'Conflict' };
+  if (msg.includes('NOT_AUTHORISED'))
+    return { status: 403, message: 'Not authorised for this key' };
+  if (msg.includes('EXPIRED_CODE'))
+    return { status: 404, message: 'Code has expired' };
   return { status: 500, message: 'Internal error' };
 };
 
@@ -32,15 +35,18 @@ export const POST = async (request: NextRequest) => {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json(err('Unauthorized', 401), { status: 401 });
+  if (!user)
+    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
 
   const { data: profile } = await supabase
     .from('profiles')
     .select('role, department_id')
     .eq('id', user.id)
     .single();
-  if (!profile) return NextResponse.json(err('Unauthorized', 401), { status: 401 });
-  if (profile.role !== 'REQUESTER') return NextResponse.json(err('Forbidden', 403), { status: 403 });
+  if (!profile)
+    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
+  if (profile.role !== 'REQUESTER')
+    return NextResponse.json(err('Forbidden', 403), { status: 403 });
 
   const body = await request.json().catch(() => null);
   const parsed = bodySchema.safeParse(body);
@@ -54,7 +60,7 @@ export const POST = async (request: NextRequest) => {
     p_key_id: key_id,
     p_type: type,
     p_return_deadline: return_deadline,
-    p_weekend_date: weekend_date ?? null,
+    p_weekend_date: weekend_date ?? undefined,
   });
 
   if (error) {
@@ -62,9 +68,13 @@ export const POST = async (request: NextRequest) => {
     if (mapped.status === 500) {
       const ref = crypto.randomUUID();
       logger.error('create_request RPC failed', { err: error.message, ref });
-      return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), { status: 500 });
+      return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
+        status: 500,
+      });
     }
-    return NextResponse.json(err(mapped.message, mapped.status), { status: mapped.status });
+    return NextResponse.json(err(mapped.message, mapped.status), {
+      status: mapped.status,
+    });
   }
 
   const result = Array.isArray(data) ? data[0] : data;
@@ -72,7 +82,9 @@ export const POST = async (request: NextRequest) => {
   if (!result) {
     const ref = crypto.randomUUID();
     logger.error('create_request RPC returned empty result', { ref });
-    return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), { status: 500 });
+    return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
+      status: 500,
+    });
   }
 
   if (type === 'WEEKEND') {
@@ -82,7 +94,7 @@ export const POST = async (request: NextRequest) => {
         status: 'PENDING_HOD',
         risk_tier: 'LOW',
       }),
-      { status: 201 },
+      { status: 201 }
     );
   }
 
@@ -93,6 +105,6 @@ export const POST = async (request: NextRequest) => {
       code_expires_at: result.code_expires_at,
       risk_tier: 'LOW',
     }),
-    { status: 201 },
+    { status: 201 }
   );
 };
