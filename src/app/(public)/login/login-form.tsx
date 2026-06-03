@@ -30,11 +30,7 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from '@/components/ui/input-group';
-import {
-  InputOTP,
-  InputOTPGroup,
-  InputOTPSlot,
-} from '@/components/ui/input-otp';
+import { Input } from '@/components/ui/input';
 import { email, password } from '@/lib/validation/primitives';
 
 // ── Schemas ───────────────────────────────────────────────────────────────
@@ -193,20 +189,24 @@ export const LoginForm = () => {
             render={({ field, fieldState }) => (
               <Field data-invalid={fieldState.invalid}>
                 <FieldLabel htmlFor="otp">Verification code</FieldLabel>
-                <InputOTP
+                <Input
+                  id="otp"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
                   maxLength={6}
-                  value={field.value}
-                  onChange={field.onChange}
+                  placeholder="000000"
                   aria-invalid={fieldState.invalid}
-                  aria-label="One-time password"
                   autoFocus
-                >
-                  <InputOTPGroup>
-                    {[0, 1, 2, 3, 4, 5].map((i) => (
-                      <InputOTPSlot key={i} index={i} />
-                    ))}
-                  </InputOTPGroup>
-                </InputOTP>
+                  className="text-center font-mono text-2xl tracking-[0.5em]"
+                  {...field}
+                  onChange={(e) => {
+                    const digits = e.target.value
+                      .replace(/\D/g, '')
+                      .slice(0, 6);
+                    field.onChange(digits);
+                  }}
+                />
                 {fieldState.invalid ? (
                   <FieldError errors={[fieldState.error]} />
                 ) : (
