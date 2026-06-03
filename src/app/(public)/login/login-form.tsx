@@ -69,9 +69,9 @@ export const LoginForm = () => {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [isResending, setIsResending] = useState(false);
-  const [otpValue, setOtpValue] = useState('');
   const [otpError, setOtpError] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
+  const otpRef = useRef<HTMLInputElement>(null);
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const credentialsForm = useForm<CredentialsValues>({
     resolver: zodResolver(credentialsSchema),
@@ -130,7 +130,8 @@ export const LoginForm = () => {
 
   const handleOtpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (otpValue.length !== 6) {
+    const otp = otpRef.current?.value ?? '';
+    if (otp.length !== 6) {
       setOtpError('Enter the 6-digit code from your email.');
       return;
     }
@@ -140,7 +141,7 @@ export const LoginForm = () => {
       const res = await fetch('/api/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: pendingEmail, otp: otpValue }),
+        body: JSON.stringify({ email: pendingEmail, otp }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -197,6 +198,7 @@ export const LoginForm = () => {
               Verification code
             </label>
             <input
+              ref={otpRef}
               id="otp"
               type="text"
               inputMode="numeric"
@@ -204,11 +206,17 @@ export const LoginForm = () => {
               maxLength={6}
               placeholder="000000"
               autoFocus
-              value={otpValue}
-              onChange={(e) =>
-                setOtpValue(e.target.value.replace(/\D/g, '').slice(0, 6))
-              }
-              className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-center font-mono text-2xl tracking-[0.5em] text-foreground shadow-xs outline-none ring-offset-background placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/50"
+              style={{
+                width: '100%',
+                height: '48px',
+                border: '1px solid #ccc',
+                borderRadius: '6px',
+                padding: '8px',
+                fontSize: '28px',
+                fontFamily: 'monospace',
+                letterSpacing: '0.4em',
+                textAlign: 'center',
+              }}
             />
             {otpError ? (
               <p className="text-sm text-destructive">{otpError}</p>
@@ -247,7 +255,6 @@ export const LoginForm = () => {
               className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
               onClick={() => {
                 setStep('credentials');
-                setOtpValue('');
                 setOtpError('');
               }}
             >
