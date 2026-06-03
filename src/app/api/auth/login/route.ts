@@ -1,8 +1,11 @@
+import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-import { createServerClient } from '@/lib/supabase/server';
+import { sendOtpEmail } from '@/lib/email/otp';
 import { logger } from '@/lib/logger';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { createServerClient } from '@/lib/supabase/server';
 import { err, ok } from '@/types/api';
 
 const MFA_ROLES = new Set(['CSO', 'HOD', 'VERIFIER']);
@@ -24,10 +27,7 @@ export const POST = async (request: NextRequest) => {
   const { email, password } = parsed.data;
 
   const { data: authData, error: authError } =
-    await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    await supabase.auth.signInWithPassword({ email, password });
 
   if (authError || !authData.session) {
     return NextResponse.json(err('Invalid credentials', 401), { status: 401 });
@@ -43,25 +43,28 @@ export const POST = async (request: NextRequest) => {
   const mfaRequired = role ? MFA_ROLES.has(role) : false;
 
   if (mfaRequired) {
-    const { error: otpError } = await supabase.auth.signInWithOtp({ email });
-    if (otpError) {
-      logger.error('OTP send failed', {
-        email,
-        error: otpError.message,
-        code: otpError.status,
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const codeHash = crypto.createHash('sha256').update(code).digest('hex');
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+    const adminClient = createAdminClient();
+    await adminClient.auth.admin.updateUserById(authData.user.id, {
+      app_metadata: { mfa_code_hash: codeHash, mfa_code_expires_at: expiresAt },
+    });
+
+    try {
+      await sendOtpEmail({ to: email, code });
+    } catch (emailErr) {
+      logger.error('OTP email failed', { email, err: String(emailErr) });
+      return NextResponse.json(err('Failed to send verification code', 500), {
+        status: 500,
       });
-      return NextResponse.json(
-        err(`Failed to send OTP: ${otpError.message}`, 500),
-        { status: 500 }
-      );
     }
+
+    return NextResponse.json(ok({ session: null, role, mfa_required: true }));
   }
 
   return NextResponse.json(
-    ok({
-      session: mfaRequired ? null : authData.session,
-      role,
-      mfa_required: mfaRequired,
-    })
+    ok({ session: authData.session, role, mfa_required: false })
   );
 };
