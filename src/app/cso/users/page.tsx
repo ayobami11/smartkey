@@ -307,7 +307,7 @@ export default function UsersPage() {
             Manage SmartKey accounts across all roles.
           </p>
         </div>
-        <Button onClick={handleOpenProvision}>
+        <Button>
           <UserPlusIcon className="size-4" aria-hidden="true" />
           Provision new user
         </Button>

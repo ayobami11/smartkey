@@ -16,7 +16,12 @@ export const POST = async (request: NextRequest) => {
   // Always return 200 — no email enumeration
   if (!parsed.success) return NextResponse.json(ok(null));
 
-  await supabase.auth.resetPasswordForEmail(parsed.data.email);
+  const siteUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ?? 'https://smartkey-ochre.vercel.app';
+
+  await supabase.auth.resetPasswordForEmail(parsed.data.email, {
+    redirectTo: `${siteUrl}/api/auth/callback?next=/reset-password`,
+  });
 
   return NextResponse.json(ok(null));
 };
