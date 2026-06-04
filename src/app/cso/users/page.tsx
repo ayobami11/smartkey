@@ -1,7 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { MoreHorizontalIcon, SearchIcon, UsersIcon } from 'lucide-react';
+import {
+  MoreHorizontalIcon,
+  RefreshCwIcon,
+  SearchIcon,
+  UsersIcon,
+} from 'lucide-react';
 
 import {
   AlertDialog,
@@ -53,8 +58,7 @@ type User = {
   status: UserStatus;
 };
 
-// ── Constants ─────────────────────────────────────────────────────────────
-
+// ── Constants 
 const ROLE_LABEL: Record<UserRole, string> = {
   CSO: 'CSO',
   HOD: 'HOD',
@@ -118,9 +122,9 @@ export default function UsersPage() {
   } | null>(null);
   const [revoking, setRevoking] = useState(false);
   const [revokeError, setRevokeError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // ── Fetch users ───────────────────────────────────────────────────────────
-
+  // ── Fetch users 
   const fetchUsers = async (reset = true, cursor?: string) => {
     if (reset) setLoadState('loading');
     else setLoadState('loadingMore');
@@ -165,8 +169,7 @@ export default function UsersPage() {
     fetchUsers(true);
   }, [roleFilter, statusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Revoke access ─────────────────────────────────────────────────────────
-
+  // ── Revoke access 
   const handleRevoke = async () => {
     if (!revokeTarget) return;
     setRevoking(true);
@@ -195,8 +198,7 @@ export default function UsersPage() {
     }
   };
 
-  // ── Computed ──────────────────────────────────────────────────────────────
-
+  // ── Computed 
   const filtered = search
     ? users.filter(
         (u) =>
@@ -205,8 +207,7 @@ export default function UsersPage() {
       )
     : users;
 
-  // ── Render ────────────────────────────────────────────────────────────────
-
+  // ── Render 
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -216,7 +217,26 @@ export default function UsersPage() {
             Manage SmartKey accounts across all roles.
           </p>
         </div>
-        <ProvisionUserDialog onSuccess={() => fetchUsers(true)} />
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label="Refresh users list"
+            disabled={refreshing || loadState === 'loading'}
+            onClick={async () => {
+              setRefreshing(true);
+              await fetchUsers(true);
+              setRefreshing(false);
+            }}
+          >
+            <RefreshCwIcon
+              className={`size-4 ${refreshing ? 'animate-spin' : ''}`}
+              aria-hidden="true"
+            />
+            Refresh
+          </Button>
+          <ProvisionUserDialog onSuccess={() => fetchUsers(true)} />
+        </div>
       </div>
 
       {/* Search + filters */}
