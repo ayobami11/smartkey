@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/breadcrumb';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
+import { ModeToggle } from '@/components/smartkey/ModeToggle';
 
 const ROUTES: Record<string, string> = {
   '/cso/dashboard': 'Dashboard',
@@ -58,6 +59,9 @@ export const DashboardHeader = () => {
             )}
           </BreadcrumbList>
         </Breadcrumb>
+      </div>
+      <div className="ml-auto px-4">
+        <ModeToggle />
       </div>
     </header>
   );
