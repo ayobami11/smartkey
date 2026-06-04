@@ -44,8 +44,7 @@ import {
 } from '@/components/ui/table';
 import { ProvisionUserDialog } from './_components/provision-user-dialog';
 
-// ── Types ──────────────────────────────────────────────────────────────────
-
+// ── Types 
 type UserRole = 'CSO' | 'HOD' | 'VERIFIER' | 'REQUESTER';
 type UserStatus = 'ACTIVE' | 'PENDING_ACTIVATION' | 'DEACTIVATED';
 
@@ -100,8 +99,7 @@ const ROLE_CHIPS: { label: string; value: string }[] = [
   { label: 'Requester', value: 'REQUESTER' },
 ];
 
-// ── Component ──────────────────────────────────────────────────────────────
-
+// ── Component 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
