@@ -71,11 +71,13 @@ export const POST = async (request: NextRequest) => {
     process.env.NEXT_PUBLIC_SITE_URL ?? 'https://smartkey-ochre.vercel.app';
   const activationPath = role === 'HOD' ? '/hod/onboarding' : '/activate';
 
+  // Invite links use the implicit flow (tokens in URL fragment #access_token=...)
+  // so we redirect to a client-side page that can read the fragment and set the session.
   const adminClient = createAdminClient();
   const { error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
     institutional_email,
     {
-      redirectTo: `${siteUrl}/api/auth/callback?next=${activationPath}`,
+      redirectTo: `${siteUrl}/auth/confirm?next=${activationPath}`,
     }
   );
 
