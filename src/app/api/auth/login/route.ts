@@ -30,7 +30,7 @@ export const POST = async (request: NextRequest) => {
     await supabase.auth.signInWithPassword({ email, password });
 
   if (authError || !authData.session) {
-    return NextResponse.json(err('Invalid credentials', 401), { status: 401 });
+    return NextResponse.json(err('Invalid email or password', 401), { status: 401 });
   }
 
   const { data: profileData } = await supabase

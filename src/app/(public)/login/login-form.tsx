@@ -18,18 +18,25 @@ import * as z from 'zod';
 
 import { Button } from '@/components/ui/button';
 import {
+  Field,
+  FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
-  Field,
-  FieldDescription,
 } from '@/components/ui/field';
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSlot,
+} from '@/components/ui/input-otp';
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
   InputGroupInput,
 } from '@/components/ui/input-group';
+import { REGEXP_ONLY_DIGITS } from 'input-otp';
+
 import { email, password } from '@/lib/validation/primitives';
 
 // ── Schemas ───────────────────────────────────────────────────────────────
@@ -71,8 +78,10 @@ export const LoginForm = () => {
   const [isResending, setIsResending] = useState(false);
   const [otpError, setOtpError] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
-  const otpRef = useRef<HTMLInputElement>(null);
+  const [otpValue, setOtpValue] = useState('');
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isPasteRef = useRef(false);
+  const submitBtnRef = useRef<HTMLButtonElement>(null);
   const credentialsForm = useForm<CredentialsValues>({
     resolver: zodResolver(credentialsSchema),
     defaultValues: { email: '', password: '' },
@@ -128,9 +137,7 @@ export const LoginForm = () => {
 
   // ── Step 2: OTP ───────────────────────────────────────────────────────────
 
-  const handleOtpSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const otp = otpRef.current?.value ?? '';
+  const verifyOtp = async (otp: string) => {
     if (otp.length !== 6) {
       setOtpError('Enter the 6-digit code from your email.');
       return;
@@ -145,17 +152,22 @@ export const LoginForm = () => {
       });
       const json = await res.json();
       if (!res.ok) {
-        setOtpError(
+        toast.error(
           json.error ?? 'Invalid code. Check your email and try again.'
         );
         return;
       }
       router.push(ROLE_REDIRECTS[pendingRole] ?? '/');
     } catch {
-      setOtpError('Unable to reach the server. Check your connection.');
+      toast.error('Unable to reach the server. Check your connection.');
     } finally {
       setIsVerifying(false);
     }
+  };
+
+  const handleOtpSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    await verifyOtp(otpValue);
   };
 
   const handleResendOtp = async () => {
@@ -190,36 +202,50 @@ export const LoginForm = () => {
             </span>
           </div>
 
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col items-center gap-3">
             <label
               htmlFor="otp"
-              className="text-sm font-medium text-foreground"
+              className="self-start text-sm font-medium text-foreground"
             >
               Verification code
             </label>
-            <input
-              ref={otpRef}
+            <InputOTP
               id="otp"
-              type="text"
-              inputMode="numeric"
-              autoComplete="one-time-code"
               maxLength={6}
-              placeholder="000000"
-              autoFocus
-              style={{
-                width: '100%',
-                height: '48px',
-                border: '1px solid #ccc',
-                borderRadius: '6px',
-                padding: '8px',
-                fontSize: '28px',
-                fontFamily: 'monospace',
-                letterSpacing: '0.4em',
-                textAlign: 'center',
+              value={otpValue}
+              onChange={(value) => {
+                setOtpValue(value);
+                if (otpError) setOtpError('');
+                if (value.length === 6) {
+                  if (isPasteRef.current) {
+                    verifyOtp(value);
+                  } else {
+                    submitBtnRef.current?.focus();
+                  }
+                  isPasteRef.current = false;
+                }
               }}
-            />
+              onPaste={() => {
+                isPasteRef.current = true;
+              }}
+              autoComplete="one-time-code"
+              autoFocus
+              aria-invalid={!!otpError}
+              pattern={REGEXP_ONLY_DIGITS}
+            >
+              <InputOTPGroup>
+                <InputOTPSlot index={0} className="size-12 font-mono text-xl" />
+                <InputOTPSlot index={1} className="size-12 font-mono text-xl" />
+                <InputOTPSlot index={2} className="size-12 font-mono text-xl" />
+                <InputOTPSlot index={3} className="size-12 font-mono text-xl" />
+                <InputOTPSlot index={4} className="size-12 font-mono text-xl" />
+                <InputOTPSlot index={5} className="size-12 font-mono text-xl" />
+              </InputOTPGroup>
+            </InputOTP>
             {otpError ? (
-              <p className="text-sm text-destructive">{otpError}</p>
+              <p className="text-sm text-destructive" role="alert">
+                {otpError}
+              </p>
             ) : (
               <p className="text-sm text-muted-foreground">
                 Check your inbox — the code expires in 10 minutes.
@@ -228,6 +254,7 @@ export const LoginForm = () => {
           </div>
 
           <Button
+            ref={submitBtnRef}
             type="submit"
             size="lg"
             className="w-full"
