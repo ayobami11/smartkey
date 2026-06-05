@@ -69,7 +69,8 @@ export const POST = async (request: NextRequest) => {
   const adminClient = createAdminClient();
 
   // Check whether a profile already exists for this email.
-  // DEACTIVATED users can be re-invited; ACTIVE / PENDING_ACTIVATION are a conflict.
+  // ACTIVE users are a real conflict. PENDING_ACTIVATION (never activated) and
+  // DEACTIVATED (revoked) can both be re-invited.
   const { data: existingProfile } = await supabase
     .from('profiles')
     .select('id, status')
@@ -77,18 +78,20 @@ export const POST = async (request: NextRequest) => {
     .maybeSingle();
 
   if (existingProfile) {
-    if (existingProfile.status !== 'DEACTIVATED') {
+    if (existingProfile.status === 'ACTIVE') {
       return NextResponse.json(err('Email already registered', 409), {
         status: 409,
       });
     }
 
-    // Re-invite a previously deactivated user: lift the ban, reset status,
-    // and send a fresh magic link so they can log back in.
-    await adminClient.auth.admin.updateUserById(existingProfile.id, {
-      ban_duration: 'none',
-    });
+    // DEACTIVATED: lift the ban before resending so they can log in.
+    if (existingProfile.status === 'DEACTIVATED') {
+      await adminClient.auth.admin.updateUserById(existingProfile.id, {
+        ban_duration: 'none',
+      });
+    }
 
+    // Reset profile status and update name/department in case they changed.
     const { error: resetError } = await supabase
       .from('profiles')
       .update({ status: 'PENDING_ACTIVATION', full_name, department_id })
@@ -105,9 +108,10 @@ export const POST = async (request: NextRequest) => {
       });
     }
 
-    // generateLink sends a magic-link email via Supabase's SMTP config.
+    // Send a fresh invite link. generateLink works for both confirmed and
+    // unconfirmed users and sends the email via Supabase's SMTP config.
     const { error: linkError } = await adminClient.auth.admin.generateLink({
-      type: 'magiclink',
+      type: 'invite',
       email: institutional_email,
       options: {
         redirectTo: `${siteUrl}/auth/confirm?next=${activationPath}`,
