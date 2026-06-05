@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
+import { sendActivationEmail } from '@/lib/email/otp';
 import { logger } from '@/lib/logger';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
@@ -108,19 +109,29 @@ export const POST = async (request: NextRequest) => {
       });
     }
 
-    // Send a fresh invite link. generateLink works for both confirmed and
-    // unconfirmed users and sends the email via Supabase's SMTP config.
-    const { error: linkError } = await adminClient.auth.admin.generateLink({
-      type: 'invite',
-      email: institutional_email,
-      options: {
-        redirectTo: `${siteUrl}/auth/confirm?next=${activationPath}`,
-      },
-    });
-    if (linkError) {
-      logger.error('re-invite: generateLink failed', {
-        err: linkError.message,
+    // generateLink creates a one-time magic link. We send it ourselves via
+    // Gmail so delivery is reliable regardless of Supabase's SMTP config.
+    const { data: linkData, error: linkError } =
+      await adminClient.auth.admin.generateLink({
+        type: 'magiclink',
+        email: institutional_email,
+        options: {
+          redirectTo: `${siteUrl}/auth/confirm?next=${activationPath}`,
+        },
       });
+
+    if (linkError || !linkData?.properties?.action_link) {
+      logger.error('re-invite: generateLink failed', {
+        err: linkError?.message ?? 'no action_link returned',
+      });
+    } else {
+      await sendActivationEmail({
+        to: institutional_email,
+        link: linkData.properties.action_link,
+        isReinvite: true,
+      }).catch((e: unknown) =>
+        logger.error('re-invite: email send failed', { err: String(e) })
+      );
     }
 
     return NextResponse.json(
@@ -129,28 +140,36 @@ export const POST = async (request: NextRequest) => {
     );
   }
 
-  // New user: send a Supabase Auth invite (creates the auth.users row and
-  // delivers the email). Invite links use the implicit flow (#access_token=…)
-  // so we redirect to a client-side page that can read the fragment.
-  const { error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
-    institutional_email,
-    {
-      redirectTo: `${siteUrl}/auth/confirm?next=${activationPath}`,
-    }
-  );
+  // New user: use generateLink to create the auth.users row and get the invite
+  // URL, then send via our own Gmail for reliable delivery.
+  const { data: newLinkData, error: inviteError } =
+    await adminClient.auth.admin.generateLink({
+      type: 'invite',
+      email: institutional_email,
+      options: {
+        redirectTo: `${siteUrl}/auth/confirm?next=${activationPath}`,
+      },
+    });
 
-  if (
-    inviteError &&
-    !inviteError.message.toLowerCase().includes('already been registered')
-  ) {
+  if (inviteError) {
     const ref = crypto.randomUUID();
-    logger.error('provision_user: invite failed', {
+    logger.error('provision_user: generateLink failed', {
       err: inviteError.message,
       ref,
     });
     return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
       status: 500,
     });
+  }
+
+  if (newLinkData?.properties?.action_link) {
+    await sendActivationEmail({
+      to: institutional_email,
+      link: newLinkData.properties.action_link,
+      isReinvite: false,
+    }).catch((e: unknown) =>
+      logger.error('provision_user: email send failed', { err: String(e) })
+    );
   }
 
   const { data: rpcData, error: rpcError } = await supabase.rpc(
