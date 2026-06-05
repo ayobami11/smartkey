@@ -25,18 +25,13 @@ export const POST = async (request: NextRequest) => {
       { status: 422 }
     );
   }
-  if (!photo || !(photo instanceof File)) {
-    return NextResponse.json(err('Passport photo is required', 422), {
-      status: 422,
-    });
-  }
-  if (photo.size > MAX_PHOTO_BYTES) {
+  if (photo instanceof File && photo.size > MAX_PHOTO_BYTES) {
     return NextResponse.json(err('Photo must be under 5 MB', 413), {
       status: 413,
     });
   }
 
-  // Session is established by /api/auth/callback after the invite link is clicked.
+  // Session is established by /auth/confirm after the invite link is clicked.
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -48,6 +43,21 @@ export const POST = async (request: NextRequest) => {
   }
 
   const userId = user.id;
+
+  // Fetch role to determine whether a photo is required.
+  const { data: profileRow } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', userId)
+    .single();
+
+  const userRole = (profileRow as { role: string } | null)?.role;
+
+  if (userRole === 'REQUESTER' && !(photo instanceof File)) {
+    return NextResponse.json(err('Passport photo is required', 422), {
+      status: 422,
+    });
+  }
 
   // Update password
   const { error: pwError } = await supabase.auth.updateUser({ password });
@@ -61,31 +71,38 @@ export const POST = async (request: NextRequest) => {
     });
   }
 
-  // Upload passport photo to Supabase Storage
-  const photoBytes = await photo.arrayBuffer();
-  const ext = photo.name.split('.').pop() ?? 'jpg';
-  const photoPath = `${userId}/passport.${ext}`;
+  let photoUrl: string | undefined;
 
-  const { error: uploadError } = await supabase.storage
-    .from('passport-photos')
-    .upload(photoPath, photoBytes, { contentType: photo.type, upsert: true });
+  if (photo instanceof File) {
+    // Upload passport photo to Supabase Storage
+    const photoBytes = await photo.arrayBuffer();
+    const ext = photo.name.split('.').pop() ?? 'jpg';
+    const photoPath = `${userId}/passport.${ext}`;
 
-  if (uploadError) {
-    logger.error('register: photo upload failed', {
-      userId,
-      err: uploadError.message,
-    });
-    return NextResponse.json(err('Photo upload failed', 500), { status: 500 });
+    const { error: uploadError } = await supabase.storage
+      .from('passport-photos')
+      .upload(photoPath, photoBytes, { contentType: photo.type, upsert: true });
+
+    if (uploadError) {
+      logger.error('register: photo upload failed', {
+        userId,
+        err: uploadError.message,
+      });
+      return NextResponse.json(err('Photo upload failed', 500), {
+        status: 500,
+      });
+    }
+
+    const { data: urlData } = supabase.storage
+      .from('passport-photos')
+      .getPublicUrl(photoPath);
+    photoUrl = urlData.publicUrl;
   }
 
-  const { data: urlData } = supabase.storage
-    .from('passport-photos')
-    .getPublicUrl(photoPath);
-
-  // Save photo URL to profile
+  // Activate profile
   const { error: profileError } = await supabase
     .from('profiles')
-    .update({ photo_url: urlData.publicUrl, status: 'ACTIVE' })
+    .update({ status: 'ACTIVE', ...(photoUrl ? { photo_url: photoUrl } : {}) })
     .eq('id', userId);
 
   if (profileError) {
