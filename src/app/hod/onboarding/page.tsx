@@ -1,15 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   CheckIcon,
   CheckCircleIcon,
   CloudUploadIcon,
-  ImageIcon,
   RefreshCwIcon,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 type Step = 0 | 1 | 2 | 3;
 
@@ -21,9 +22,51 @@ const steps = [
 
 export default function HodOnboardingPage() {
   const [step, setStep] = useState<Step>(0);
-  const [sigUploaded, setSigUploaded] = useState(false);
-  const [stampUploaded, setStampUploaded] = useState(false);
+  const [sigFile, setSigFile] = useState<File | null>(null);
+  const [stampFile, setStampFile] = useState<File | null>(null);
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [confirmed, setConfirmed] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const sigInputRef = useRef<HTMLInputElement>(null);
+  const stampInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFinish = async () => {
+    if (!sigFile || !stampFile) return;
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+
+    const formData = new FormData();
+    formData.append('password', password);
+    formData.append('signature', sigFile);
+    formData.append('stamp', stampFile);
+
+    const res = await fetch('/api/auth/activate-hod', {
+      method: 'POST',
+      body: formData,
+    });
+
+    const json = (await res.json()) as { error?: string };
+
+    if (!res.ok) {
+      setError(json.error ?? 'Something went wrong. Please try again.');
+      setSubmitting(false);
+      return;
+    }
+
+    setStep(3);
+  };
 
   if (step === 3) {
     return (
@@ -104,65 +147,58 @@ export default function HodOnboardingPage() {
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 Sign on a clean white sheet of paper, scan or photograph it, and
-                upload the image. We&apos;ll process it to compare against
-                future approvals you sign.
+                upload the image. We&apos;ll use it to verify future approvals
+                you sign.
               </p>
             </div>
 
-            {!sigUploaded ? (
-              <div>
-                <button
-                  type="button"
-                  onClick={() => setSigUploaded(true)}
-                  className="flex w-full flex-col items-center gap-3 rounded-lg border-2 border-dashed border-border bg-muted/30 p-10 text-center transition-colors hover:border-primary/50 hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                  aria-label="Upload signature image"
-                >
-                  <CloudUploadIcon
-                    className="size-8 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                  <div>
-                    <p className="text-sm font-medium text-foreground">
-                      Drag and drop or click to browse
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      PNG or JPG · max 5 MB
-                    </p>
-                  </div>
-                </button>
-              </div>
+            <input
+              ref={sigInputRef}
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              aria-label="Signature image file"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) setSigFile(file);
+              }}
+            />
+
+            {!sigFile ? (
+              <button
+                type="button"
+                onClick={() => sigInputRef.current?.click()}
+                className="flex w-full flex-col items-center gap-3 rounded-lg border-2 border-dashed border-border bg-muted/30 p-10 text-center transition-colors hover:border-primary/50 hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              >
+                <CloudUploadIcon
+                  className="size-8 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    Click to browse
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    PNG or JPG · max 5 MB
+                  </p>
+                </div>
+              </button>
             ) : (
               <div className="flex flex-col gap-4">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="flex flex-col gap-2">
-                    <p className="text-xs font-medium text-muted-foreground">
-                      Original
-                    </p>
-                    <div className="flex h-32 items-center justify-center rounded-lg border border-border bg-white">
-                      <ImageIcon
-                        className="size-8 text-muted-foreground/40"
-                        aria-hidden="true"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <p className="text-xs font-medium text-muted-foreground">
-                      Processed reference
-                    </p>
-                    <div className="flex h-32 items-center justify-center rounded-lg border border-border bg-muted/60">
-                      <ImageIcon
-                        className="size-8 text-muted-foreground/40"
-                        aria-hidden="true"
-                      />
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      This is what we&apos;ll compare future signatures against.
-                    </p>
-                  </div>
+                <div className="flex h-32 items-center justify-center overflow-hidden rounded-lg border border-border bg-white">
+                  <img
+                    src={URL.createObjectURL(sigFile)}
+                    alt="Signature preview"
+                    className="max-h-full max-w-full object-contain p-2"
+                  />
                 </div>
+                <p className="text-sm text-muted-foreground">{sigFile.name}</p>
                 <button
                   type="button"
-                  onClick={() => setSigUploaded(false)}
+                  onClick={() => {
+                    setSigFile(null);
+                    if (sigInputRef.current) sigInputRef.current.value = '';
+                  }}
                   className="flex w-fit items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 >
                   <RefreshCwIcon className="size-3.5" aria-hidden="true" />
@@ -172,7 +208,7 @@ export default function HodOnboardingPage() {
             )}
 
             <div className="flex justify-end">
-              <Button disabled={!sigUploaded} onClick={() => setStep(1)}>
+              <Button disabled={!sigFile} onClick={() => setStep(1)}>
                 Continue
               </Button>
             </div>
@@ -187,16 +223,27 @@ export default function HodOnboardingPage() {
                 Upload your departmental stamp
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Stamp on white paper, scan or photograph, upload.
+                Stamp on white paper, scan or photograph, then upload.
               </p>
             </div>
 
-            {!stampUploaded ? (
+            <input
+              ref={stampInputRef}
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              aria-label="Stamp image file"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) setStampFile(file);
+              }}
+            />
+
+            {!stampFile ? (
               <button
                 type="button"
-                onClick={() => setStampUploaded(true)}
+                onClick={() => stampInputRef.current?.click()}
                 className="flex w-full flex-col items-center gap-3 rounded-lg border-2 border-dashed border-border bg-muted/30 p-10 text-center transition-colors hover:border-primary/50 hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                aria-label="Upload stamp image"
               >
                 <CloudUploadIcon
                   className="size-8 text-muted-foreground"
@@ -204,7 +251,7 @@ export default function HodOnboardingPage() {
                 />
                 <div>
                   <p className="text-sm font-medium text-foreground">
-                    Drag and drop or click to browse
+                    Click to browse
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
                     PNG or JPG · max 5 MB
@@ -213,36 +260,22 @@ export default function HodOnboardingPage() {
               </button>
             ) : (
               <div className="flex flex-col gap-4">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="flex flex-col gap-2">
-                    <p className="text-xs font-medium text-muted-foreground">
-                      Original
-                    </p>
-                    <div className="flex h-32 items-center justify-center rounded-lg border border-border bg-white">
-                      <ImageIcon
-                        className="size-8 text-muted-foreground/40"
-                        aria-hidden="true"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <p className="text-xs font-medium text-muted-foreground">
-                      Processed reference
-                    </p>
-                    <div className="flex h-32 items-center justify-center rounded-lg border border-border bg-muted/60">
-                      <ImageIcon
-                        className="size-8 text-muted-foreground/40"
-                        aria-hidden="true"
-                      />
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      This is what we&apos;ll compare future stamps against.
-                    </p>
-                  </div>
+                <div className="flex h-32 items-center justify-center overflow-hidden rounded-lg border border-border bg-white">
+                  <img
+                    src={URL.createObjectURL(stampFile)}
+                    alt="Stamp preview"
+                    className="max-h-full max-w-full object-contain p-2"
+                  />
                 </div>
+                <p className="text-sm text-muted-foreground">
+                  {stampFile.name}
+                </p>
                 <button
                   type="button"
-                  onClick={() => setStampUploaded(false)}
+                  onClick={() => {
+                    setStampFile(null);
+                    if (stampInputRef.current) stampInputRef.current.value = '';
+                  }}
                   className="flex w-fit items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 >
                   <RefreshCwIcon className="size-3.5" aria-hidden="true" />
@@ -255,20 +288,23 @@ export default function HodOnboardingPage() {
               <Button variant="ghost" onClick={() => setStep(0)}>
                 Back
               </Button>
-              <Button disabled={!stampUploaded} onClick={() => setStep(2)}>
+              <Button disabled={!stampFile} onClick={() => setStep(2)}>
                 Continue
               </Button>
             </div>
           </div>
         )}
 
-        {/* Step 2 — Confirm */}
+        {/* Step 2 — Password + Confirm */}
         {step === 2 && (
           <div className="flex flex-col gap-6 rounded-lg border border-border bg-card p-6 shadow-[0_2px_4px_rgba(15,23,42,0.06)]">
             <div>
               <h2 className="text-lg font-semibold text-foreground">
                 Confirm and finish
               </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Set a password for your SmartKey account to complete setup.
+              </p>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
@@ -276,36 +312,52 @@ export default function HodOnboardingPage() {
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Signature
                 </p>
-                <div className="flex h-24 items-center justify-center rounded-md bg-muted/60">
-                  <ImageIcon
-                    className="size-7 text-muted-foreground/40"
-                    aria-hidden="true"
+                {sigFile && (
+                  <img
+                    src={URL.createObjectURL(sigFile)}
+                    alt="Signature reference"
+                    className="h-24 w-full object-contain"
                   />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Processed reference
-                </p>
+                )}
               </div>
               <div className="flex flex-col gap-2 rounded-lg border border-border p-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Departmental stamp
                 </p>
-                <div className="flex h-24 items-center justify-center rounded-md bg-muted/60">
-                  <ImageIcon
-                    className="size-7 text-muted-foreground/40"
-                    aria-hidden="true"
+                {stampFile && (
+                  <img
+                    src={URL.createObjectURL(stampFile)}
+                    alt="Stamp reference"
+                    className="h-24 w-full object-contain"
                   />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Processed reference
-                </p>
+                )}
               </div>
             </div>
 
-            <p className="text-sm text-muted-foreground">
-              These references will be used to verify your future weekend
-              approvals. You can update them later from your profile.
-            </p>
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Min. 8 characters"
+                  autoComplete="new-password"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="confirm-password">Confirm password</Label>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Repeat password"
+                  autoComplete="new-password"
+                />
+              </div>
+            </div>
 
             <label className="flex cursor-pointer items-start gap-3">
               <input
@@ -319,12 +371,26 @@ export default function HodOnboardingPage() {
               </span>
             </label>
 
+            {error && <p className="text-sm text-destructive">{error}</p>}
+
             <div className="flex justify-between">
-              <Button variant="ghost" onClick={() => setStep(1)}>
+              <Button
+                variant="ghost"
+                onClick={() => setStep(1)}
+                disabled={submitting}
+              >
                 Back
               </Button>
-              <Button disabled={!confirmed} onClick={() => setStep(3)}>
-                Finish setup
+              <Button
+                disabled={
+                  !confirmed ||
+                  password.length < 8 ||
+                  password !== confirmPassword ||
+                  submitting
+                }
+                onClick={handleFinish}
+              >
+                {submitting ? 'Setting up…' : 'Finish setup'}
               </Button>
             </div>
           </div>

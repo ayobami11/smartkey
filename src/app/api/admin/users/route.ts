@@ -63,17 +63,71 @@ export const POST = async (request: NextRequest) => {
     );
   }
 
-  // Send a Supabase Auth invite — creates the auth.users row and delivers the
-  // email through whatever SMTP is configured in the Supabase dashboard.
-  // If the user was already invited, Supabase returns "already been registered"
-  // which we ignore so re-provisioning after a failed first attempt still works.
   const siteUrl =
     process.env.NEXT_PUBLIC_SITE_URL ?? 'https://smartkey-ochre.vercel.app';
   const activationPath = role === 'HOD' ? '/hod/onboarding' : '/activate';
-
-  // Invite links use the implicit flow (tokens in URL fragment #access_token=...)
-  // so we redirect to a client-side page that can read the fragment and set the session.
   const adminClient = createAdminClient();
+
+  // Check whether a profile already exists for this email.
+  // DEACTIVATED users can be re-invited; ACTIVE / PENDING_ACTIVATION are a conflict.
+  const { data: existingProfile } = await supabase
+    .from('profiles')
+    .select('id, status')
+    .eq('institutional_email', institutional_email)
+    .maybeSingle();
+
+  if (existingProfile) {
+    if (existingProfile.status !== 'DEACTIVATED') {
+      return NextResponse.json(err('Email already registered', 409), {
+        status: 409,
+      });
+    }
+
+    // Re-invite a previously deactivated user: lift the ban, reset status,
+    // and send a fresh magic link so they can log back in.
+    await adminClient.auth.admin.updateUserById(existingProfile.id, {
+      ban_duration: 'none',
+    });
+
+    const { error: resetError } = await supabase
+      .from('profiles')
+      .update({ status: 'PENDING_ACTIVATION', full_name, department_id })
+      .eq('id', existingProfile.id);
+
+    if (resetError) {
+      const ref = crypto.randomUUID();
+      logger.error('re-invite: profile reset failed', {
+        err: resetError.message,
+        ref,
+      });
+      return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
+        status: 500,
+      });
+    }
+
+    // generateLink sends a magic-link email via Supabase's SMTP config.
+    const { error: linkError } = await adminClient.auth.admin.generateLink({
+      type: 'magiclink',
+      email: institutional_email,
+      options: {
+        redirectTo: `${siteUrl}/auth/confirm?next=${activationPath}`,
+      },
+    });
+    if (linkError) {
+      logger.error('re-invite: generateLink failed', {
+        err: linkError.message,
+      });
+    }
+
+    return NextResponse.json(
+      ok({ profile_id: existingProfile.id, status: 'PENDING_ACTIVATION' }),
+      { status: 200 }
+    );
+  }
+
+  // New user: send a Supabase Auth invite (creates the auth.users row and
+  // delivers the email). Invite links use the implicit flow (#access_token=…)
+  // so we redirect to a client-side page that can read the fragment.
   const { error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
     institutional_email,
     {
