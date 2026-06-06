@@ -1,6 +1,6 @@
 import Link from 'next/link';
 
-import { LoginForm } from '@/app/(public)/login/login-form';
+import { LoginForm } from '@/app/(public)/login/_components/login-form';
 
 export default async function LoginPage({
   searchParams,
