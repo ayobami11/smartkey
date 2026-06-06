@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
+import { sendActivationEmail } from '@/lib/email/otp';
 import { logger } from '@/lib/logger';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
@@ -63,36 +64,112 @@ export const POST = async (request: NextRequest) => {
     );
   }
 
-  // Send a Supabase Auth invite — creates the auth.users row and delivers the
-  // email through whatever SMTP is configured in the Supabase dashboard.
-  // If the user was already invited, Supabase returns "already been registered"
-  // which we ignore so re-provisioning after a failed first attempt still works.
   const siteUrl =
     process.env.NEXT_PUBLIC_SITE_URL ?? 'https://smartkey-ochre.vercel.app';
   const activationPath = role === 'HOD' ? '/hod/onboarding' : '/activate';
-
-  // Invite links use the implicit flow (tokens in URL fragment #access_token=...)
-  // so we redirect to a client-side page that can read the fragment and set the session.
   const adminClient = createAdminClient();
-  const { error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
-    institutional_email,
-    {
-      redirectTo: `${siteUrl}/auth/confirm?next=${activationPath}`,
-    }
-  );
 
-  if (
-    inviteError &&
-    !inviteError.message.toLowerCase().includes('already been registered')
-  ) {
+  // Check whether a profile already exists for this email.
+  // ACTIVE users are a real conflict. PENDING_ACTIVATION (never activated) and
+  // DEACTIVATED (revoked) can both be re-invited.
+  const { data: existingProfile } = await supabase
+    .from('profiles')
+    .select('id, status')
+    .eq('institutional_email', institutional_email)
+    .maybeSingle();
+
+  if (existingProfile) {
+    if (existingProfile.status === 'ACTIVE') {
+      return NextResponse.json(err('Email already registered', 409), {
+        status: 409,
+      });
+    }
+
+    // DEACTIVATED: lift the ban before resending so they can log in.
+    if (existingProfile.status === 'DEACTIVATED') {
+      await adminClient.auth.admin.updateUserById(existingProfile.id, {
+        ban_duration: 'none',
+      });
+    }
+
+    // Reset profile status and update name/department in case they changed.
+    const { error: resetError } = await supabase
+      .from('profiles')
+      .update({ status: 'PENDING_ACTIVATION', full_name, department_id })
+      .eq('id', existingProfile.id);
+
+    if (resetError) {
+      const ref = crypto.randomUUID();
+      logger.error('re-invite: profile reset failed', {
+        err: resetError.message,
+        ref,
+      });
+      return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
+        status: 500,
+      });
+    }
+
+    // generateLink creates a one-time magic link. We send it ourselves via
+    // Gmail so delivery is reliable regardless of Supabase's SMTP config.
+    const { data: linkData, error: linkError } =
+      await adminClient.auth.admin.generateLink({
+        type: 'magiclink',
+        email: institutional_email,
+        options: {
+          redirectTo: `${siteUrl}/auth/confirm?next=${activationPath}`,
+        },
+      });
+
+    if (linkError || !linkData?.properties?.action_link) {
+      logger.error('re-invite: generateLink failed', {
+        err: linkError?.message ?? 'no action_link returned',
+      });
+    } else {
+      await sendActivationEmail({
+        to: institutional_email,
+        link: linkData.properties.action_link,
+        isReinvite: true,
+      }).catch((e: unknown) =>
+        logger.error('re-invite: email send failed', { err: String(e) })
+      );
+    }
+
+    return NextResponse.json(
+      ok({ profile_id: existingProfile.id, status: 'PENDING_ACTIVATION' }),
+      { status: 200 }
+    );
+  }
+
+  // New user: use generateLink to create the auth.users row and get the invite
+  // URL, then send via our own Gmail for reliable delivery.
+  const { data: newLinkData, error: inviteError } =
+    await adminClient.auth.admin.generateLink({
+      type: 'invite',
+      email: institutional_email,
+      options: {
+        redirectTo: `${siteUrl}/auth/confirm?next=${activationPath}`,
+      },
+    });
+
+  if (inviteError) {
     const ref = crypto.randomUUID();
-    logger.error('provision_user: invite failed', {
+    logger.error('provision_user: generateLink failed', {
       err: inviteError.message,
       ref,
     });
     return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
       status: 500,
     });
+  }
+
+  if (newLinkData?.properties?.action_link) {
+    await sendActivationEmail({
+      to: institutional_email,
+      link: newLinkData.properties.action_link,
+      isReinvite: false,
+    }).catch((e: unknown) =>
+      logger.error('provision_user: email send failed', { err: String(e) })
+    );
   }
 
   const { data: rpcData, error: rpcError } = await supabase.rpc(

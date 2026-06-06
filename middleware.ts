@@ -13,7 +13,7 @@ const PROTECTED_ROUTES: Array<{ prefix: string; role: UserRole }> = [
 
 // Paths where authenticated users should be sent to their dashboard instead
 const PUBLIC_ONLY_EXACT = new Set(['/', '/login', '/help']);
-const PUBLIC_ONLY_PREFIXES = ['/activate', '/forgot-password'];
+const PUBLIC_ONLY_PREFIXES = ['/forgot-password'];
 
 const ROLE_DASHBOARD: Record<UserRole, string> = {
   CSO: '/cso/dashboard',
