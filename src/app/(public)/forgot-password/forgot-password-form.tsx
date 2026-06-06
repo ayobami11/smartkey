@@ -26,7 +26,6 @@ const schema = z.object({ email });
 
 export const ForgotPasswordForm = () => {
   const [done, setDone] = useState(false);
-  const [submittedEmail, setSubmittedEmail] = useState('');
 
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
@@ -39,8 +38,6 @@ export const ForgotPasswordForm = () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: data.email }),
     });
-    // Always show success — no email enumeration
-    setSubmittedEmail(data.email);
     setDone(true);
   }
 
@@ -53,12 +50,7 @@ export const ForgotPasswordForm = () => {
             Check your email
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            If{' '}
-            <span className="font-medium text-foreground">
-              {submittedEmail}
-            </span>{' '}
-            is registered, we&apos;ve sent a password reset link. Click it to
-            set a new password.
+            If that email address is registered, we will send you an email to reset your password.
           </p>
         </div>
         <Button asChild variant="outline" size="lg" className="mt-2 w-full">
