@@ -44,7 +44,7 @@ import {
 } from '@/components/ui/table';
 import { ProvisionUserDialog } from './_components/provision-user-dialog';
 
-// ── Types 
+// ── Types
 type UserRole = 'CSO' | 'HOD' | 'VERIFIER' | 'REQUESTER';
 type UserStatus = 'ACTIVE' | 'PENDING_ACTIVATION' | 'DEACTIVATED';
 
@@ -57,7 +57,7 @@ type User = {
   status: UserStatus;
 };
 
-// ── Constants 
+// ── Constants
 const ROLE_LABEL: Record<UserRole, string> = {
   CSO: 'CSO',
   HOD: 'HOD',
@@ -99,7 +99,7 @@ const ROLE_CHIPS: { label: string; value: string }[] = [
   { label: 'Requester', value: 'REQUESTER' },
 ];
 
-// ── Component 
+// ── Component
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -122,15 +122,13 @@ export default function UsersPage() {
   const [revokeError, setRevokeError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  // ── Fetch users 
+  // ── Fetch users
   const fetchUsers = async (reset = true, cursor?: string) => {
     if (reset) setLoadState('loading');
     else setLoadState('loadingMore');
     setFetchError(null);
 
     const params = new URLSearchParams({ limit: '20' });
-    if (roleFilter) params.set('role', roleFilter);
-    if (statusFilter) params.set('status', statusFilter);
     if (cursor) params.set('cursor', cursor);
 
     try {
@@ -165,9 +163,9 @@ export default function UsersPage() {
 
   useEffect(() => {
     fetchUsers(true);
-  }, [roleFilter, statusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
-  // ── Revoke access 
+  // ── Revoke access
   const handleRevoke = async () => {
     if (!revokeTarget) return;
     setRevoking(true);
@@ -196,16 +194,18 @@ export default function UsersPage() {
     }
   };
 
-  // ── Computed 
-  const filtered = search
-    ? users.filter(
-        (u) =>
-          u.full_name.toLowerCase().includes(search.toLowerCase()) ||
-          u.institutional_email.toLowerCase().includes(search.toLowerCase())
-      )
-    : users;
+  // ── Computed
+  const filtered = users.filter((u) => {
+    const matchesSearch =
+      search === '' ||
+      u.full_name.toLowerCase().includes(search.toLowerCase()) ||
+      u.institutional_email.toLowerCase().includes(search.toLowerCase());
+    const matchesRole = roleFilter === '' || u.role === roleFilter;
+    const matchesStatus = statusFilter === '' || u.status === statusFilter;
+    return matchesSearch && matchesRole && matchesStatus;
+  });
 
-  // ── Render 
+  // ── Render
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
       <div className="flex flex-wrap items-start justify-between gap-4">
