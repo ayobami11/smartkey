@@ -33,7 +33,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { createBrowserClient } from '@/lib/supabase/client';
 
-// ── Types ──────────────────────────────────────────────────────────────────
+// Types
 
 type RiskFactor = { rule: string; description: string; weight: number };
 type RiskTier = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -59,7 +59,7 @@ type IssueResult = {
 
 type SheetStep = 'code' | 'success';
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// Helpers
 
 const relativeTime = (iso: string) => {
   const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
@@ -82,7 +82,7 @@ const avatarInitials = (name: string) =>
     .join('')
     .toUpperCase();
 
-// ── Risk badge ─────────────────────────────────────────────────────────────
+// Risk badge
 
 const riskConfig: Record<
   RiskTier,
@@ -118,7 +118,7 @@ const RiskBadge = ({ tier }: { tier: RiskTier }) => {
   );
 };
 
-// ── Component ──────────────────────────────────────────────────────────────
+// Component
 
 export const LiveRequestQueue = () => {
   const [requests, setRequests] = useState<QueueRequest[]>([]);
@@ -138,7 +138,7 @@ export const LiveRequestQueue = () => {
     null
   );
 
-  // ── Init ──────────────────────────────────────────────────────────────────
+  // Init
 
   useEffect(() => {
     const init = async () => {
@@ -175,7 +175,7 @@ export const LiveRequestQueue = () => {
     }
   };
 
-  // ── Sheet helpers ─────────────────────────────────────────────────────────
+  // Sheet helpers
 
   const openSheet = (req?: QueueRequest) => {
     setContextRequest(req ?? null);
@@ -233,7 +233,7 @@ export const LiveRequestQueue = () => {
     }
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // Render
 
   return (
     <section className="flex flex-col gap-4">
@@ -351,7 +351,7 @@ export const LiveRequestQueue = () => {
         </div>
       )}
 
-      {/* ── Issue Sheet ── */}
+      {/* Issue Sheet */}
       <Sheet
         open={sheetOpen}
         onOpenChange={(open) => {
@@ -372,7 +372,7 @@ export const LiveRequestQueue = () => {
           </SheetHeader>
 
           <div className="flex flex-1 flex-col overflow-y-auto p-6">
-            {/* ── Context card (if opened from queue card) ── */}
+            {/* Context card (if opened from queue card) */}
             {sheetStep === 'code' && contextRequest && (
               <div className="mb-6 rounded-lg border border-border bg-muted/40 p-4">
                 <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
@@ -421,7 +421,7 @@ export const LiveRequestQueue = () => {
               </div>
             )}
 
-            {/* ── Code entry step ── */}
+            {/* Code entry step */}
             {sheetStep === 'code' && (
               <div className="flex flex-col items-center gap-6">
                 <div className="flex flex-col items-center gap-3">
@@ -494,7 +494,7 @@ export const LiveRequestQueue = () => {
               </div>
             )}
 
-            {/* ── Success step ── */}
+            {/* Success step */}
             {sheetStep === 'success' && issueResult && (
               <div className="flex flex-col items-center gap-4 py-4 text-center">
                 <CheckCircleIcon

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { createBrowserClient } from '@/lib/supabase/client';
 
-// ── Types ──────────────────────────────────────────────────────────────────
+// Types
 
 type ActiveRequest = {
   id: string;
@@ -18,7 +18,7 @@ type ActiveRequest = {
   key: { code: string; room_name: string } | null;
 };
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// Helpers
 
 const formatDeadline = (iso: string) => {
   const date = new Date(iso);
@@ -46,7 +46,7 @@ const formatCountdown = (seconds: number) => {
   return `${m}:${s}`;
 };
 
-// ── Component ──────────────────────────────────────────────────────────────
+// Component
 
 export const ActiveRequestBanner = () => {
   const [loading, setLoading] = useState(true);
@@ -55,7 +55,7 @@ export const ActiveRequestBanner = () => {
   const [cancelling, setCancelling] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // ── Fetch ────────────────────────────────────────────────────────────────
+  // Fetch
 
   const fetchActive = async () => {
     try {
@@ -94,7 +94,7 @@ export const ActiveRequestBanner = () => {
     fetchActive();
   }, []);
 
-  // ── Countdown timer ───────────────────────────────────────────────────────
+  // Countdown timer
 
   useEffect(() => {
     if (!request?.code_expires_at) return;
@@ -113,7 +113,7 @@ export const ActiveRequestBanner = () => {
     };
   }, [request?.code_expires_at]);
 
-  // ── Cancel ────────────────────────────────────────────────────────────────
+  // Cancel
 
   const handleCancel = async () => {
     if (!request) return;
@@ -132,7 +132,7 @@ export const ActiveRequestBanner = () => {
     }
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // Render
 
   if (loading) {
     return <Skeleton className="h-24 rounded-lg" />;

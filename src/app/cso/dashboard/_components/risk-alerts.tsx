@@ -16,7 +16,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 import { formatFactors, formatTime } from './helpers';
 
-// ── Types ──────────────────────────────────────────────────────────────────
+// Types
 
 type RiskAlert = {
   id: string;
@@ -27,7 +27,7 @@ type RiskAlert = {
   risk_factors?: unknown[];
 };
 
-// ── Component ──────────────────────────────────────────────────────────────
+// Component
 
 export const RiskAlerts = () => {
   const [alerts, setAlerts] = useState<RiskAlert[]>([]);

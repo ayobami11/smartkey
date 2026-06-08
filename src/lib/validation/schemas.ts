@@ -14,7 +14,7 @@
 
 import { z } from 'zod';
 
-// ── Auth ──────────────────────────────────────────────────────────────────────
+// Auth
 
 export const loginSchema = z.object({
   email: z.email('Enter a valid email address'),
@@ -25,7 +25,7 @@ export const resetPasswordSchema = z.object({
   email: z.email('Enter a valid email address'),
 });
 
-// ── User management (CSO) ─────────────────────────────────────────────────────
+// User management (CSO)
 
 export const provisionUserSchema = z
   .object({
@@ -57,7 +57,7 @@ export const authoriseCollectorSchema = z.object({
   requester_id: z.string().min(1, 'Requester is required'),
 });
 
-// ── Requests ──────────────────────────────────────────────────────────────────
+// Requests
 
 export const submitRequestSchema = z.object({
   /** UUID of the key being requested. */
@@ -91,7 +91,7 @@ export const csoDecisionSchema = z.object({
   note: z.string().optional(),
 });
 
-// ── Key operations (Verifier) ─────────────────────────────────────────────────
+// Key operations (Verifier)
 
 export const collectKeySchema = z.object({
   /** The 6-digit code the requester presents at the desk. */
@@ -118,7 +118,7 @@ export const markKeyLostSchema = z.object({
   note: z.string().min(1, 'Reason is required'),
 });
 
-// ── Incidents ─────────────────────────────────────────────────────────────────
+// Incidents
 
 export const logIncidentSchema = z.object({
   type: z.enum([
@@ -138,7 +138,7 @@ export const logIncidentSchema = z.object({
   related_person_id: z.string().optional(),
 });
 
-// ── Shifts ────────────────────────────────────────────────────────────────────
+// Shifts
 
 export const shiftHandoverSchema = z.object({
   /** UUID of the outgoing shift being handed over. */
@@ -149,7 +149,7 @@ export const shiftHandoverSchema = z.object({
   bulk: z.boolean(),
 });
 
-// ── Reports ───────────────────────────────────────────────────────────────────
+// Reports
 
 export const generateReportSchema = z.object({
   /** UUID of the shift to generate a report for. */
@@ -160,7 +160,7 @@ export const addReportCommentSchema = z.object({
   text: z.string().min(1, 'Comment text is required'),
 });
 
-// ── Inferred TypeScript types ─────────────────────────────────────────────────
+// Inferred TypeScript types
 // Import these where you need the form value types.
 
 export type LoginInput = z.infer<typeof loginSchema>;

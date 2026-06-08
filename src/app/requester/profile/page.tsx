@@ -7,11 +7,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-// ── Types ──────────────────────────────────────────────────────────────────
+// Types
 
 type Section = 'account' | 'notifications' | 'appearance';
 
-// ── Data ──────────────────────────────────────────────────────────────────
+// Data
 
 const navItems: { id: Section; label: string }[] = [
   { id: 'account', label: 'Account' },
@@ -52,7 +52,7 @@ const notificationItems = [
 
 type NotificationId = (typeof notificationItems)[number]['id'];
 
-// ── Component ──────────────────────────────────────────────────────────────
+// Component
 
 export default function RequesterProfilePage() {
   const [active, setActive] = useState<Section>('account');
@@ -113,7 +113,7 @@ export default function RequesterProfilePage() {
 
         {/* Section content */}
         <div className="min-w-0 flex-1">
-          {/* ── Account ── */}
+          {/* Account */}
           {active === 'account' && (
             <div className="flex flex-col gap-6">
               <h2 className="text-base font-semibold text-foreground">
@@ -191,7 +191,7 @@ export default function RequesterProfilePage() {
             </div>
           )}
 
-          {/* ── Notifications ── */}
+          {/* Notifications */}
           {active === 'notifications' && (
             <div className="flex flex-col gap-6">
               <h2 className="text-base font-semibold text-foreground">
@@ -248,7 +248,7 @@ export default function RequesterProfilePage() {
             </div>
           )}
 
-          {/* ── Appearance ── */}
+          {/* Appearance */}
           {active === 'appearance' && (
             <div className="flex flex-col gap-6">
               <h2 className="text-base font-semibold text-foreground">

@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 
-// ── Types ──────────────────────────────────────────────────────────────────
+// Types
 
 type IncidentType =
   | 'MISSING_KEY'
@@ -27,7 +27,7 @@ type IncidentSeverity = 'LOW' | 'MEDIUM' | 'HIGH';
 
 type FormStep = 'form' | 'submitting' | 'success';
 
-// ── Constants ──────────────────────────────────────────────────────────────
+// Constants
 
 const INCIDENT_TYPES: { value: IncidentType; label: string }[] = [
   { value: 'MISSING_KEY', label: 'Missing key' },
@@ -51,7 +51,7 @@ const SEVERITIES: { value: IncidentSeverity; label: string; hint: string }[] = [
   },
 ];
 
-// ── Component ──────────────────────────────────────────────────────────────
+// Component
 
 export default function IncidentsPage() {
   const [type, setType] = useState<IncidentType | ''>('');
