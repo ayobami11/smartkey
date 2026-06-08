@@ -449,7 +449,7 @@ export default function UsersPage() {
                               />
                             </button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
+                          <DropdownMenuContent align="end" className="w-44">
                             {user.status === 'PENDING_ACTIVATION' && (
                               <DropdownMenuItem
                                 disabled={resendingId === user.id}
