@@ -5,8 +5,10 @@ import {
   MoreHorizontalIcon,
   RefreshCwIcon,
   SearchIcon,
+  SendIcon,
   UsersIcon,
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 import {
   AlertDialog,
@@ -44,7 +46,7 @@ import {
 } from '@/components/ui/table';
 import { ProvisionUserDialog } from './_components/provision-user-dialog';
 
-// ── Types
+// Types
 type UserRole = 'CSO' | 'HOD' | 'VERIFIER' | 'REQUESTER';
 type UserStatus = 'ACTIVE' | 'PENDING_ACTIVATION' | 'DEACTIVATED';
 
@@ -57,7 +59,7 @@ type User = {
   status: UserStatus;
 };
 
-// ── Constants
+// Constants
 const ROLE_LABEL: Record<UserRole, string> = {
   CSO: 'CSO',
   HOD: 'HOD',
@@ -99,7 +101,7 @@ const ROLE_CHIPS: { label: string; value: string }[] = [
   { label: 'Requester', value: 'REQUESTER' },
 ];
 
-// ── Component
+// Component
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -122,7 +124,10 @@ export default function UsersPage() {
   const [revokeError, setRevokeError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  // ── Fetch users
+  // Resend invite
+  const [resendingId, setResendingId] = useState<string | null>(null);
+
+  // Fetch users
   const fetchUsers = async (reset = true, cursor?: string) => {
     if (reset) setLoadState('loading');
     else setLoadState('loadingMore');
@@ -165,7 +170,7 @@ export default function UsersPage() {
     fetchUsers(true);
   }, []);
 
-  // ── Revoke access
+  // Revoke access
   const handleRevoke = async () => {
     if (!revokeTarget) return;
     setRevoking(true);
@@ -194,7 +199,27 @@ export default function UsersPage() {
     }
   };
 
-  // ── Computed
+  // Resend invite
+  const handleResend = async (user: User) => {
+    setResendingId(user.id);
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}/resend-invite`, {
+        method: 'POST',
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        toast.error(json.error ?? 'Failed to resend invite.');
+        return;
+      }
+      toast.success(`Invite resent to ${user.institutional_email}.`);
+    } catch {
+      toast.error('Something went wrong. Check your connection.');
+    } finally {
+      setResendingId(null);
+    }
+  };
+
+  // Computed
   const filtered = users.filter((u) => {
     const matchesSearch =
       search === '' ||
@@ -205,7 +230,7 @@ export default function UsersPage() {
     return matchesSearch && matchesRole && matchesStatus;
   });
 
-  // ── Render
+  // Render
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -425,6 +450,20 @@ export default function UsersPage() {
                             </button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
+                            {user.status === 'PENDING_ACTIVATION' && (
+                              <DropdownMenuItem
+                                disabled={resendingId === user.id}
+                                onClick={() => handleResend(user)}
+                              >
+                                <SendIcon
+                                  className="size-4"
+                                  aria-hidden="true"
+                                />
+                                {resendingId === user.id
+                                  ? 'Resending…'
+                                  : 'Resend invite'}
+                              </DropdownMenuItem>
+                            )}
                             {user.status !== 'DEACTIVATED' && (
                               <DropdownMenuItem
                                 className="text-destructive focus:text-destructive"

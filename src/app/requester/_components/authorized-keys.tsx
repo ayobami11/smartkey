@@ -37,7 +37,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { createBrowserClient } from '@/lib/supabase/client';
 
-// ── Types ──────────────────────────────────────────────────────────────────
+// Types
 
 type AuthorisedKey = {
   key: {
@@ -65,7 +65,7 @@ type SubmitResult = {
   status?: string;
 };
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// Helpers
 
 const defaultReturnDeadline = () => {
   const d = new Date();
@@ -94,7 +94,7 @@ const zoneLabel = (zone: string) =>
 const zoneStripe = (zone: string) =>
   zone === 'NEW_SENATE' ? 'bg-primary' : 'bg-blue-500';
 
-// ── KeyTile ────────────────────────────────────────────────────────────────
+// KeyTile
 
 const KeyTile = ({
   authorised,
@@ -142,7 +142,7 @@ const KeyTile = ({
   );
 };
 
-// ── Component ──────────────────────────────────────────────────────────────
+// Component
 
 export const AuthorizedKeys = () => {
   const [keys, setKeys] = useState<AuthorisedKey[]>([]);
@@ -163,7 +163,7 @@ export const AuthorizedKeys = () => {
   const [cancelling, setCancelling] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // ── Fetch authorized keys ─────────────────────────────────────────────────
+  // Fetch authorized keys
 
   const fetchKeys = useCallback(async () => {
     try {
@@ -201,7 +201,7 @@ export const AuthorizedKeys = () => {
     fetchKeys();
   }, [fetchKeys]);
 
-  // ── Countdown timer ───────────────────────────────────────────────────────
+  // Countdown timer
 
   useEffect(() => {
     if (!result?.code_expires_at) return;
@@ -222,7 +222,7 @@ export const AuthorizedKeys = () => {
     };
   }, [result?.code_expires_at]);
 
-  // ── Sheet helpers ─────────────────────────────────────────────────────────
+  // Sheet helpers
 
   const openWeekdaySheet = (keyId: string) => {
     setSelectedKeyId(keyId);
@@ -258,7 +258,7 @@ export const AuthorizedKeys = () => {
     if (timerRef.current) clearInterval(timerRef.current);
   };
 
-  // ── Submit request ────────────────────────────────────────────────────────
+  // Submit request
 
   const handleSubmit = async () => {
     setStep('submitting');
@@ -311,7 +311,7 @@ export const AuthorizedKeys = () => {
     }
   };
 
-  // ── Cancel request ────────────────────────────────────────────────────────
+  // Cancel request
 
   const handleCancel = async () => {
     if (!result?.request_id) return;
@@ -328,7 +328,7 @@ export const AuthorizedKeys = () => {
     }
   };
 
-  // ── Derived values ────────────────────────────────────────────────────────
+  // Derived values
 
   const selectedKey = keys.find((k) => k.key.id === selectedKeyId)?.key;
   const activeKeys = keys.filter((k) => k.key.status !== 'RETIRED');
@@ -343,7 +343,7 @@ export const AuthorizedKeys = () => {
     description.trim().length > 0 &&
     userId !== null;
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  // Render
 
   return (
     <section className="flex flex-col gap-4">
@@ -431,7 +431,7 @@ export const AuthorizedKeys = () => {
         </>
       )}
 
-      {/* ── Request Sheet ── */}
+      {/* Request Sheet */}
       <Sheet
         open={sheetOpen}
         onOpenChange={(open) => {
@@ -460,7 +460,7 @@ export const AuthorizedKeys = () => {
           </SheetHeader>
 
           <div className="flex flex-1 flex-col overflow-y-auto p-6">
-            {/* ── Weekday form ── */}
+            {/* Weekday form */}
             {step === 'weekday_form' && selectedKey && (
               <div className="flex flex-col gap-5">
                 {/* Key context */}
@@ -508,7 +508,7 @@ export const AuthorizedKeys = () => {
               </div>
             )}
 
-            {/* ── Weekend form ── */}
+            {/* Weekend form */}
             {step === 'weekend_form' && (
               <div className="flex flex-col gap-5">
                 {/* Key selector */}
@@ -578,7 +578,7 @@ export const AuthorizedKeys = () => {
               </div>
             )}
 
-            {/* ── Submitting ── */}
+            {/* Submitting */}
             {step === 'submitting' && (
               <div className="flex flex-1 items-center justify-center">
                 <p className="text-sm text-muted-foreground">
@@ -587,7 +587,7 @@ export const AuthorizedKeys = () => {
               </div>
             )}
 
-            {/* ── Code step ── */}
+            {/* Code step */}
             {step === 'code' && result && (
               <div className="flex flex-col items-center gap-4 text-center">
                 <CheckCircleIcon
@@ -656,7 +656,7 @@ export const AuthorizedKeys = () => {
               </div>
             )}
 
-            {/* ── Pending HOD approval ── */}
+            {/* Pending HOD approval */}
             {step === 'pending_hod' && result && (
               <div className="flex flex-col items-center gap-4 text-center">
                 <div className="flex size-12 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950/40">

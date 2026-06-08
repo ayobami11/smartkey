@@ -27,7 +27,7 @@ import {
 import { email, password } from '@/lib/validation/primitives';
 import { OtpForm } from './otp-form';
 
-// ── Schema ────────────────────────────────────────────────────────────────
+// Schema
 
 const credentialsSchema = z.object({
   email: email,
@@ -36,7 +36,7 @@ const credentialsSchema = z.object({
 
 type CredentialsValues = z.infer<typeof credentialsSchema>;
 
-// ── Constants ─────────────────────────────────────────────────────────────
+// Constants
 
 const ROLE_REDIRECTS: Record<string, string> = {
   CSO: '/cso/dashboard',
@@ -45,7 +45,7 @@ const ROLE_REDIRECTS: Record<string, string> = {
   REQUESTER: '/requester/dashboard',
 };
 
-// ── Component ──────────────────────────────────────────────────────────────
+// Component
 
 export const LoginForm = () => {
   const router = useRouter();

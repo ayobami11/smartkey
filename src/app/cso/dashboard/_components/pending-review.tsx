@@ -16,7 +16,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 import { formatFactors, formatTime } from './helpers';
 
-// ── Types ──────────────────────────────────────────────────────────────────
+// Types
 
 type CsoRequest = {
   id: string;
@@ -28,7 +28,7 @@ type CsoRequest = {
   risk_factors?: unknown[];
 };
 
-// ── Component ──────────────────────────────────────────────────────────────
+// Component
 
 export const PendingReview = () => {
   const [queue, setQueue] = useState<CsoRequest[]>([]);
@@ -55,7 +55,7 @@ export const PendingReview = () => {
   };
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+     
     fetchQueue();
   }, []);
 

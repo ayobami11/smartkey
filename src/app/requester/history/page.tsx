@@ -14,7 +14,7 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty';
 
-// ── Types ──────────────────────────────────────────────────────────────────
+// Types
 
 type RequestStatus =
   | 'CODE_ISSUED'
@@ -40,7 +40,7 @@ type ApiResponse = {
   next_cursor: string | null;
 };
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// Helpers
 
 const STATUS_CONFIG: Record<
   RequestStatus,
@@ -65,7 +65,7 @@ const formatDate = (iso: string) =>
     year: 'numeric',
   });
 
-// ── Skeleton rows ─────────────────────────────────────────────────────────
+// Skeleton rows
 
 const HistorySkeleton = () => (
   <ul className="divide-y" aria-busy="true" aria-label="Loading history">
@@ -84,7 +84,7 @@ const HistorySkeleton = () => (
   </ul>
 );
 
-// ── Component ──────────────────────────────────────────────────────────────
+// Component
 
 export default function RequesterHistoryPage() {
   const [requests, setRequests] = useState<RequestRow[]>([]);
@@ -106,7 +106,7 @@ export default function RequesterHistoryPage() {
     return json.data;
   }, []);
 
-  // ── Initial load ─────────────────────────────────────────────────────────
+  // Initial load
 
   useEffect(() => {
     fetchHistory()
@@ -118,7 +118,7 @@ export default function RequesterHistoryPage() {
       .finally(() => setLoading(false));
   }, [fetchHistory]);
 
-  // ── Load more ─────────────────────────────────────────────────────────────
+  // Load more
 
   const handleLoadMore = async () => {
     if (!nextCursor) return;
@@ -134,7 +134,7 @@ export default function RequesterHistoryPage() {
     }
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // Render
 
   if (loading) {
     return (

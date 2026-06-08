@@ -24,7 +24,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 
-// ── Types ──────────────────────────────────────────────────────────────────
+// Types
 
 type Shift = {
   id: string;
@@ -44,7 +44,7 @@ type OutstandingKey = {
 
 type PageStep = 'loading' | 'ready' | 'success' | 'error';
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// Helpers
 
 const formatTime = (iso: string) =>
   new Date(iso).toLocaleTimeString('en-GB', {
@@ -59,7 +59,7 @@ const formatDate = (iso: string) =>
     month: 'short',
   });
 
-// ── Component ──────────────────────────────────────────────────────────────
+// Component
 
 export default function HandoverPage() {
   const [step, setStep] = useState<PageStep>('loading');
@@ -77,7 +77,7 @@ export default function HandoverPage() {
     outstandingKeys.length > 0 &&
     outstandingKeys.every((k) => acknowledged.has(k.id));
 
-  // ── Fetch ──────────────────────────────────────────────────────────────────
+  // Fetch
 
   useEffect(() => {
     fetchData();
@@ -121,7 +121,7 @@ export default function HandoverPage() {
     }
   };
 
-  // ── Handlers ───────────────────────────────────────────────────────────────
+  // Handlers
 
   const toggleKey = (id: string) => {
     setAcknowledged((prev) => {
@@ -171,7 +171,7 @@ export default function HandoverPage() {
     }
   };
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  // Render
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 pt-0">

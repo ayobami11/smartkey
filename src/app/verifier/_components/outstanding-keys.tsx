@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 
-// ── Types ──────────────────────────────────────────────────────────────────
+// Types
 
 type OutstandingKey = {
   id: string;
@@ -33,7 +33,7 @@ type OutstandingKey = {
 
 type ReturnStep = 'confirm' | 'returning' | 'success';
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// Helpers
 
 const formatTime = (iso: string) =>
   new Date(iso).toLocaleTimeString('en-GB', {
@@ -65,7 +65,7 @@ const relativeTime = (iso: string) => {
   return hours === 1 ? '1 hr ago' : `${hours} hrs ago`;
 };
 
-// ── Component ──────────────────────────────────────────────────────────────
+// Component
 
 export const OutstandingKeys = () => {
   const [keys, setKeys] = useState<OutstandingKey[]>([]);
@@ -78,7 +78,7 @@ export const OutstandingKeys = () => {
   const [returnStep, setReturnStep] = useState<ReturnStep>('confirm');
   const [returnError, setReturnError] = useState<string | null>(null);
 
-  // ── Fetch ──────────────────────────────────────────────────────────────────
+  // Fetch
 
   useEffect(() => {
     fetchOutstanding();
@@ -109,7 +109,7 @@ export const OutstandingKeys = () => {
     }
   };
 
-  // ── Sheet helpers ──────────────────────────────────────────────────────────
+  // Sheet helpers
 
   const openReturnSheet = (key: OutstandingKey) => {
     setSelectedKey(key);
@@ -153,7 +153,7 @@ export const OutstandingKeys = () => {
     }
   };
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  // Render
 
   return (
     <section className="flex flex-col gap-4">
@@ -271,7 +271,7 @@ export const OutstandingKeys = () => {
         </div>
       )}
 
-      {/* ── Return Sheet ── */}
+      {/* Return Sheet */}
       <Sheet
         open={sheetOpen}
         onOpenChange={(open) => {

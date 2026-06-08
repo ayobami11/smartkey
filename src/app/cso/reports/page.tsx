@@ -40,7 +40,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { createBrowserClient } from '@/lib/supabase/client';
 
-// ── Types ──────────────────────────────────────────────────────────────────
+// Types
 
 type Report = {
   id: string;
@@ -57,7 +57,7 @@ type DateFilter = 'all' | '7d' | '30d';
 
 type ShiftOption = { id: string; label: string };
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// Helpers
 
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString('en-GB', {
@@ -120,7 +120,7 @@ const DATE_FILTER_LABELS: Record<DateFilter, string> = {
   '30d': 'Last 30 days',
 };
 
-// ── Component ──────────────────────────────────────────────────────────────
+// Component
 
 export default function ShiftReportsPage() {
   const [reportGroups, setReportGroups] = useState<
@@ -144,7 +144,7 @@ export default function ShiftReportsPage() {
     null
   );
 
-  // ── Fetch reports ─────────────────────────────────────────────────────────
+  // Fetch reports
 
   const fetchReports = async (reset = true, cursor?: string) => {
     if (reset) setLoadState('loading');
@@ -196,7 +196,7 @@ export default function ShiftReportsPage() {
     fetchReports(true);
   }, [dateFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Load more ─────────────────────────────────────────────────────────────
+  // Load more
 
   const handleLoadMore = async () => {
     if (!nextCursor) return;
@@ -205,7 +205,7 @@ export default function ShiftReportsPage() {
     setLoadingMore(false);
   };
 
-  // ── Fetch shifts (for generate sheet) ────────────────────────────────────
+  // Fetch shifts (for generate sheet)
 
   const fetchShifts = async () => {
     const supabase = createBrowserClient();
@@ -231,7 +231,7 @@ export default function ShiftReportsPage() {
     fetchShifts();
   };
 
-  // ── Generate report ───────────────────────────────────────────────────────
+  // Generate report
 
   const handleGenerate = async () => {
     if (!selectedShiftId) return;
@@ -257,7 +257,7 @@ export default function ShiftReportsPage() {
     }
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // Render
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 pt-0">

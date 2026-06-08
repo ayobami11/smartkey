@@ -7,7 +7,7 @@ import { ArrowDownIcon, ArrowUpIcon } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { createBrowserClient } from '@/lib/supabase/client';
 
-// ── Types ──────────────────────────────────────────────────────────────────
+// Types
 
 type ZoneStat = {
   name: string;
@@ -17,7 +17,7 @@ type ZoneStat = {
   trend: number;
 };
 
-// ── Component ──────────────────────────────────────────────────────────────
+// Component
 
 export const LiveZoneCounts = () => {
   const [zones, setZones] = useState<ZoneStat[]>([]);

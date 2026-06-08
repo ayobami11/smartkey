@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { logger } from '@/lib/logger';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
 import { err, ok } from '@/types/api';
 
@@ -80,12 +81,17 @@ export const POST = async (request: NextRequest) => {
     });
   }
 
+  // Upload via the service-role client. The user is already verified above and
+  // the paths are built from their verified id, so this is safe and avoids the
+  // storage RLS auth-context fragility of the cookie-based server client.
+  const adminClient = createAdminClient();
+
   // Upload signature
   const sigBytes = await signature.arrayBuffer();
   const sigExt = signature.name.split('.').pop() ?? 'png';
   const sigPath = `${userId}/signature.${sigExt}`;
 
-  const { error: sigUploadError } = await supabase.storage
+  const { error: sigUploadError } = await adminClient.storage
     .from('hod-signatures')
     .upload(sigPath, sigBytes, { contentType: signature.type, upsert: true });
 
@@ -104,7 +110,7 @@ export const POST = async (request: NextRequest) => {
   const stampExt = stamp.name.split('.').pop() ?? 'png';
   const stampPath = `${userId}/stamp.${stampExt}`;
 
-  const { error: stampUploadError } = await supabase.storage
+  const { error: stampUploadError } = await adminClient.storage
     .from('hod-signatures')
     .upload(stampPath, stampBytes, { contentType: stamp.type, upsert: true });
 
@@ -116,10 +122,10 @@ export const POST = async (request: NextRequest) => {
     return NextResponse.json(err('Stamp upload failed', 500), { status: 500 });
   }
 
-  const { data: sigUrlData } = supabase.storage
+  const { data: sigUrlData } = adminClient.storage
     .from('hod-signatures')
     .getPublicUrl(sigPath);
-  const { data: stampUrlData } = supabase.storage
+  const { data: stampUrlData } = adminClient.storage
     .from('hod-signatures')
     .getPublicUrl(stampPath);
 

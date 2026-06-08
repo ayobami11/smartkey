@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { logger } from '@/lib/logger';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
 import { err, ok } from '@/types/api';
 
@@ -74,12 +75,15 @@ export const POST = async (request: NextRequest) => {
   let photoUrl: string | undefined;
 
   if (photo instanceof File) {
-    // Upload passport photo to Supabase Storage
+    // Upload via the service-role client. The user is already verified above
+    // and the path is built from their verified id, so this is safe and avoids
+    // the storage RLS auth-context fragility of the cookie-based server client.
+    const adminClient = createAdminClient();
     const photoBytes = await photo.arrayBuffer();
     const ext = photo.name.split('.').pop() ?? 'jpg';
     const photoPath = `${userId}/passport.${ext}`;
 
-    const { error: uploadError } = await supabase.storage
+    const { error: uploadError } = await adminClient.storage
       .from('passport-photos')
       .upload(photoPath, photoBytes, { contentType: photo.type, upsert: true });
 
@@ -93,7 +97,7 @@ export const POST = async (request: NextRequest) => {
       });
     }
 
-    const { data: urlData } = supabase.storage
+    const { data: urlData } = adminClient.storage
       .from('passport-photos')
       .getPublicUrl(photoPath);
     photoUrl = urlData.publicUrl;

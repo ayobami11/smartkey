@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { createBrowserClient } from '@/lib/supabase/client';
 
-// ── Types ──────────────────────────────────────────────────────────────────
+// Types
 
 type RequestDetail = {
   id: string;
@@ -32,7 +32,7 @@ type RequestDetail = {
   key: { code: string; room_name: string; zone: string } | null;
 };
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// Helpers
 
 const secondsRemaining = (isoExpiry: string) =>
   Math.max(0, Math.floor((new Date(isoExpiry).getTime() - Date.now()) / 1000));
@@ -68,7 +68,7 @@ const statusMessage: Record<string, string> = {
   EXPIRED: 'This request has expired.',
 };
 
-// ── Component ──────────────────────────────────────────────────────────────
+// Component
 
 export default function CodeDisplayPage() {
   const { requestId } = useParams<{ requestId: string }>();
@@ -80,7 +80,7 @@ export default function CodeDisplayPage() {
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // ── Fetch ────────────────────────────────────────────────────────────────
+  // Fetch
 
   useEffect(() => {
     const fetchRequest = async () => {
@@ -118,7 +118,7 @@ export default function CodeDisplayPage() {
     fetchRequest();
   }, [requestId]);
 
-  // ── Countdown timer ───────────────────────────────────────────────────────
+  // Countdown timer
 
   useEffect(() => {
     if (!request?.code_expires_at) return;
@@ -137,7 +137,7 @@ export default function CodeDisplayPage() {
     };
   }, [request?.code_expires_at]);
 
-  // ── Copy to clipboard ─────────────────────────────────────────────────────
+  // Copy to clipboard
 
   const handleCopy = async () => {
     if (!request?.code) return;
@@ -146,7 +146,7 @@ export default function CodeDisplayPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // Render
 
   if (loading) {
     return (
@@ -187,7 +187,7 @@ export default function CodeDisplayPage() {
     request.code_expires_at !== null &&
     countdown === 0;
 
-  // ── KEY_ISSUED ────────────────────────────────────────────────────────────
+  // KEY_ISSUED
 
   if (request.status === 'KEY_ISSUED') {
     return (
@@ -221,7 +221,7 @@ export default function CodeDisplayPage() {
     );
   }
 
-  // ── Non-active statuses ───────────────────────────────────────────────────
+  // Non-active statuses
 
   if (request.status !== 'CODE_ISSUED') {
     const msg =
@@ -247,7 +247,7 @@ export default function CodeDisplayPage() {
     );
   }
 
-  // ── CODE_ISSUED ───────────────────────────────────────────────────────────
+  // CODE_ISSUED
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 p-6">

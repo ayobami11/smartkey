@@ -23,7 +23,7 @@ import {
   InputOTPSlot,
 } from '@/components/ui/input-otp';
 
-// ── Schema ────────────────────────────────────────────────────────────────
+// Schema
 
 const otpSchema = z.object({
   otp: z
@@ -34,7 +34,7 @@ const otpSchema = z.object({
 
 type OtpValues = z.infer<typeof otpSchema>;
 
-// ── Constants ─────────────────────────────────────────────────────────────
+// Constants
 
 const ROLE_REDIRECTS: Record<string, string> = {
   CSO: '/cso/dashboard',
@@ -43,7 +43,7 @@ const ROLE_REDIRECTS: Record<string, string> = {
   REQUESTER: '/requester/dashboard',
 };
 
-// ── Helpers ───────────────────────────────────────────────────────────────
+// Helpers
 
 const maskEmail = (email: string) => {
   const [local, domain] = email.split('@');
@@ -51,7 +51,7 @@ const maskEmail = (email: string) => {
   return `${local.slice(0, 3)}***@${domain}`;
 };
 
-// ── Types ─────────────────────────────────────────────────────────────────
+// Types
 
 type OtpFormProps = {
   pendingEmail: string;
@@ -59,7 +59,7 @@ type OtpFormProps = {
   onBack: () => void;
 };
 
-// ── Component ─────────────────────────────────────────────────────────────
+// Component
 
 export const OtpForm = ({
   pendingEmail,

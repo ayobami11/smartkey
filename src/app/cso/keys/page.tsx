@@ -36,7 +36,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { createBrowserClient } from '@/lib/supabase/client';
 
-// ── Types ──────────────────────────────────────────────────────────────────
+// Types
 
 type KeyStatus = 'AVAILABLE' | 'ISSUED' | 'OVERDUE' | 'RETIRED';
 type KeyZone = 'NEW_SENATE' | 'OLD_SENATE';
@@ -52,7 +52,7 @@ type Key = {
   status: KeyStatus;
 };
 
-// ── Constants ─────────────────────────────────────────────────────────────
+// Constants
 
 const statusConfig: Record<KeyStatus, { label: string; cls: string }> = {
   AVAILABLE: { label: 'Available', cls: 'bg-emerald-100 text-emerald-700' },
@@ -68,7 +68,7 @@ const tabs: { label: string; value: ActiveTab }[] = [
   { label: 'Retired', value: 'Retired' },
 ];
 
-// ── Component ──────────────────────────────────────────────────────────────
+// Component
 
 export default function KeyInventoryPage() {
   const [keys, setKeys] = useState<Key[]>([]);
@@ -85,7 +85,7 @@ export default function KeyInventoryPage() {
   const [marking, setMarking] = useState(false);
   const [markError, setMarkError] = useState<string | null>(null);
 
-  // ── Fetch ─────────────────────────────────────────────────────────────────
+  // Fetch
 
   const fetchKeys = async () => {
     setLoadState('loading');
@@ -126,7 +126,7 @@ export default function KeyInventoryPage() {
     fetchKeys();
   }, []);
 
-  // ── Mark as lost ──────────────────────────────────────────────────────────
+  // Mark as lost
 
   const handleMarkLost = async () => {
     if (!lostTarget) return;
@@ -157,7 +157,7 @@ export default function KeyInventoryPage() {
     }
   };
 
-  // ── Computed ──────────────────────────────────────────────────────────────
+  // Computed
 
   const filtered =
     activeTab === 'All'
@@ -166,7 +166,7 @@ export default function KeyInventoryPage() {
         ? keys.filter((k) => k.status === 'RETIRED')
         : keys.filter((k) => k.zone === activeTab);
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // Render
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 pt-0">

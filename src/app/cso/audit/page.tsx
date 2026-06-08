@@ -46,7 +46,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { createBrowserClient } from '@/lib/supabase/client';
 
-// ── Types ──────────────────────────────────────────────────────────────────
+// Types
 
 type AuditEventType =
   | 'REQUEST'
@@ -87,7 +87,7 @@ type Incident = {
   logged_by_name?: string;
 };
 
-// ── Constants ─────────────────────────────────────────────────────────────
+// Constants
 
 const eventConfig: Record<
   AuditEventType,
@@ -197,7 +197,7 @@ const SEVERITY_CHIPS: { label: string; value: string }[] = [
   { label: 'High', value: 'HIGH' },
 ];
 
-// ── Component ──────────────────────────────────────────────────────────────
+// Component
 
 export default function AuditLogPage() {
   // Audit log state
@@ -232,7 +232,7 @@ export default function AuditLogPage() {
   const [logError, setLogError] = useState<string | null>(null);
   const [logRef, setLogRef] = useState<string | null>(null);
 
-  // ── Fetch audit log ───────────────────────────────────────────────────────
+  // Fetch audit log
 
   const fetchAudit = async () => {
     setAuditState('loading');
@@ -286,7 +286,7 @@ export default function AuditLogPage() {
     fetchAudit();
   }, []);
 
-  // ── Fetch incidents ───────────────────────────────────────────────────────
+  // Fetch incidents
 
   const fetchIncidents = async (reset = true, cursor?: string) => {
     if (reset) setIncidentState('loading');
@@ -334,7 +334,7 @@ export default function AuditLogPage() {
     }
   }, [incidentTypeFilter, incidentSeverityFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Log incident ──────────────────────────────────────────────────────────
+  // Log incident
 
   const handleLogIncident = async () => {
     if (!logType || !logSeverity || !logDesc.trim()) return;
@@ -373,7 +373,7 @@ export default function AuditLogPage() {
     setLogRef(null);
   };
 
-  // ── Computed (audit) ──────────────────────────────────────────────────────
+  // Computed (audit)
 
   const filteredEntries = entries.filter((e) => {
     if (typeFilter && e.type !== typeFilter) return false;
@@ -389,7 +389,7 @@ export default function AuditLogPage() {
     return true;
   });
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // Render
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
@@ -443,7 +443,7 @@ export default function AuditLogPage() {
         ))}
       </div>
 
-      {/* ── Audit Log tab ── */}
+      {/* Audit Log tab */}
       {activeTab === 'audit' && (
         <>
           {/* Filter bar */}
@@ -612,7 +612,7 @@ export default function AuditLogPage() {
         </>
       )}
 
-      {/* ── Incidents tab ── */}
+      {/* Incidents tab */}
       {activeTab === 'incidents' && (
         <>
           {/* Filters */}
