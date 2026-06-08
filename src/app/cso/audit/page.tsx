@@ -857,6 +857,7 @@ export default function AuditLogPage() {
                     placeholder="Describe what occurred, when, and who was involved…"
                     rows={5}
                     aria-required="true"
+                    className='resize-none'
                   />
                 </div>
                 {logError && (
