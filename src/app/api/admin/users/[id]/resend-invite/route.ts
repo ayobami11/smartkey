@@ -60,23 +60,21 @@ export const POST = async (
   const activationPath =
     target.role === 'HOD' ? '/hod/onboarding' : '/activate';
 
-  // generateLink creates a fresh one-time magic link. We send it via Gmail so
-  // delivery is reliable regardless of Supabase's SMTP config.
+  // generateLink mints a fresh one-time token. We build our own /auth/confirm
+  // link from the token hash (verified server-side via verifyOtp) and send it
+  // via Gmail so delivery is reliable regardless of Supabase's SMTP config.
   const adminClient = createAdminClient();
   const { data: linkData, error: linkError } =
     await adminClient.auth.admin.generateLink({
       type: 'magiclink',
       email: target.institutional_email,
-      options: {
-        redirectTo: `${siteUrl}/auth/confirm?next=${activationPath}`,
-      },
     });
 
-  if (linkError || !linkData?.properties?.action_link) {
+  if (linkError || !linkData?.properties?.hashed_token) {
     const ref = crypto.randomUUID();
     logger.error('resend-invite: generateLink failed', {
       id,
-      err: linkError?.message ?? 'no action_link returned',
+      err: linkError?.message ?? 'no hashed_token returned',
       ref,
     });
     return NextResponse.json(err(`Could not generate link. Ref: ${ref}`, 500), {
@@ -84,10 +82,17 @@ export const POST = async (
     });
   }
 
+  const confirmParams = new URLSearchParams({
+    token_hash: linkData.properties.hashed_token,
+    type: linkData.properties.verification_type,
+    next: activationPath,
+  });
+  const confirmLink = `${siteUrl}/auth/confirm?${confirmParams.toString()}`;
+
   try {
     await sendActivationEmail({
       to: target.institutional_email,
-      link: linkData.properties.action_link,
+      link: confirmLink,
       isReinvite: true,
     });
   } catch (e: unknown) {

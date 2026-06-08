@@ -109,25 +109,28 @@ export const POST = async (request: NextRequest) => {
       });
     }
 
-    // generateLink creates a one-time magic link. We send it ourselves via
+    // generateLink mints a one-time token. We build our own /auth/confirm link
+    // from the token hash (verified server-side via verifyOtp) and send it via
     // Gmail so delivery is reliable regardless of Supabase's SMTP config.
     const { data: linkData, error: linkError } =
       await adminClient.auth.admin.generateLink({
         type: 'magiclink',
         email: institutional_email,
-        options: {
-          redirectTo: `${siteUrl}/auth/confirm?next=${activationPath}`,
-        },
       });
 
-    if (linkError || !linkData?.properties?.action_link) {
+    if (linkError || !linkData?.properties?.hashed_token) {
       logger.error('re-invite: generateLink failed', {
-        err: linkError?.message ?? 'no action_link returned',
+        err: linkError?.message ?? 'no hashed_token returned',
       });
     } else {
+      const confirmParams = new URLSearchParams({
+        token_hash: linkData.properties.hashed_token,
+        type: linkData.properties.verification_type,
+        next: activationPath,
+      });
       await sendActivationEmail({
         to: institutional_email,
-        link: linkData.properties.action_link,
+        link: `${siteUrl}/auth/confirm?${confirmParams.toString()}`,
         isReinvite: true,
       }).catch((e: unknown) =>
         logger.error('re-invite: email send failed', { err: String(e) })
@@ -140,15 +143,13 @@ export const POST = async (request: NextRequest) => {
     );
   }
 
-  // New user: use generateLink to create the auth.users row and get the invite
-  // URL, then send via our own Gmail for reliable delivery.
+  // New user: generateLink with type 'invite' creates the auth.users row and
+  // mints a one-time token. We build our own /auth/confirm link from the token
+  // hash and send via our own Gmail for reliable delivery.
   const { data: newLinkData, error: inviteError } =
     await adminClient.auth.admin.generateLink({
       type: 'invite',
       email: institutional_email,
-      options: {
-        redirectTo: `${siteUrl}/auth/confirm?next=${activationPath}`,
-      },
     });
 
   if (inviteError) {
@@ -162,10 +163,15 @@ export const POST = async (request: NextRequest) => {
     });
   }
 
-  if (newLinkData?.properties?.action_link) {
+  if (newLinkData?.properties?.hashed_token) {
+    const confirmParams = new URLSearchParams({
+      token_hash: newLinkData.properties.hashed_token,
+      type: newLinkData.properties.verification_type,
+      next: activationPath,
+    });
     await sendActivationEmail({
       to: institutional_email,
-      link: newLinkData.properties.action_link,
+      link: `${siteUrl}/auth/confirm?${confirmParams.toString()}`,
       isReinvite: false,
     }).catch((e: unknown) =>
       logger.error('provision_user: email send failed', { err: String(e) })
