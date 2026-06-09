@@ -730,6 +730,7 @@ This is already created at `.github/pull_request_template.md`. Every PR body pre
 ## 6. Issue templates
 
 Two templates are in `.github/ISSUE_TEMPLATE/`:
+
 - `backend-feature.md` — for new features
 - `bug-report.md` — for bugs
 
@@ -739,19 +740,21 @@ Use them when creating issues via the GitHub web UI (they appear as options when
 
 ## 7. Work order summary
 
+Issue numbers below are the actual GitHub issue numbers for this repo (`ayobami11/smartkey`). ✅ = merged to main, 🔄 = PR open/in review, ⬜ = not started.
+
 ```
-Milestone 1 (all blocking)
-  #7 → #8 → #9 → #10 → #11 → #12 → #13
+Milestone 1 — Foundation (all ✅ done)
+  #9 (Supabase setup) → #10 (schema) → #11 (RLS) → #12 (RPCs) → #13 (client utils) → #14 (middleware) → #15 (auth routes)
 
-Milestone 2 (after M1 merged)
-  #14 → #15 → #16 (can overlap)
+Milestone 2 — Request Workflow (all ✅ done)
+  #16 (request routes) → #17 (key/admin routes) → #18 (realtime + offline guard)
 
-Milestone 3 (after #14 submit route)
-  #17 → #18
+Milestone 3 — AI Risk Engine
+  #19 ✅ (risk engine + unit tests) → #20 🔄 (RiskTierBadge, RiskFactorPopover — PR #40 in review)
 
-Milestone 4 (can overlap with M3)
-  #19 → #20
+Milestone 4 — LLM + Signature
+  #21 ⬜ (Gemini shift reports) → #22 ⬜ (signature verification + Supabase Storage)
 
-Milestone 5 (after M2 + M4)
-  #21 → #22 → #23 (start #23 early if CI is needed sooner)
+Milestone 5 — CSO Backend + Jobs
+  #23 ✅ (shift/incident/report routes) → #24 ⬜ (edge functions) → #25 ⬜ (CI/CD pipeline)
 ```
