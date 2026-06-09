@@ -8,6 +8,21 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-06-09 — Supabase Realtime subscriptions and offline guard (PR #39, branch: backend/feat/18-realtime-offline)
+
+- `src/hooks/useRealtime.ts` — generic subscription hook. Accepts `table`, optional `filter`, and `onInsert`/`onUpdate`/`onDelete` callbacks. Reconnects automatically with exponential backoff (1 s → 2 s → 4 s → … → 30 s cap). After 30 s without a successful connection, emits `'offline'` status.
+- `src/hooks/useConnectionStatus.ts` — module-level event emitter that returns `'connected' | 'reconnecting' | 'offline'`. Shared across all `useRealtime` instances so the app bar dot reflects the aggregate connection state.
+- `src/components/smartkey/OfflineBanner.tsx` — full-bleed, sharp-edged banner with `aria-live="assertive"`. Renders only when status is `'offline'`; hidden otherwise. Carries the standard copy: "You are offline. Live updates are paused. New requests will appear when you reconnect."
+
+### 2026-06-09 — Rule-based risk scoring engine (PR #38, branch: backend/feat/19-risk-engine)
+
+- `src/lib/ai/risk/types.ts` — `RiskTier` (`'LOW' | 'MEDIUM' | 'HIGH'`), `RiskFactor` (`{ rule, description, weight }`), `RiskContext` (DB query results passed to rules), `RiskResult` (`{ tier, factors }`).
+- `src/lib/ai/risk/rules.ts` — 5 deterministic rule functions, each returning a `RiskFactor | null`. Rules: `outsideOperationalHours` (weight 3), `outstandingKeyNotReturned` (weight 5), `weekendWithoutMemo` (weight 4), `excessRequestFrequency` (weight 2), `collectorNotWhitelisted` (weight 5). Weights configurable via env vars (`RISK_WEIGHT_*`).
+- `src/lib/ai/risk/thresholds.ts` — tier boundaries from env vars (`RISK_TIER_MEDIUM_MIN` default 4, `RISK_TIER_HIGH_MIN` default 7). LOW: total < 4; MEDIUM: 4–6; HIGH: ≥ 7.
+- `src/lib/ai/risk/engine.ts` — `evaluateRisk(context)` runs all 5 rules, sums active weights, maps to tier.
+- `src/lib/ai/risk/rules.test.ts` + `engine.test.ts` — 24 unit tests covering every rule (positive + negative cases) and all three tier boundaries.
+- `src/app/api/requests/submit/route.ts` — updated to run 4 parallel DB queries (operational hours, outstanding keys, weekend memo, request frequency), call `evaluateRisk()`, and back-fill `risk_tier` + `risk_factors` on the created request row. Risk evaluation is pure TypeScript; no external API.
+
 ### 2026-06-02 — Shift handover, incidents, reports, and AI risk-alerts routes (PR #37, branch: backend/feat/23-shift-incident-routes)
 
 - Implemented shift, incident, report, and AI risk-alert route handlers.
