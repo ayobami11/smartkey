@@ -1,11 +1,14 @@
 import crypto from 'crypto';
+import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { sendOtpEmail } from '@/lib/email/otp';
 import { logger } from '@/lib/logger';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { DEFAULT_NAMESPACE, namespaceForRole } from '@/lib/supabase/cookies';
 import { createServerClient } from '@/lib/supabase/server';
+import type { Database } from '@/lib/supabase/types';
 import { err, ok } from '@/types/api';
 
 const MFA_ROLES = new Set(['CSO', 'HOD', 'VERIFIER']);
@@ -16,8 +19,6 @@ const bodySchema = z.object({
 });
 
 export const POST = async (request: NextRequest) => {
-  const supabase = await createServerClient();
-
   const body = await request.json().catch(() => null);
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
@@ -26,20 +27,41 @@ export const POST = async (request: NextRequest) => {
 
   const { email, password } = parsed.data;
 
+  // Verify credentials on a throwaway client that persists nothing. We can't
+  // know the role — and therefore the cookie namespace to write — until after
+  // authentication, so we avoid touching any cookie here.
+  const verifier = createClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { auth: { persistSession: false, autoRefreshToken: false } }
+  );
+
   const { data: authData, error: authError } =
-    await supabase.auth.signInWithPassword({ email, password });
+    await verifier.auth.signInWithPassword({ email, password });
 
   if (authError || !authData.session) {
-    return NextResponse.json(err('Invalid email or password', 401), { status: 401 });
+    return NextResponse.json(err('Invalid email or password', 401), {
+      status: 401,
+    });
   }
 
-  const { data: profileData } = await supabase
+  const { data: profileData } = await verifier
     .from('profiles')
     .select('role')
     .eq('id', authData.user.id)
     .single();
 
   const role = (profileData as { role: string } | null)?.role ?? null;
+
+  // Persist the session into the role-specific cookie so logging in as one role
+  // never overwrites a session for a different role in the same browser.
+  const namespace = namespaceForRole(role) ?? DEFAULT_NAMESPACE;
+  const supabase = await createServerClient(namespace);
+  await supabase.auth.setSession({
+    access_token: authData.session.access_token,
+    refresh_token: authData.session.refresh_token,
+  });
+
   const mfaRequired = role ? MFA_ROLES.has(role) : false;
 
   if (mfaRequired) {
