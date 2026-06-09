@@ -2,28 +2,70 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircleIcon, CloudUploadIcon, RefreshCwIcon } from 'lucide-react';
+
+import { zodResolver } from '@hookform/resolvers/zod';
+import {
+  CheckCircleIcon,
+  CloudUploadIcon,
+  EyeIcon,
+  EyeOffIcon,
+  LockIcon,
+  RefreshCwIcon,
+} from 'lucide-react';
+import { Controller, useForm } from 'react-hook-form';
+import { toast } from 'sonner';
+import * as z from 'zod';
 
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from '@/components/ui/field';
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from '@/components/ui/input-group';
 import { createBrowserClient } from '@/lib/supabase/client';
+import { password } from '@/lib/validation/primitives';
 
 type Role = 'VERIFIER' | 'REQUESTER';
+
+const activateSchema = z
+  .object({
+    password,
+    confirmPassword: password,
+  })
+  .refine((d) => d.password === d.confirmPassword, {
+    message: 'Passwords do not match.',
+    path: ['confirmPassword'],
+  });
+
+type ActivateValues = z.infer<typeof activateSchema>;
 
 export default function ActivatePage() {
   const router = useRouter();
   const [role, setRole] = useState<Role | null>(null);
   const [checking, setChecking] = useState(true);
 
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+
   const photoInputRef = useRef<HTMLInputElement>(null);
+
+  const form = useForm<ActivateValues>({
+    resolver: zodResolver(activateSchema),
+    defaultValues: { password: '', confirmPassword: '' },
+  });
+  const { isSubmitting } = form.formState;
 
   useEffect(() => {
     const supabase = createBrowserClient();
@@ -48,25 +90,15 @@ export default function ActivatePage() {
     });
   }, [router]);
 
-  const handleSubmit = async () => {
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters');
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
+  const onSubmit = async (data: ActivateValues) => {
     if (role === 'REQUESTER' && !photoFile) {
-      setError('Passport photo is required');
+      setPhotoError('Passport photo is required.');
       return;
     }
-
-    setSubmitting(true);
-    setError(null);
+    setPhotoError(null);
 
     const formData = new FormData();
-    formData.append('password', password);
+    formData.append('password', data.password);
     if (photoFile) formData.append('passport_photo', photoFile);
 
     const res = await fetch('/api/auth/register', {
@@ -77,8 +109,7 @@ export default function ActivatePage() {
     const json = (await res.json()) as { error?: string };
 
     if (!res.ok) {
-      setError(json.error ?? 'Something went wrong. Please try again.');
-      setSubmitting(false);
+      toast.error(json.error ?? 'Something went wrong. Please try again.');
       return;
     }
 
@@ -133,34 +164,105 @@ export default function ActivatePage() {
           </p>
         </div>
 
-        <div className="flex flex-col gap-5 rounded-lg border border-border bg-card p-6 shadow-[0_2px_4px_rgba(15,23,42,0.06)]">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Min. 8 characters"
-              autoComplete="new-password"
+        <form
+          onSubmit={form.handleSubmit(onSubmit)}
+          className="flex flex-col gap-5 rounded-lg border border-border bg-card p-6 shadow-[0_2px_4px_rgba(15,23,42,0.06)]"
+        >
+          <FieldGroup>
+            <Controller
+              name="password"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="password">Password</FieldLabel>
+                  <InputGroup>
+                    <InputGroupAddon>
+                      <LockIcon aria-hidden="true" />
+                    </InputGroupAddon>
+                    <InputGroupInput
+                      id="password"
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="New password"
+                      autoComplete="new-password"
+                      aria-invalid={fieldState.invalid}
+                      {...field}
+                    />
+                    <InputGroupAddon align="inline-end">
+                      <InputGroupButton
+                        aria-label={
+                          showPassword ? 'Hide password' : 'Show password'
+                        }
+                        size="icon-xs"
+                        onClick={() => setShowPassword((prev) => !prev)}
+                      >
+                        {showPassword ? (
+                          <EyeOffIcon aria-hidden="true" />
+                        ) : (
+                          <EyeIcon aria-hidden="true" />
+                        )}
+                      </InputGroupButton>
+                    </InputGroupAddon>
+                  </InputGroup>
+                  <FieldDescription>
+                    At least 8 characters with uppercase, lowercase, number, and
+                    special character.
+                  </FieldDescription>
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
+                </Field>
+              )}
             />
-          </div>
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="confirm-password">Confirm password</Label>
-            <Input
-              id="confirm-password"
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Repeat password"
-              autoComplete="new-password"
+            <Controller
+              name="confirmPassword"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="confirm-password">
+                    Confirm password
+                  </FieldLabel>
+                  <InputGroup>
+                    <InputGroupAddon>
+                      <LockIcon aria-hidden="true" />
+                    </InputGroupAddon>
+                    <InputGroupInput
+                      id="confirm-password"
+                      type={showConfirm ? 'text' : 'password'}
+                      placeholder="Repeat password"
+                      autoComplete="new-password"
+                      aria-invalid={fieldState.invalid}
+                      {...field}
+                    />
+                    <InputGroupAddon align="inline-end">
+                      <InputGroupButton
+                        aria-label={
+                          showConfirm ? 'Hide password' : 'Show password'
+                        }
+                        size="icon-xs"
+                        onClick={() => setShowConfirm((prev) => !prev)}
+                      >
+                        {showConfirm ? (
+                          <EyeOffIcon aria-hidden="true" />
+                        ) : (
+                          <EyeIcon aria-hidden="true" />
+                        )}
+                      </InputGroupButton>
+                    </InputGroupAddon>
+                  </InputGroup>
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
+                </Field>
+              )}
             />
-          </div>
+          </FieldGroup>
 
           {role === 'REQUESTER' && (
             <div className="flex flex-col gap-1.5">
-              <Label>Passport photo</Label>
+              <span className="text-sm font-medium text-foreground">
+                Passport photo
+              </span>
               <input
                 ref={photoInputRef}
                 type="file"
@@ -169,7 +271,10 @@ export default function ActivatePage() {
                 aria-label="Passport photo file"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
-                  if (file) setPhotoFile(file);
+                  if (file) {
+                    setPhotoFile(file);
+                    setPhotoError(null);
+                  }
                 }}
               />
               {!photoFile ? (
@@ -208,24 +313,14 @@ export default function ActivatePage() {
                   </button>
                 </div>
               )}
+              {photoError && <FieldError errors={[{ message: photoError }]} />}
             </div>
           )}
 
-          {error && <p className="text-sm text-destructive">{error}</p>}
-
-          <Button
-            onClick={handleSubmit}
-            disabled={
-              submitting ||
-              password.length < 8 ||
-              password !== confirmPassword ||
-              (role === 'REQUESTER' && !photoFile)
-            }
-            className="w-full"
-          >
-            {submitting ? 'Activating…' : 'Activate account'}
+          <Button type="submit" disabled={isSubmitting} className="w-full">
+            {isSubmitting ? 'Activating…' : 'Activate account'}
           </Button>
-        </div>
+        </form>
       </div>
     </div>
   );
