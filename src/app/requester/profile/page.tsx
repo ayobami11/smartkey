@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
 import { createBrowserClient } from '@/lib/supabase/client';
 
 // Types
@@ -341,14 +342,17 @@ export default function RequesterProfilePage() {
                 {notificationItems.map((item) => {
                   const checked = notifications[item.id];
                   return (
-                    <label
+                    <div
                       key={item.id}
-                      className="flex cursor-pointer items-center justify-between gap-4 px-4 py-4"
+                      className="flex items-center justify-between gap-4 px-4 py-4"
                     >
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-foreground">
+                        <Label
+                          htmlFor={item.id}
+                          className="cursor-pointer text-sm font-medium text-foreground"
+                        >
                           {item.label}
-                        </p>
+                        </Label>
                         <p className="text-xs text-muted-foreground">
                           {item.description}
                         </p>
@@ -356,25 +360,13 @@ export default function RequesterProfilePage() {
                           {item.channel}
                         </p>
                       </div>
-                      <input
-                        type="checkbox"
-                        className="peer sr-only"
+                      <Switch
+                        id={item.id}
                         checked={checked}
-                        onChange={() => toggleNotification(item.id)}
+                        onCheckedChange={() => toggleNotification(item.id)}
                         aria-label={`${item.label} (${item.channel})`}
                       />
-                      {/* Toggle pill */}
-                      <div
-                        className="relative h-5 w-9 shrink-0 rounded-full bg-muted transition-colors peer-checked:bg-primary peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ring"
-                        aria-hidden="true"
-                      >
-                        <div
-                          className={`absolute top-0.5 size-4 rounded-full bg-white shadow-sm transition-transform ${
-                            checked ? 'translate-x-4' : 'translate-x-0.5'
-                          }`}
-                        />
-                      </div>
-                    </label>
+                    </div>
                   );
                 })}
               </div>
