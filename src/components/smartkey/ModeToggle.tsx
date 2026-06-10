@@ -1,12 +1,31 @@
 'use client';
 
+import { useSyncExternalStore } from 'react';
 import { MonitorIcon, MoonIcon, SunIcon } from 'lucide-react';
 import { useTheme } from 'next-themes';
 
+import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+
+const emptySubscribe = () => () => {};
 
 export const ModeToggle = () => {
   const { theme, setTheme } = useTheme();
+  const mounted = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
+
+  if (!mounted) {
+    return (
+      <div className="flex overflow-hidden rounded-md border border-input">
+        <Skeleton className="h-9 w-9 rounded-none" />
+        <Skeleton className="h-9 w-9 rounded-none border-x border-input" />
+        <Skeleton className="h-9 w-9 rounded-none" />
+      </div>
+    );
+  }
 
   return (
     <ToggleGroup
