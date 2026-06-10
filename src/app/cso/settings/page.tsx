@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
 import { createBrowserClient } from '@/lib/supabase/client';
 
 type Section = 'operational' | 'risk' | 'notifications' | 'account';
@@ -68,27 +69,6 @@ const notificationToggles = [
   },
   { id: 'daily_digest', label: 'Daily digest at 08:00', enabled: false },
 ];
-
-const Toggle = ({
-  defaultChecked,
-  id,
-}: {
-  defaultChecked: boolean;
-  id: string;
-}) => (
-  <label
-    htmlFor={id}
-    className="relative inline-flex cursor-pointer items-center"
-  >
-    <input
-      type="checkbox"
-      id={id}
-      defaultChecked={defaultChecked}
-      className="peer sr-only"
-    />
-    <div className="peer h-6 w-11 rounded-full bg-muted after:absolute after:inset-s-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition-all after:content-[''] peer-checked:bg-primary peer-checked:after:translate-x-full peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ring" />
-  </label>
-);
 
 export default function SettingsPage() {
   const [active, setActive] = useState<Section>('operational');
@@ -288,7 +268,7 @@ export default function SettingsPage() {
                         >
                           Closed
                         </Label>
-                        <Toggle
+                        <Switch
                           id={`${zone}-weekend-closed`}
                           defaultChecked={true}
                         />
@@ -418,7 +398,11 @@ export default function SettingsPage() {
                         />
                       </td>
                       <td className="px-4 py-3">
-                        <Toggle id={rule.id} defaultChecked={rule.enabled} />
+                        <Switch
+                          id={rule.id}
+                          defaultChecked={rule.enabled}
+                          aria-label={`Enable ${rule.name}`}
+                        />
                       </td>
                     </tr>
                   ))}
@@ -502,7 +486,7 @@ export default function SettingsPage() {
                   >
                     {item.label}
                   </Label>
-                  <Toggle id={item.id} defaultChecked={item.enabled} />
+                  <Switch id={item.id} defaultChecked={item.enabled} />
                 </div>
               ))}
             </div>
