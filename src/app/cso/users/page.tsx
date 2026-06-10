@@ -56,6 +56,7 @@ type User = {
   role: UserRole;
   department?: string;
   status: UserStatus;
+  last_sign_in_at: string | null;
 };
 
 // Constants
@@ -99,6 +100,25 @@ const ROLE_CHIPS: { label: string; value: string }[] = [
   { label: 'Verifier', value: 'VERIFIER' },
   { label: 'Requester', value: 'REQUESTER' },
 ];
+
+const formatLastSignIn = (iso: string | null): string => {
+  if (!iso) return 'Never';
+  const d = new Date(iso);
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return d.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: diffDays > 365 ? 'numeric' : undefined,
+  });
+};
 
 // Component
 export default function UsersPage() {
@@ -155,6 +175,7 @@ export default function UsersPage() {
             | string
             | undefined) ?? undefined,
         status: u.status as UserStatus,
+        last_sign_in_at: (u.last_sign_in_at as string | null) ?? null,
       }));
       setNextCursor(json.data?.next_cursor ?? null);
       setUsers(reset ? incoming : (prev) => [...prev, ...incoming]);
@@ -335,13 +356,14 @@ export default function UsersPage() {
                 <TableHead>Role</TableHead>
                 <TableHead>Department</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Last sign-in</TableHead>
                 <TableHead className="sr-only">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {[0, 1, 2, 3, 4].map((i) => (
                 <TableRow key={i}>
-                  {[0, 1, 2, 3, 4, 5].map((j) => (
+                  {[0, 1, 2, 3, 4, 5, 6].map((j) => (
                     <TableCell key={j}>
                       <Skeleton className="h-4 w-full" />
                     </TableCell>
@@ -404,6 +426,7 @@ export default function UsersPage() {
                     <TableHead>Role</TableHead>
                     <TableHead>Department</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Last sign-in</TableHead>
                     <TableHead className="sr-only">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -433,6 +456,16 @@ export default function UsersPage() {
                         >
                           {STATUS_LABEL[user.status]}
                         </span>
+                      </TableCell>
+                      <TableCell
+                        className="text-muted-foreground"
+                        aria-label={
+                          user.last_sign_in_at
+                            ? `Last sign-in: ${new Date(user.last_sign_in_at).toLocaleString()}`
+                            : 'Never signed in'
+                        }
+                      >
+                        {formatLastSignIn(user.last_sign_in_at)}
                       </TableCell>
                       <TableCell>
                         <DropdownMenu>

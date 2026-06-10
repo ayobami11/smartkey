@@ -246,7 +246,7 @@ export const GET = async (request: NextRequest) => {
   let query = supabase
     .from('profiles')
     .select(
-      'id, full_name, institutional_email, role, status, department_id, photo_url, created_at'
+      'id, full_name, institutional_email, role, status, photo_url, created_at, department:departments!department_id(name)'
     )
     .order('created_at', { ascending: false })
     .limit(limit + 1);
@@ -256,7 +256,10 @@ export const GET = async (request: NextRequest) => {
   if (status) query = query.eq('status', status as ProfileStatus);
   if (cursor) query = query.lt('created_at', cursor);
 
-  const { data, error } = await query;
+  const [{ data, error }, { data: authData }] = await Promise.all([
+    query,
+    createAdminClient().auth.admin.listUsers({ perPage: 1000 }),
+  ]);
 
   if (error) {
     return NextResponse.json(err('Failed to fetch users', 500), {
@@ -264,11 +267,19 @@ export const GET = async (request: NextRequest) => {
     });
   }
 
+  const lastSignInById = new Map(
+    (authData?.users ?? []).map((u) => [u.id, u.last_sign_in_at ?? null])
+  );
+
   const rows = data ?? [];
   const hasMore = rows.length > limit;
-  const users = hasMore ? rows.slice(0, limit) : rows;
+  const sliced = hasMore ? rows.slice(0, limit) : rows;
+  const users = sliced.map((u) => ({
+    ...u,
+    last_sign_in_at: lastSignInById.get(u.id) ?? null,
+  }));
   const nextCursor =
-    hasMore && users.length > 0 ? users[users.length - 1].created_at : null;
+    hasMore && sliced.length > 0 ? sliced[sliced.length - 1].created_at : null;
 
   return NextResponse.json(ok({ users, next_cursor: nextCursor }), {
     status: 200,
