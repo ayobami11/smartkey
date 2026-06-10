@@ -8,6 +8,8 @@ import {
   KeyRoundIcon,
   XCircleIcon,
 } from 'lucide-react';
+import { Controller, useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -17,6 +19,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty';
+import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -36,6 +39,10 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { createBrowserClient } from '@/lib/supabase/client';
+import {
+  weekendRequestFormSchema,
+  type WeekendRequestFormInput,
+} from '@/lib/validation/schemas';
 
 // Types
 
@@ -155,13 +162,16 @@ export const AuthorizedKeys = () => {
   const [step, setStep] = useState<RequestStep>('weekday_form');
   const [selectedKeyId, setSelectedKeyId] = useState<string>('');
   const [returnDeadline, setReturnDeadline] = useState(defaultReturnDeadline());
-  const [weekendDate, setWeekendDate] = useState('');
-  const [description, setDescription] = useState('');
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [result, setResult] = useState<SubmitResult | null>(null);
   const [countdown, setCountdown] = useState(0);
   const [cancelling, setCancelling] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const weekendForm = useForm<WeekendRequestFormInput>({
+    resolver: zodResolver(weekendRequestFormSchema),
+    defaultValues: { key_id: '', weekend_date: '', description: '' },
+  });
 
   // Fetch authorized keys
 
@@ -234,11 +244,14 @@ export const AuthorizedKeys = () => {
   };
 
   const openWeekendSheet = () => {
-    setSelectedKeyId(
-      keys.find((k) => k.key.status !== 'RETIRED')?.key.id ?? ''
-    );
-    setWeekendDate('');
-    setDescription('');
+    const firstActiveKeyId =
+      keys.find((k) => k.key.status !== 'RETIRED')?.key.id ?? '';
+    setSelectedKeyId(firstActiveKeyId);
+    weekendForm.reset({
+      key_id: firstActiveKeyId,
+      weekend_date: '',
+      description: '',
+    });
     setSubmitError(null);
     setResult(null);
     setStep('weekend_form');
@@ -249,53 +262,42 @@ export const AuthorizedKeys = () => {
     setSheetOpen(false);
     setSelectedKeyId('');
     setReturnDeadline(defaultReturnDeadline());
-    setWeekendDate('');
-    setDescription('');
     setSubmitError(null);
     setResult(null);
     setStep('weekday_form');
     setCancelling(false);
+    weekendForm.reset();
     if (timerRef.current) clearInterval(timerRef.current);
   };
 
-  // Submit request
+  // Submit weekday request
 
   const handleSubmit = async () => {
     setStep('submitting');
     setSubmitError(null);
 
-    const isWeekend = step === 'weekend_form';
-    const body = isWeekend
-      ? {
-          key_id: selectedKeyId,
-          type: 'WEEKEND',
-          return_deadline: new Date(`${weekendDate}T23:59:00`).toISOString(),
-          weekend_date: weekendDate,
-        }
-      : {
-          key_id: selectedKeyId,
-          type: 'WEEKDAY',
-          return_deadline: new Date(returnDeadline).toISOString(),
-        };
-
     try {
       const res = await fetch('/api/requests/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          key_id: selectedKeyId,
+          type: 'WEEKDAY',
+          return_deadline: new Date(returnDeadline).toISOString(),
+        }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
         setSubmitError(
           (json as { error?: string }).error ?? 'Failed to submit request.'
         );
-        setStep(isWeekend ? 'weekend_form' : 'weekday_form');
+        setStep('weekday_form');
         return;
       }
       const data = (json as { data?: SubmitResult }).data;
       if (!data) {
         setSubmitError('Unexpected server response. Please try again.');
-        setStep(isWeekend ? 'weekend_form' : 'weekday_form');
+        setStep('weekday_form');
         return;
       }
       setResult(data);
@@ -303,11 +305,50 @@ export const AuthorizedKeys = () => {
       if (data.code_expires_at) {
         setCountdown(secondsRemaining(data.code_expires_at));
       }
-      // WEEKEND requests go to HOD approval; WEEKDAY requests get a code
-      setStep(isWeekend ? 'pending_hod' : 'code');
+      setStep('code');
     } catch {
       setSubmitError('Network error. Check your connection and try again.');
-      setStep(isWeekend ? 'weekend_form' : 'weekday_form');
+      setStep('weekday_form');
+    }
+  };
+
+  // Submit weekend request
+
+  const handleWeekendSubmit = async (values: WeekendRequestFormInput) => {
+    setStep('submitting');
+    setSubmitError(null);
+    try {
+      const res = await fetch('/api/requests/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          key_id: values.key_id,
+          type: 'WEEKEND',
+          return_deadline: new Date(
+            `${values.weekend_date}T23:59:00`
+          ).toISOString(),
+          weekend_date: values.weekend_date,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSubmitError(
+          (json as { error?: string }).error ?? 'Failed to submit request.'
+        );
+        setStep('weekend_form');
+        return;
+      }
+      const data = (json as { data?: SubmitResult }).data;
+      if (!data) {
+        setSubmitError('Unexpected server response. Please try again.');
+        setStep('weekend_form');
+        return;
+      }
+      setResult(data);
+      setStep('pending_hod');
+    } catch {
+      setSubmitError('Network error. Check your connection and try again.');
+      setStep('weekend_form');
     }
   };
 
@@ -337,11 +378,6 @@ export const AuthorizedKeys = () => {
 
   const weekdayCanSubmit =
     selectedKeyId !== '' && returnDeadline !== '' && userId !== null;
-  const weekendCanSubmit =
-    selectedKeyId !== '' &&
-    weekendDate !== '' &&
-    description.trim().length > 0 &&
-    userId !== null;
 
   // Render
 
@@ -510,72 +546,91 @@ export const AuthorizedKeys = () => {
 
             {/* Weekend form */}
             {step === 'weekend_form' && (
-              <div className="flex flex-col gap-5">
+              <form
+                id="weekend-form"
+                onSubmit={weekendForm.handleSubmit(handleWeekendSubmit)}
+                className="flex flex-col gap-5"
+              >
                 {/* Key selector */}
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="weekend-key">Key</Label>
-                  <Select
-                    value={selectedKeyId}
-                    onValueChange={setSelectedKeyId}
-                  >
-                    <SelectTrigger id="weekend-key">
-                      <SelectValue placeholder="Select a key…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {activeKeys.map((a) => (
-                        <SelectItem key={a.key.id} value={a.key.id}>
-                          <span className="font-mono">{a.key.code}</span>
-                          <span className="ml-2 text-muted-foreground">
-                            — {a.key.room_name}
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                <Controller
+                  name="key_id"
+                  control={weekendForm.control}
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel htmlFor="weekend-key">Key</FieldLabel>
+                      <Select
+                        value={field.value}
+                        onValueChange={(val) => {
+                          field.onChange(val);
+                          setSelectedKeyId(val);
+                        }}
+                      >
+                        <SelectTrigger id="weekend-key">
+                          <SelectValue placeholder="Select a key…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {activeKeys.map((a) => (
+                            <SelectItem key={a.key.id} value={a.key.id}>
+                              <span className="font-mono">{a.key.code}</span>
+                              <span className="ml-2 text-muted-foreground">
+                                — {a.key.room_name}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FieldError errors={[fieldState.error]} />
+                    </Field>
+                  )}
+                />
 
                 {/* Weekend date */}
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="weekend-date">Weekend date</Label>
-                  <Input
-                    id="weekend-date"
-                    type="date"
-                    value={weekendDate}
-                    onChange={(e) => setWeekendDate(e.target.value)}
-                    min={new Date().toISOString().slice(0, 10)}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Must be a Saturday or Sunday.
-                  </p>
-                </div>
+                <Controller
+                  name="weekend_date"
+                  control={weekendForm.control}
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel htmlFor="weekend-date">
+                        Weekend date
+                      </FieldLabel>
+                      <Input
+                        id="weekend-date"
+                        type="date"
+                        min={new Date().toISOString().slice(0, 10)}
+                        {...field}
+                      />
+                      {!fieldState.error && (
+                        <p className="text-xs text-muted-foreground">
+                          Must be a Saturday or Sunday.
+                        </p>
+                      )}
+                      <FieldError errors={[fieldState.error]} />
+                    </Field>
+                  )}
+                />
 
                 {/* Description */}
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="weekend-desc">Reason for access</Label>
-                  <Textarea
-                    id="weekend-desc"
-                    placeholder="Describe the work you need to carry out…"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    rows={4}
-                    aria-required="true"
-                  />
-                </div>
-
-                {submitError && (
-                  <p className="text-xs text-destructive" role="alert">
-                    {submitError}
-                  </p>
-                )}
-
-                <Button
-                  className="w-full"
-                  disabled={!weekendCanSubmit}
-                  onClick={handleSubmit}
-                >
-                  Submit request
-                </Button>
-              </div>
+                <Controller
+                  name="description"
+                  control={weekendForm.control}
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel htmlFor="weekend-desc">
+                        Reason for access
+                      </FieldLabel>
+                      <Textarea
+                        id="weekend-desc"
+                        placeholder="Describe the work you need to carry out…"
+                        rows={4}
+                        aria-required="true"
+                        className="resize-none"
+                        {...field}
+                      />
+                      <FieldError errors={[fieldState.error]} />
+                    </Field>
+                  )}
+                />
+              </form>
             )}
 
             {/* Submitting */}
@@ -690,9 +745,11 @@ export const AuthorizedKeys = () => {
                       </p>
                     </>
                   )}
-                  {weekendDate && (
+                  {weekendForm.getValues('weekend_date') && (
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {new Date(weekendDate).toLocaleDateString('en-GB', {
+                      {new Date(
+                        `${weekendForm.getValues('weekend_date')}T00:00:00`
+                      ).toLocaleDateString('en-GB', {
                         weekday: 'long',
                         day: 'numeric',
                         month: 'long',
@@ -708,6 +765,20 @@ export const AuthorizedKeys = () => {
               </div>
             )}
           </div>
+
+          {/* Sticky footer — weekend form submit */}
+          {step === 'weekend_form' && (
+            <div className="border-t border-border p-6 pt-4">
+              {submitError && (
+                <p className="mb-3 text-xs text-destructive" role="alert">
+                  {submitError}
+                </p>
+              )}
+              <Button type="submit" form="weekend-form" className="w-full">
+                Submit request
+              </Button>
+            </div>
+          )}
         </SheetContent>
       </Sheet>
     </section>
