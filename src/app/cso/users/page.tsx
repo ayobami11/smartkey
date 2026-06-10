@@ -1,12 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import {
-  MoreHorizontalIcon,
-  RefreshCwIcon,
-  SearchIcon,
-  UsersIcon,
-} from 'lucide-react';
+import { RefreshCwIcon } from 'lucide-react';
 import { toast } from 'sonner';
 
 import {
@@ -20,20 +15,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyMedia,
-  EmptyTitle,
-} from '@/components/ui/empty';
-import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
@@ -43,96 +24,23 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { UsersDataTable } from './_components/data-table';
 import { ProvisionUserDialog } from './_components/provision-user-dialog';
-
-// Types
-type UserRole = 'CSO' | 'HOD' | 'VERIFIER' | 'REQUESTER';
-type UserStatus = 'ACTIVE' | 'PENDING_ACTIVATION' | 'DEACTIVATED';
-
-type User = {
-  id: string;
-  full_name: string;
-  institutional_email: string;
-  role: UserRole;
-  department?: string;
-  status: UserStatus;
-  last_sign_in_at: string | null;
-};
-
-// Constants
-const ROLE_LABEL: Record<UserRole, string> = {
-  CSO: 'CSO',
-  HOD: 'HOD',
-  VERIFIER: 'Verifier',
-  REQUESTER: 'Requester',
-};
-
-const ROLE_CLASS: Record<UserRole, string> = {
-  CSO: 'bg-primary/10 text-primary',
-  HOD: 'bg-amber-100 text-amber-700',
-  VERIFIER: 'bg-blue-100 text-blue-700',
-  REQUESTER: 'bg-muted text-muted-foreground',
-};
-
-const STATUS_LABEL: Record<UserStatus, string> = {
-  ACTIVE: 'Active',
-  PENDING_ACTIVATION: 'Pending activation',
-  DEACTIVATED: 'Deactivated',
-};
-
-const STATUS_CLASS: Record<UserStatus, string> = {
-  ACTIVE: 'bg-emerald-100 text-emerald-700',
-  PENDING_ACTIVATION: 'bg-amber-100 text-amber-700',
-  DEACTIVATED: 'bg-muted text-muted-foreground',
-};
-
-const STATUS_CHIPS: { label: string; value: string }[] = [
-  { label: 'All', value: '' },
-  { label: 'Active', value: 'ACTIVE' },
-  { label: 'Pending', value: 'PENDING_ACTIVATION' },
-  { label: 'Deactivated', value: 'DEACTIVATED' },
-];
-
-const ROLE_CHIPS: { label: string; value: string }[] = [
-  { label: 'All roles', value: '' },
-  { label: 'CSO', value: 'CSO' },
-  { label: 'HOD', value: 'HOD' },
-  { label: 'Verifier', value: 'VERIFIER' },
-  { label: 'Requester', value: 'REQUESTER' },
-];
-
-const formatLastSignIn = (iso: string | null): string => {
-  if (!iso) return 'Never';
-  const d = new Date(iso);
-  const now = new Date();
-  const diffMs = now.getTime() - d.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return d.toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: diffDays > 365 ? 'numeric' : undefined,
-  });
-};
+import {
+  type UserRole,
+  type UserRow,
+  type UserStatus,
+} from './_components/columns';
 
 // Component
-export default function UsersPage() {
-  const [users, setUsers] = useState<User[]>([]);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [loadState, setLoadState] = useState<
-    'loading' | 'loadingMore' | 'ready' | 'error'
-  >('loading');
-  const [fetchError, setFetchError] = useState<string | null>(null);
 
-  // Filters
-  const [search, setSearch] = useState('');
-  const [roleFilter, setRoleFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+export default function UsersPage() {
+  const [users, setUsers] = useState<UserRow[]>([]);
+  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>(
+    'loading'
+  );
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Revoke dialog
   const [revokeTarget, setRevokeTarget] = useState<{
@@ -141,19 +49,16 @@ export default function UsersPage() {
   } | null>(null);
   const [revoking, setRevoking] = useState(false);
   const [revokeError, setRevokeError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
 
   // Resend invite
   const [resendingId, setResendingId] = useState<string | null>(null);
 
-  // Fetch users
-  const fetchUsers = async (reset = true, cursor?: string) => {
-    if (reset) setLoadState('loading');
-    else setLoadState('loadingMore');
+  // Fetch all users
+  const fetchUsers = async () => {
+    setLoadState('loading');
     setFetchError(null);
 
-    const params = new URLSearchParams({ limit: '20' });
-    if (cursor) params.set('cursor', cursor);
+    const params = new URLSearchParams({ limit: '1000' });
 
     try {
       const res = await fetch(`/api/admin/users?${params.toString()}`);
@@ -163,22 +68,26 @@ export default function UsersPage() {
         setLoadState('error');
         return;
       }
-      const incoming: User[] = (
+      const incoming: UserRow[] = (
         (json.data?.users ?? []) as Record<string, unknown>[]
-      ).map((u) => ({
-        id: u.id as string,
-        full_name: u.full_name as string,
-        institutional_email: u.institutional_email as string,
-        role: u.role as UserRole,
-        department:
-          ((u.department as Record<string, unknown> | null)?.name as
-            | string
-            | undefined) ?? undefined,
-        status: u.status as UserStatus,
-        last_sign_in_at: (u.last_sign_in_at as string | null) ?? null,
-      }));
-      setNextCursor(json.data?.next_cursor ?? null);
-      setUsers(reset ? incoming : (prev) => [...prev, ...incoming]);
+      ).map((u) => {
+        const role = u.role as UserRole;
+        const deptName = (u.department as Record<string, unknown> | null)
+          ?.name as string | undefined;
+        return {
+          id: u.id as string,
+          full_name: u.full_name as string,
+          institutional_email: u.institutional_email as string,
+          role,
+          department:
+            role === 'CSO' || role === 'VERIFIER'
+              ? (deptName ?? 'Security')
+              : deptName,
+          status: u.status as UserStatus,
+          last_sign_in_at: (u.last_sign_in_at as string | null) ?? null,
+        };
+      });
+      setUsers(incoming);
       setLoadState('ready');
     } catch {
       setFetchError('Something went wrong. Check your connection.');
@@ -187,7 +96,7 @@ export default function UsersPage() {
   };
 
   useEffect(() => {
-    fetchUsers(true);
+    fetchUsers();
   }, []);
 
   // Revoke access
@@ -220,7 +129,7 @@ export default function UsersPage() {
   };
 
   // Resend invite
-  const handleResend = async (user: User) => {
+  const handleResend = async (user: UserRow) => {
     setResendingId(user.id);
     try {
       const res = await fetch(`/api/admin/users/${user.id}/resend-invite`, {
@@ -238,17 +147,6 @@ export default function UsersPage() {
       setResendingId(null);
     }
   };
-
-  // Computed
-  const filtered = users.filter((u) => {
-    const matchesSearch =
-      search === '' ||
-      u.full_name.toLowerCase().includes(search.toLowerCase()) ||
-      u.institutional_email.toLowerCase().includes(search.toLowerCase());
-    const matchesRole = roleFilter === '' || u.role === roleFilter;
-    const matchesStatus = statusFilter === '' || u.status === statusFilter;
-    return matchesSearch && matchesRole && matchesStatus;
-  });
 
   // Render
   return (
@@ -268,7 +166,7 @@ export default function UsersPage() {
             disabled={refreshing || loadState === 'loading'}
             onClick={async () => {
               setRefreshing(true);
-              await fetchUsers(true);
+              await fetchUsers();
               setRefreshing(false);
             }}
           >
@@ -278,71 +176,11 @@ export default function UsersPage() {
             />
             Refresh
           </Button>
-          <ProvisionUserDialog onSuccess={() => fetchUsers(true)} />
+          <ProvisionUserDialog onSuccess={() => fetchUsers()} />
         </div>
       </div>
 
-      {/* Search + filters */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-56 flex-1">
-          <SearchIcon
-            className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <Input
-            type="search"
-            placeholder="Search by name or email"
-            className="pl-9"
-            aria-label="Search users"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <div
-          className="flex flex-wrap items-center gap-1.5"
-          role="group"
-          aria-label="Filter by status"
-        >
-          {STATUS_CHIPS.map((chip) => (
-            <button
-              key={chip.value}
-              type="button"
-              onClick={() => setStatusFilter(chip.value)}
-              aria-pressed={statusFilter === chip.value}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
-                statusFilter === chip.value
-                  ? 'bg-primary text-primary-foreground'
-                  : 'border border-border bg-card text-foreground hover:bg-muted'
-              }`}
-            >
-              {chip.label}
-            </button>
-          ))}
-        </div>
-        <div
-          className="flex flex-wrap items-center gap-1.5"
-          role="group"
-          aria-label="Filter by role"
-        >
-          {ROLE_CHIPS.map((chip) => (
-            <button
-              key={chip.value}
-              type="button"
-              onClick={() => setRoleFilter(chip.value)}
-              aria-pressed={roleFilter === chip.value}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
-                roleFilter === chip.value
-                  ? 'bg-primary text-primary-foreground'
-                  : 'border border-border bg-card text-foreground hover:bg-muted'
-              }`}
-            >
-              {chip.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Loading */}
+      {/* Loading skeleton */}
       {loadState === 'loading' && (
         <div
           className="rounded-lg border border-border bg-card shadow-[0_2px_4px_rgba(15,23,42,0.06)]"
@@ -391,149 +229,26 @@ export default function UsersPage() {
             variant="outline"
             size="sm"
             className="mt-3"
-            onClick={() => fetchUsers(true)}
+            onClick={() => fetchUsers()}
           >
             Retry
           </Button>
         </div>
       )}
 
-      {/* Content */}
-      {(loadState === 'ready' || loadState === 'loadingMore') && (
-        <>
-          {filtered.length === 0 ? (
-            <Empty className="border border-border bg-card">
-              <EmptyMedia variant="icon">
-                <UsersIcon
-                  className="size-8 text-muted-foreground"
-                  aria-hidden="true"
-                />
-              </EmptyMedia>
-              <EmptyContent>
-                <EmptyTitle>No users found</EmptyTitle>
-                <EmptyDescription>
-                  No users match the current filters.
-                </EmptyDescription>
-              </EmptyContent>
-            </Empty>
-          ) : (
-            <div className="rounded-lg border border-border bg-card shadow-[0_2px_4px_rgba(15,23,42,0.06)]">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Department</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Last sign-in</TableHead>
-                    <TableHead className="sr-only">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell className="font-medium text-foreground">
-                        {user.full_name}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {user.institutional_email}
-                      </TableCell>
-                      <TableCell>
-                        <span
-                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${ROLE_CLASS[user.role]}`}
-                        >
-                          {ROLE_LABEL[user.role]}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {user.department ?? '—'}
-                      </TableCell>
-                      <TableCell>
-                        <span
-                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_CLASS[user.status]}`}
-                          aria-label={`Status: ${STATUS_LABEL[user.status]}`}
-                        >
-                          {STATUS_LABEL[user.status]}
-                        </span>
-                      </TableCell>
-                      <TableCell
-                        className="text-muted-foreground"
-                        aria-label={
-                          user.last_sign_in_at
-                            ? `Last sign-in: ${new Date(user.last_sign_in_at).toLocaleString()}`
-                            : 'Never signed in'
-                        }
-                      >
-                        {formatLastSignIn(user.last_sign_in_at)}
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button
-                              type="button"
-                              className="flex size-8 items-center justify-center rounded-md hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                              aria-label={`More actions for ${user.full_name}`}
-                            >
-                              <MoreHorizontalIcon
-                                className="size-4 text-muted-foreground"
-                                aria-hidden="true"
-                              />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-44">
-                            {user.status === 'PENDING_ACTIVATION' && (
-                              <DropdownMenuItem
-                                disabled={resendingId === user.id}
-                                onClick={() => handleResend(user)}
-                              >
-                                {resendingId === user.id
-                                  ? 'Resending…'
-                                  : 'Resend invite'}
-                              </DropdownMenuItem>
-                            )}
-                            {user.status !== 'DEACTIVATED' && (
-                              <DropdownMenuItem
-                                className="text-destructive focus:text-destructive"
-                                onClick={() =>
-                                  setRevokeTarget({
-                                    id: user.id,
-                                    name: user.full_name,
-                                  })
-                                }
-                              >
-                                Revoke access
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-
-          <div className="flex flex-col items-center gap-3">
-            <p className="text-xs text-muted-foreground">
-              Showing {filtered.length} user{filtered.length !== 1 ? 's' : ''}
-            </p>
-            {nextCursor && (
-              <Button
-                variant="outline"
-                onClick={() => fetchUsers(false, nextCursor ?? undefined)}
-                disabled={loadState === 'loadingMore'}
-                aria-busy={loadState === 'loadingMore'}
-              >
-                {loadState === 'loadingMore' ? 'Loading…' : 'Load more'}
-              </Button>
-            )}
-          </div>
-        </>
+      {/* Data table */}
+      {loadState === 'ready' && (
+        <UsersDataTable
+          data={users}
+          onRevoke={(user) =>
+            setRevokeTarget({ id: user.id, name: user.full_name })
+          }
+          onResend={handleResend}
+          resendingId={resendingId}
+        />
       )}
 
-      {/* Revoke access AlertDialog */}
+      {/* Revoke access confirmation */}
       <AlertDialog
         open={revokeTarget !== null}
         onOpenChange={(open) => {
