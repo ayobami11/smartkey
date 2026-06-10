@@ -39,6 +39,21 @@ const activateSchema = z
   .object({
     password,
     confirmPassword: password,
+    passport_photo: z.custom<File | undefined>().superRefine((val, ctx) => {
+      if (!(val instanceof File)) return;
+      if (!['image/jpeg', 'image/png'].includes(val.type)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Only JPG and PNG files are accepted.',
+        });
+      }
+      if (val.size > 5 * 1024 * 1024) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'File must be 5 MB or smaller.',
+        });
+      }
+    }),
   })
   .refine((d) => d.password === d.confirmPassword, {
     message: 'Passwords do not match.',
@@ -52,8 +67,7 @@ export default function ActivatePage() {
   const [role, setRole] = useState<Role | null>(null);
   const [checking, setChecking] = useState(true);
 
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
   const [showPassword, setShowPassword] = useState(false);
@@ -63,7 +77,11 @@ export default function ActivatePage() {
 
   const form = useForm<ActivateValues>({
     resolver: zodResolver(activateSchema),
-    defaultValues: { password: '', confirmPassword: '' },
+    defaultValues: {
+      password: '',
+      confirmPassword: '',
+      passport_photo: undefined,
+    },
   });
   const { isSubmitting } = form.formState;
 
@@ -90,16 +108,24 @@ export default function ActivatePage() {
     });
   }, [router]);
 
+  useEffect(() => {
+    return () => {
+      if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl);
+    };
+  }, [photoPreviewUrl]);
+
   const onSubmit = async (data: ActivateValues) => {
-    if (role === 'REQUESTER' && !photoFile) {
-      setPhotoError('Passport photo is required.');
+    if (role === 'REQUESTER' && !data.passport_photo) {
+      form.setError('passport_photo', {
+        message: 'Passport photo is required.',
+      });
       return;
     }
-    setPhotoError(null);
 
     const formData = new FormData();
     formData.append('password', data.password);
-    if (photoFile) formData.append('passport_photo', photoFile);
+    if (data.passport_photo)
+      formData.append('passport_photo', data.passport_photo);
 
     const res = await fetch('/api/auth/register', {
       method: 'POST',
@@ -259,62 +285,95 @@ export default function ActivatePage() {
           </FieldGroup>
 
           {role === 'REQUESTER' && (
-            <div className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-foreground">
-                Passport photo
-              </span>
-              <input
-                ref={photoInputRef}
-                type="file"
-                accept="image/*"
-                className="sr-only"
-                aria-label="Passport photo file"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    setPhotoFile(file);
-                    setPhotoError(null);
-                  }
-                }}
-              />
-              {!photoFile ? (
-                <button
-                  type="button"
-                  onClick={() => photoInputRef.current?.click()}
-                  className="flex w-full flex-col items-center gap-2 rounded-lg border-2 border-dashed border-border bg-muted/30 p-8 text-center transition-colors hover:border-primary/50 hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                >
-                  <CloudUploadIcon
-                    className="size-7 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                  <div>
-                    <p className="text-sm font-medium text-foreground">
-                      Click to browse
-                    </p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      PNG or JPG · max 5 MB
-                    </p>
-                  </div>
-                </button>
-              ) : (
-                <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-4 py-3">
-                  <p className="text-sm text-foreground">{photoFile.name}</p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPhotoFile(null);
-                      if (photoInputRef.current)
-                        photoInputRef.current.value = '';
+            <Controller
+              name="passport_photo"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel>Passport photo</FieldLabel>
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png"
+                    className="sr-only"
+                    aria-label="Passport photo file"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl);
+                      field.onChange(file);
+                      void form.trigger('passport_photo');
+                      const validType = ['image/jpeg', 'image/png'].includes(
+                        file.type
+                      );
+                      const validSize = file.size <= 5 * 1024 * 1024;
+                      if (validType && validSize) {
+                        setPhotoPreviewUrl(URL.createObjectURL(file));
+                      } else {
+                        setPhotoPreviewUrl(null);
+                      }
                     }}
-                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                  >
-                    <RefreshCwIcon className="size-3.5" aria-hidden="true" />
-                    Replace
-                  </button>
-                </div>
+                  />
+                  {!photoPreviewUrl ? (
+                    <button
+                      type="button"
+                      onClick={() => photoInputRef.current?.click()}
+                      className="flex w-full flex-col items-center gap-2 rounded-lg border-2 border-dashed border-border bg-muted/30 p-8 text-center transition-colors hover:border-primary/50 hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                    >
+                      <CloudUploadIcon
+                        className="size-7 text-muted-foreground"
+                        aria-hidden="true"
+                      />
+                      <div>
+                        <p className="text-sm font-medium text-foreground">
+                          Click to browse
+                        </p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          PNG or JPG · max 5 MB
+                        </p>
+                      </div>
+                    </button>
+                  ) : (
+                    <div className="flex flex-col gap-3">
+                      <div className="overflow-hidden rounded-lg border border-border bg-muted/30">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={photoPreviewUrl}
+                          alt="Passport photo preview"
+                          className="mx-auto block aspect-3/4 w-36 object-cover"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="truncate text-xs text-muted-foreground">
+                          {field.value instanceof File ? field.value.name : ''}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (photoPreviewUrl)
+                              URL.revokeObjectURL(photoPreviewUrl);
+                            setPhotoPreviewUrl(null);
+                            field.onChange(undefined);
+                            if (photoInputRef.current)
+                              photoInputRef.current.value = '';
+                          }}
+                          className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                        >
+                          <RefreshCwIcon
+                            className="size-3.5"
+                            aria-hidden="true"
+                          />
+                          Replace
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
+                </Field>
               )}
-              {photoError && <FieldError errors={[{ message: photoError }]} />}
-            </div>
+            />
           )}
 
           <Button type="submit" disabled={isSubmitting} className="w-full">

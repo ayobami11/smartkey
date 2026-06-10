@@ -1,12 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { LogOutIcon, UploadIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
+import { createBrowserClient } from '@/lib/supabase/client';
 
 type Section = 'operational' | 'risk' | 'notifications' | 'account';
 
@@ -90,6 +92,33 @@ const Toggle = ({
 
 export default function SettingsPage() {
   const [active, setActive] = useState<Section>('operational');
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [profileLoading, setProfileLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      const supabase = createBrowserClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        setProfileLoading(false);
+        return;
+      }
+      const { data } = await supabase
+        .from('profiles')
+        .select('full_name, institutional_email')
+        .eq('id', user.id)
+        .single();
+      if (data) {
+        setFullName(data.full_name ?? '');
+        setEmail(data.institutional_email ?? '');
+      }
+      setProfileLoading(false);
+    };
+    fetchProfile();
+  }, []);
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 pt-0 lg:flex-row lg:gap-8">
@@ -448,7 +477,7 @@ export default function SettingsPage() {
                 Account
               </h2>
               <p className="mt-0.5 text-sm text-muted-foreground">
-                Update your profile, theme, and credentials.
+                Update your profile and credentials.
               </p>
             </div>
 
@@ -459,7 +488,14 @@ export default function SettingsPage() {
               <h3 className="text-sm font-semibold text-foreground">Profile</h3>
               <div className="flex items-center gap-4">
                 <div className="flex size-16 shrink-0 items-center justify-center rounded-full bg-primary/10 text-lg font-semibold text-primary">
-                  AB
+                  {profileLoading
+                    ? '…'
+                    : fullName
+                        .split(' ')
+                        .map((w) => w[0])
+                        .slice(0, 2)
+                        .join('')
+                        .toUpperCase() || '?'}
                 </div>
                 <Button variant="outline" size="sm">
                   <UploadIcon className="size-3.5" aria-hidden="true" />
@@ -469,42 +505,30 @@ export default function SettingsPage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="full-name">Full name</Label>
-                  <Input id="full-name" defaultValue="Adekunle Balogun" />
+                  {profileLoading ? (
+                    <Skeleton className="h-9 w-full rounded-md" />
+                  ) : (
+                    <Input
+                      id="full-name"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                    />
+                  )}
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="email">Institutional email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    defaultValue="a.balogun@unilag.edu.ng"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Theme */}
-            <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-5">
-              <h3 className="text-sm font-semibold text-foreground">Theme</h3>
-              <div
-                className="flex gap-2"
-                role="radiogroup"
-                aria-label="Select theme"
-              >
-                {(['System', 'Light', 'Dark'] as const).map((theme, idx) => (
-                  <label
-                    key={theme}
-                    className="flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm has-checked:border-primary has-checked:bg-primary/10"
-                  >
-                    <input
-                      type="radio"
-                      name="theme"
-                      value={theme.toLowerCase()}
-                      defaultChecked={idx === 0}
-                      className="accent-primary"
+                  {profileLoading ? (
+                    <Skeleton className="h-9 w-full rounded-md" />
+                  ) : (
+                    <Input
+                      id="email"
+                      type="email"
+                      value={email}
+                      readOnly
+                      className="cursor-not-allowed bg-muted/50 text-muted-foreground"
                     />
-                    {theme}
-                  </label>
-                ))}
+                  )}
+                </div>
               </div>
             </div>
 

@@ -1,24 +1,21 @@
 'use client';
 
-import { useState } from 'react';
-import {
-  CameraIcon,
-  ImageIcon,
-  KeyRoundIcon,
-  RefreshCwIcon,
-} from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ImageIcon, LogOutIcon, RefreshCwIcon, UploadIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
+import { createBrowserClient } from '@/lib/supabase/client';
 
-type Section = 'account' | 'signature' | 'notifications' | 'appearance';
+type Section = 'account' | 'signature' | 'notifications';
 
 const navItems: { id: Section; label: string }[] = [
   { id: 'account', label: 'Account' },
   { id: 'signature', label: 'Signature & stamp' },
   { id: 'notifications', label: 'Notifications' },
-  { id: 'appearance', label: 'Appearance' },
 ];
 
 const notificationItems = [
@@ -41,13 +38,43 @@ const notificationItems = [
 
 export default function HodProfilePage() {
   const [active, setActive] = useState<Section>('account');
-  const [name, setName] = useState('Prof. Okonkwo');
-  const [theme, setTheme] = useState<'system' | 'light' | 'dark'>('system');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [department, setDepartment] = useState('');
+  const [profileLoading, setProfileLoading] = useState(true);
   const [notifications, setNotifications] = useState({
     'weekend-in-app': true,
     'weekend-email': true,
     'digest-email': false,
   });
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      const supabase = createBrowserClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        setProfileLoading(false);
+        return;
+      }
+      const { data } = await supabase
+        .from('profiles')
+        .select(
+          'full_name, institutional_email, department:departments!department_id(name)'
+        )
+        .eq('id', user.id)
+        .single();
+      if (data) {
+        setName((data.full_name as string | null) ?? '');
+        setEmail((data.institutional_email as string | null) ?? '');
+        const dept = data.department as { name: string } | null;
+        setDepartment(dept?.name ?? '');
+      }
+      setProfileLoading(false);
+    };
+    fetchProfile();
+  }, []);
 
   const toggleNotification = (id: keyof typeof notifications) => {
     setNotifications((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -93,70 +120,117 @@ export default function HodProfilePage() {
               <h2 className="text-base font-semibold text-foreground">
                 Account
               </h2>
+              <Separator />
 
-              {/* Avatar */}
-              <div className="flex items-center gap-4">
-                <div className="relative">
-                  <div className="flex size-16 items-center justify-center rounded-full bg-primary/10 text-xl font-semibold text-primary">
-                    PO
+              {/* Profile card */}
+              <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-5">
+                <h3 className="text-sm font-semibold text-foreground">
+                  Profile
+                </h3>
+                <div className="flex items-center gap-4">
+                  <div className="flex size-16 shrink-0 items-center justify-center rounded-full bg-primary/10 text-lg font-semibold text-primary">
+                    {profileLoading
+                      ? '…'
+                      : name
+                          .split(' ')
+                          .map((w) => w[0])
+                          .slice(0, 2)
+                          .join('')
+                          .toUpperCase() || '?'}
                   </div>
-                  <button
-                    type="button"
-                    className="absolute -bottom-1 -right-1 flex size-6 items-center justify-center rounded-full border border-border bg-card shadow-sm hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                    aria-label="Upload profile photo"
-                  >
-                    <CameraIcon
-                      className="size-3.5 text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                  </button>
+                  <Button variant="outline" size="sm">
+                    <UploadIcon className="size-3.5" aria-hidden="true" />
+                    Upload photo
+                  </Button>
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-foreground">
-                    Profile photo
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    PNG or JPG · max 2 MB
-                  </p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="hod-name">Full name</Label>
+                    {profileLoading ? (
+                      <Skeleton className="h-9 w-full rounded-md" />
+                    ) : (
+                      <Input
+                        id="hod-name"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                      />
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="hod-email">Institutional email</Label>
+                    {profileLoading ? (
+                      <Skeleton className="h-9 w-full rounded-md" />
+                    ) : (
+                      <Input
+                        id="hod-email"
+                        type="email"
+                        value={email}
+                        readOnly
+                        className="cursor-not-allowed bg-muted/50 text-muted-foreground"
+                      />
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Managed by CSO. Contact them to update.
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-1.5 sm:col-span-2">
+                    <Label htmlFor="hod-dept">Department</Label>
+                    {profileLoading ? (
+                      <Skeleton className="h-9 w-full rounded-md" />
+                    ) : (
+                      <Input
+                        id="hod-dept"
+                        value={department}
+                        readOnly
+                        className="cursor-not-allowed bg-muted/50 text-muted-foreground"
+                      />
+                    )}
+                  </div>
                 </div>
               </div>
 
-              {/* Fields */}
-              <div className="flex flex-col gap-4 sm:max-w-md">
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="hod-name">Full name</Label>
-                  <Input
-                    id="hod-name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                  />
+              {/* Change password card */}
+              <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-5">
+                <h3 className="text-sm font-semibold text-foreground">
+                  Change password
+                </h3>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="current-password">Current password</Label>
+                    <Input
+                      id="current-password"
+                      type="password"
+                      autoComplete="current-password"
+                    />
+                  </div>
+                  <div />
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="new-password">New password</Label>
+                    <Input
+                      id="new-password"
+                      type="password"
+                      autoComplete="new-password"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="confirm-password">
+                      Confirm new password
+                    </Label>
+                    <Input
+                      id="confirm-password"
+                      type="password"
+                      autoComplete="new-password"
+                    />
+                  </div>
                 </div>
+              </div>
 
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="hod-email">Institutional email</Label>
-                  <Input
-                    id="hod-email"
-                    type="email"
-                    defaultValue="o.okonkwo@unilag.edu.ng"
-                    readOnly
-                    className="cursor-not-allowed bg-muted/50 text-muted-foreground"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Managed by CSO. Contact them to update.
-                  </p>
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="hod-dept">Department</Label>
-                  <Input
-                    id="hod-dept"
-                    defaultValue="Faculty of Engineering"
-                    readOnly
-                    className="cursor-not-allowed bg-muted/50 text-muted-foreground"
-                  />
-                </div>
-
-                <Button className="w-fit">Save changes</Button>
+              <div className="flex items-center justify-between">
+                <Button>Save account settings</Button>
+                <Button variant="destructive">
+                  <LogOutIcon className="size-4" aria-hidden="true" />
+                  Sign out
+                </Button>
               </div>
             </div>
           )}
@@ -265,44 +339,6 @@ export default function HodProfilePage() {
                     </label>
                   );
                 })}
-              </div>
-            </div>
-          )}
-
-          {/* Appearance */}
-          {active === 'appearance' && (
-            <div className="flex flex-col gap-6">
-              <h2 className="text-base font-semibold text-foreground">
-                Appearance
-              </h2>
-
-              <div className="flex flex-col gap-4 sm:max-w-md">
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="hod-theme">Theme</Label>
-                  <select
-                    id="hod-theme"
-                    value={theme}
-                    onChange={(e) => setTheme(e.target.value as typeof theme)}
-                    className="flex h-9 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                  >
-                    <option value="system">System</option>
-                    <option value="light">Light</option>
-                    <option value="dark">Dark</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-3 border-t border-border pt-6 sm:max-w-md">
-                <Button variant="outline" className="w-fit">
-                  <KeyRoundIcon className="size-4" aria-hidden="true" />
-                  Change password
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="w-fit text-destructive hover:bg-destructive/5 hover:text-destructive"
-                >
-                  Sign out
-                </Button>
               </div>
             </div>
           )}

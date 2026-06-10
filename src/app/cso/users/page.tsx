@@ -5,7 +5,6 @@ import {
   MoreHorizontalIcon,
   RefreshCwIcon,
   SearchIcon,
-  SendIcon,
   UsersIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -455,10 +454,6 @@ export default function UsersPage() {
                                 disabled={resendingId === user.id}
                                 onClick={() => handleResend(user)}
                               >
-                                <SendIcon
-                                  className="size-4"
-                                  aria-hidden="true"
-                                />
                                 {resendingId === user.id
                                   ? 'Resending…'
                                   : 'Resend invite'}

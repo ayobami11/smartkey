@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import {
+  AlertCircleIcon,
+  ClockIcon,
   EllipsisIcon,
   KeyRoundIcon,
   PlusIcon,
@@ -40,7 +42,23 @@ import { createBrowserClient } from '@/lib/supabase/client';
 
 type KeyStatus = 'AVAILABLE' | 'ISSUED' | 'OVERDUE' | 'RETIRED';
 type KeyZone = 'NEW_SENATE' | 'OLD_SENATE';
-type ActiveTab = 'All' | 'NEW_SENATE' | 'OLD_SENATE' | 'Retired';
+type ActiveTab =
+  | 'All'
+  | 'NEW_SENATE'
+  | 'OLD_SENATE'
+  | 'Outstanding'
+  | 'Retired';
+
+type OutstandingKey = {
+  requestId: string;
+  keyCode: string;
+  roomName: string;
+  zone: string;
+  requesterName: string;
+  issuedAt: string;
+  returnDeadline: string;
+  isOverdue: boolean;
+};
 
 type Key = {
   id: string;
@@ -65,6 +83,7 @@ const tabs: { label: string; value: ActiveTab }[] = [
   { label: 'All', value: 'All' },
   { label: 'New Senate', value: 'NEW_SENATE' },
   { label: 'Old Senate', value: 'OLD_SENATE' },
+  { label: 'Outstanding', value: 'Outstanding' },
   { label: 'Retired', value: 'Retired' },
 ];
 
@@ -77,6 +96,11 @@ export default function KeyInventoryPage() {
   );
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>('All');
+  const [outstandingKeys, setOutstandingKeys] = useState<OutstandingKey[]>([]);
+  const [outstandingState, setOutstandingState] = useState<
+    'idle' | 'loading' | 'ready' | 'error'
+  >('idle');
+  const [outstandingError, setOutstandingError] = useState<string | null>(null);
   const [lostTarget, setLostTarget] = useState<{
     id: string;
     code: string;
@@ -125,6 +149,49 @@ export default function KeyInventoryPage() {
   useEffect(() => {
     fetchKeys();
   }, []);
+
+  useEffect(() => {
+    if (activeTab !== 'Outstanding') return;
+    if (outstandingState !== 'idle') return;
+    const fetchOutstanding = async () => {
+      setOutstandingState('loading');
+      setOutstandingError(null);
+      try {
+        const res = await fetch('/api/keys/out');
+        const json = await res.json();
+        if (!res.ok) {
+          setOutstandingError(
+            (json as { error?: string }).error ??
+              'Failed to load outstanding keys.'
+          );
+          setOutstandingState('error');
+          return;
+        }
+        const raw =
+          (json as { data?: { outstanding?: Record<string, unknown>[] } }).data
+            ?.outstanding ?? [];
+        setOutstandingKeys(
+          raw.map((item) => ({
+            requestId: item.request_id as string,
+            keyCode: item.key_code as string,
+            roomName: item.room_name as string,
+            zone: item.zone as string,
+            requesterName: item.requester_name as string,
+            issuedAt: item.issued_at as string,
+            returnDeadline: item.return_deadline as string,
+            isOverdue: new Date() > new Date(item.return_deadline as string),
+          }))
+        );
+        setOutstandingState('ready');
+      } catch {
+        setOutstandingError(
+          'Network error. Check your connection and try again.'
+        );
+        setOutstandingState('error');
+      }
+    };
+    fetchOutstanding();
+  }, [activeTab, outstandingState]);
 
   // Mark as lost
 
@@ -210,7 +277,7 @@ export default function KeyInventoryPage() {
       </div>
 
       {/* Loading */}
-      {loadState === 'loading' && (
+      {loadState === 'loading' && activeTab !== 'Outstanding' && (
         <div
           className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
           aria-busy="true"
@@ -223,7 +290,7 @@ export default function KeyInventoryPage() {
       )}
 
       {/* Error */}
-      {loadState === 'error' && (
+      {loadState === 'error' && activeTab !== 'Outstanding' && (
         <div
           className="rounded-lg border border-destructive/30 bg-destructive/5 p-4"
           role="alert"
@@ -245,8 +312,123 @@ export default function KeyInventoryPage() {
         </div>
       )}
 
+      {/* Outstanding tab */}
+      {activeTab === 'Outstanding' && (
+        <>
+          {outstandingState === 'loading' && (
+            <div className="flex flex-col gap-3" aria-busy="true">
+              {[0, 1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-16 rounded-lg" />
+              ))}
+            </div>
+          )}
+
+          {outstandingState === 'error' && (
+            <div
+              className="rounded-lg border border-destructive/30 bg-destructive/5 p-4"
+              role="alert"
+            >
+              <p className="text-sm font-medium text-destructive">
+                Failed to load outstanding keys
+              </p>
+              {outstandingError && (
+                <p className="mt-1 text-xs text-destructive/80">
+                  {outstandingError}
+                </p>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3"
+                onClick={() => setOutstandingState('idle')}
+              >
+                Retry
+              </Button>
+            </div>
+          )}
+
+          {outstandingState === 'ready' && (
+            <>
+              {outstandingKeys.length === 0 ? (
+                <Empty className="border border-border bg-card">
+                  <EmptyMedia variant="icon">
+                    <KeyRoundIcon
+                      className="size-8 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                  </EmptyMedia>
+                  <EmptyContent>
+                    <EmptyTitle>No keys currently issued</EmptyTitle>
+                    <EmptyDescription>
+                      All keys have been returned.
+                    </EmptyDescription>
+                  </EmptyContent>
+                </Empty>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {outstandingKeys.map((item) => (
+                    <div
+                      key={item.requestId}
+                      className={`flex items-center gap-4 rounded-lg border p-4 ${item.isOverdue ? 'border-destructive/30 bg-destructive/5' : 'border-border bg-card'}`}
+                    >
+                      <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                        <KeyRoundIcon
+                          className="size-4 text-primary"
+                          aria-hidden="true"
+                        />
+                      </div>
+                      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <div className="flex items-center gap-2">
+                          <code className="font-mono text-sm font-semibold text-foreground">
+                            {item.keyCode}
+                          </code>
+                          <span className="truncate text-xs text-muted-foreground">
+                            {item.roomName}
+                          </span>
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {item.requesterName}
+                        </span>
+                      </div>
+                      <div className="flex shrink-0 flex-col items-end gap-1 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <ClockIcon className="size-3.5" aria-hidden="true" />
+                          {new Date(item.issuedAt).toLocaleTimeString('en-GB', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                        <span>
+                          Due{' '}
+                          {new Date(item.returnDeadline).toLocaleTimeString(
+                            'en-GB',
+                            { hour: '2-digit', minute: '2-digit' }
+                          )}
+                        </span>
+                      </div>
+                      {item.isOverdue && (
+                        <span
+                          className="flex shrink-0 items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-semibold text-destructive"
+                          aria-label="Overdue"
+                        >
+                          <AlertCircleIcon
+                            className="size-3.5"
+                            aria-hidden="true"
+                          />
+                          Overdue
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </>
+      )}
+
       {/* Content */}
-      {loadState === 'ready' && (
+      {loadState === 'ready' && activeTab !== 'Outstanding' && (
         <>
           {filtered.length === 0 ? (
             <Empty className="border border-border bg-card">

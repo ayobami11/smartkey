@@ -1,13 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import {
-  CheckCircleIcon,
-  InboxIcon,
-  KeyRoundIcon,
-  ShieldAlertIcon,
-  ShieldCheckIcon,
-} from 'lucide-react';
+import { CheckCircleIcon, InboxIcon, KeyRoundIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -32,11 +26,14 @@ import {
 } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { createBrowserClient } from '@/lib/supabase/client';
+import {
+  RiskAcknowledgement,
+  RiskTierBadge,
+} from '@/components/smartkey/RiskTierBadge';
+import { useRealtime } from '@/hooks/useRealtime';
+import type { RiskFactor, RiskTier } from '@/lib/ai/risk/types';
 
 // Types
-
-type RiskFactor = { rule: string; description: string; weight: number };
-type RiskTier = 'LOW' | 'MEDIUM' | 'HIGH';
 
 type QueueRequest = {
   id: string;
@@ -82,42 +79,6 @@ const avatarInitials = (name: string) =>
     .join('')
     .toUpperCase();
 
-// Risk badge
-
-const riskConfig: Record<
-  RiskTier,
-  { label: string; stripe: string; badgeClass: string }
-> = {
-  LOW: {
-    label: 'Low',
-    stripe: 'bg-emerald-500',
-    badgeClass: 'bg-emerald-100 text-emerald-700',
-  },
-  MEDIUM: {
-    label: 'Medium',
-    stripe: 'bg-amber-500',
-    badgeClass: 'bg-amber-100 text-amber-700',
-  },
-  HIGH: {
-    label: 'High',
-    stripe: 'bg-destructive',
-    badgeClass: 'bg-destructive/10 text-destructive',
-  },
-};
-
-const RiskBadge = ({ tier }: { tier: RiskTier }) => {
-  const cfg = riskConfig[tier];
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${cfg.badgeClass}`}
-      aria-label={`Risk tier: ${cfg.label}`}
-    >
-      <ShieldCheckIcon className="size-3 shrink-0" aria-hidden="true" />
-      {cfg.label}
-    </span>
-  );
-};
-
 // Component
 
 export const LiveRequestQueue = () => {
@@ -137,6 +98,7 @@ export const LiveRequestQueue = () => {
   const [contextRequest, setContextRequest] = useState<QueueRequest | null>(
     null
   );
+  const [acknowledged, setAcknowledged] = useState(false);
 
   // Init
 
@@ -151,6 +113,21 @@ export const LiveRequestQueue = () => {
     init();
     fetchQueue();
   }, []);
+
+  useRealtime<{ id: string; status: string }>({
+    table: 'requests',
+    onInsert: (payload) => {
+      if (
+        (payload.new as { id: string; status: string }).status === 'CODE_ISSUED'
+      )
+        fetchQueue();
+    },
+    onUpdate: (payload) => {
+      const row = payload.new as { id: string; status: string };
+      if (row.status !== 'CODE_ISSUED')
+        setRequests((prev) => prev.filter((r) => r.id !== row.id));
+    },
+  });
 
   const fetchQueue = async () => {
     setLoading(true);
@@ -184,6 +161,7 @@ export const LiveRequestQueue = () => {
     setIssueError(null);
     setIssueResult(null);
     setIssuing(false);
+    setAcknowledged(false);
     setSheetOpen(true);
   };
 
@@ -195,6 +173,7 @@ export const LiveRequestQueue = () => {
     setIssueError(null);
     setIssueResult(null);
     setIssuing(false);
+    setAcknowledged(false);
   };
 
   const handleIssue = async () => {
@@ -303,14 +282,19 @@ export const LiveRequestQueue = () => {
       {!loading && !fetchError && requests.length > 0 && (
         <div className="flex flex-col gap-3" aria-live="polite">
           {requests.map((req) => {
-            const cfg = riskConfig[req.risk_tier];
+            const stripeClass =
+              req.risk_tier === 'HIGH'
+                ? 'bg-destructive'
+                : req.risk_tier === 'MEDIUM'
+                  ? 'bg-amber-500'
+                  : 'bg-emerald-500';
             return (
               <div
                 key={req.id}
                 className="flex overflow-hidden rounded-lg border border-border bg-card shadow-[0_2px_4px_rgba(15,23,42,0.06)]"
               >
                 <div
-                  className={`w-1 shrink-0 ${cfg.stripe}`}
+                  className={`w-1 shrink-0 ${stripeClass}`}
                   aria-hidden="true"
                 />
                 <div className="flex flex-1 items-center gap-3 p-4">
@@ -319,7 +303,10 @@ export const LiveRequestQueue = () => {
                       <span className="truncate text-sm font-medium text-foreground">
                         {req.requester.full_name}
                       </span>
-                      <RiskBadge tier={req.risk_tier} />
+                      <RiskTierBadge
+                        tier={req.risk_tier}
+                        factors={req.risk_factors}
+                      />
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-xs text-muted-foreground">
@@ -389,34 +376,18 @@ export const LiveRequestQueue = () => {
                   <p className="font-mono text-xs text-muted-foreground">
                     {contextRequest.key.code} · {contextRequest.key.room_name}
                   </p>
-                  <div className="mt-1">
-                    <RiskBadge tier={contextRequest.risk_tier} />
-                  </div>
-                  {contextRequest.risk_tier === 'HIGH' &&
-                    contextRequest.risk_factors.length > 0 && (
-                      <div className="mt-2 flex flex-col gap-1">
-                        <p className="flex items-center gap-1 text-xs font-semibold text-destructive">
-                          <ShieldAlertIcon
-                            className="size-3.5 shrink-0"
-                            aria-hidden="true"
-                          />
-                          Contributing risk factors
-                        </p>
-                        {contextRequest.risk_factors.map((factor, idx) => (
-                          <div
-                            key={idx}
-                            className="flex items-center justify-between gap-2 rounded-md bg-destructive/5 px-2 py-1.5"
-                          >
-                            <span className="text-xs text-foreground">
-                              {factor.description || factor.rule}
-                            </span>
-                            <span className="shrink-0 text-xs font-medium text-destructive">
-                              w{factor.weight}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
+                  <div className="mt-2 flex flex-col gap-2">
+                    <RiskTierBadge
+                      tier={contextRequest.risk_tier}
+                      factors={contextRequest.risk_factors}
+                    />
+                    {contextRequest.risk_tier === 'HIGH' && (
+                      <RiskAcknowledgement
+                        acknowledged={acknowledged}
+                        onAcknowledge={setAcknowledged}
+                      />
                     )}
+                  </div>
                 </div>
               </div>
             )}
@@ -479,7 +450,12 @@ export const LiveRequestQueue = () => {
 
                 <Button
                   className="w-full"
-                  disabled={codeInput.length !== 6 || issuing || !verifierId}
+                  disabled={
+                    codeInput.length !== 6 ||
+                    issuing ||
+                    !verifierId ||
+                    (contextRequest?.risk_tier === 'HIGH' && !acknowledged)
+                  }
                   onClick={handleIssue}
                   aria-busy={issuing}
                 >

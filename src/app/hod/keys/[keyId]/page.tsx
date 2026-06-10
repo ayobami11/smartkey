@@ -1,18 +1,33 @@
+'use client';
+
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import {
   ArrowLeftIcon,
-  CheckCircleIcon,
   KeyRoundIcon,
   PlusIcon,
-  RotateCcwIcon,
   Trash2Icon,
   UserIcon,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
+import { createBrowserClient } from '@/lib/supabase/client';
+
+// Types
 
 type FilledSlot = {
   filled: true;
+  profile_id: string;
   name: string;
   email: string;
   authorisedAt: string;
@@ -20,84 +35,268 @@ type FilledSlot = {
 type VacantSlot = { filled: false };
 type Slot = FilledSlot | VacantSlot;
 
-type RecentEvent = {
+type Candidate = {
   id: string;
-  type: 'ISSUED' | 'RETURNED' | 'REQUESTED';
-  actor: string;
-  time: string;
+  full_name: string;
+  institutional_email: string;
 };
 
-const slots: Slot[] = [
-  {
-    filled: true,
-    name: 'Dr. Emeka Bakare',
-    email: 'e.bakare@unilag.edu.ng',
-    authorisedAt: '2 Jan 2026',
-  },
-  {
-    filled: true,
-    name: 'Eng. Adeyemi Fashola',
-    email: 'a.fashola@unilag.edu.ng',
-    authorisedAt: '15 Feb 2026',
-  },
-  { filled: false },
-];
-
-const recentEvents: RecentEvent[] = [
-  {
-    id: 'e-1',
-    type: 'ISSUED',
-    actor: 'Dr. Bakare',
-    time: '14 May 2026, 09:15',
-  },
-  {
-    id: 'e-2',
-    type: 'RETURNED',
-    actor: 'Dr. Bakare',
-    time: '14 May 2026, 16:30',
-  },
-  {
-    id: 'e-3',
-    type: 'REQUESTED',
-    actor: 'Dr. Bakare',
-    time: '13 May 2026, 08:45',
-  },
-  {
-    id: 'e-4',
-    type: 'ISSUED',
-    actor: 'Eng. Adeyemi',
-    time: '12 May 2026, 10:00',
-  },
-  {
-    id: 'e-5',
-    type: 'RETURNED',
-    actor: 'Eng. Adeyemi',
-    time: '12 May 2026, 17:30',
-  },
-];
-
-const eventConfig: Record<
-  RecentEvent['type'],
-  { label: string; icon: typeof CheckCircleIcon; iconClass: string }
-> = {
-  ISSUED: {
-    label: 'Key issued',
-    icon: KeyRoundIcon,
-    iconClass: 'text-primary',
-  },
-  RETURNED: {
-    label: 'Key returned',
-    icon: RotateCcwIcon,
-    iconClass: 'text-emerald-600',
-  },
-  REQUESTED: {
-    label: 'Key requested',
-    icon: CheckCircleIcon,
-    iconClass: 'text-muted-foreground',
-  },
+type KeyData = {
+  id: string;
+  code: string;
+  zone: string;
+  room_name: string;
+  department: { name: string } | null;
 };
+
+// Component
 
 export default function KeySlotManagementPage() {
+  const { keyId } = useParams<{ keyId: string }>();
+
+  const [keyData, setKeyData] = useState<KeyData | null>(null);
+  const [slots, setSlots] = useState<Slot[]>([]);
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
+  // Add collector picker state
+  const [addPickerOpen, setAddPickerOpen] = useState(false);
+  const [selectedCandidateId, setSelectedCandidateId] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
+
+  // Remove confirmation state
+  const [removeTarget, setRemoveTarget] = useState<FilledSlot | null>(null);
+  const [removing, setRemoving] = useState(false);
+  const [removeError, setRemoveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!keyId) return;
+    const init = async () => {
+      const supabase = createBrowserClient();
+
+      // Get HOD's department
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('department_id')
+        .eq('id', user.id)
+        .single();
+
+      const hodDeptId = (profile?.department_id as string | null) ?? null;
+
+      // Fetch key details
+      const { data: key, error: keyErr } = await supabase
+        .from('keys')
+        .select(
+          'id, code, zone, room_name, department:departments!department_id(name)'
+        )
+        .eq('id', keyId)
+        .single();
+
+      if (keyErr || !key) {
+        setFetchError('Key not found.');
+        setLoading(false);
+        return;
+      }
+
+      setKeyData(key as unknown as KeyData);
+
+      // Fetch current authorisations (slots)
+      const { data: auths } = await supabase
+        .from('authorisations')
+        .select(
+          'profile_id, authorised_at, profile:profiles!profile_id(full_name, institutional_email)'
+        )
+        .eq('key_id', keyId);
+
+      const filledSlots: FilledSlot[] = (auths ?? []).map(
+        (a: Record<string, unknown>) => {
+          const p = a.profile as {
+            full_name: string;
+            institutional_email: string;
+          } | null;
+          return {
+            filled: true as const,
+            profile_id: a.profile_id as string,
+            name: p?.full_name ?? '—',
+            email: p?.institutional_email ?? '—',
+            authorisedAt: new Date(
+              a.authorised_at as string
+            ).toLocaleDateString('en-GB', {
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric',
+            }),
+          };
+        }
+      );
+
+      // Pad to 3 slots
+      const paddedSlots: Slot[] = [
+        ...filledSlots,
+        ...Array(Math.max(0, 3 - filledSlots.length)).fill({ filled: false }),
+      ];
+      setSlots(paddedSlots);
+
+      // Fetch candidates (requesters in HOD's department, excluding already-authorised)
+      if (hodDeptId) {
+        const authorisedIds = new Set(filledSlots.map((s) => s.profile_id));
+        const { data: cands } = await supabase
+          .from('profiles')
+          .select('id, full_name, institutional_email')
+          .eq('role', 'REQUESTER')
+          .eq('department_id', hodDeptId);
+
+        setCandidates(
+          ((cands ?? []) as Candidate[]).filter((c) => !authorisedIds.has(c.id))
+        );
+      }
+
+      setLoading(false);
+    };
+
+    init().catch(() => {
+      setFetchError('Failed to load key data.');
+      setLoading(false);
+    });
+  }, [keyId]);
+
+  const handleRemove = async (slot: FilledSlot) => {
+    setRemoving(true);
+    setRemoveError(null);
+    try {
+      const res = await fetch(
+        `/api/admin/authorisations/${keyId}/${slot.profile_id}`,
+        { method: 'DELETE' }
+      );
+      if (!res.ok && res.status !== 204) {
+        const json = await res.json().catch(() => ({}));
+        setRemoveError(
+          (json as { error?: string }).error ?? 'Failed to remove collector.'
+        );
+        return;
+      }
+      // Remove from slots, add back to candidates
+      setSlots((prev) =>
+        prev
+          .filter((s) => !(s.filled && s.profile_id === slot.profile_id))
+          .concat([{ filled: false }])
+          .slice(0, 3)
+      );
+      setCandidates((prev) => [
+        ...prev,
+        {
+          id: slot.profile_id,
+          full_name: slot.name,
+          institutional_email: slot.email,
+        },
+      ]);
+      setRemoveTarget(null);
+    } catch {
+      setRemoveError('Network error. Check your connection.');
+    } finally {
+      setRemoving(false);
+    }
+  };
+
+  const handleAdd = async () => {
+    if (!selectedCandidateId) return;
+    setAdding(true);
+    setAddError(null);
+    try {
+      const res = await fetch('/api/admin/authorisations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          key_id: keyId,
+          requester_id: selectedCandidateId,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setAddError(
+          (json as { error?: string }).error ?? 'Failed to add collector.'
+        );
+        return;
+      }
+      const candidate = candidates.find((c) => c.id === selectedCandidateId);
+      if (candidate) {
+        const newSlot: FilledSlot = {
+          filled: true,
+          profile_id: candidate.id,
+          name: candidate.full_name,
+          email: candidate.institutional_email,
+          authorisedAt: new Date().toLocaleDateString('en-GB', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+          }),
+        };
+        setSlots((prev) => {
+          const vacantIdx = prev.findIndex((s) => !s.filled);
+          if (vacantIdx === -1) return prev;
+          const next = [...prev];
+          next[vacantIdx] = newSlot;
+          return next;
+        });
+        setCandidates((prev) =>
+          prev.filter((c) => c.id !== selectedCandidateId)
+        );
+      }
+      setAddPickerOpen(false);
+      setSelectedCandidateId('');
+    } catch {
+      setAddError('Network error. Check your connection.');
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const filledCount = slots.filter((s) => s.filled).length;
+  const zoneLabel =
+    keyData?.zone === 'NEW_SENATE' ? 'New Senate' : 'Old Senate';
+  const dept = keyData?.department as { name: string } | null;
+
+  if (loading) {
+    return (
+      <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
+        <Skeleton className="h-6 w-32 rounded" />
+        <Skeleton className="h-20 rounded-lg" />
+        <div className="grid gap-4 sm:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="h-44 rounded-lg" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
+        <Link
+          href="/hod"
+          className="flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeftIcon className="size-4" aria-hidden="true" />
+          Back to dashboard
+        </Link>
+        <div
+          className="rounded-lg border border-destructive/30 bg-destructive/5 p-4"
+          role="alert"
+        >
+          <p className="text-sm text-destructive">{fetchError}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
       {/* Back link */}
@@ -118,19 +317,20 @@ export default function KeySlotManagementPage() {
           <div>
             <div className="flex items-center gap-2">
               <code className="font-mono text-lg font-semibold text-foreground">
-                NS-304
+                {keyData?.code}
               </code>
               <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
-                New Senate
+                {zoneLabel}
               </span>
             </div>
             <p className="text-sm text-muted-foreground">
-              Senate Hall A · Faculty of Engineering
+              {keyData?.room_name}
+              {dept?.name ? ` · ${dept.name}` : ''}
             </p>
           </div>
         </div>
         <p className="text-xs text-muted-foreground">
-          {slots.filter((s) => s.filled).length} of 3 slots filled
+          {filledCount} of 3 slots filled
         </p>
       </div>
 
@@ -143,7 +343,7 @@ export default function KeySlotManagementPage() {
           {slots.map((slot, idx) =>
             slot.filled ? (
               <div
-                key={idx}
+                key={slot.profile_id}
                 className="flex flex-col gap-4 rounded-lg border border-border bg-card p-5 shadow-[0_2px_4px_rgba(15,23,42,0.06)]"
               >
                 <div className="flex items-start justify-between gap-2">
@@ -167,33 +367,60 @@ export default function KeySlotManagementPage() {
                     Authorised {slot.authorisedAt}
                   </p>
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <Button variant="outline" size="sm" className="w-full">
-                    View activity
-                  </Button>
-                  <div className="flex gap-1.5">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1 text-xs"
-                    >
-                      Replace
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="flex-1 text-xs text-destructive hover:bg-destructive/5 hover:text-destructive"
-                      aria-label={`Remove ${slot.name}`}
-                    >
-                      <Trash2Icon className="size-3.5" aria-hidden="true" />
-                      Remove
-                    </Button>
+
+                {removeTarget?.profile_id === slot.profile_id ? (
+                  <div className="flex flex-col gap-2">
+                    <p className="text-xs text-muted-foreground">
+                      Remove {slot.name}? This cannot be undone.
+                    </p>
+                    {removeError && (
+                      <p className="text-xs text-destructive" role="alert">
+                        {removeError}
+                      </p>
+                    )}
+                    <div className="flex gap-1.5">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 text-xs"
+                        onClick={() => {
+                          setRemoveTarget(null);
+                          setRemoveError(null);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        className="flex-1 text-xs"
+                        disabled={removing}
+                        aria-busy={removing}
+                        onClick={() => handleRemove(slot)}
+                      >
+                        {removing ? 'Removing…' : 'Confirm'}
+                      </Button>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full text-xs text-destructive hover:bg-destructive/5 hover:text-destructive"
+                    aria-label={`Remove ${slot.name}`}
+                    onClick={() => {
+                      setRemoveTarget(slot);
+                      setRemoveError(null);
+                    }}
+                  >
+                    <Trash2Icon className="size-3.5" aria-hidden="true" />
+                    Remove
+                  </Button>
+                )}
               </div>
             ) : (
               <div
-                key={idx}
+                key={`vacant-${idx}`}
                 className="flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-border bg-muted/30 p-8 text-center"
               >
                 <div className="flex size-10 items-center justify-center rounded-full bg-muted">
@@ -210,49 +437,95 @@ export default function KeySlotManagementPage() {
                     No collector assigned
                   </p>
                 </div>
-                <Button size="sm" variant="outline">
-                  <PlusIcon className="size-4" aria-hidden="true" />
-                  Add collector
-                </Button>
+
+                {addPickerOpen &&
+                !slots.slice(0, idx).some((s) => !s.filled) ? (
+                  // Show picker in the first vacant slot
+                  <div className="flex w-full flex-col gap-2">
+                    <Label htmlFor={`picker-${idx}`} className="sr-only">
+                      Select a collector
+                    </Label>
+                    <Select
+                      value={selectedCandidateId}
+                      onValueChange={setSelectedCandidateId}
+                    >
+                      <SelectTrigger id={`picker-${idx}`} className="text-xs">
+                        <SelectValue placeholder="Select a collector…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {candidates.length === 0 ? (
+                          <SelectItem value="__none" disabled>
+                            No eligible staff
+                          </SelectItem>
+                        ) : (
+                          candidates.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.full_name}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                    {addError && (
+                      <p className="text-xs text-destructive" role="alert">
+                        {addError}
+                      </p>
+                    )}
+                    <div className="flex gap-1.5">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 text-xs"
+                        onClick={() => {
+                          setAddPickerOpen(false);
+                          setSelectedCandidateId('');
+                          setAddError(null);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="flex-1 text-xs"
+                        disabled={!selectedCandidateId || adding}
+                        aria-busy={adding}
+                        onClick={handleAdd}
+                      >
+                        {adding ? 'Adding…' : 'Add'}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  !addPickerOpen && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setAddPickerOpen(true);
+                        setSelectedCandidateId('');
+                        setAddError(null);
+                      }}
+                    >
+                      <PlusIcon className="size-4" aria-hidden="true" />
+                      Add collector
+                    </Button>
+                  )
+                )}
               </div>
             )
           )}
         </div>
       </div>
 
-      {/* Recent activity */}
+      {/* Recent activity — static placeholder; no history API in current scope */}
       <div>
         <h2 className="mb-3 text-sm font-semibold text-foreground">
-          Recent activity for NS-304
+          Recent activity for {keyData?.code}
         </h2>
-        <div className="rounded-lg border border-border bg-card shadow-[0_2px_4px_rgba(15,23,42,0.06)]">
-          {recentEvents.map((event, idx) => {
-            const cfg = eventConfig[event.type];
-            const Icon = cfg.icon;
-            return (
-              <div
-                key={event.id}
-                className={`flex items-center gap-3 px-4 py-3 ${
-                  idx !== recentEvents.length - 1
-                    ? 'border-b border-border'
-                    : ''
-                }`}
-              >
-                <Icon
-                  className={`size-4 shrink-0 ${cfg.iconClass}`}
-                  aria-hidden="true"
-                />
-                <div className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
-                  <span className="text-sm text-foreground">
-                    {cfg.label} · {event.actor}
-                  </span>
-                  <time className="font-mono text-xs text-muted-foreground">
-                    {event.time}
-                  </time>
-                </div>
-              </div>
-            );
-          })}
+        <div className="flex items-center justify-center rounded-lg border border-border bg-card p-8 text-center">
+          <p className="text-sm text-muted-foreground">
+            Activity history coming soon.
+          </p>
         </div>
       </div>
     </div>

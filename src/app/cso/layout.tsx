@@ -1,6 +1,7 @@
 import { AppSidebar } from './_components/sidebar';
 import { DashboardHeader } from './_components/dashboard-header';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
+import { OfflineBanner } from '@/components/smartkey/OfflineBanner';
 
 export default function CsoLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -8,6 +9,7 @@ export default function CsoLayout({ children }: { children: React.ReactNode }) {
       <AppSidebar />
       <SidebarInset>
         <DashboardHeader />
+        <OfflineBanner />
         {children}
       </SidebarInset>
     </SidebarProvider>

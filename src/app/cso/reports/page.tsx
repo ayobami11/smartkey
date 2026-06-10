@@ -5,10 +5,12 @@ import Link from 'next/link';
 import {
   BotIcon,
   CalendarIcon,
+  CheckCircleIcon,
   DownloadIcon,
   FileTextIcon,
   FlagIcon,
   KeyRoundIcon,
+  MessageSquareIcon,
   RotateCcwIcon,
 } from 'lucide-react';
 
@@ -38,6 +40,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Textarea } from '@/components/ui/textarea';
 import { createBrowserClient } from '@/lib/supabase/client';
 
 // Types
@@ -143,6 +146,16 @@ export default function ShiftReportsPage() {
   const [generatedReportId, setGeneratedReportId] = useState<string | null>(
     null
   );
+
+  // Comment sheet
+  const [commentTarget, setCommentTarget] = useState<{
+    id: string;
+    label: string;
+  } | null>(null);
+  const [commentText, setCommentText] = useState('');
+  const [commenting, setCommenting] = useState(false);
+  const [commentError, setCommentError] = useState<string | null>(null);
+  const [commentSuccess, setCommentSuccess] = useState(false);
 
   // Fetch reports
 
@@ -254,6 +267,33 @@ export default function ShiftReportsPage() {
       setGenerateError('Something went wrong. Check your connection.');
     } finally {
       setGenerating(false);
+    }
+  };
+
+  // Comment
+
+  const handleComment = async () => {
+    if (!commentTarget || !commentText.trim()) return;
+    setCommenting(true);
+    setCommentError(null);
+    try {
+      const res = await fetch(`/api/reports/${commentTarget.id}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: commentText.trim() }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setCommentError(
+          (json as { error?: string }).error ?? 'Failed to save comment.'
+        );
+        return;
+      }
+      setCommentSuccess(true);
+    } catch {
+      setCommentError('Network error. Check your connection and try again.');
+    } finally {
+      setCommenting(false);
     }
   };
 
@@ -376,10 +416,9 @@ export default function ShiftReportsPage() {
                     {group.day}
                   </h2>
                   {group.items.map((report) => (
-                    <Link
+                    <div
                       key={report.id}
-                      href={`/cso/reports/${report.id}`}
-                      className="flex flex-col gap-4 rounded-lg border border-border bg-card p-5 shadow-[0_2px_4px_rgba(15,23,42,0.06)] transition-shadow hover:shadow-[0_4px_8px_rgba(15,23,42,0.08)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                      className="flex flex-col gap-4 rounded-lg border border-border bg-card p-5 shadow-[0_2px_4px_rgba(15,23,42,0.06)]"
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex flex-col gap-0.5">
@@ -391,10 +430,37 @@ export default function ShiftReportsPage() {
                             {report.officers.join(', ')}
                           </span>
                         </div>
-                        <DownloadIcon
-                          className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-                          aria-hidden="true"
-                        />
+                        <div className="flex shrink-0 items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCommentTarget({
+                                id: report.id,
+                                label: `Shift ${report.shift}`,
+                              });
+                              setCommentText('');
+                              setCommentError(null);
+                              setCommentSuccess(false);
+                            }}
+                            aria-label={`Add comment to Shift ${report.shift} report`}
+                            className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                          >
+                            <MessageSquareIcon
+                              className="size-4"
+                              aria-hidden="true"
+                            />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`Download Shift ${report.shift} report`}
+                            className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                          >
+                            <DownloadIcon
+                              className="size-4"
+                              aria-hidden="true"
+                            />
+                          </button>
+                        </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-4 text-xs">
                         <span className="flex items-center gap-1.5 text-muted-foreground">
@@ -422,7 +488,7 @@ export default function ShiftReportsPage() {
                         <BotIcon className="size-3.5" aria-hidden="true" />
                         <span>Generated by AI from shift event data</span>
                       </div>
-                    </Link>
+                    </div>
                   ))}
                 </div>
               ))}
@@ -443,6 +509,89 @@ export default function ShiftReportsPage() {
           )}
         </>
       )}
+
+      {/* Comment Sheet */}
+      <Sheet
+        open={commentTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCommentTarget(null);
+            setCommentText('');
+            setCommentError(null);
+            setCommentSuccess(false);
+          }
+        }}
+      >
+        <SheetContent
+          side="right"
+          className="flex flex-col gap-0 p-0 sm:max-w-md"
+        >
+          <SheetHeader className="border-b border-border p-6">
+            <SheetTitle>
+              Add comment — {commentTarget?.label ?? 'Report'}
+            </SheetTitle>
+            <SheetDescription>
+              Comments are saved permanently to the report and cannot be edited
+              or deleted.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-6">
+            {commentSuccess ? (
+              <div className="flex flex-col items-center gap-3 py-6 text-center">
+                <div className="flex size-12 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950/40">
+                  <CheckCircleIcon
+                    className="size-6 text-emerald-600"
+                    aria-hidden="true"
+                  />
+                </div>
+                <p className="font-medium text-foreground">Comment saved.</p>
+                <p className="text-sm text-muted-foreground">
+                  Your comment has been added to the report permanently.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="comment-text">Comment</Label>
+                  <Textarea
+                    id="comment-text"
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    placeholder="Add a note or observation to this report…"
+                    rows={5}
+                    aria-required="true"
+                  />
+                </div>
+                {commentError && (
+                  <p className="text-sm text-destructive" role="alert">
+                    {commentError}
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+          <SheetFooter className="border-t border-border p-6">
+            {commentSuccess ? (
+              <SheetClose asChild>
+                <Button className="w-full">Close</Button>
+              </SheetClose>
+            ) : (
+              <>
+                <SheetClose asChild>
+                  <Button variant="outline">Cancel</Button>
+                </SheetClose>
+                <Button
+                  disabled={!commentText.trim() || commenting}
+                  aria-busy={commenting}
+                  onClick={handleComment}
+                >
+                  {commenting ? 'Saving…' : 'Save comment'}
+                </Button>
+              </>
+            )}
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
 
       {/* Generate report Sheet */}
       <Sheet open={generateOpen} onOpenChange={setGenerateOpen}>

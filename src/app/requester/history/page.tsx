@@ -178,7 +178,7 @@ export default function RequesterHistoryPage() {
   if (requests.length === 0) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center p-4 pt-0">
-        <Empty>
+        <Empty className="border border-border bg-card">
           <EmptyMedia variant="icon">
             <HistoryIcon
               className="size-8 text-muted-foreground"
