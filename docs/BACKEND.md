@@ -521,12 +521,12 @@ Track progress here after every merged PR. Update the status column; link the PR
 | Auth API routes (login, OTP, register, activate)  | ✅ Done        | #32 |
 | Request management API routes                     | ✅ Done        | #33 |
 | Key transaction + admin API routes                | ✅ Done        | #36 |
-| Supabase Realtime subscriptions                   | ⬜ Not started | —   |
-| Rule-based risk scoring engine + unit tests       | ⬜ Not started | —   |
-| Risk tier UI (RiskTierBadge, RiskFactorPopover)   | ⬜ Not started | —   |
+| Supabase Realtime subscriptions                   | ✅ Done        | #39 |
+| Rule-based risk scoring engine + unit tests       | ✅ Done        | #38 |
+| Risk tier UI (RiskTierBadge, RiskFactorPopover)   | ✅ Done        | #40 |
 | Gemini shift report generation                    | ⬜ Not started | —   |
 | Signature verification (Sharp + Pixelmatch)       | ⬜ Not started | —   |
-| Supabase Storage (photos, signatures, letters)    | 🔄 In review   | #32 |
+| Supabase Storage (photos, signatures, letters)    | ✅ Done        | #32 |
 | Shift handover + incident + report API routes     | ✅ Done        | #37 |
 | Edge Functions (overdue check + daily summary)    | ⬜ Not started | —   |
 | CI/CD pipeline (GitHub Actions)                   | ⬜ Not started | —   |

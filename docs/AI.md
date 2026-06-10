@@ -63,11 +63,11 @@ Located in `src/lib/ai/signature/`. Server-side only.
 
 **Tests**: `src/lib/ai/signature/verifier.test.ts` with fixture image pairs covering match, threshold-edge, mismatch.
 
-## Implementation status (as of 2026-06-02)
+## Implementation status (as of 2026-06-10)
 
-- **Risk scoring engine**: not yet implemented. `src/lib/ai/risk/` does not exist. The `create_request` RPC includes a risk scoring placeholder; the TypeScript engine (`rules.ts`, `thresholds.ts`, `engine.ts`) and its unit tests have not been written.
-- **Gemini shift reports**: `POST /api/reports/generate` route exists but the Gemini client (`src/lib/ai/reports/`) has not been implemented. The route currently returns a placeholder response.
-- **Signature verification**: `POST /api/ai/verify-signature` route exists but the Sharp + Pixelmatch pipeline (`src/lib/ai/signature/verifier.ts`) has not been implemented. The route is not yet wired to any image processing logic.
+- **Risk scoring engine**: ✅ Done (PR #38). `src/lib/ai/risk/` contains `types.ts`, `rules.ts`, `thresholds.ts`, and `engine.ts`. 24 unit tests cover every rule and tier boundary. `POST /api/requests/submit` runs the engine and back-fills `risk_tier` + `risk_factors` on the request row via the admin client.
+- **Gemini shift reports**: not yet implemented. `POST /api/reports/generate` route exists but `src/lib/ai/reports/` has not been written. The route returns a placeholder response.
+- **Signature verification**: not yet implemented. `POST /api/ai/verify-signature` route exists but the Sharp + Pixelmatch pipeline (`src/lib/ai/signature/verifier.ts`) has not been written. The route is not wired to any image processing logic.
 
 ## Cross-cutting
 
