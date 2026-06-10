@@ -19,13 +19,14 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
+import { createBrowserClient } from '@/lib/supabase/client';
 
 // Types
 
 type OutstandingKey = {
   id: string;
-  key: { code: string; room_name: string; zone: string };
-  requester: { id: string; full_name: string; photo_url: string | null };
+  key: { code: string; room_name: string; zone: string } | null;
+  requester: { id: string; full_name: string; photo_url: string | null } | null;
   issued_at: string;
   return_deadline: string;
   status: 'KEY_ISSUED' | 'KEY_OVERDUE';
@@ -71,6 +72,7 @@ export const OutstandingKeys = () => {
   const [keys, setKeys] = useState<OutstandingKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
 
   // Return Sheet state
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -81,6 +83,10 @@ export const OutstandingKeys = () => {
   // Fetch
 
   useEffect(() => {
+    const supabase = createBrowserClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) setUserId(user.id);
+    });
     fetchOutstanding();
   }, []);
 
@@ -133,7 +139,10 @@ export const OutstandingKeys = () => {
       const res = await fetch('/api/keys/return', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ request_id: selectedKey.id }),
+        body: JSON.stringify({
+          request_id: selectedKey.id,
+          verifier_id: userId,
+        }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -224,7 +233,7 @@ export const OutstandingKeys = () => {
                   <div className="flex min-w-0 flex-1 flex-col gap-1">
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-sm font-medium text-foreground">
-                        {item.key.code}
+                        {item.key?.code}
                       </span>
                       {isOverdue && (
                         <span
@@ -236,10 +245,10 @@ export const OutstandingKeys = () => {
                       )}
                     </div>
                     <p className="truncate text-xs text-muted-foreground">
-                      {item.key.room_name}
+                      {item.key?.room_name}
                     </p>
                     <p className="truncate text-xs text-muted-foreground">
-                      {item.requester.full_name} · issued{' '}
+                      {item.requester?.full_name ?? '—'} · issued{' '}
                       {relativeTime(item.issued_at)}
                     </p>
                     <p className="text-xs text-muted-foreground">
@@ -260,7 +269,7 @@ export const OutstandingKeys = () => {
                     size="sm"
                     className="shrink-0"
                     onClick={() => openReturnSheet(item)}
-                    aria-label={`Mark ${item.key.code} as returned`}
+                    aria-label={`Mark ${item.key?.code ?? 'key'} as returned`}
                   >
                     Return
                   </Button>
@@ -302,15 +311,15 @@ export const OutstandingKeys = () => {
                     Key details
                   </div>
                   <p className="mt-2 font-mono text-sm font-medium text-foreground">
-                    {selectedKey.key.code}
+                    {selectedKey.key?.code}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {selectedKey.key.room_name}
+                    {selectedKey.key?.room_name}
                   </p>
                   <p className="mt-2 text-xs text-muted-foreground">
                     Issued to{' '}
                     <span className="font-medium text-foreground">
-                      {selectedKey.requester.full_name}
+                      {selectedKey.requester?.full_name ?? '—'}
                     </span>{' '}
                     at {formatTime(selectedKey.issued_at)}
                   </p>
@@ -355,7 +364,7 @@ export const OutstandingKeys = () => {
                     Returned successfully
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {`Key ${selectedKey.key.code} returned by ${selectedKey.requester.full_name} at ${formatTime(new Date().toISOString())}.`}
+                    {`Key ${selectedKey.key?.code ?? '—'} returned by ${selectedKey.requester?.full_name ?? '—'} at ${formatTime(new Date().toISOString())}.`}
                   </p>
                 </div>
 
@@ -365,13 +374,13 @@ export const OutstandingKeys = () => {
                     Returned
                   </p>
                   <p className="mt-1.5 font-mono text-sm font-medium text-foreground">
-                    {selectedKey.key.code}
+                    {selectedKey.key?.code}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {selectedKey.key.room_name}
+                    {selectedKey.key?.room_name}
                   </p>
                   <p className="mt-2 text-xs text-muted-foreground">
-                    {selectedKey.requester.full_name}
+                    {selectedKey.requester?.full_name ?? '—'}
                   </p>
                 </div>
 
