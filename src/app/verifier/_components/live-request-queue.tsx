@@ -43,8 +43,8 @@ type QueueRequest = {
   risk_tier: RiskTier;
   risk_factors: RiskFactor[];
   created_at: string;
-  requester: { id: string; full_name: string; photo_url: string | null };
-  key: { id: string; code: string; room_name: string; zone: string };
+  requester: { id: string; full_name: string; photo_url: string | null } | null;
+  key: { id: string; code: string; room_name: string; zone: string } | null;
 };
 
 type IssueResult = {
@@ -301,7 +301,7 @@ export const LiveRequestQueue = () => {
                   <div className="flex min-w-0 flex-1 flex-col gap-1">
                     <div className="flex items-center gap-2">
                       <span className="truncate text-sm font-medium text-foreground">
-                        {req.requester.full_name}
+                        {req.requester?.full_name ?? '—'}
                       </span>
                       <RiskTierBadge
                         tier={req.risk_tier}
@@ -310,11 +310,11 @@ export const LiveRequestQueue = () => {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-xs text-muted-foreground">
-                        {req.key.code}
+                        {req.key?.code}
                       </span>
                       <span className="text-xs text-muted-foreground">·</span>
                       <span className="text-xs text-muted-foreground">
-                        {req.key.room_name}
+                        {req.key?.room_name}
                       </span>
                     </div>
                   </div>
@@ -326,7 +326,7 @@ export const LiveRequestQueue = () => {
                       variant="outline"
                       size="sm"
                       onClick={() => openSheet(req)}
-                      aria-label={`Issue key for ${req.requester.full_name}`}
+                      aria-label={`Issue key for ${req.requester?.full_name ?? 'requester'}`}
                     >
                       Issue
                     </Button>
@@ -371,10 +371,10 @@ export const LiveRequestQueue = () => {
                 </div>
                 <div className="mt-2 flex flex-col gap-1">
                   <p className="text-sm font-medium text-foreground">
-                    {contextRequest.requester.full_name}
+                    {contextRequest.requester?.full_name ?? '—'}
                   </p>
                   <p className="font-mono text-xs text-muted-foreground">
-                    {contextRequest.key.code} · {contextRequest.key.room_name}
+                    {contextRequest.key?.code} · {contextRequest.key?.room_name}
                   </p>
                   <div className="mt-2 flex flex-col gap-2">
                     <RiskTierBadge
