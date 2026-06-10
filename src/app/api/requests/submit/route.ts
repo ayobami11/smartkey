@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
+import { evaluateRisk } from '@/lib/ai/risk/engine';
+import type { RiskContext } from '@/lib/ai/risk/types';
 import { logger } from '@/lib/logger';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
 import { err, ok } from '@/types/api';
 
@@ -56,6 +59,37 @@ export const POST = async (request: NextRequest) => {
 
   const { key_id, type, return_deadline, weekend_date } = parsed.data;
 
+  // Fetch risk context data in parallel before calling the RPC.
+  const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const [keyRes, outstandingRes, recentRes, whitelistRes] = await Promise.all([
+    supabase.from('keys').select('zone').eq('id', key_id).single(),
+    supabase
+      .from('requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('requester_id', user.id)
+      .in('status', ['CODE_ISSUED', 'KEY_ISSUED']),
+    supabase
+      .from('requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('requester_id', user.id)
+      .gte('created_at', since24h),
+    supabase
+      .from('authorisations')
+      .select('profile_id', { count: 'exact', head: true })
+      .eq('key_id', key_id)
+      .eq('profile_id', user.id),
+  ]);
+
+  const riskCtx: RiskContext = {
+    requestType: type,
+    requestedAt: new Date(),
+    keyZone: (keyRes.data?.zone as RiskContext['keyZone']) ?? 'NEW_SENATE',
+    hasOutstandingKey: (outstandingRes.count ?? 0) > 0,
+    recentRequestCount: recentRes.count ?? 0,
+    isWhitelisted: (whitelistRes.count ?? 0) > 0,
+  };
+  const { tier, factors } = evaluateRisk(riskCtx);
+
   const { data, error } = await supabase.rpc('create_request', {
     p_key_id: key_id,
     p_type: type,
@@ -87,12 +121,29 @@ export const POST = async (request: NextRequest) => {
     });
   }
 
+  // Back-fill the real risk tier and factors. RLS blocks REQUESTER updates so
+  // this goes via the admin client. The write is best-effort — a failure here
+  // should not block the response; the default 'LOW' stored by the RPC is safe.
+  const adminClient = createAdminClient();
+  const { error: riskUpdateError } = await adminClient
+    .from('requests')
+    .update({ risk_tier: tier, risk_factors: factors as never })
+    .eq('id', result.request_id);
+
+  if (riskUpdateError) {
+    logger.error('failed to persist risk tier', {
+      requestId: result.request_id,
+      tier,
+      err: riskUpdateError.message,
+    });
+  }
+
   if (type === 'WEEKEND') {
     return NextResponse.json(
       ok({
         request_id: result.request_id,
         status: 'PENDING_HOD',
-        risk_tier: 'LOW',
+        risk_tier: tier,
       }),
       { status: 201 }
     );
@@ -103,7 +154,7 @@ export const POST = async (request: NextRequest) => {
       request_id: result.request_id,
       code: result.code,
       code_expires_at: result.code_expires_at,
-      risk_tier: 'LOW',
+      risk_tier: tier,
     }),
     { status: 201 }
   );

@@ -8,7 +8,9 @@ import { err, ok } from '@/types/api';
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB
 
 export const POST = async (request: NextRequest) => {
-  const supabase = await createServerClient();
+  // The invite session lives in the transient `activate` namespace (set by
+  // /auth/confirm); read it from there.
+  const supabase = await createServerClient('activate');
 
   let formData: FormData;
   try {
@@ -146,6 +148,19 @@ export const POST = async (request: NextRequest) => {
     });
     return NextResponse.json(err('Profile update failed', 500), {
       status: 500,
+    });
+  }
+
+  // Promote the activation session into the HOD cookie so the user lands on
+  // their dashboard without having to sign in again.
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (session) {
+    const roleClient = await createServerClient('hod');
+    await roleClient.auth.setSession({
+      access_token: session.access_token,
+      refresh_token: session.refresh_token,
     });
   }
 

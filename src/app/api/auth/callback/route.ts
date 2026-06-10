@@ -12,7 +12,9 @@ export const GET = async (request: NextRequest) => {
   const next = searchParams.get('next') ?? '/';
 
   if (code) {
-    const supabase = await createServerClient();
+    // Invite / reset links resolve before any role URL exists, so the session
+    // lives in the transient `activate` namespace until the user signs in.
+    const supabase = await createServerClient('activate');
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
       return NextResponse.redirect(new URL(next, origin));

@@ -20,7 +20,9 @@ export const GET = async (request: NextRequest) => {
     );
   }
 
-  const supabase = await createServerClient();
+  // Invite / magic links resolve before any role URL exists, so the session
+  // lives in the transient `activate` namespace until the user signs in.
+  const supabase = await createServerClient('activate');
   const { error } = await supabase.auth.verifyOtp({
     type,
     token_hash: tokenHash,

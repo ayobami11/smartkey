@@ -1,5 +1,11 @@
 import { type NextRequest, NextResponse } from 'next/server';
 
+import {
+  DEFAULT_NAMESPACE,
+  namespaceFromPath,
+  namespaceFromReferer,
+  type SessionNamespace,
+} from '@/lib/supabase/cookies';
 import { updateSession } from '@/lib/supabase/middleware';
 
 type UserRole = 'CSO' | 'HOD' | 'VERIFIER' | 'REQUESTER';
@@ -8,19 +14,8 @@ const PROTECTED_ROUTES: Array<{ prefix: string; role: UserRole }> = [
   { prefix: '/cso', role: 'CSO' },
   { prefix: '/hod', role: 'HOD' },
   { prefix: '/verifier', role: 'VERIFIER' },
-  { prefix: '/me', role: 'REQUESTER' },
+  { prefix: '/requester', role: 'REQUESTER' },
 ];
-
-// Paths where authenticated users should be sent to their dashboard instead
-const PUBLIC_ONLY_EXACT = new Set(['/', '/login', '/help']);
-const PUBLIC_ONLY_PREFIXES = ['/forgot-password'];
-
-const ROLE_DASHBOARD: Record<UserRole, string> = {
-  CSO: '/cso/dashboard',
-  HOD: '/hod/dashboard',
-  VERIFIER: '/verifier',
-  REQUESTER: '/me',
-};
 
 const redirectTo = (request: NextRequest, destination: string): NextResponse =>
   NextResponse.redirect(new URL(destination, request.url));
@@ -28,13 +23,14 @@ const redirectTo = (request: NextRequest, destination: string): NextResponse =>
 export const middleware = async (
   request: NextRequest
 ): Promise<NextResponse> => {
+  const { pathname } = request.nextUrl;
+
   // Guard: if Supabase env vars are missing the whole site would crash.
   // Fail open so non-auth pages still render; protected routes redirect to login.
   if (
     !process.env.NEXT_PUBLIC_SUPABASE_URL ||
     !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   ) {
-    const { pathname } = request.nextUrl;
     const isProtected = PROTECTED_ROUTES.some(({ prefix }) =>
       pathname.startsWith(prefix)
     );
@@ -42,26 +38,32 @@ export const middleware = async (
   }
 
   try {
-    const { pathname } = request.nextUrl;
+    const matchedProtected = PROTECTED_ROUTES.find(
+      ({ prefix }) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+    );
 
-    const { response, supabase } = await updateSession(request);
+    // Resolve which role's cookie this request operates on: the URL prefix for
+    // role areas, the calling page's Referer for `/api/*` and similar, else the
+    // transient default. This keeps each role's session fully isolated.
+    const namespace: SessionNamespace =
+      namespaceFromPath(pathname) ??
+      namespaceFromReferer(request.headers.get('referer')) ??
+      DEFAULT_NAMESPACE;
+
+    const { response, supabase } = await updateSession(request, namespace);
+
+    // Only protected routes need an authenticated user; skip the network call
+    // to Auth on public routes so they stay fast.
+    if (!matchedProtected) {
+      return response;
+    }
 
     // getUser() makes a network call to Auth — safe for auth decisions unlike getSession()
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
-    const matchedProtected = PROTECTED_ROUTES.find(({ prefix }) =>
-      pathname.startsWith(prefix)
-    );
-    const isPublicOnly =
-      PUBLIC_ONLY_EXACT.has(pathname) ||
-      PUBLIC_ONLY_PREFIXES.some((prefix) => pathname.startsWith(prefix));
-
-    if (!user) {
-      if (matchedProtected) return redirectTo(request, '/login');
-      return response;
-    }
+    if (!user) return redirectTo(request, '/login');
 
     // Role read from DB, not JWT claim — JWT claim may be stale
     const { data: profileData } = await supabase
@@ -74,25 +76,16 @@ export const middleware = async (
     // can't statically parse the column list against the schema.
     const userRole = (profileData as { role: UserRole } | null)?.role;
 
-    if (isPublicOnly) {
-      return redirectTo(
-        request,
-        userRole ? (ROLE_DASHBOARD[userRole] ?? '/') : '/'
-      );
-    }
-
-    if (matchedProtected && (!userRole || userRole !== matchedProtected.role)) {
-      return redirectTo(
-        request,
-        userRole ? ROLE_DASHBOARD[userRole] : '/login'
-      );
+    // The cookie is role-namespaced, so a mismatch here means a stale or
+    // tampered session for this area — send them back to login.
+    if (!userRole || userRole !== matchedProtected.role) {
+      return redirectTo(request, '/login');
     }
 
     return response;
   } catch {
     // If middleware throws (e.g. Supabase unreachable), fail open on public routes
     // and redirect to login for protected routes so the site stays up.
-    const { pathname } = request.nextUrl;
     const isProtected = PROTECTED_ROUTES.some(({ prefix }) =>
       pathname.startsWith(prefix)
     );
