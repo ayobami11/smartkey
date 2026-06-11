@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { LogOutIcon, UploadIcon } from 'lucide-react';
 
+import { ChangePasswordForm } from '@/components/smartkey/change-password-form';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -75,50 +77,6 @@ export default function SettingsPage() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [profileLoading, setProfileLoading] = useState(true);
-
-  const [pwCurrent, setPwCurrent] = useState('');
-  const [pwNew, setPwNew] = useState('');
-  const [pwConfirm, setPwConfirm] = useState('');
-  const [pwLoading, setPwLoading] = useState(false);
-  const [pwError, setPwError] = useState<string | null>(null);
-  const [pwSuccess, setPwSuccess] = useState(false);
-
-  const handlePasswordChange = async () => {
-    setPwError(null);
-    setPwSuccess(false);
-    if (!pwCurrent || !pwNew || !pwConfirm) {
-      setPwError('All password fields are required.');
-      return;
-    }
-    if (pwNew !== pwConfirm) {
-      setPwError('New passwords do not match.');
-      return;
-    }
-    setPwLoading(true);
-    try {
-      const res = await fetch('/api/auth/change-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          current_password: pwCurrent,
-          new_password: pwNew,
-        }),
-      });
-      const json = (await res.json()) as { error?: string };
-      if (!res.ok) {
-        setPwError(json.error ?? 'Failed to update password.');
-        return;
-      }
-      setPwSuccess(true);
-      setPwCurrent('');
-      setPwNew('');
-      setPwConfirm('');
-    } catch {
-      setPwError('Network error. Check your connection and try again.');
-    } finally {
-      setPwLoading(false);
-    }
-  };
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -565,60 +523,7 @@ export default function SettingsPage() {
               <h3 className="text-sm font-semibold text-foreground">
                 Change password
               </h3>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="cso-current-password">Current password</Label>
-                  <Input
-                    id="cso-current-password"
-                    type="password"
-                    autoComplete="current-password"
-                    value={pwCurrent}
-                    onChange={(e) => setPwCurrent(e.target.value)}
-                  />
-                </div>
-                <div />
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="cso-new-password">New password</Label>
-                  <Input
-                    id="cso-new-password"
-                    type="password"
-                    autoComplete="new-password"
-                    value={pwNew}
-                    onChange={(e) => setPwNew(e.target.value)}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="cso-confirm-password">
-                    Confirm new password
-                  </Label>
-                  <Input
-                    id="cso-confirm-password"
-                    type="password"
-                    autoComplete="new-password"
-                    value={pwConfirm}
-                    onChange={(e) => setPwConfirm(e.target.value)}
-                  />
-                </div>
-              </div>
-              {pwError && (
-                <p className="text-sm text-destructive" role="alert">
-                  {pwError}
-                </p>
-              )}
-              {pwSuccess && (
-                <p className="text-sm text-[#10B981]" role="status">
-                  Password updated successfully.
-                </p>
-              )}
-              <div>
-                <Button
-                  variant="outline"
-                  disabled={pwLoading}
-                  onClick={handlePasswordChange}
-                >
-                  {pwLoading ? 'Updating…' : 'Update password'}
-                </Button>
-              </div>
+              <ChangePasswordForm />
             </div>
 
             <div className="flex items-center justify-between">

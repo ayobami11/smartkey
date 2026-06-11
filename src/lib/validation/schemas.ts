@@ -14,7 +14,20 @@
 
 import { z } from 'zod';
 
+import { password } from '@/lib/validation/primitives';
+
 // Auth
+
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, 'Current password is required.'),
+    newPassword: password,
+    confirmPassword: password,
+  })
+  .refine((d) => d.newPassword === d.confirmPassword, {
+    message: 'Passwords do not match.',
+    path: ['confirmPassword'],
+  });
 
 export const loginSchema = z.object({
   email: z.email('Enter a valid email address'),
@@ -187,6 +200,7 @@ export const addReportCommentSchema = z.object({
 // Inferred TypeScript types
 // Import these where you need the form value types.
 
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 export type ProvisionUserInput = z.infer<typeof provisionUserSchema>;

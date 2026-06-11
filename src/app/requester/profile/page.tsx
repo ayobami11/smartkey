@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { LogOutIcon, UploadIcon } from 'lucide-react';
 
+import { ChangePasswordForm } from '@/components/smartkey/change-password-form';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -64,13 +66,6 @@ export default function RequesterProfilePage() {
   const [department, setDepartment] = useState('');
   const [profileLoading, setProfileLoading] = useState(true);
 
-  const [pwCurrent, setPwCurrent] = useState('');
-  const [pwNew, setPwNew] = useState('');
-  const [pwConfirm, setPwConfirm] = useState('');
-  const [pwLoading, setPwLoading] = useState(false);
-  const [pwError, setPwError] = useState<string | null>(null);
-  const [pwSuccess, setPwSuccess] = useState(false);
-
   const [notifications, setNotifications] = useState<
     Record<NotificationId, boolean>
   >({
@@ -107,43 +102,6 @@ export default function RequesterProfilePage() {
     };
     fetchProfile();
   }, []);
-
-  const handlePasswordChange = async () => {
-    setPwError(null);
-    setPwSuccess(false);
-    if (!pwCurrent || !pwNew || !pwConfirm) {
-      setPwError('All password fields are required.');
-      return;
-    }
-    if (pwNew !== pwConfirm) {
-      setPwError('New passwords do not match.');
-      return;
-    }
-    setPwLoading(true);
-    try {
-      const res = await fetch('/api/auth/change-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          current_password: pwCurrent,
-          new_password: pwNew,
-        }),
-      });
-      const json = (await res.json()) as { error?: string };
-      if (!res.ok) {
-        setPwError(json.error ?? 'Failed to update password.');
-        return;
-      }
-      setPwSuccess(true);
-      setPwCurrent('');
-      setPwNew('');
-      setPwConfirm('');
-    } catch {
-      setPwError('Network error. Check your connection and try again.');
-    } finally {
-      setPwLoading(false);
-    }
-  };
 
   const toggleNotification = (id: NotificationId) => {
     setNotifications((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -263,62 +221,7 @@ export default function RequesterProfilePage() {
                 <h3 className="text-sm font-semibold text-foreground">
                   Change password
                 </h3>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="req-current-password">
-                      Current password
-                    </Label>
-                    <Input
-                      id="req-current-password"
-                      type="password"
-                      autoComplete="current-password"
-                      value={pwCurrent}
-                      onChange={(e) => setPwCurrent(e.target.value)}
-                    />
-                  </div>
-                  <div />
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="req-new-password">New password</Label>
-                    <Input
-                      id="req-new-password"
-                      type="password"
-                      autoComplete="new-password"
-                      value={pwNew}
-                      onChange={(e) => setPwNew(e.target.value)}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="req-confirm-password">
-                      Confirm new password
-                    </Label>
-                    <Input
-                      id="req-confirm-password"
-                      type="password"
-                      autoComplete="new-password"
-                      value={pwConfirm}
-                      onChange={(e) => setPwConfirm(e.target.value)}
-                    />
-                  </div>
-                </div>
-                {pwError && (
-                  <p className="text-sm text-destructive" role="alert">
-                    {pwError}
-                  </p>
-                )}
-                {pwSuccess && (
-                  <p className="text-sm text-[#10B981]" role="status">
-                    Password updated successfully.
-                  </p>
-                )}
-                <div>
-                  <Button
-                    variant="outline"
-                    disabled={pwLoading}
-                    onClick={handlePasswordChange}
-                  >
-                    {pwLoading ? 'Updating…' : 'Update password'}
-                  </Button>
-                </div>
+                <ChangePasswordForm />
               </div>
 
               <div className="flex items-center justify-between">
