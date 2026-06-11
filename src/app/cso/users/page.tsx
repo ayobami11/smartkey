@@ -58,10 +58,8 @@ export default function UsersPage() {
     setLoadState('loading');
     setFetchError(null);
 
-    const params = new URLSearchParams({ limit: '1000' });
-
     try {
-      const res = await fetch(`/api/admin/users?${params.toString()}`);
+      const res = await fetch('/api/admin/users');
       const json = await res.json();
       if (!res.ok) {
         setFetchError(json.error ?? 'Failed to load users.');

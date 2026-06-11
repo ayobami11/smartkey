@@ -6,7 +6,6 @@ import { logger } from '@/lib/logger';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
 import { err, ok } from '@/types/api';
-import type { ProfileStatus, UserRole } from '@/types/database';
 
 const postBodySchema = z.object({
   full_name: z.string().min(1),
@@ -217,7 +216,7 @@ export const POST = async (request: NextRequest) => {
   );
 };
 
-export const GET = async (request: NextRequest) => {
+export const GET = async () => {
   const supabase = await createServerClient();
 
   const {
@@ -236,33 +235,22 @@ export const GET = async (request: NextRequest) => {
   if (profile.role !== 'CSO')
     return NextResponse.json(err('Forbidden', 403), { status: 403 });
 
-  const { searchParams } = new URL(request.url);
-  const role = searchParams.get('role');
-  const departmentId = searchParams.get('department_id');
-  const status = searchParams.get('status');
-  const limit = Math.min(parseInt(searchParams.get('limit') ?? '50', 10), 100);
-  const cursor = searchParams.get('cursor');
-
-  let query = supabase
-    .from('profiles')
-    .select(
-      'id, full_name, institutional_email, role, status, photo_url, created_at, department:departments!department_id(name)'
-    )
-    .order('created_at', { ascending: false })
-    .limit(limit + 1);
-
-  if (role) query = query.eq('role', role as UserRole);
-  if (departmentId) query = query.eq('department_id', departmentId);
-  if (status) query = query.eq('status', status as ProfileStatus);
-  if (cursor) query = query.lt('created_at', cursor);
-
+  // Fetch all profiles in one shot — filtering, sorting, and pagination happen
+  // client-side via TanStack Table. At pilot scale (≤500 users) this is fine.
   const [{ data, error }, { data: authData }] = await Promise.all([
-    query,
+    supabase
+      .from('profiles')
+      .select(
+        'id, full_name, institutional_email, role, status, photo_url, created_at, department:departments!department_id(name)'
+      )
+      .order('created_at', { ascending: false }),
     createAdminClient().auth.admin.listUsers({ perPage: 1000 }),
   ]);
 
   if (error) {
-    return NextResponse.json(err('Failed to fetch users', 500), {
+    const ref = crypto.randomUUID();
+    logger.error('admin/users GET failed', { err: error.message, ref });
+    return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
       status: 500,
     });
   }
@@ -271,17 +259,10 @@ export const GET = async (request: NextRequest) => {
     (authData?.users ?? []).map((u) => [u.id, u.last_sign_in_at ?? null])
   );
 
-  const rows = data ?? [];
-  const hasMore = rows.length > limit;
-  const sliced = hasMore ? rows.slice(0, limit) : rows;
-  const users = sliced.map((u) => ({
+  const users = (data ?? []).map((u) => ({
     ...u,
     last_sign_in_at: lastSignInById.get(u.id) ?? null,
   }));
-  const nextCursor =
-    hasMore && sliced.length > 0 ? sliced[sliced.length - 1].created_at : null;
 
-  return NextResponse.json(ok({ users, next_cursor: nextCursor }), {
-    status: 200,
-  });
+  return NextResponse.json(ok({ users }), { status: 200 });
 };
