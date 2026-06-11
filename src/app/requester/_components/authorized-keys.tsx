@@ -21,7 +21,6 @@ import {
 } from '@/components/ui/empty';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -40,7 +39,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { createBrowserClient } from '@/lib/supabase/client';
 import {
+  weekdayRequestFormSchema,
   weekendRequestFormSchema,
+  type WeekdayRequestFormInput,
   type WeekendRequestFormInput,
 } from '@/lib/validation/schemas';
 
@@ -161,12 +162,16 @@ export const AuthorizedKeys = () => {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [step, setStep] = useState<RequestStep>('weekday_form');
   const [selectedKeyId, setSelectedKeyId] = useState<string>('');
-  const [returnDeadline, setReturnDeadline] = useState(defaultReturnDeadline());
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [result, setResult] = useState<SubmitResult | null>(null);
   const [countdown, setCountdown] = useState(0);
   const [cancelling, setCancelling] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const weekdayForm = useForm<WeekdayRequestFormInput>({
+    resolver: zodResolver(weekdayRequestFormSchema),
+    defaultValues: { return_deadline: defaultReturnDeadline() },
+  });
 
   const weekendForm = useForm<WeekendRequestFormInput>({
     resolver: zodResolver(weekendRequestFormSchema),
@@ -236,7 +241,7 @@ export const AuthorizedKeys = () => {
 
   const openWeekdaySheet = (keyId: string) => {
     setSelectedKeyId(keyId);
-    setReturnDeadline(defaultReturnDeadline());
+    weekdayForm.reset({ return_deadline: defaultReturnDeadline() });
     setSubmitError(null);
     setResult(null);
     setStep('weekday_form');
@@ -261,7 +266,7 @@ export const AuthorizedKeys = () => {
   const resetSheet = () => {
     setSheetOpen(false);
     setSelectedKeyId('');
-    setReturnDeadline(defaultReturnDeadline());
+    weekdayForm.reset();
     setSubmitError(null);
     setResult(null);
     setStep('weekday_form');
@@ -272,7 +277,7 @@ export const AuthorizedKeys = () => {
 
   // Submit weekday request
 
-  const handleSubmit = async () => {
+  const handleWeekdaySubmit = async (values: WeekdayRequestFormInput) => {
     setStep('submitting');
     setSubmitError(null);
 
@@ -283,7 +288,7 @@ export const AuthorizedKeys = () => {
         body: JSON.stringify({
           key_id: selectedKeyId,
           type: 'WEEKDAY',
-          return_deadline: new Date(returnDeadline).toISOString(),
+          return_deadline: new Date(values.return_deadline).toISOString(),
         }),
       });
       const json = await res.json().catch(() => ({}));
@@ -375,9 +380,6 @@ export const AuthorizedKeys = () => {
   const activeKeys = keys.filter((k) => k.key.status !== 'RETIRED');
   const isExpired =
     step === 'code' && result?.code_expires_at !== undefined && countdown === 0;
-
-  const weekdayCanSubmit =
-    selectedKeyId !== '' && returnDeadline !== '' && userId !== null;
 
   // Render
 
@@ -498,7 +500,11 @@ export const AuthorizedKeys = () => {
           <div className="flex flex-1 flex-col overflow-y-auto p-6">
             {/* Weekday form */}
             {step === 'weekday_form' && selectedKey && (
-              <div className="flex flex-col gap-5">
+              <form
+                id="weekday-form"
+                onSubmit={weekdayForm.handleSubmit(handleWeekdaySubmit)}
+                className="flex flex-col gap-5"
+              >
                 {/* Key context */}
                 <div className="rounded-lg border border-border bg-muted/40 p-4">
                   <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
@@ -514,19 +520,28 @@ export const AuthorizedKeys = () => {
                 </div>
 
                 {/* Return deadline */}
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="return-deadline">Return by</Label>
-                  <Input
-                    id="return-deadline"
-                    type="datetime-local"
-                    value={returnDeadline}
-                    onChange={(e) => setReturnDeadline(e.target.value)}
-                    min={new Date().toISOString().slice(0, 16)}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Defaults to today at 17:00 (end of business day).
-                  </p>
-                </div>
+                <Controller
+                  name="return_deadline"
+                  control={weekdayForm.control}
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel htmlFor="return-deadline">
+                        Return by
+                      </FieldLabel>
+                      <Input
+                        id="return-deadline"
+                        type="datetime-local"
+                        {...field}
+                      />
+                      {!fieldState.error && (
+                        <p className="text-xs text-muted-foreground">
+                          Defaults to today at 4PM (end of business day).
+                        </p>
+                      )}
+                      <FieldError errors={[fieldState.error]} />
+                    </Field>
+                  )}
+                />
 
                 {submitError && (
                   <p className="text-xs text-destructive" role="alert">
@@ -534,14 +549,10 @@ export const AuthorizedKeys = () => {
                   </p>
                 )}
 
-                <Button
-                  className="w-full"
-                  disabled={!weekdayCanSubmit}
-                  onClick={handleSubmit}
-                >
+                <Button type="submit" className="w-full" disabled={!userId}>
                   Request key
                 </Button>
-              </div>
+              </form>
             )}
 
             {/* Weekend form */}

@@ -72,18 +72,28 @@ export const submitRequestSchema = z.object({
     .optional(),
 });
 
+export const weekdayRequestFormSchema = z.object({
+  return_deadline: z
+    .string()
+    .min(1, 'Return time is required.')
+    .refine(
+      (val) => new Date(val) > new Date(),
+      'Return time must be in the future.'
+    ),
+});
+
 export const weekendRequestFormSchema = z.object({
   key_id: z.string().min(1, 'Key is required'),
   weekend_date: z
     .string()
-    .min(1, 'Date is required')
+    .min(1, 'Date is required.')
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD')
     .refine((val) => {
       const [y, m, d] = val.split('-').map(Number);
       const day = new Date(y, m - 1, d).getDay();
       return day === 0 || day === 6;
     }, 'Must be a Saturday or Sunday'),
-  description: z.string().trim().min(1, 'Reason for access is required'),
+  description: z.string().trim().min(1, 'Reason for access is required.'),
 });
 
 export const cancelRequestSchema = z.object({
@@ -192,4 +202,5 @@ export type LogIncidentInput = z.infer<typeof logIncidentSchema>;
 export type ShiftHandoverInput = z.infer<typeof shiftHandoverSchema>;
 export type GenerateReportInput = z.infer<typeof generateReportSchema>;
 export type AddReportCommentInput = z.infer<typeof addReportCommentSchema>;
+export type WeekdayRequestFormInput = z.infer<typeof weekdayRequestFormSchema>;
 export type WeekendRequestFormInput = z.infer<typeof weekendRequestFormSchema>;
