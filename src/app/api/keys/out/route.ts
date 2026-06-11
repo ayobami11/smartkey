@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
 import { err, ok } from '@/types/api';
 
@@ -25,7 +26,9 @@ export const GET = async (request: NextRequest) => {
   const zone = searchParams.get('zone');
   const overdueOnly = searchParams.get('overdue_only') === 'true';
 
-  let query = supabase
+  // Use admin client so the requester profile join is not blocked by RLS.
+  // Auth + role check above is still done via the session client.
+  let query = createAdminClient()
     .from('requests')
     .select(
       `id, status, issued_at, return_deadline, created_at,
