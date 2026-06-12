@@ -17,6 +17,11 @@ const PROTECTED_ROUTES: Array<{ prefix: string; role: UserRole }> = [
   { prefix: '/requester', role: 'REQUESTER' },
 ];
 
+// These paths live inside a protected prefix but are part of the invite/activation
+// flow. The session is in the 'activate' namespace (not the role namespace) at
+// this point, so the role gate must not apply. Each page handles its own auth.
+const ACTIVATION_PATHS = ['/hod/onboarding'];
+
 const redirectTo = (request: NextRequest, destination: string): NextResponse =>
   NextResponse.redirect(new URL(destination, request.url));
 
@@ -53,8 +58,9 @@ export const middleware = async (
     const { response, supabase } = await updateSession(request, namespace);
 
     // Only protected routes need an authenticated user; skip the network call
-    // to Auth on public routes so they stay fast.
-    if (!matchedProtected) {
+    // to Auth on public routes so they stay fast. Activation paths within
+    // protected prefixes also bypass the role gate — they handle their own auth.
+    if (!matchedProtected || ACTIVATION_PATHS.includes(pathname)) {
       return response;
     }
 
