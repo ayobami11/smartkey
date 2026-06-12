@@ -36,7 +36,7 @@ export const POST = async (request: NextRequest) => {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, department_id')
+    .select('role, department_id, signature_ref_url')
     .eq('id', user.id)
     .single();
   if (!profile)
@@ -53,6 +53,20 @@ export const POST = async (request: NextRequest) => {
   const { request_id, decision, note } = parsed.data;
 
   if (decision === 'APPROVED') {
+    // HOD must have uploaded their reference signature during onboarding.
+    // When a submitted document URL is available (e.g., a weekend letter),
+    // call verifySignature(refBuffer, submittedBuffer) here and pass the
+    // real result to the RPC. For now there is no submitted document.
+    if (!profile.signature_ref_url) {
+      return NextResponse.json(
+        err(
+          'HOD onboarding is incomplete. Please upload your signature before approving requests.',
+          403
+        ),
+        { status: 403 }
+      );
+    }
+
     const { data, error } = await supabase.rpc('approve_weekend', {
       p_request_id: request_id,
       p_hod_id: user.id,
