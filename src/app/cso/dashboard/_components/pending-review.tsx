@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircleIcon, ShieldAlertIcon } from 'lucide-react';
 
+import { useRealtime } from '@/hooks/useRealtime';
 import { Button } from '@/components/ui/button';
 import {
   Empty,
@@ -31,33 +33,44 @@ type CsoRequest = {
 // Component
 
 export const PendingReview = () => {
-  const [queue, setQueue] = useState<CsoRequest[]>([]);
-  const [queueState, setQueueState] = useState<'loading' | 'ready' | 'error'>(
-    'loading'
-  );
+  const queryClient = useQueryClient();
   const [decidingId, setDecidingId] = useState<string | null>(null);
   const [decisionError, setDecisionError] = useState<string | null>(null);
 
-  const fetchQueue = async () => {
-    setQueueState('loading');
-    try {
+  const {
+    data: queue = [],
+    isLoading: queueLoading,
+    error: queueError,
+    refetch,
+  } = useQuery({
+    queryKey: ['cso', 'pending-review'],
+    queryFn: async () => {
       const res = await fetch('/api/requests/cso-queue');
       const json = await res.json();
-      if (!res.ok) {
-        setQueueState('error');
-        return;
-      }
-      setQueue((json.data?.requests ?? []) as CsoRequest[]);
-      setQueueState('ready');
-    } catch {
-      setQueueState('error');
-    }
-  };
+      if (!res.ok)
+        throw new Error(
+          (json as { error?: string }).error ??
+            'Failed to load pending requests.'
+        );
+      return (
+        (json as { data?: { requests?: CsoRequest[] } }).data?.requests ?? []
+      );
+    },
+  });
 
-  useEffect(() => {
-     
-    fetchQueue();
-  }, []);
+  useRealtime({
+    table: 'requests',
+    onInsert: (payload) => {
+      const row = payload.new as { risk_tier?: string };
+      if (row.risk_tier === 'HIGH')
+        queryClient.invalidateQueries({ queryKey: ['cso', 'pending-review'] });
+    },
+    onUpdate: (payload) => {
+      const row = payload.new as { risk_tier?: string };
+      if (row.risk_tier === 'HIGH')
+        queryClient.invalidateQueries({ queryKey: ['cso', 'pending-review'] });
+    },
+  });
 
   const handleDecision = async (
     requestId: string,
@@ -76,7 +89,7 @@ export const PendingReview = () => {
         setDecisionError(json.error ?? 'Failed to process decision.');
         return;
       }
-      setQueue((prev) => prev.filter((r) => r.id !== requestId));
+      queryClient.invalidateQueries({ queryKey: ['cso', 'pending-review'] });
     } catch {
       setDecisionError('Something went wrong. Check your connection.');
     } finally {
@@ -88,7 +101,7 @@ export const PendingReview = () => {
     <div className="flex flex-col gap-4">
       <h2 className="text-sm font-semibold text-foreground">Pending review</h2>
 
-      {queueState === 'loading' && (
+      {queueLoading && (
         <div className="flex flex-col gap-3" aria-busy="true">
           {[0, 1, 2].map((i) => (
             <Skeleton key={i} className="h-28 rounded-lg" />
@@ -96,26 +109,26 @@ export const PendingReview = () => {
         </div>
       )}
 
-      {queueState === 'error' && (
+      {!!queueError && (
         <div
           className="rounded-lg border border-destructive/30 bg-destructive/5 p-4"
           role="alert"
         >
           <p className="text-sm text-destructive">
-            Failed to load request queue.
+            {(queueError as Error).message}
           </p>
           <Button
             variant="outline"
             size="sm"
             className="mt-2"
-            onClick={fetchQueue}
+            onClick={() => refetch()}
           >
             Retry
           </Button>
         </div>
       )}
 
-      {queueState === 'ready' && (
+      {!queueLoading && !queueError && (
         <>
           {decisionError && (
             <p className="text-sm text-destructive" role="alert">

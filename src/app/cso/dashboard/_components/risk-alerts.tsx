@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangleIcon, CheckCircleIcon } from 'lucide-react';
 
+import { useRealtime } from '@/hooks/useRealtime';
 import { Button } from '@/components/ui/button';
 import {
   Empty,
@@ -30,37 +30,45 @@ type RiskAlert = {
 // Component
 
 export const RiskAlerts = () => {
-  const [alerts, setAlerts] = useState<RiskAlert[]>([]);
-  const [alertsState, setAlertsState] = useState<'loading' | 'ready' | 'error'>(
-    'loading'
-  );
+  const queryClient = useQueryClient();
 
-  const fetchAlerts = async () => {
-    setAlertsState('loading');
-    try {
+  const {
+    data: alerts = [],
+    isLoading,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ['cso', 'risk-alerts'],
+    queryFn: async () => {
       const res = await fetch('/api/ai/risk-alerts');
       const json = await res.json();
-      if (!res.ok) {
-        setAlertsState('error');
-        return;
-      }
-      setAlerts((json.data?.alerts ?? []) as RiskAlert[]);
-      setAlertsState('ready');
-    } catch {
-      setAlertsState('error');
-    }
-  };
+      if (!res.ok)
+        throw new Error(
+          (json as { error?: string }).error ?? 'Failed to load risk alerts.'
+        );
+      return (json as { data?: { alerts?: RiskAlert[] } }).data?.alerts ?? [];
+    },
+  });
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchAlerts();
-  }, []);
+  useRealtime({
+    table: 'requests',
+    onInsert: (payload) => {
+      const row = payload.new as { risk_tier?: string };
+      if (row.risk_tier === 'HIGH')
+        queryClient.invalidateQueries({ queryKey: ['cso', 'risk-alerts'] });
+    },
+    onUpdate: (payload) => {
+      const row = payload.new as { risk_tier?: string };
+      if (row.risk_tier === 'HIGH')
+        queryClient.invalidateQueries({ queryKey: ['cso', 'risk-alerts'] });
+    },
+  });
 
   return (
     <div className="flex flex-col gap-4">
       <h2 className="text-sm font-semibold text-foreground">Risk alerts</h2>
 
-      {alertsState === 'loading' && (
+      {isLoading && (
         <div className="flex flex-col gap-3" aria-busy="true">
           {[0, 1, 2].map((i) => (
             <Skeleton key={i} className="h-20 rounded-lg" />
@@ -68,26 +76,24 @@ export const RiskAlerts = () => {
         </div>
       )}
 
-      {alertsState === 'error' && (
+      {!!error && (
         <div
           className="rounded-lg border border-destructive/30 bg-destructive/5 p-4"
           role="alert"
         >
-          <p className="text-sm text-destructive">
-            Failed to load risk alerts.
-          </p>
+          <p className="text-sm text-destructive">{(error as Error).message}</p>
           <Button
             variant="outline"
             size="sm"
             className="mt-2"
-            onClick={fetchAlerts}
+            onClick={() => refetch()}
           >
             Retry
           </Button>
         </div>
       )}
 
-      {alertsState === 'ready' && (
+      {!isLoading && !error && (
         <>
           {alerts.length === 0 ? (
             <Empty className="border border-border bg-card">
