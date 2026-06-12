@@ -165,6 +165,7 @@ const EVENT_TYPE_MAP: Record<string, AuditEventType> = {
   request_created: 'REQUEST',
   shift_handover_acknowledged: 'HANDOVER',
   user_provisioned: 'SETTINGS',
+  signature_mismatch: 'SIGNATURE',
 };
 
 const SEVERITY_CLASS: Record<IncidentSeverity, string> = {
@@ -857,7 +858,7 @@ export default function AuditLogPage() {
                     placeholder="Describe what occurred, when, and who was involved…"
                     rows={5}
                     aria-required="true"
-                    className='resize-none'
+                    className="resize-none"
                   />
                 </div>
                 {logError && (
