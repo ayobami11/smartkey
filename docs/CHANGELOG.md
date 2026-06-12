@@ -8,6 +8,14 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-06-12 — Signature verification: Sharp + Pixelmatch pipeline (PR #22, branch: backend/feat/22-signature-verification)
+
+- `src/lib/ai/signature/verifier.ts` — greyscale → resize to 800×400 → binary threshold → RGBA expand → Pixelmatch diff. Returns `{ mismatch_ratio, passed }`. Threshold from `SIGNATURE_DIFF_THRESHOLD` env var (default 0.15).
+- `src/lib/ai/signature/verifier.test.ts` — 4 unit tests: identical images (ratio=0), ~10% mismatch (passes), ~50% mismatch (fails), custom threshold.
+- `src/app/api/ai/verify-signature/route.ts` — internal POST endpoint. Fetches HOD reference and submitted image by URL, runs pipeline, returns result. Gated by `x-internal-secret: <SUPABASE_SERVICE_ROLE_KEY>` header.
+- `src/app/api/requests/hod-decision/route.ts` — APPROVED path now: (1) blocks if HOD has no `signature_ref_url` (onboarding incomplete); (2) when `submitted_signature_url` is present, runs pixel comparison — if mismatch exceeds threshold, approval is held and a `SIGNATURE_MISMATCH` audit entry is written (ref URL, submitted URL, mismatch %) for CSO review; if passes, calls `approve_weekend` RPC with real mismatch data.
+- `supabase/migrations/20260612000001_weekend_letters_bucket.sql` + applied to remote — adds the `weekend-letters` private storage bucket with RLS: requesters upload their own letters; HOD and CSO can read.
+
 ### 2026-06-09 — Supabase Realtime subscriptions and offline guard (PR #39, branch: backend/feat/18-realtime-offline)
 
 - `src/hooks/useRealtime.ts` — generic subscription hook. Accepts `table`, optional `filter`, and `onInsert`/`onUpdate`/`onDelete` callbacks. Reconnects automatically with exponential backoff (1 s → 2 s → 4 s → … → 30 s cap). After 30 s without a successful connection, emits `'offline'` status.
