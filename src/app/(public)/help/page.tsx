@@ -2,11 +2,64 @@ import Link from 'next/link';
 
 import { KeyRoundIcon, MailIcon } from 'lucide-react';
 
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
 
 export const metadata = {
   title: 'Help — SmartKey',
 };
+
+const faqs = [
+  {
+    id: 'account',
+    question: 'How do I get an account?',
+    answer: (
+      <>
+        Accounts are provisioned by the Chief Security Officer (CSO). There is
+        no self-registration. If you need access, contact your department&apos;s
+        Head of Department or the CSO directly.
+      </>
+    ),
+  },
+  {
+    id: 'code',
+    question: "I didn't receive my verification code",
+    answer: (
+      <>
+        Check your spam or junk folder. Codes expire after 10 minutes — return
+        to the sign-in page and try again to request a fresh code. If the
+        problem persists, contact the CSO.
+      </>
+    ),
+  },
+  {
+    id: 'password',
+    question: 'I forgot my password',
+    answer: (
+      <>
+        Use the <Link href="/forgot-password">Forgot password</Link> link on the
+        sign-in page. A reset link will be sent to your registered email
+        address.
+      </>
+    ),
+  },
+  {
+    id: 'request',
+    question: 'How do I request a key?',
+    answer: (
+      <>
+        Sign in with your account, then tap the key you want to request from
+        your dashboard. You&apos;ll receive a 6-digit code by email to present
+        at the security desk.
+      </>
+    ),
+  },
+];
 
 export default function HelpPage() {
   return (
@@ -34,59 +87,31 @@ export default function HelpPage() {
           Lagos Senate Building.
         </p>
 
-        <div className="mt-10 space-y-8">
-          <section>
-            <h2 className="text-lg font-semibold text-foreground">
-              How do I get an account?
+        <div className="mt-10 space-y-10">
+          <section aria-labelledby="faq-heading">
+            <h2
+              id="faq-heading"
+              className="text-lg font-semibold text-foreground"
+            >
+              Frequently asked questions
             </h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Accounts are provisioned by the Chief Security Officer (CSO).
-              There is no self-registration. If you need access, contact your
-              department&apos;s Head of Department or the CSO directly.
-            </p>
+            <Accordion type="multiple" className="mt-4 border rounded-lg px-2">
+              {faqs.map(({ id, question, answer }) => (
+                <AccordionItem key={id} value={id}>
+                  <AccordionTrigger>{question}</AccordionTrigger>
+                  <AccordionContent>
+                    <p className="text-muted-foreground">{answer}</p>
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
           </section>
 
-          <section>
-            <h2 className="text-lg font-semibold text-foreground">
-              I didn&apos;t receive my verification code
-            </h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Check your spam or junk folder. Codes expire after 10 minutes —
-              return to the sign-in page and try again to request a fresh code.
-              If the problem persists, contact the CSO.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-lg font-semibold text-foreground">
-              I forgot my password
-            </h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Use the{' '}
-              <Link
-                href="/forgot-password"
-                className="text-primary underline-offset-4 hover:underline"
-              >
-                Forgot password
-              </Link>{' '}
-              link on the sign-in page. A reset link will be sent to your
-              registered email address.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-lg font-semibold text-foreground">
-              I need to request a key
-            </h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Sign in with your account, then tap the key you want to request
-              from your dashboard. You&apos;ll receive a 6-digit code by email
-              to present at the security desk.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-lg font-semibold text-foreground">
+          <section aria-labelledby="contact-heading">
+            <h2
+              id="contact-heading"
+              className="text-lg font-semibold text-foreground"
+            >
               Contact support
             </h2>
             <p className="mt-2 text-sm text-muted-foreground">
