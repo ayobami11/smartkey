@@ -67,7 +67,7 @@ Located in `src/lib/ai/signature/`. Server-side only.
 
 - **Risk scoring engine**: ✅ Done (PR #38). `src/lib/ai/risk/` contains `types.ts`, `rules.ts`, `thresholds.ts`, and `engine.ts`. 24 unit tests cover every rule and tier boundary. `POST /api/requests/submit` runs the engine and back-fills `risk_tier` + `risk_factors` on the request row via the admin client.
 - **Gemini shift reports**: not yet implemented. `POST /api/reports/generate` route exists but `src/lib/ai/reports/` has not been written. The route returns a placeholder response.
-- **Signature verification**: not yet implemented. `POST /api/ai/verify-signature` route exists but the Sharp + Pixelmatch pipeline (`src/lib/ai/signature/verifier.ts`) has not been written. The route is not wired to any image processing logic.
+- **Signature verification**: ✅ Done (PR #22). `src/lib/ai/signature/verifier.ts` preprocesses images with Sharp (greyscale, 800×400, binary threshold) and diffs them with Pixelmatch. 4 unit tests cover identical, threshold-edge, mismatch, and custom-threshold cases. `POST /api/ai/verify-signature` exposes the pipeline as an internal endpoint. `POST /api/requests/hod-decision` now gates approval on the HOD having a reference signature.
 
 ## Cross-cutting
 
