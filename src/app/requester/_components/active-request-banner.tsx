@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { KeyRoundIcon, XCircleIcon } from 'lucide-react';
 
+import { useRealtime } from '@/hooks/useRealtime';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { createBrowserClient } from '@/lib/supabase/client';
@@ -59,55 +61,60 @@ const formatCountdown = (seconds: number) => {
 // Component
 
 export const ActiveRequestBanner = () => {
-  const [loading, setLoading] = useState(true);
-  const [request, setRequest] = useState<ActiveRequest | null>(null);
+  const queryClient = useQueryClient();
+  const [userId, setUserId] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(0);
   const [cancelling, setCancelling] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Fetch
+  // Resolve user ID once on mount
 
-  const fetchActive = async () => {
-    try {
+  useEffect(() => {
+    createBrowserClient()
+      .auth.getUser()
+      .then(({ data: { user } }) => {
+        if (user) setUserId(user.id);
+      });
+  }, []);
+
+  // Fetch active request via TanStack Query
+
+  const { data: request = null, isLoading: loading } = useQuery({
+    queryKey: ['active-request', userId],
+    enabled: !!userId,
+    queryFn: async () => {
       const supabase = createBrowserClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        setLoading(false);
-        return;
-      }
-
       const { data } = await supabase
         .from('requests')
         .select(
           'id, status, code, code_expires_at, return_deadline, key:keys!key_id(code, room_name)'
         )
-        .eq('requester_id', user.id)
+        .eq('requester_id', userId!)
         .in('status', ['CODE_ISSUED', 'KEY_ISSUED'])
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
+      return (data as ActiveRequest | null) ?? null;
+    },
+  });
 
-      setRequest(data as ActiveRequest | null);
-      if (data?.code_expires_at) {
-        setCountdown(secondsRemaining(data.code_expires_at));
+  // Real-time subscription — no server-side filter; check requester_id client-side
+
+  useRealtime({
+    table: 'requests',
+    onUpdate: (payload) => {
+      const row = payload.new as { requester_id?: string };
+      if (row.requester_id === userId) {
+        queryClient.invalidateQueries({ queryKey: ['active-request', userId] });
       }
-    } catch {
-      // fail silently — banner is non-critical; page remains usable
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchActive();
-  }, []);
+    },
+  });
 
   // Countdown timer
 
   useEffect(() => {
     if (!request?.code_expires_at) return;
+    setCountdown(secondsRemaining(request.code_expires_at));
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
       setCountdown((prev) => {
@@ -134,7 +141,7 @@ export const ActiveRequestBanner = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ request_id: request.id }),
       });
-      setRequest(null);
+      queryClient.invalidateQueries({ queryKey: ['active-request', userId] });
     } catch {
       // fail silently — user can retry
     } finally {
