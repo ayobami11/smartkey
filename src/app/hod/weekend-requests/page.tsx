@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangleIcon,
   CalendarIcon,
@@ -9,6 +10,8 @@ import {
   KeyRoundIcon,
   XIcon,
 } from 'lucide-react';
+
+import { useRealtime } from '@/hooks/useRealtime';
 
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -64,9 +67,7 @@ const formatDate = (iso: string) =>
 // Component
 
 export default function WeekendRequestsPage() {
-  const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [fetchError, setFetchError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState(0);
   const [selected, setSelected] = useState<PendingRequest | null>(null);
   const [note, setNote] = useState('');
@@ -77,32 +78,39 @@ export default function WeekendRequestsPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [decidedIds, setDecidedIds] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    fetchPending();
-  }, []);
-
-  const fetchPending = async () => {
-    setLoading(true);
-    setFetchError(null);
-    try {
+  const {
+    data: pendingRequests = [],
+    isLoading: loading,
+    error: fetchError,
+    refetch,
+  } = useQuery({
+    queryKey: ['requests', 'pending-weekend'],
+    queryFn: async () => {
       const res = await fetch('/api/requests/pending');
       const json = await res.json();
-      if (!res.ok) {
-        setFetchError(
+      if (!res.ok)
+        throw new Error(
           (json as { error?: string }).error ?? 'Failed to load requests.'
         );
-        return;
-      }
-      setPendingRequests(
+      return (
         (json as { data?: { requests?: PendingRequest[] } }).data?.requests ??
-          []
+        []
       );
-    } catch {
-      setFetchError('Network error. Check your connection and try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+  });
+
+  useRealtime({
+    table: 'requests',
+    filter: { column: 'type', value: 'WEEKEND' },
+    onInsert: () =>
+      queryClient.invalidateQueries({
+        queryKey: ['requests', 'pending-weekend'],
+      }),
+    onUpdate: () =>
+      queryClient.invalidateQueries({
+        queryKey: ['requests', 'pending-weekend'],
+      }),
+  });
 
   const handleClose = () => {
     setSelected(null);
@@ -205,12 +213,14 @@ export default function WeekendRequestsPage() {
           className="rounded-lg border border-destructive/30 bg-destructive/5 p-4"
           role="alert"
         >
-          <p className="text-sm font-medium text-destructive">{fetchError}</p>
+          <p className="text-sm font-medium text-destructive">
+            {fetchError.message}
+          </p>
           <Button
             variant="outline"
             size="sm"
             className="mt-3"
-            onClick={fetchPending}
+            onClick={() => refetch()}
           >
             Retry
           </Button>

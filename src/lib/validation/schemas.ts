@@ -105,7 +105,7 @@ export const weekendRequestFormSchema = z.object({
       const [y, m, d] = val.split('-').map(Number);
       const day = new Date(y, m - 1, d).getDay();
       return day === 0 || day === 6;
-    }, 'Must be a Saturday or Sunday'),
+    }, 'Must be a Saturday or Sunday.'),
   description: z.string().trim().min(1, 'Reason for access is required.'),
 });
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertCircleIcon,
   CalendarIcon,
@@ -9,6 +10,7 @@ import {
   KeyRoundIcon,
 } from 'lucide-react';
 
+import { useRealtime } from '@/hooks/useRealtime';
 import { Skeleton } from '@/components/ui/skeleton';
 import { createBrowserClient } from '@/lib/supabase/client';
 
@@ -53,65 +55,38 @@ type FilterTab = (typeof filterTabs)[number];
 // Component
 
 export default function HodDashboardPage() {
+  const queryClient = useQueryClient();
   const [fullName, setFullName] = useState('');
   const [deptName, setDeptName] = useState('');
-  const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]);
   const [deptKeys, setDeptKeys] = useState<DeptKey[]>([]);
-  const [loadingRequests, setLoadingRequests] = useState(true);
   const [loadingKeys, setLoadingKeys] = useState(true);
   const [activeFilter, setActiveFilter] = useState<FilterTab>('All keys');
 
-  useEffect(() => {
-    const init = async () => {
-      const supabase = createBrowserClient();
-
-      // Get current user profile + department
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select(
-          'full_name, department_id, department:departments!department_id(name)'
-        )
-        .eq('id', user.id)
-        .single();
-
-      if (profile) {
-        setFullName((profile.full_name as string | null) ?? '');
-        const dept = profile.department as { name: string } | null;
-        setDeptName(dept?.name ?? '');
-
-        const deptId = profile.department_id as string | null;
-        if (deptId) {
-          fetchKeys(supabase, deptId);
-        }
-      }
-
-      fetchPendingRequests();
-    };
-
-    init();
-  }, []);
-
-  const fetchPendingRequests = async () => {
-    setLoadingRequests(true);
-    try {
+  const { data: pendingRequests = [], isLoading: loadingRequests } = useQuery({
+    queryKey: ['requests', 'pending-weekend'],
+    queryFn: async () => {
       const res = await fetch('/api/requests/pending');
-      if (!res.ok) return;
+      if (!res.ok) return [];
       const json = await res.json();
-      setPendingRequests(
+      return (
         (json as { data?: { requests?: PendingRequest[] } }).data?.requests ??
-          []
+        []
       );
-    } catch {
-      // silent — dashboard panel is non-critical
-    } finally {
-      setLoadingRequests(false);
-    }
-  };
+    },
+  });
+
+  useRealtime({
+    table: 'requests',
+    filter: { column: 'type', value: 'WEEKEND' },
+    onInsert: () =>
+      queryClient.invalidateQueries({
+        queryKey: ['requests', 'pending-weekend'],
+      }),
+    onUpdate: () =>
+      queryClient.invalidateQueries({
+        queryKey: ['requests', 'pending-weekend'],
+      }),
+  });
 
   const fetchKeys = async (
     supabase: ReturnType<typeof createBrowserClient>,
@@ -142,6 +117,38 @@ export default function HodDashboardPage() {
     );
     setLoadingKeys(false);
   };
+
+  useEffect(() => {
+    const init = async () => {
+      const supabase = createBrowserClient();
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select(
+          'full_name, department_id, department:departments!department_id(name)'
+        )
+        .eq('id', user.id)
+        .single();
+
+      if (profile) {
+        setFullName((profile.full_name as string | null) ?? '');
+        const dept = profile.department as { name: string } | null;
+        setDeptName(dept?.name ?? '');
+
+        const deptId = profile.department_id as string | null;
+        if (deptId) {
+          fetchKeys(supabase, deptId);
+        }
+      }
+    };
+
+    init();
+  }, []);
 
   const filteredKeys =
     activeFilter === 'Has vacant slot'
