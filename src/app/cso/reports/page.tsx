@@ -31,14 +31,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
-  Sheet,
-  SheetClose,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { createBrowserClient } from '@/lib/supabase/client';
@@ -510,8 +510,8 @@ export default function ShiftReportsPage() {
         </>
       )}
 
-      {/* Comment Sheet */}
-      <Sheet
+      {/* Comment Dialog */}
+      <Dialog
         open={commentTarget !== null}
         onOpenChange={(open) => {
           if (!open) {
@@ -522,22 +522,19 @@ export default function ShiftReportsPage() {
           }
         }}
       >
-        <SheetContent
-          side="right"
-          className="flex flex-col gap-0 p-0 sm:max-w-md"
-        >
-          <SheetHeader className="border-b border-border p-6">
-            <SheetTitle>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
               Add comment — {commentTarget?.label ?? 'Report'}
-            </SheetTitle>
-            <SheetDescription>
+            </DialogTitle>
+            <DialogDescription>
               Comments are saved permanently to the report and cannot be edited
               or deleted.
-            </SheetDescription>
-          </SheetHeader>
-          <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-6">
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
             {commentSuccess ? (
-              <div className="flex flex-col items-center gap-3 py-6 text-center">
+              <div className="flex flex-col items-center gap-3 py-4 text-center">
                 <div className="flex size-12 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950/40">
                   <CheckCircleIcon
                     className="size-6 text-emerald-600"
@@ -570,16 +567,16 @@ export default function ShiftReportsPage() {
               </>
             )}
           </div>
-          <SheetFooter className="border-t border-border p-6">
+          <DialogFooter>
             {commentSuccess ? (
-              <SheetClose asChild>
+              <DialogClose asChild>
                 <Button className="w-full">Close</Button>
-              </SheetClose>
+              </DialogClose>
             ) : (
               <>
-                <SheetClose asChild>
+                <DialogClose asChild>
                   <Button variant="outline">Cancel</Button>
-                </SheetClose>
+                </DialogClose>
                 <Button
                   disabled={!commentText.trim() || commenting}
                   aria-busy={commenting}
@@ -589,25 +586,22 @@ export default function ShiftReportsPage() {
                 </Button>
               </>
             )}
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      {/* Generate report Sheet */}
-      <Sheet open={generateOpen} onOpenChange={setGenerateOpen}>
-        <SheetContent
-          side="right"
-          className="flex flex-col gap-0 p-0 sm:max-w-md"
-        >
-          <SheetHeader className="border-b border-border p-6">
-            <SheetTitle>Generate shift report</SheetTitle>
-            <SheetDescription>
+      {/* Generate report Dialog */}
+      <Dialog open={generateOpen} onOpenChange={setGenerateOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Generate shift report</DialogTitle>
+            <DialogDescription>
               Select a completed shift to generate an AI-powered summary.
-            </SheetDescription>
-          </SheetHeader>
-          <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-6">
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
             {generatedReportId ? (
-              <div className="flex flex-col items-center gap-3 py-6 text-center">
+              <div className="flex flex-col items-center gap-3 py-4 text-center">
                 <div className="flex size-12 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950/40">
                   <CalendarIcon
                     className="size-6 text-emerald-600"
@@ -656,16 +650,16 @@ export default function ShiftReportsPage() {
               </>
             )}
           </div>
-          <SheetFooter className="border-t border-border p-6">
+          <DialogFooter>
             {generatedReportId ? (
-              <SheetClose asChild>
+              <DialogClose asChild>
                 <Button className="w-full">Close</Button>
-              </SheetClose>
+              </DialogClose>
             ) : (
               <>
-                <SheetClose asChild>
+                <DialogClose asChild>
                   <Button variant="outline">Cancel</Button>
-                </SheetClose>
+                </DialogClose>
                 <Button
                   disabled={!selectedShiftId || generating}
                   aria-busy={generating}
@@ -675,9 +669,9 @@ export default function ShiftReportsPage() {
                 </Button>
               </>
             )}
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

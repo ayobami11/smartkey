@@ -26,14 +26,14 @@ import {
 } from '@/components/ui/empty';
 import { Label } from '@/components/ui/label';
 import {
-  Sheet,
-  SheetClose,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { createBrowserClient } from '@/lib/supabase/client';
@@ -526,8 +526,8 @@ export default function KeyInventoryPage() {
         </>
       )}
 
-      {/* Mark as lost Sheet */}
-      <Sheet
+      {/* Mark as lost Dialog */}
+      <Dialog
         open={lostTarget !== null}
         onOpenChange={(open) => {
           if (!open) {
@@ -537,18 +537,15 @@ export default function KeyInventoryPage() {
           }
         }}
       >
-        <SheetContent
-          side="right"
-          className="flex flex-col gap-0 p-0 sm:max-w-md"
-        >
-          <SheetHeader className="border-b border-border p-6">
-            <SheetTitle>Mark key {lostTarget?.code} as lost</SheetTitle>
-            <SheetDescription>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Mark key {lostTarget?.code} as lost</DialogTitle>
+            <DialogDescription>
               This will retire the key and open a HIGH-severity incident. This
               action cannot be undone.
-            </SheetDescription>
-          </SheetHeader>
-          <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-6">
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="lost-note">
                 Loss note <span aria-hidden="true">*</span>
@@ -568,10 +565,10 @@ export default function KeyInventoryPage() {
               </p>
             )}
           </div>
-          <SheetFooter className="border-t border-border p-6">
-            <SheetClose asChild>
+          <DialogFooter>
+            <DialogClose asChild>
               <Button variant="outline">Cancel</Button>
-            </SheetClose>
+            </DialogClose>
             <Button
               variant="destructive"
               disabled={!lostNote.trim() || marking}
@@ -580,9 +577,9 @@ export default function KeyInventoryPage() {
             >
               {marking ? 'Marking…' : 'Confirm — mark as lost'}
             </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

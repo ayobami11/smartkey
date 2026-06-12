@@ -1,17 +1,19 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  CalendarIcon,
-  CheckCircleIcon,
-  InboxIcon,
-  KeyRoundIcon,
-  XCircleIcon,
-} from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { CalendarIcon, InboxIcon, KeyRoundIcon } from 'lucide-react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Empty,
   EmptyDescription,
@@ -61,17 +63,8 @@ type RequestStep =
   | 'weekday_form'
   | 'weekend_form'
   | 'submitting'
-  | 'code'
   | 'pending_hod'
   | 'error';
-
-type SubmitResult = {
-  request_id: string;
-  code?: string;
-  code_expires_at?: string;
-  risk_tier?: string;
-  status?: string;
-};
 
 // Helpers
 
@@ -83,17 +76,6 @@ const defaultReturnDeadline = () => {
     d.setDate(d.getDate() + 1);
   }
   return d.toISOString().slice(0, 16); // "YYYY-MM-DDTHH:MM"
-};
-
-const secondsRemaining = (isoExpiry: string) =>
-  Math.max(0, Math.floor((new Date(isoExpiry).getTime() - Date.now()) / 1000));
-
-const formatCountdown = (seconds: number) => {
-  const m = Math.floor(seconds / 60)
-    .toString()
-    .padStart(2, '0');
-  const s = (seconds % 60).toString().padStart(2, '0');
-  return `${m}:${s}`;
 };
 
 const zoneLabel = (zone: string) =>
@@ -153,20 +135,18 @@ const KeyTile = ({
 // Component
 
 export const AuthorizedKeys = () => {
+  const router = useRouter();
   const [keys, setKeys] = useState<AuthorisedKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
 
-  // Sheet state
-  const [sheetOpen, setSheetOpen] = useState(false);
+  // Dialog / Sheet state
+  const [weekdayOpen, setWeekdayOpen] = useState(false);
+  const [weekendOpen, setWeekendOpen] = useState(false);
   const [step, setStep] = useState<RequestStep>('weekday_form');
   const [selectedKeyId, setSelectedKeyId] = useState<string>('');
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [result, setResult] = useState<SubmitResult | null>(null);
-  const [countdown, setCountdown] = useState(0);
-  const [cancelling, setCancelling] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const weekdayForm = useForm<WeekdayRequestFormInput>({
     resolver: zodResolver(weekdayRequestFormSchema),
@@ -216,36 +196,14 @@ export const AuthorizedKeys = () => {
     fetchKeys();
   }, [fetchKeys]);
 
-  // Countdown timer
-
-  useEffect(() => {
-    if (!result?.code_expires_at) return;
-    // Initial countdown is set in handleSubmit when the result arrives so we
-    // avoid a synchronous setState inside this effect body.
-    if (timerRef.current) clearInterval(timerRef.current);
-    timerRef.current = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(timerRef.current!);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [result?.code_expires_at]);
-
-  // Sheet helpers
+  // Overlay helpers
 
   const openWeekdaySheet = (keyId: string) => {
     setSelectedKeyId(keyId);
     weekdayForm.reset({ return_deadline: defaultReturnDeadline() });
     setSubmitError(null);
-    setResult(null);
     setStep('weekday_form');
-    setSheetOpen(true);
+    setWeekdayOpen(true);
   };
 
   const openWeekendSheet = () => {
@@ -258,21 +216,18 @@ export const AuthorizedKeys = () => {
       description: '',
     });
     setSubmitError(null);
-    setResult(null);
     setStep('weekend_form');
-    setSheetOpen(true);
+    setWeekendOpen(true);
   };
 
   const resetSheet = () => {
-    setSheetOpen(false);
+    setWeekdayOpen(false);
+    setWeekendOpen(false);
     setSelectedKeyId('');
     weekdayForm.reset();
     setSubmitError(null);
-    setResult(null);
     setStep('weekday_form');
-    setCancelling(false);
     weekendForm.reset();
-    if (timerRef.current) clearInterval(timerRef.current);
   };
 
   // Submit weekday request
@@ -299,18 +254,14 @@ export const AuthorizedKeys = () => {
         setStep('weekday_form');
         return;
       }
-      const data = (json as { data?: SubmitResult }).data;
+      const data = (json as { data?: { request_id: string } }).data;
       if (!data) {
         setSubmitError('Unexpected server response. Please try again.');
         setStep('weekday_form');
         return;
       }
-      setResult(data);
-      // Initialise countdown here (not in useEffect) to avoid sync setState in effect
-      if (data.code_expires_at) {
-        setCountdown(secondsRemaining(data.code_expires_at));
-      }
-      setStep('code');
+      setWeekdayOpen(false);
+      router.push(`/requester/request/${data.request_id}/code`);
     } catch {
       setSubmitError('Network error. Check your connection and try again.');
       setStep('weekday_form');
@@ -343,13 +294,12 @@ export const AuthorizedKeys = () => {
         setStep('weekend_form');
         return;
       }
-      const data = (json as { data?: SubmitResult }).data;
+      const data = (json as { data?: { request_id: string } }).data;
       if (!data) {
         setSubmitError('Unexpected server response. Please try again.');
         setStep('weekend_form');
         return;
       }
-      setResult(data);
       setStep('pending_hod');
     } catch {
       setSubmitError('Network error. Check your connection and try again.');
@@ -357,29 +307,10 @@ export const AuthorizedKeys = () => {
     }
   };
 
-  // Cancel request
-
-  const handleCancel = async () => {
-    if (!result?.request_id) return;
-    setCancelling(true);
-    try {
-      await fetch('/api/requests/cancel', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ request_id: result.request_id }),
-      });
-      resetSheet();
-    } catch {
-      setCancelling(false);
-    }
-  };
-
   // Derived values
 
   const selectedKey = keys.find((k) => k.key.id === selectedKeyId)?.key;
   const activeKeys = keys.filter((k) => k.key.status !== 'RETIRED');
-  const isExpired =
-    step === 'code' && result?.code_expires_at !== undefined && countdown === 0;
 
   // Render
 
@@ -469,92 +400,105 @@ export const AuthorizedKeys = () => {
         </>
       )}
 
-      {/* Request Sheet */}
-      <Sheet
-        open={sheetOpen}
+      {/* Weekday Request Dialog */}
+      <Dialog
+        open={weekdayOpen}
         onOpenChange={(open) => {
           if (!open) resetSheet();
         }}
       >
-        <SheetContent
-          side="right"
-          className="flex flex-col gap-0 p-0 sm:max-w-md"
-        >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Request a key</DialogTitle>
+            <DialogDescription>
+              Confirm the return deadline and submit your request.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Weekday form */}
+          {step === 'weekday_form' && selectedKey && (
+            <form
+              id="weekday-form"
+              onSubmit={weekdayForm.handleSubmit(handleWeekdaySubmit)}
+              className="flex flex-col gap-5"
+            >
+              {/* Key context */}
+              <div className="rounded-lg border border-border bg-muted/40 p-4">
+                <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                  <KeyRoundIcon className="size-3.5" aria-hidden="true" />
+                  Key
+                </div>
+                <p className="mt-1.5 font-mono text-sm font-medium text-foreground">
+                  {selectedKey.code}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {selectedKey.room_name} · {zoneLabel(selectedKey.zone)}
+                </p>
+              </div>
+
+              {/* Return deadline */}
+              <Controller
+                name="return_deadline"
+                control={weekdayForm.control}
+                render={({ field, fieldState }) => (
+                  <Field data-invalid={fieldState.invalid}>
+                    <FieldLabel htmlFor="return-deadline">Return by</FieldLabel>
+                    <Input
+                      id="return-deadline"
+                      type="datetime-local"
+                      {...field}
+                    />
+                    {!fieldState.error && (
+                      <p className="text-xs text-muted-foreground">
+                        Defaults to today at 4PM (end of business day).
+                      </p>
+                    )}
+                    <FieldError errors={[fieldState.error]} />
+                  </Field>
+                )}
+              />
+
+              {submitError && (
+                <p className="text-xs text-destructive" role="alert">
+                  {submitError}
+                </p>
+              )}
+
+              <Button type="submit" className="w-full" disabled={!userId}>
+                Request key
+              </Button>
+            </form>
+          )}
+
+          {/* Submitting */}
+          {step === 'submitting' && weekdayOpen && (
+            <div className="flex items-center justify-center py-8">
+              <p className="text-sm text-muted-foreground">
+                Submitting request…
+              </p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Weekend Request Sheet */}
+      <Sheet
+        open={weekendOpen}
+        onOpenChange={(open) => {
+          if (!open) resetSheet();
+        }}
+      >
+        <SheetContent side="bottom" className="flex flex-col gap-0 p-0">
           <SheetHeader className="border-b border-border p-6">
-            <SheetTitle>
-              {step === 'weekend_form' || step === 'pending_hod'
-                ? 'Request weekend access'
-                : 'Request a key'}
-            </SheetTitle>
+            <SheetTitle>Request weekend access</SheetTitle>
             <SheetDescription>
-              {step === 'code'
-                ? 'Show this code to the security officer at the desk.'
-                : step === 'pending_hod'
-                  ? 'Your HOD will be notified to approve this request.'
-                  : step === 'weekend_form'
-                    ? 'Select a key, choose a date, and describe your reason.'
-                    : 'Confirm the return deadline and submit your request.'}
+              {step === 'pending_hod'
+                ? 'Your HOD will be notified to approve this request.'
+                : 'Select a key, choose a date, and describe your reason.'}
             </SheetDescription>
           </SheetHeader>
 
           <div className="flex flex-1 flex-col overflow-y-auto p-6">
-            {/* Weekday form */}
-            {step === 'weekday_form' && selectedKey && (
-              <form
-                id="weekday-form"
-                onSubmit={weekdayForm.handleSubmit(handleWeekdaySubmit)}
-                className="flex flex-col gap-5"
-              >
-                {/* Key context */}
-                <div className="rounded-lg border border-border bg-muted/40 p-4">
-                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                    <KeyRoundIcon className="size-3.5" aria-hidden="true" />
-                    Key
-                  </div>
-                  <p className="mt-1.5 font-mono text-sm font-medium text-foreground">
-                    {selectedKey.code}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {selectedKey.room_name} · {zoneLabel(selectedKey.zone)}
-                  </p>
-                </div>
-
-                {/* Return deadline */}
-                <Controller
-                  name="return_deadline"
-                  control={weekdayForm.control}
-                  render={({ field, fieldState }) => (
-                    <Field data-invalid={fieldState.invalid}>
-                      <FieldLabel htmlFor="return-deadline">
-                        Return by
-                      </FieldLabel>
-                      <Input
-                        id="return-deadline"
-                        type="datetime-local"
-                        {...field}
-                      />
-                      {!fieldState.error && (
-                        <p className="text-xs text-muted-foreground">
-                          Defaults to today at 4PM (end of business day).
-                        </p>
-                      )}
-                      <FieldError errors={[fieldState.error]} />
-                    </Field>
-                  )}
-                />
-
-                {submitError && (
-                  <p className="text-xs text-destructive" role="alert">
-                    {submitError}
-                  </p>
-                )}
-
-                <Button type="submit" className="w-full" disabled={!userId}>
-                  Request key
-                </Button>
-              </form>
-            )}
-
             {/* Weekend form */}
             {step === 'weekend_form' && (
               <form
@@ -645,7 +589,7 @@ export const AuthorizedKeys = () => {
             )}
 
             {/* Submitting */}
-            {step === 'submitting' && (
+            {step === 'submitting' && weekendOpen && (
               <div className="flex flex-1 items-center justify-center">
                 <p className="text-sm text-muted-foreground">
                   Submitting request…
@@ -653,77 +597,8 @@ export const AuthorizedKeys = () => {
               </div>
             )}
 
-            {/* Code step */}
-            {step === 'code' && result && (
-              <div className="flex flex-col items-center gap-4 text-center">
-                <CheckCircleIcon
-                  className="size-10 text-emerald-600"
-                  aria-hidden="true"
-                />
-                <div>
-                  <p className="font-medium text-foreground">
-                    Request submitted
-                  </p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Show this code to the security officer at the desk.
-                  </p>
-                </div>
-
-                {/* Code display */}
-                {isExpired ? (
-                  <div className="w-full rounded-lg border border-muted bg-muted/40 p-6 text-center">
-                    <p className="text-sm font-medium text-muted-foreground">
-                      Code expired
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Cancel this request and submit a new one to continue.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="w-full rounded-lg border border-primary/20 bg-primary/5 p-6 text-center">
-                    {selectedKey && (
-                      <p className="mb-3 text-xs text-muted-foreground">
-                        {selectedKey.code} · {selectedKey.room_name}
-                      </p>
-                    )}
-                    <p
-                      className="font-mono text-5xl font-semibold tracking-[0.3em] text-foreground"
-                      aria-label={`Collection code: ${result.code}`}
-                    >
-                      {result.code}
-                    </p>
-                    {result.code_expires_at && (
-                      <p
-                        className="mt-3 font-mono text-sm text-muted-foreground"
-                        aria-live="polite"
-                        aria-label={`Expires in ${formatCountdown(countdown)}`}
-                      >
-                        Expires in {formatCountdown(countdown)}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                <div className="flex w-full flex-col gap-2">
-                  <Button
-                    variant="outline"
-                    className="w-full gap-1.5 text-destructive hover:bg-destructive/10"
-                    onClick={handleCancel}
-                    disabled={cancelling}
-                    aria-busy={cancelling}
-                  >
-                    <XCircleIcon className="size-3.5" aria-hidden="true" />
-                    {cancelling ? 'Cancelling…' : 'Cancel request'}
-                  </Button>
-                  <Button className="w-full" onClick={resetSheet}>
-                    Done
-                  </Button>
-                </div>
-              </div>
-            )}
-
             {/* Pending HOD approval */}
-            {step === 'pending_hod' && result && (
+            {step === 'pending_hod' && (
               <div className="flex flex-col items-center gap-4 text-center">
                 <div className="flex size-12 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950/40">
                   <CalendarIcon
