@@ -29,7 +29,7 @@ import { createBrowserClient } from '@/lib/supabase/client';
 import {
   RiskAcknowledgement,
   RiskTierBadge,
-} from '@/components/smartkey/RiskTierBadge';
+} from '@/components/smartkey/risk-tier-badge';
 import { useRealtime } from '@/hooks/useRealtime';
 import type { RiskFactor, RiskTier } from '@/lib/ai/risk/types';
 

@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/breadcrumb';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
-import { ModeToggle } from '@/components/smartkey/ModeToggle';
+import { ModeToggle } from '@/components/smartkey/mode-toggle';
 
 function getPageTitle(pathname: string): string {
   if (pathname === '/hod/weekend-requests') return 'Weekend Requests';

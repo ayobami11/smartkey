@@ -1,7 +1,7 @@
 import { AppSidebar } from './_components/sidebar';
 import { DashboardHeader } from './_components/dashboard-header';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
-import { OfflineBanner } from '@/components/smartkey/OfflineBanner';
+import { OfflineBanner } from '@/components/smartkey/offline-banner';
 
 export default function CsoLayout({ children }: { children: React.ReactNode }) {
   return (

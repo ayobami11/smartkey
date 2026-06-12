@@ -7,7 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import type { RiskFactor, RiskTier } from '@/lib/ai/risk/types';
 
-import { RiskFactorPopover } from './RiskFactorPopover';
+import { RiskFactorPopover } from './risk-factor-popover';
 
 type TierConfig = {
   label: string;
