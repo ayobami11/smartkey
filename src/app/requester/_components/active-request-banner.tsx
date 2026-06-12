@@ -39,6 +39,16 @@ const secondsRemaining = (isoExpiry: string) =>
   Math.max(0, Math.floor((new Date(isoExpiry).getTime() - Date.now()) / 1000));
 
 const formatCountdown = (seconds: number) => {
+  if (seconds >= 86400) {
+    const d = Math.floor(seconds / 86400);
+    const h = Math.floor((seconds % 86400) / 3600);
+    return `${d}d ${h}h`;
+  }
+  if (seconds >= 3600) {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    return `${h}h ${m}m`;
+  }
   const m = Math.floor(seconds / 60)
     .toString()
     .padStart(2, '0');
