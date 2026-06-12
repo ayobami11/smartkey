@@ -5,7 +5,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { InboxIcon, KeyRoundIcon } from 'lucide-react';
 
 import { useRealtime } from '@/hooks/useRealtime';
-
 import { Button } from '@/components/ui/button';
 import {
   Empty,
@@ -121,17 +120,15 @@ export const OutstandingKeys = () => {
     table: 'requests',
     onInsert: (payload) => {
       const row = payload.new as { status?: string };
-      if (row.status === 'KEY_ISSUED') {
+      if (row.status === 'KEY_ISSUED')
         queryClient.invalidateQueries({ queryKey: ['keys', 'outstanding'] });
-      }
     },
     onUpdate: (payload) => {
       const row = payload.new as { status?: string };
       if (
         ['KEY_ISSUED', 'KEY_OVERDUE', 'KEY_RETURNED'].includes(row.status ?? '')
-      ) {
+      )
         queryClient.invalidateQueries({ queryKey: ['keys', 'outstanding'] });
-      }
     },
   });
 
