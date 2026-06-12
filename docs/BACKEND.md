@@ -525,10 +525,10 @@ Track progress here after every merged PR. Update the status column; link the PR
 | Rule-based risk scoring engine + unit tests       | ✅ Done        | #38 |
 | Risk tier UI (RiskTierBadge, RiskFactorPopover)   | ✅ Done        | #40 |
 | Gemini shift report generation                    | ⬜ Not started | —   |
-| Signature verification (Sharp + Pixelmatch)       | ⬜ Not started | —   |
+| Signature verification (Sharp + Pixelmatch)       | ✅ Done        | #22 |
 | Supabase Storage (photos, signatures, letters)    | ✅ Done        | #32 |
 | Shift handover + incident + report API routes     | ✅ Done        | #37 |
-| Edge Functions (overdue check + daily summary)    | ⬜ Not started | —   |
+| Edge Functions (overdue check + daily summary)    | ✅ Done        | #24 |
 | CI/CD pipeline (GitHub Actions)                   | ⬜ Not started | —   |
 
 Statuses: `⬜ Not started` → `🔄 In progress` → `✅ Done`
