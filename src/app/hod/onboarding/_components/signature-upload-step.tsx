@@ -145,7 +145,10 @@ export const SignatureUploadStep = ({
                   className="w-fit"
                   onClick={() => {
                     field.onChange(undefined);
-                    if (fileInputRef.current) fileInputRef.current.value = '';
+                    if (fileInputRef.current) {
+                      fileInputRef.current.value = '';
+                      fileInputRef.current.click();
+                    }
                   }}
                 >
                   <RefreshCwIcon className="size-3.5" aria-hidden="true" />
