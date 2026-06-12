@@ -103,6 +103,16 @@ enabled = true
 policy = "oneshot"
 inspector_port = 8083
 
+[functions.overdue-key-check]
+enabled = true
+# Called by pg_cron every hour — no user JWT present.
+verify_jwt = false
+
+[functions.daily-shift-summary]
+enabled = true
+# Called by pg_cron at 18:00 daily — no user JWT present.
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327
