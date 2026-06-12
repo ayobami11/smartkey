@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   CheckCircleIcon,
   ClipboardCopyIcon,
@@ -10,6 +11,7 @@ import {
   XCircleIcon,
 } from 'lucide-react';
 
+import { useRealtime } from '@/hooks/useRealtime';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { createBrowserClient } from '@/lib/supabase/client';
@@ -82,70 +84,68 @@ const statusMessage: Record<string, string> = {
 
 export default function CodeDisplayPage() {
   const { requestId } = useParams<{ requestId: string }>();
+  const queryClient = useQueryClient();
 
-  const [loading, setLoading] = useState(true);
-  const [request, setRequest] = useState<RequestDetail | null>(null);
-  const [notFound, setNotFound] = useState(false);
-  const [countdown, setCountdown] = useState(0);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [, forceUpdate] = useState(0);
   const [copied, setCopied] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Fetch
+  // Resolve user ID once on mount
 
   useEffect(() => {
-    const fetchRequest = async () => {
+    createBrowserClient()
+      .auth.getUser()
+      .then(({ data: { user } }) => {
+        if (user) setUserId(user.id);
+      });
+  }, []);
+
+  // Fetch request via TanStack Query
+
+  const { data: request = null, isLoading: loading } = useQuery({
+    queryKey: ['request', requestId, userId],
+    enabled: !!userId,
+    queryFn: async () => {
       const supabase = createBrowserClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        setNotFound(true);
-        setLoading(false);
-        return;
-      }
-
       const { data } = await supabase
         .from('requests')
         .select(
           'id, status, code, code_expires_at, return_deadline, key:keys!key_id(code, room_name, zone)'
         )
         .eq('id', requestId)
-        .eq('requester_id', user.id)
+        .eq('requester_id', userId!)
         .maybeSingle();
+      return (data as RequestDetail | null) ?? null;
+    },
+  });
 
-      if (!data) {
-        setNotFound(true);
-      } else {
-        setRequest(data as unknown as RequestDetail);
-        if (data.code_expires_at) {
-          setCountdown(secondsRemaining(data.code_expires_at));
-        }
+  const notFound = !loading && request === null && !!userId;
+
+  // Real-time subscription — check request ID and requester ID client-side
+
+  useRealtime({
+    table: 'requests',
+    onUpdate: (payload) => {
+      const row = payload.new as { id?: string; requester_id?: string };
+      if (row.id === requestId && row.requester_id === userId) {
+        queryClient.invalidateQueries({
+          queryKey: ['request', requestId, userId],
+        });
       }
-      setLoading(false);
-    };
+    },
+  });
 
-    fetchRequest();
-  }, [requestId]);
-
-  // Countdown timer
+  // Countdown timer — re-renders every second; countdown derived from expiry
 
   useEffect(() => {
     if (!request?.code_expires_at) return;
-    if (timerRef.current) clearInterval(timerRef.current);
-    timerRef.current = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(timerRef.current!);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
+    const interval = setInterval(() => forceUpdate((n) => n + 1), 1000);
+    return () => clearInterval(interval);
   }, [request?.code_expires_at]);
+
+  const countdown = request?.code_expires_at
+    ? secondsRemaining(request.code_expires_at)
+    : 0;
 
   // Copy to clipboard
 

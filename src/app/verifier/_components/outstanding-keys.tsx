@@ -1,7 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { InboxIcon, KeyRoundIcon } from 'lucide-react';
+
+import { useRealtime } from '@/hooks/useRealtime';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -69,9 +72,7 @@ const relativeTime = (iso: string) => {
 // Component
 
 export const OutstandingKeys = () => {
-  const [keys, setKeys] = useState<OutstandingKey[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [fetchError, setFetchError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [userId, setUserId] = useState<string | null>(null);
 
   // Return Sheet state
@@ -80,40 +81,59 @@ export const OutstandingKeys = () => {
   const [returnStep, setReturnStep] = useState<ReturnStep>('confirm');
   const [returnError, setReturnError] = useState<string | null>(null);
 
-  // Fetch
+  // Resolve user ID once on mount (used in handleMarkReturned)
 
   useEffect(() => {
-    const supabase = createBrowserClient();
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) setUserId(user.id);
-    });
-    fetchOutstanding();
+    createBrowserClient()
+      .auth.getUser()
+      .then(({ data: { user } }) => {
+        if (user) setUserId(user.id);
+      });
   }, []);
 
-  const fetchOutstanding = async () => {
-    setLoading(true);
-    setFetchError(null);
-    try {
+  // Fetch outstanding keys via TanStack Query
+
+  const {
+    data: keys = [],
+    isLoading: loading,
+    error: fetchError,
+    refetch,
+  } = useQuery({
+    queryKey: ['keys', 'outstanding'],
+    queryFn: async () => {
       const res = await fetch('/api/keys/out');
-      if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        setFetchError(
+      const json = await res.json();
+      if (!res.ok)
+        throw new Error(
           (json as { error?: string }).error ??
             'Failed to load outstanding keys.'
         );
-        return;
-      }
-      const json = await res.json();
-      setKeys(
+      return (
         (json as { data?: { outstanding?: OutstandingKey[] } }).data
           ?.outstanding ?? []
       );
-    } catch {
-      setFetchError('Network error. Check your connection and try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+  });
+
+  // Real-time subscription
+
+  useRealtime({
+    table: 'requests',
+    onInsert: (payload) => {
+      const row = payload.new as { status?: string };
+      if (row.status === 'KEY_ISSUED') {
+        queryClient.invalidateQueries({ queryKey: ['keys', 'outstanding'] });
+      }
+    },
+    onUpdate: (payload) => {
+      const row = payload.new as { status?: string };
+      if (
+        ['KEY_ISSUED', 'KEY_OVERDUE', 'KEY_RETURNED'].includes(row.status ?? '')
+      ) {
+        queryClient.invalidateQueries({ queryKey: ['keys', 'outstanding'] });
+      }
+    },
+  });
 
   // Sheet helpers
 
@@ -153,8 +173,7 @@ export const OutstandingKeys = () => {
         setReturnStep('confirm');
         return;
       }
-      // Remove from local list
-      setKeys((prev) => prev.filter((k) => k.id !== selectedKey.id));
+      queryClient.invalidateQueries({ queryKey: ['keys', 'outstanding'] });
       setReturnStep('success');
     } catch {
       setReturnError('Network error. Check your connection and try again.');
@@ -190,12 +209,12 @@ export const OutstandingKeys = () => {
           role="alert"
         >
           <p className="font-medium">Failed to load outstanding keys</p>
-          <p className="mt-1 text-destructive/80">{fetchError}</p>
+          <p className="mt-1 text-destructive/80">{fetchError.message}</p>
           <Button
             variant="outline"
             size="sm"
             className="mt-3 border-destructive/30 text-destructive hover:bg-destructive/10"
-            onClick={fetchOutstanding}
+            onClick={() => refetch()}
           >
             Retry
           </Button>
