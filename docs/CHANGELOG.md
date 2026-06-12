@@ -8,6 +8,13 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-06-12 — Supabase Edge Functions: overdue key check + daily shift summary (PR #24, branch: backend/feat/24-edge-functions)
+
+- `supabase/functions/overdue-key-check/index.ts` — Deno Edge Function. Calls `mark_key_overdue()` RPC with service-role client. Logs structured JSON (`overdue_check_complete`, `updated_count`). Deployed to Supabase Cloud.
+- `supabase/functions/daily-shift-summary/index.ts` — Deno Edge Function. Finds the most recent shift without a report, inserts a `PENDING_GENERATION` placeholder into `shift_reports`, writes a `SHIFT_REPORT_SCHEDULED` audit entry attributed to the first active CSO. Actual Gemini generation is triggered by the CSO from their dashboard. Logs structured JSON. Deployed to Supabase Cloud.
+- `supabase/config.toml` — added `[functions.overdue-key-check]` and `[functions.daily-shift-summary]` blocks; both have `verify_jwt = false` (called by pg_cron, not by a user session).
+- `supabase/migrations/20260612000002_edge_function_schedules.sql` — enables `pg_cron` and `pg_net`; registers hourly cron for overdue-key-check (`0 * * * *`) and daily cron for daily-shift-summary (`0 18 * * *`). Applied and active on Supabase Cloud.
+
 ### 2026-06-12 — Signature verification: Sharp + Pixelmatch pipeline (PR #22, branch: backend/feat/22-signature-verification)
 
 - `src/lib/ai/signature/verifier.ts` — greyscale → resize to 800×400 → binary threshold → RGBA expand → Pixelmatch diff. Returns `{ mismatch_ratio, passed }`. Threshold from `SIGNATURE_DIFF_THRESHOLD` env var (default 0.15).

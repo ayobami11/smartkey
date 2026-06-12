@@ -528,7 +528,7 @@ Track progress here after every merged PR. Update the status column; link the PR
 | Signature verification (Sharp + Pixelmatch)       | ✅ Done        | #22 |
 | Supabase Storage (photos, signatures, letters)    | ✅ Done        | #32 |
 | Shift handover + incident + report API routes     | ✅ Done        | #37 |
-| Edge Functions (overdue check + daily summary)    | ⬜ Not started | —   |
+| Edge Functions (overdue check + daily summary)    | ✅ Done        | #24 |
 | CI/CD pipeline (GitHub Actions)                   | ⬜ Not started | —   |
 
 Statuses: `⬜ Not started` → `🔄 In progress` → `✅ Done`
