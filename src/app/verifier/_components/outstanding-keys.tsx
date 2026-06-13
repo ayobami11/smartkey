@@ -132,6 +132,17 @@ export const OutstandingKeys = () => {
     },
   });
 
+  // The hourly mark_key_overdue job flips keys.status to OVERDUE without
+  // touching the request row, so subscribe to keys to surface overdue live.
+  useRealtime({
+    table: 'keys',
+    onUpdate: (payload) => {
+      const row = payload.new as { status?: string };
+      if (row.status === 'OVERDUE' || row.status === 'AVAILABLE')
+        queryClient.invalidateQueries({ queryKey: ['keys', 'outstanding'] });
+    },
+  });
+
   // Sheet helpers
 
   const openReturnSheet = (key: OutstandingKey) => {

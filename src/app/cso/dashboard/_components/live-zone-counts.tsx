@@ -6,6 +6,7 @@ import { ArrowDownIcon, ArrowUpIcon } from 'lucide-react';
 
 import { Skeleton } from '@/components/ui/skeleton';
 import { createBrowserClient } from '@/lib/supabase/client';
+import { useRealtime } from '@/hooks/useRealtime';
 
 // Types
 
@@ -61,6 +62,15 @@ export const LiveZoneCounts = () => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchZones();
   }, []);
+
+  // Live "building pulse": keys.status drives the counts (ISSUED on issue,
+  // AVAILABLE on return, OVERDUE from the hourly job). Re-read on any key change.
+  useRealtime({
+    table: 'keys',
+    onInsert: () => fetchZones(),
+    onUpdate: () => fetchZones(),
+    onDelete: () => fetchZones(),
+  });
 
   return (
     <div className="flex flex-col gap-4">
