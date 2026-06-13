@@ -600,7 +600,7 @@ export default function KeyInventoryPage() {
                         {key.department}
                       </span>
                       <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        {key.hod !== '—' ? key.hod : 'No HOD assigned'}
+                        {key.hod !== '—' ? key.hod : <i>No HOD assigned</i>}
                         {key.hodPending && (
                           <span
                             className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
