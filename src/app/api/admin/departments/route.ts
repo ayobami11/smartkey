@@ -24,7 +24,8 @@ export const GET = async () => {
 
   const { data, error } = await supabase
     .from('departments')
-    .select('id, name, hod_id')
+    .select('id, name, faculty, hod_id')
+    .order('faculty', { ascending: true })
     .order('name', { ascending: true });
 
   if (error) {
