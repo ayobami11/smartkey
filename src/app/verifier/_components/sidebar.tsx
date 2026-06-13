@@ -3,9 +3,7 @@
 import * as React from 'react';
 import {
   ArrowLeftRightIcon,
-  CornerDownLeftIcon,
   GalleryVerticalEnd,
-  KeyRoundIcon,
   LayoutDashboardIcon,
   SirenIcon,
 } from 'lucide-react';
@@ -36,8 +34,6 @@ const data = {
       url: '/verifier/dashboard',
       icon: LayoutDashboardIcon,
     },
-    { title: 'Issue Key', url: '/verifier/issue', icon: KeyRoundIcon },
-    { title: 'Return Key', url: '/verifier/return', icon: CornerDownLeftIcon },
     { title: 'Handover', url: '/verifier/handover', icon: ArrowLeftRightIcon },
     { title: 'Incidents', url: '/verifier/incidents', icon: SirenIcon },
   ],
