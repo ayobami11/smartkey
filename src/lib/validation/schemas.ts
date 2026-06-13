@@ -163,6 +163,23 @@ export const markKeyLostSchema = z.object({
 
 // Incidents
 
+export const incidentFormSchema = z.object({
+  type: z.enum(
+    [
+      'MISSING_KEY',
+      'SUSPICIOUS_ACTIVITY',
+      'EQUIPMENT_FAULT',
+      'PROCEDURAL',
+      'OTHER',
+    ],
+    { error: 'Select an incident type.' }
+  ),
+  severity: z.enum(['LOW', 'MEDIUM', 'HIGH'], {
+    error: 'Select a severity level.',
+  }),
+  description: z.string().min(1, 'Description is required.'),
+});
+
 export const logIncidentSchema = z.object({
   type: z.enum([
     'MISSING_KEY',
@@ -225,3 +242,4 @@ export type AddReportCommentInput = z.infer<typeof addReportCommentSchema>;
 export type WeekdayRequestFormInput = z.infer<typeof weekdayRequestFormSchema>;
 export type WeekendRequestFormInput = z.infer<typeof weekendRequestFormSchema>;
 export type IssueKeyFormInput = z.infer<typeof issueKeyFormSchema>;
+export type IncidentFormInput = z.infer<typeof incidentFormSchema>;

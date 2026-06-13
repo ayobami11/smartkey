@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { Controller, useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { CheckCircleIcon, SirenIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
+import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import {
   Select,
   SelectContent,
@@ -13,23 +15,18 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  incidentFormSchema,
+  type IncidentFormInput,
+} from '@/lib/validation/schemas';
 
 // Types
-
-type IncidentType =
-  | 'MISSING_KEY'
-  | 'SUSPICIOUS_ACTIVITY'
-  | 'EQUIPMENT_FAULT'
-  | 'PROCEDURAL'
-  | 'OTHER';
-
-type IncidentSeverity = 'LOW' | 'MEDIUM' | 'HIGH';
 
 type FormStep = 'form' | 'submitting' | 'success';
 
 // Constants
 
-const INCIDENT_TYPES: { value: IncidentType; label: string }[] = [
+const INCIDENT_TYPES: { value: IncidentFormInput['type']; label: string }[] = [
   { value: 'MISSING_KEY', label: 'Missing key' },
   { value: 'SUSPICIOUS_ACTIVITY', label: 'Suspicious activity' },
   { value: 'EQUIPMENT_FAULT', label: 'Equipment fault' },
@@ -37,7 +34,11 @@ const INCIDENT_TYPES: { value: IncidentType; label: string }[] = [
   { value: 'OTHER', label: 'Other' },
 ];
 
-const SEVERITIES: { value: IncidentSeverity; label: string; hint: string }[] = [
+const SEVERITIES: {
+  value: IncidentFormInput['severity'];
+  label: string;
+  hint: string;
+}[] = [
   { value: 'LOW', label: 'Low', hint: 'Minor issue, no immediate risk' },
   {
     value: 'MEDIUM',
@@ -54,19 +55,18 @@ const SEVERITIES: { value: IncidentSeverity; label: string; hint: string }[] = [
 // Component
 
 export default function IncidentsPage() {
-  const [type, setType] = useState<IncidentType | ''>('');
-  const [severity, setSeverity] = useState<IncidentSeverity | ''>('');
-  const [description, setDescription] = useState('');
   const [step, setStep] = useState<FormStep>('form');
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [incidentRef, setIncidentRef] = useState<string | null>(null);
 
-  const canSubmit =
-    type !== '' && severity !== '' && description.trim().length > 0;
+  const form = useForm<IncidentFormInput>({
+    resolver: zodResolver(incidentFormSchema),
+    defaultValues: { type: undefined, severity: undefined, description: '' },
+  });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!canSubmit) return;
+  const watchedSeverity = form.watch('severity');
+
+  const onSubmit = form.handleSubmit(async (values) => {
     setStep('submitting');
     setSubmitError(null);
     try {
@@ -74,9 +74,7 @@ export default function IncidentsPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          type,
-          severity,
-          description: description.trim(),
+          ...values,
           occurred_at: new Date().toISOString(),
         }),
       });
@@ -96,12 +94,10 @@ export default function IncidentsPage() {
       setSubmitError('Network error. Check your connection and try again.');
       setStep('form');
     }
-  };
+  });
 
   const handleReset = () => {
-    setType('');
-    setSeverity('');
-    setDescription('');
+    form.reset();
     setSubmitError(null);
     setIncidentRef(null);
     setStep('form');
@@ -140,7 +136,7 @@ export default function IncidentsPage() {
                 </p>
               )}
               <p className="mt-1 text-sm text-muted-foreground">
-                {severity === 'HIGH'
+                {watchedSeverity === 'HIGH'
                   ? 'The CSO has been notified.'
                   : 'The incident has been recorded in the audit log.'}
               </p>
@@ -154,80 +150,109 @@ export default function IncidentsPage() {
         {/* Form */}
         {step !== 'success' && (
           <form
-            onSubmit={handleSubmit}
+            onSubmit={onSubmit}
             className="flex flex-col gap-6 rounded-lg border border-border bg-card p-6 shadow-[0_2px_4px_rgba(15,23,42,0.06)]"
             aria-label="Log incident form"
           >
             {/* Type */}
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="incident-type">Incident type</Label>
-              <Select
-                value={type}
-                onValueChange={(v) => setType(v as IncidentType)}
-                disabled={step === 'submitting'}
-              >
-                <SelectTrigger id="incident-type" aria-required="true">
-                  <SelectValue placeholder="Select type…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {INCIDENT_TYPES.map((t) => (
-                    <SelectItem key={t.value} value={t.value}>
-                      {t.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <Controller
+              name="type"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="incident-type">Incident type</FieldLabel>
+                  <Select
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    disabled={step === 'submitting'}
+                  >
+                    <SelectTrigger
+                      id="incident-type"
+                      aria-invalid={fieldState.invalid}
+                    >
+                      <SelectValue placeholder="Select type…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {INCIDENT_TYPES.map((t) => (
+                        <SelectItem key={t.value} value={t.value}>
+                          {t.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FieldError errors={[fieldState.error]} />
+                </Field>
+              )}
+            />
 
             {/* Severity */}
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="incident-severity">Severity</Label>
-              <Select
-                value={severity}
-                onValueChange={(v) => setSeverity(v as IncidentSeverity)}
-                disabled={step === 'submitting'}
-              >
-                <SelectTrigger id="incident-severity" aria-required="true">
-                  <SelectValue placeholder="Select severity…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {SEVERITIES.map((s) => (
-                    <SelectItem key={s.value} value={s.value}>
-                      <span>{s.label}</span>
-                      <span className="ml-2 text-xs text-muted-foreground">
-                        — {s.hint}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {severity === 'HIGH' && (
-                <p className="text-xs text-destructive">
-                  High severity incidents notify the CSO immediately.
-                </p>
+            <Controller
+              name="severity"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="incident-severity">Severity</FieldLabel>
+                  <Select
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    disabled={step === 'submitting'}
+                  >
+                    <SelectTrigger
+                      id="incident-severity"
+                      aria-invalid={fieldState.invalid}
+                    >
+                      <SelectValue placeholder="Select severity…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SEVERITIES.map((s) => (
+                        <SelectItem key={s.value} value={s.value}>
+                          <span>{s.label}</span>
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            — {s.hint}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FieldError errors={[fieldState.error]} />
+                  {watchedSeverity === 'HIGH' && (
+                    <p className="text-xs text-destructive">
+                      High severity incidents notify the CSO immediately.
+                    </p>
+                  )}
+                </Field>
               )}
-            </div>
+            />
 
             {/* Description */}
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="incident-description">Description</Label>
-              <Textarea
-                id="incident-description"
-                placeholder="Describe what happened, who was involved, and any actions already taken…"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                disabled={step === 'submitting'}
-                rows={5}
-                aria-required="true"
-                aria-describedby="description-hint"
-              />
-              <p
-                id="description-hint"
-                className="text-xs text-muted-foreground"
-              >
-                Be specific. This entry is immutable once submitted.
-              </p>
-            </div>
+            <Controller
+              name="description"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="incident-description">
+                    Description
+                  </FieldLabel>
+                  <Textarea
+                    id="incident-description"
+                    placeholder="Describe what happened, who was involved, and any actions already taken…"
+                    rows={5}
+                    className="resize-none"
+                    disabled={step === 'submitting'}
+                    aria-invalid={fieldState.invalid}
+                    aria-describedby="description-hint"
+                    {...field}
+                  />
+                  <FieldError errors={[fieldState.error]} />
+                  <p
+                    id="description-hint"
+                    className="text-xs text-muted-foreground"
+                  >
+                    Be specific. This entry is immutable once submitted.
+                  </p>
+                </Field>
+              )}
+            />
 
             {submitError && (
               <p className="text-xs text-destructive" role="alert">
@@ -237,7 +262,7 @@ export default function IncidentsPage() {
 
             <Button
               type="submit"
-              disabled={!canSubmit || step === 'submitting'}
+              disabled={step === 'submitting'}
               aria-busy={step === 'submitting'}
               className="w-full"
             >
