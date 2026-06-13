@@ -67,6 +67,7 @@ type Key = {
   room: string;
   department: string;
   hod: string;
+  hodPending: boolean;
   status: KeyStatus;
 };
 
@@ -118,7 +119,7 @@ export default function KeyInventoryPage() {
     const { data, error } = await supabase
       .from('keys')
       .select(
-        'id, code, zone, room_name, status, department:departments!department_id(name, hod:profiles!hod_id(full_name))'
+        'id, code, zone, room_name, status, department:departments!department_id(name, hod:profiles!hod_id(full_name, status))'
       )
       .order('code', { ascending: true });
 
@@ -139,6 +140,7 @@ export default function KeyInventoryPage() {
           room: k.room_name as string,
           department: (dept?.name as string | undefined) ?? '—',
           hod: (hod?.full_name as string | undefined) ?? '—',
+          hodPending: hod?.status === 'PENDING_ACTIVATION',
           status: k.status as KeyStatus,
         };
       })
@@ -507,8 +509,17 @@ export default function KeyInventoryPage() {
                       <span className="text-xs text-muted-foreground">
                         {key.department}
                       </span>
-                      <span className="text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         {key.hod}
+                        {key.hodPending && (
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
+                            aria-label="HOD has not activated their account yet"
+                          >
+                            <ClockIcon className="size-3" aria-hidden="true" />
+                            Pending activation
+                          </span>
+                        )}
                       </span>
                     </div>
 
