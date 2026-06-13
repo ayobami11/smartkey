@@ -27,7 +27,7 @@ const mapRpcError = (msg: string): { status: number; message: string } => {
     return {
       status: 409,
       message:
-        'You already have an active request for this key. Cancel it or wait for it to be returned before requesting again.',
+        'Active request exists for this key. Cancel it or wait for the key to be returned.',
     };
   if (msg.includes('NOT_AUTHORISED'))
     return { status: 403, message: 'Not authorised for this key' };
