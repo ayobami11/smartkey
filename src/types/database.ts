@@ -100,16 +100,19 @@ export type Database = {
       };
       departments: {
         Row: {
+          faculty: string;
           hod_id: string | null;
           id: string;
           name: string;
         };
         Insert: {
+          faculty?: string;
           hod_id?: string | null;
           id?: string;
           name: string;
         };
         Update: {
+          faculty?: string;
           hod_id?: string | null;
           id?: string;
           name?: string;
@@ -682,6 +685,12 @@ export type Database = {
           updated_count: number;
         }[];
       };
+      nominate_collector: {
+        Args: { p_key_id: string; p_requester_id: string };
+        Returns: {
+          slot_number: number;
+        }[];
+      };
       provision_user: {
         Args: {
           p_department_id?: string;
@@ -693,6 +702,10 @@ export type Database = {
           activation_token: string;
           profile_id: string;
         }[];
+      };
+      remove_collector: {
+        Args: { p_key_id: string; p_requester_id: string };
+        Returns: undefined;
       };
       return_key: {
         Args: {
