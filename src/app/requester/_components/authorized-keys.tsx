@@ -248,10 +248,16 @@ export const AuthorizedKeys = () => {
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setSubmitError(
-          (json as { error?: string }).error ?? 'Failed to submit request.'
-        );
-        setStep('weekday_form');
+        const msg =
+          (json as { error?: string }).error ?? 'Failed to submit request.';
+        if (res.status === 409) {
+          // Close the dialog so the existing active request is visible in the banner
+          setWeekdayOpen(false);
+          setSubmitError(msg);
+        } else {
+          setSubmitError(msg);
+          setStep('weekday_form');
+        }
         return;
       }
       const data = (json as { data?: { request_id: string } }).data;
@@ -366,6 +372,24 @@ export const AuthorizedKeys = () => {
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
+      )}
+
+      {/* Conflict / submit error (shown outside the dialog after it closes) */}
+      {!weekdayOpen && !weekendOpen && submitError && (
+        <div
+          className="flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100"
+          role="alert"
+        >
+          <p>{submitError}</p>
+          <button
+            type="button"
+            onClick={() => setSubmitError(null)}
+            aria-label="Dismiss"
+            className="shrink-0 text-amber-600 hover:text-amber-800 dark:text-amber-400"
+          >
+            ✕
+          </button>
+        </div>
       )}
 
       {/* Key grid + weekend CTA */}
