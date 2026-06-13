@@ -141,5 +141,11 @@ begin
 end;
 $$;
 
+-- Restrict execution to the authenticated role only. CREATE FUNCTION grants
+-- EXECUTE to PUBLIC by default, and Supabase's default privileges also grant it
+-- to anon; revoke both so the grant below is the only path, matching the other RPCs.
+revoke execute on function public.nominate_collector(uuid, uuid) from public, anon;
+revoke execute on function public.remove_collector(uuid, uuid)   from public, anon;
+
 grant execute on function public.nominate_collector(uuid, uuid) to authenticated;
 grant execute on function public.remove_collector(uuid, uuid)   to authenticated;
