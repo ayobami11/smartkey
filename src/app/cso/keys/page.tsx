@@ -592,7 +592,7 @@ export default function KeyInventoryPage() {
                       </DropdownMenu>
                     </div>
 
-                    <div className="flex flex-col gap-0.5">
+                    <div className="flex flex-col gap-1.5">
                       <span className="text-sm font-medium text-foreground">
                         {key.room}
                       </span>
@@ -600,7 +600,14 @@ export default function KeyInventoryPage() {
                         {key.department}
                       </span>
                       <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        {key.hod !== '—' ? key.hod : <i>No HOD assigned</i>}
+                        {key.hod !== '—' ? (
+                          <>
+                            <span className="font-bold text-white">HOD:</span>{' '}
+                            {key.hod}
+                          </>
+                        ) : (
+                          <span className="italic">No HOD assigned</span>
+                        )}
                         {key.hodPending && (
                           <span
                             className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
