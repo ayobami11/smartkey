@@ -1,9 +1,8 @@
 'use client';
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { AlertTriangleIcon, CheckCircleIcon } from 'lucide-react';
 
-import { useRealtime } from '@/hooks/useRealtime';
 import { Button } from '@/components/ui/button';
 import {
   Empty,
@@ -30,8 +29,6 @@ type RiskAlert = {
 // Component
 
 export const RiskAlerts = () => {
-  const queryClient = useQueryClient();
-
   const {
     data: alerts = [],
     isLoading,
@@ -47,20 +44,6 @@ export const RiskAlerts = () => {
           (json as { error?: string }).error ?? 'Failed to load risk alerts.'
         );
       return (json as { data?: { alerts?: RiskAlert[] } }).data?.alerts ?? [];
-    },
-  });
-
-  useRealtime({
-    table: 'requests',
-    onInsert: (payload) => {
-      const row = payload.new as { risk_tier?: string };
-      if (row.risk_tier === 'HIGH')
-        queryClient.invalidateQueries({ queryKey: ['cso', 'risk-alerts'] });
-    },
-    onUpdate: (payload) => {
-      const row = payload.new as { risk_tier?: string };
-      if (row.risk_tier === 'HIGH')
-        queryClient.invalidateQueries({ queryKey: ['cso', 'risk-alerts'] });
     },
   });
 

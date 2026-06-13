@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { InboxIcon, KeyRoundIcon } from 'lucide-react';
 
-import { useRealtime } from '@/hooks/useRealtime';
 import { useConnectionStatus } from '@/hooks/useConnectionStatus';
 import { Button } from '@/components/ui/button';
 import {
@@ -119,35 +118,6 @@ export const OutstandingKeys = () => {
         (json as { data?: { outstanding?: OutstandingKey[] } }).data
           ?.outstanding ?? []
       );
-    },
-  });
-
-  // Real-time subscription
-
-  useRealtime({
-    table: 'requests',
-    onInsert: (payload) => {
-      const row = payload.new as { status?: string };
-      if (row.status === 'KEY_ISSUED')
-        queryClient.invalidateQueries({ queryKey: ['keys', 'outstanding'] });
-    },
-    onUpdate: (payload) => {
-      const row = payload.new as { status?: string };
-      if (
-        ['KEY_ISSUED', 'KEY_OVERDUE', 'KEY_RETURNED'].includes(row.status ?? '')
-      )
-        queryClient.invalidateQueries({ queryKey: ['keys', 'outstanding'] });
-    },
-  });
-
-  // The hourly mark_key_overdue job flips keys.status to OVERDUE without
-  // touching the request row, so subscribe to keys to surface overdue live.
-  useRealtime({
-    table: 'keys',
-    onUpdate: (payload) => {
-      const row = payload.new as { status?: string };
-      if (row.status === 'OVERDUE' || row.status === 'AVAILABLE')
-        queryClient.invalidateQueries({ queryKey: ['keys', 'outstanding'] });
     },
   });
 

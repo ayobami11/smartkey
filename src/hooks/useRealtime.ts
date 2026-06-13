@@ -31,7 +31,6 @@ export const useRealtime = <
   options: UseRealtimeOptions<T>
 ): void => {
   const optionsRef = useRef(options);
-  const instanceIdRef = useRef(crypto.randomUUID());
 
   // Keep the ref current after every render so the subscription callbacks
   // always read the latest prop values without needing to re-subscribe.
@@ -48,7 +47,7 @@ export const useRealtime = <
     let destroyed = false;
 
     const buildChannelName = () =>
-      `realtime:${optionsRef.current.table}:inst-${instanceIdRef.current}${
+      `realtime:${optionsRef.current.table}${
         optionsRef.current.filter
           ? `:${optionsRef.current.filter.column}=eq.${optionsRef.current.filter.value}`
           : ''
