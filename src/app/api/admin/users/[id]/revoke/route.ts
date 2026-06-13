@@ -64,9 +64,25 @@ export const PATCH = async (
     });
   }
 
+  const adminClient = createAdminClient();
+
+  // If this user is the current HOD of any department, clear the reverse link so
+  // the department (and its key inventory) no longer resolves a deactivated HOD.
+  const { error: deptError } = await adminClient
+    .from('departments')
+    .update({ hod_id: null })
+    .eq('hod_id', id);
+  if (deptError) {
+    // Non-fatal: the profile is already DEACTIVATED and login is blocked. Log so
+    // a stale departments.hod_id can be corrected if this ever fails.
+    logger.error('revoke: clearing departments.hod_id failed', {
+      id,
+      err: deptError.message,
+    });
+  }
+
   // Ban the auth user so they cannot log in again. We use ban_duration rather
   // than deleteUser so the profiles row (and all audit history) is preserved.
-  const adminClient = createAdminClient();
   const { error: banError } = await adminClient.auth.admin.updateUserById(id, {
     ban_duration: '876000h', // ~100 years — effectively permanent
   });
