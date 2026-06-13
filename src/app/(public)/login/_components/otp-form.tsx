@@ -28,7 +28,7 @@ import {
 const otpSchema = z.object({
   otp: z
     .string()
-    .length(6, 'Enter the 6-digit code from your email')
+    .length(6, 'Enter the 6-digit code sent to your email.')
     .regex(/^\d{6}$/, 'Code must be 6 digits'),
 });
 
@@ -157,10 +157,8 @@ export const OtpForm = ({
           control={otpForm.control}
           render={({ field, fieldState }) => (
             <Field data-invalid={fieldState.invalid}>
-              <div className="flex flex-col items-center gap-3">
-                <FieldLabel htmlFor="otp" className="self-start">
-                  Verification code
-                </FieldLabel>
+              <div className="flex flex-col items-start gap-3">
+                <FieldLabel htmlFor="otp">Verification code</FieldLabel>
                 <InputOTP
                   id="otp"
                   maxLength={6}

@@ -1,6 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Controller, useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { REGEXP_ONLY_DIGITS } from 'input-otp';
 import { CheckCircleIcon, InboxIcon, KeyRoundIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -11,12 +14,12 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty';
+import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import {
   InputOTP,
   InputOTPGroup,
   InputOTPSlot,
 } from '@/components/ui/input-otp';
-import { Label } from '@/components/ui/label';
 import {
   Sheet,
   SheetContent,
@@ -37,6 +40,10 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+  issueKeyFormSchema,
+  type IssueKeyFormInput,
+} from '@/lib/validation/schemas';
 import type { RiskFactor, RiskTier } from '@/lib/ai/risk/types';
 
 // Types
@@ -95,9 +102,13 @@ export const LiveRequestQueue = () => {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [verifierId, setVerifierId] = useState<string | null>(null);
 
+  const issueForm = useForm<IssueKeyFormInput>({
+    resolver: zodResolver(issueKeyFormSchema),
+    defaultValues: { verification_code: '' },
+  });
+
   // Sheet state
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [codeInput, setCodeInput] = useState('');
   const [sheetStep, setSheetStep] = useState<SheetStep>('code');
   const [issueError, setIssueError] = useState<string | null>(null);
   const [issuing, setIssuing] = useState(false);
@@ -168,7 +179,7 @@ export const LiveRequestQueue = () => {
 
   const openSheet = (req?: QueueRequest) => {
     setContextRequest(req ?? null);
-    setCodeInput('');
+    issueForm.reset();
     setSheetStep('code');
     setIssueError(null);
     setIssueResult(null);
@@ -180,7 +191,7 @@ export const LiveRequestQueue = () => {
   const handleSheetClose = () => {
     setSheetOpen(false);
     setContextRequest(null);
-    setCodeInput('');
+    issueForm.reset();
     setSheetStep('code');
     setIssueError(null);
     setIssueResult(null);
@@ -188,15 +199,18 @@ export const LiveRequestQueue = () => {
     setAcknowledged(false);
   };
 
-  const handleIssue = async () => {
-    if (codeInput.length !== 6 || !verifierId) return;
+  const handleIssue = issueForm.handleSubmit(async (values) => {
+    if (!verifierId) return;
     setIssuing(true);
     setIssueError(null);
     try {
       const res = await fetch('/api/requests/collect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: codeInput, verifier_id: verifierId }),
+        body: JSON.stringify({
+          code: values.verification_code,
+          verifier_id: verifierId,
+        }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -214,6 +228,7 @@ export const LiveRequestQueue = () => {
         return;
       }
       setIssueResult(result);
+      issueForm.reset();
       // Remove the issued request from local list
       setRequests((prev) => prev.filter((r) => r.id !== result.request_id));
       setSheetStep('success');
@@ -222,7 +237,7 @@ export const LiveRequestQueue = () => {
     } finally {
       setIssuing(false);
     }
-  };
+  });
 
   // Render
 
@@ -433,49 +448,58 @@ export const LiveRequestQueue = () => {
             {/* Code entry step */}
             {sheetStep === 'code' && (
               <div className="flex flex-col items-center gap-6">
-                <div className="flex flex-col items-center gap-3">
-                  <Label
-                    htmlFor="otp-input"
-                    className="text-sm text-muted-foreground"
-                  >
-                    Enter the 6-digit code
-                  </Label>
-                  <InputOTP
-                    id="otp-input"
-                    maxLength={6}
-                    value={codeInput}
-                    onChange={setCodeInput}
-                    disabled={issuing}
-                    aria-label="6-digit verification code"
-                  >
-                    <InputOTPGroup>
-                      <InputOTPSlot
-                        index={0}
-                        className="size-12 text-base font-mono"
-                      />
-                      <InputOTPSlot
-                        index={1}
-                        className="size-12 text-base font-mono"
-                      />
-                      <InputOTPSlot
-                        index={2}
-                        className="size-12 text-base font-mono"
-                      />
-                      <InputOTPSlot
-                        index={3}
-                        className="size-12 text-base font-mono"
-                      />
-                      <InputOTPSlot
-                        index={4}
-                        className="size-12 text-base font-mono"
-                      />
-                      <InputOTPSlot
-                        index={5}
-                        className="size-12 text-base font-mono"
-                      />
-                    </InputOTPGroup>
-                  </InputOTP>
-                </div>
+                <Controller
+                  name="verification_code"
+                  control={issueForm.control}
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <div className="flex flex-col items-start gap-3">
+                        <FieldLabel htmlFor="verification-code-input">
+                          Verification code
+                        </FieldLabel>
+                        <InputOTP
+                          id="verification-code-input"
+                          maxLength={6}
+                          pattern={REGEXP_ONLY_DIGITS}
+                          value={field.value}
+                          onChange={field.onChange}
+                          disabled={issuing}
+                          autoComplete="one-time-code"
+                          aria-label="Verification code"
+                          aria-invalid={fieldState.invalid}
+                        >
+                          <InputOTPGroup>
+                            <InputOTPSlot
+                              index={0}
+                              className="size-12 text-base font-mono"
+                            />
+                            <InputOTPSlot
+                              index={1}
+                              className="size-12 text-base font-mono"
+                            />
+                            <InputOTPSlot
+                              index={2}
+                              className="size-12 text-base font-mono"
+                            />
+                            <InputOTPSlot
+                              index={3}
+                              className="size-12 text-base font-mono"
+                            />
+                            <InputOTPSlot
+                              index={4}
+                              className="size-12 text-base font-mono"
+                            />
+                            <InputOTPSlot
+                              index={5}
+                              className="size-12 text-base font-mono"
+                            />
+                          </InputOTPGroup>
+                        </InputOTP>
+                        <FieldError errors={[fieldState.error]} />
+                      </div>
+                    </Field>
+                  )}
+                />
 
                 {issueError && (
                   <p
@@ -493,7 +517,6 @@ export const LiveRequestQueue = () => {
                         className="w-full"
                         disabled={
                           isOffline ||
-                          codeInput.length !== 6 ||
                           issuing ||
                           !verifierId ||
                           (contextRequest?.risk_tier === 'HIGH' &&

@@ -130,6 +130,12 @@ export const csoDecisionSchema = z.object({
 
 // Key operations (Verifier)
 
+export const issueKeyFormSchema = z.object({
+  verification_code: z
+    .string()
+    .length(6, "Enter the 6-digit code sent to the requester's email."),
+});
+
 export const collectKeySchema = z.object({
   /** The 6-digit code the requester presents at the desk. */
   code: z
@@ -218,3 +224,4 @@ export type GenerateReportInput = z.infer<typeof generateReportSchema>;
 export type AddReportCommentInput = z.infer<typeof addReportCommentSchema>;
 export type WeekdayRequestFormInput = z.infer<typeof weekdayRequestFormSchema>;
 export type WeekendRequestFormInput = z.infer<typeof weekendRequestFormSchema>;
+export type IssueKeyFormInput = z.infer<typeof issueKeyFormSchema>;
