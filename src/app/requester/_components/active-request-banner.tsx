@@ -102,6 +102,13 @@ export const ActiveRequestBanner = () => {
 
   useRealtime({
     table: 'requests',
+    onInsert: (payload) => {
+      // Weekday requests start as CODE_ISSUED — an INSERT, not an UPDATE
+      const row = payload.new as { requester_id?: string };
+      if (row.requester_id === userId) {
+        queryClient.invalidateQueries({ queryKey: ['active-request', userId] });
+      }
+    },
     onUpdate: (payload) => {
       const row = payload.new as { requester_id?: string };
       if (row.requester_id === userId) {

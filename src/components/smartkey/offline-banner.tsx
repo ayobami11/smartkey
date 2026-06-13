@@ -7,7 +7,7 @@ import { useConnectionStatus } from '@/hooks/useConnectionStatus';
 export const OfflineBanner = () => {
   const status = useConnectionStatus();
 
-  if (status === 'connected') return null;
+  if (status !== 'offline') return null;
 
   return (
     <div

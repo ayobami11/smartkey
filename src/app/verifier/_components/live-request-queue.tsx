@@ -124,8 +124,12 @@ export const LiveRequestQueue = () => {
     },
     onUpdate: (payload) => {
       const row = payload.new as { id: string; status: string };
-      if (row.status !== 'CODE_ISSUED')
+      if (row.status === 'CODE_ISSUED') {
+        // Row transitioned into CODE_ISSUED (e.g. HOD approved a weekend request via UPDATE)
+        fetchQueue();
+      } else {
         setRequests((prev) => prev.filter((r) => r.id !== row.id));
+      }
     },
   });
 
