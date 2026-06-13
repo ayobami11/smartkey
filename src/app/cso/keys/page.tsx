@@ -7,6 +7,7 @@ import {
   EllipsisIcon,
   KeyRoundIcon,
   PlusIcon,
+  SearchIcon,
   XCircleIcon,
 } from 'lucide-react';
 
@@ -24,6 +25,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Dialog,
@@ -97,6 +99,7 @@ export default function KeyInventoryPage() {
   );
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>('All');
+  const [search, setSearch] = useState('');
   const [outstandingKeys, setOutstandingKeys] = useState<OutstandingKey[]>([]);
   const [outstandingState, setOutstandingState] = useState<
     'idle' | 'loading' | 'ready' | 'error'
@@ -228,12 +231,33 @@ export default function KeyInventoryPage() {
 
   // Computed
 
-  const filtered =
+  const query = search.trim().toLowerCase();
+
+  const tabFiltered =
     activeTab === 'All'
       ? keys
       : activeTab === 'Retired'
         ? keys.filter((k) => k.status === 'RETIRED')
         : keys.filter((k) => k.zone === activeTab);
+
+  const filtered = query
+    ? tabFiltered.filter(
+        (k) =>
+          k.code.toLowerCase().includes(query) ||
+          k.room.toLowerCase().includes(query) ||
+          k.department.toLowerCase().includes(query) ||
+          k.hod.toLowerCase().includes(query)
+      )
+    : tabFiltered;
+
+  const outstandingFiltered = query
+    ? outstandingKeys.filter(
+        (item) =>
+          item.keyCode.toLowerCase().includes(query) ||
+          item.roomName.toLowerCase().includes(query) ||
+          item.requesterName.toLowerCase().includes(query)
+      )
+    : outstandingKeys;
 
   // Render
 
@@ -276,6 +300,22 @@ export default function KeyInventoryPage() {
             {tab.label}
           </button>
         ))}
+      </div>
+
+      {/* Search */}
+      <div className="relative max-w-md">
+        <SearchIcon
+          className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+          aria-hidden="true"
+        />
+        <Input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by key code, room, department, or HOD…"
+          className="pl-9"
+          aria-label="Search keys"
+        />
       </div>
 
       {/* Loading */}
@@ -351,7 +391,7 @@ export default function KeyInventoryPage() {
 
           {outstandingState === 'ready' && (
             <>
-              {outstandingKeys.length === 0 ? (
+              {outstandingFiltered.length === 0 ? (
                 <Empty className="border border-border bg-card">
                   <EmptyMedia variant="icon">
                     <KeyRoundIcon
@@ -368,7 +408,7 @@ export default function KeyInventoryPage() {
                 </Empty>
               ) : (
                 <div className="flex flex-col gap-2">
-                  {outstandingKeys.map((item) => (
+                  {outstandingFiltered.map((item) => (
                     <div
                       key={item.requestId}
                       className={`flex items-center gap-4 rounded-lg border p-4 ${item.isOverdue ? 'border-destructive/30 bg-destructive/5' : 'border-border bg-card'}`}
