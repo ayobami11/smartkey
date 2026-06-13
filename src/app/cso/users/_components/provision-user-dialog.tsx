@@ -34,7 +34,9 @@ import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -43,7 +45,7 @@ const ROLES = ['HOD', 'VERIFIER', 'REQUESTER'] as const;
 
 type FormValues = ProvisionUserInput;
 
-type Department = { id: string; name: string };
+type Department = { id: string; name: string; faculty: string };
 
 type Props = { onSuccess?: () => void };
 
@@ -231,10 +233,24 @@ export const ProvisionUserDialog = ({ onSuccess }: Props) => {
                           <SelectValue placeholder="Select a department" />
                         </SelectTrigger>
                         <SelectContent>
-                          {departments.map((d) => (
-                            <SelectItem key={d.id} value={d.id}>
-                              {d.name}
-                            </SelectItem>
+                          {Object.entries(
+                            departments.reduce<Record<string, Department[]>>(
+                              (acc, d) => {
+                                const faculty = d.faculty || 'Other';
+                                (acc[faculty] ??= []).push(d);
+                                return acc;
+                              },
+                              {}
+                            )
+                          ).map(([faculty, depts]) => (
+                            <SelectGroup key={faculty}>
+                              <SelectLabel>{faculty}</SelectLabel>
+                              {depts.map((d) => (
+                                <SelectItem key={d.id} value={d.id}>
+                                  {d.name}
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
                           ))}
                         </SelectContent>
                       </Select>
