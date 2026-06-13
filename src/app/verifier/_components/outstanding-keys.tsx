@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { InboxIcon, KeyRoundIcon } from 'lucide-react';
 
 import { useRealtime } from '@/hooks/useRealtime';
+import { useConnectionStatus } from '@/hooks/useConnectionStatus';
 import { Button } from '@/components/ui/button';
 import {
   Empty,
@@ -20,6 +21,11 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { createBrowserClient } from '@/lib/supabase/client';
 
@@ -71,6 +77,8 @@ const relativeTime = (iso: string) => {
 // Component
 
 export const OutstandingKeys = () => {
+  const status = useConnectionStatus();
+  const isOffline = status === 'offline';
   const queryClient = useQueryClient();
   const [userId, setUserId] = useState<string | null>(null);
 
@@ -291,15 +299,27 @@ export const OutstandingKeys = () => {
                       </span>
                     </p>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="shrink-0"
-                    onClick={() => openReturnSheet(item)}
-                    aria-label={`Mark ${item.key?.code ?? 'key'} as returned`}
-                  >
-                    Return
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className={`shrink-0${isOffline ? ' pointer-events-none' : ''}`}
+                          onClick={() => openReturnSheet(item)}
+                          disabled={isOffline}
+                          aria-label={`Mark ${item.key?.code ?? 'key'} as returned`}
+                        >
+                          Return
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    {isOffline && (
+                      <TooltipContent>
+                        Available again when you reconnect.
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
                 </div>
               </div>
             );
@@ -364,16 +384,30 @@ export const OutstandingKeys = () => {
                   </p>
                 )}
 
-                <Button
-                  className="w-full"
-                  onClick={handleMarkReturned}
-                  disabled={returnStep === 'returning'}
-                  aria-busy={returnStep === 'returning'}
-                >
-                  {returnStep === 'returning'
-                    ? 'Marking returned…'
-                    : 'Mark returned'}
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="w-full">
+                      <Button
+                        className="w-full"
+                        onClick={handleMarkReturned}
+                        disabled={isOffline || returnStep === 'returning'}
+                        aria-busy={returnStep === 'returning'}
+                        style={
+                          isOffline ? { pointerEvents: 'none' } : undefined
+                        }
+                      >
+                        {returnStep === 'returning'
+                          ? 'Marking returned…'
+                          : 'Mark returned'}
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  {isOffline && (
+                    <TooltipContent>
+                      Available again when you reconnect.
+                    </TooltipContent>
+                  )}
+                </Tooltip>
               </>
             )}
 

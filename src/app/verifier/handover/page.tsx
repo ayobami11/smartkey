@@ -23,6 +23,12 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { useConnectionStatus } from '@/hooks/useConnectionStatus';
 
 // Types
 
@@ -62,6 +68,8 @@ const formatDate = (iso: string) =>
 // Component
 
 export default function HandoverPage() {
+  const connectionStatus = useConnectionStatus();
+  const isOffline = connectionStatus === 'offline';
   const [step, setStep] = useState<PageStep>('loading');
   const [shift, setShift] = useState<Shift | null>(null);
   const [outstandingKeys, setOutstandingKeys] = useState<OutstandingKey[]>([]);
@@ -304,7 +312,7 @@ export default function HandoverPage() {
                         id={`key-${item.id}`}
                         checked={isChecked}
                         onCheckedChange={() => toggleKey(item.id)}
-                        disabled={submitting}
+                        disabled={submitting || isOffline}
                         aria-label={`Acknowledge key ${item.key.code}`}
                       />
                       <Label
@@ -356,16 +364,28 @@ export default function HandoverPage() {
           <div className="flex flex-col gap-3">
             {/* Per-key acknowledge (when some are checked) */}
             {outstandingKeys.length > 0 && (
-              <Button
-                onClick={() => submitHandover(false)}
-                disabled={!allAcknowledged || submitting}
-                aria-busy={submitting}
-                className="w-full"
-              >
-                {submitting
-                  ? 'Completing handover…'
-                  : `Acknowledge ${outstandingKeys.length} key${outstandingKeys.length !== 1 ? 's' : ''}`}
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="w-full">
+                    <Button
+                      onClick={() => submitHandover(false)}
+                      disabled={isOffline || !allAcknowledged || submitting}
+                      aria-busy={submitting}
+                      className="w-full"
+                      style={isOffline ? { pointerEvents: 'none' } : undefined}
+                    >
+                      {submitting
+                        ? 'Completing handover…'
+                        : `Acknowledge ${outstandingKeys.length} key${outstandingKeys.length !== 1 ? 's' : ''}`}
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {isOffline && (
+                  <TooltipContent>
+                    Available again when you reconnect.
+                  </TooltipContent>
+                )}
+              </Tooltip>
             )}
 
             {/* Bulk acknowledge — always available, requires confirmation dialog */}
@@ -374,8 +394,8 @@ export default function HandoverPage() {
                 <AlertDialogTrigger asChild>
                   <Button
                     variant="outline"
-                    disabled={submitting}
-                    className="w-full"
+                    disabled={isOffline || submitting}
+                    className={`w-full${isOffline ? ' pointer-events-none' : ''}`}
                   >
                     Bulk acknowledge all
                   </Button>
@@ -405,14 +425,28 @@ export default function HandoverPage() {
 
             {/* No outstanding keys — complete handover directly */}
             {outstandingKeys.length === 0 && (
-              <Button
-                onClick={() => submitHandover(false)}
-                disabled={submitting}
-                aria-busy={submitting}
-                className="w-full"
-              >
-                {submitting ? 'Completing handover…' : 'Complete handover'}
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="w-full">
+                    <Button
+                      onClick={() => submitHandover(false)}
+                      disabled={isOffline || submitting}
+                      aria-busy={submitting}
+                      className="w-full"
+                      style={isOffline ? { pointerEvents: 'none' } : undefined}
+                    >
+                      {submitting
+                        ? 'Completing handover…'
+                        : 'Complete handover'}
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {isOffline && (
+                  <TooltipContent>
+                    Available again when you reconnect.
+                  </TooltipContent>
+                )}
+              </Tooltip>
             )}
           </div>
         </div>

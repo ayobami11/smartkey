@@ -31,6 +31,12 @@ import {
   RiskTierBadge,
 } from '@/components/smartkey/risk-tier-badge';
 import { useRealtime } from '@/hooks/useRealtime';
+import { useConnectionStatus } from '@/hooks/useConnectionStatus';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import type { RiskFactor, RiskTier } from '@/lib/ai/risk/types';
 
 // Types
@@ -82,6 +88,8 @@ const avatarInitials = (name: string) =>
 // Component
 
 export const LiveRequestQueue = () => {
+  const status = useConnectionStatus();
+  const isOffline = status === 'offline';
   const [requests, setRequests] = useState<QueueRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -224,15 +232,26 @@ export const LiveRequestQueue = () => {
         <h2 className="text-sm font-semibold text-foreground">
           Pending requests
         </h2>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => openSheet()}
-          aria-label="Enter 6-digit code to issue a key"
-        >
-          <KeyRoundIcon className="size-3.5" aria-hidden="true" />
-          Enter code
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openSheet()}
+                disabled={isOffline}
+                aria-label="Enter 6-digit code to issue a key"
+                className={isOffline ? 'pointer-events-none' : undefined}
+              >
+                <KeyRoundIcon className="size-3.5" aria-hidden="true" />
+                Enter code
+              </Button>
+            </span>
+          </TooltipTrigger>
+          {isOffline && (
+            <TooltipContent>Available again when you reconnect.</TooltipContent>
+          )}
+        </Tooltip>
       </div>
 
       {/* Loading */}
@@ -326,14 +345,29 @@ export const LiveRequestQueue = () => {
                     <time className="font-mono text-xs text-muted-foreground">
                       {relativeTime(req.created_at)}
                     </time>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => openSheet(req)}
-                      aria-label={`Issue key for ${req.requester?.full_name ?? 'requester'}`}
-                    >
-                      Issue
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openSheet(req)}
+                            disabled={isOffline}
+                            aria-label={`Issue key for ${req.requester?.full_name ?? 'requester'}`}
+                            className={
+                              isOffline ? 'pointer-events-none' : undefined
+                            }
+                          >
+                            Issue
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      {isOffline && (
+                        <TooltipContent>
+                          Available again when you reconnect.
+                        </TooltipContent>
+                      )}
+                    </Tooltip>
                   </div>
                 </div>
               </div>
@@ -452,19 +486,35 @@ export const LiveRequestQueue = () => {
                   </p>
                 )}
 
-                <Button
-                  className="w-full"
-                  disabled={
-                    codeInput.length !== 6 ||
-                    issuing ||
-                    !verifierId ||
-                    (contextRequest?.risk_tier === 'HIGH' && !acknowledged)
-                  }
-                  onClick={handleIssue}
-                  aria-busy={issuing}
-                >
-                  {issuing ? 'Issuing…' : 'Issue key'}
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="w-full">
+                      <Button
+                        className="w-full"
+                        disabled={
+                          isOffline ||
+                          codeInput.length !== 6 ||
+                          issuing ||
+                          !verifierId ||
+                          (contextRequest?.risk_tier === 'HIGH' &&
+                            !acknowledged)
+                        }
+                        onClick={handleIssue}
+                        aria-busy={issuing}
+                        style={
+                          isOffline ? { pointerEvents: 'none' } : undefined
+                        }
+                      >
+                        {issuing ? 'Issuing…' : 'Issue key'}
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  {isOffline && (
+                    <TooltipContent>
+                      Available again when you reconnect.
+                    </TooltipContent>
+                  )}
+                </Tooltip>
 
                 {!verifierId && (
                   <p className="text-center text-xs text-muted-foreground">

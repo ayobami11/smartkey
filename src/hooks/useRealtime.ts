@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
 import { createBrowserClient } from '@/lib/supabase/client';
@@ -31,7 +31,7 @@ export const useRealtime = <
   options: UseRealtimeOptions<T>
 ): void => {
   const optionsRef = useRef(options);
-  const instanceId = useId();
+  const instanceIdRef = useRef(crypto.randomUUID());
 
   // Keep the ref current after every render so the subscription callbacks
   // always read the latest prop values without needing to re-subscribe.
@@ -48,7 +48,7 @@ export const useRealtime = <
     let destroyed = false;
 
     const buildChannelName = () =>
-      `realtime:${optionsRef.current.table}:inst-${instanceId}${
+      `realtime:${optionsRef.current.table}:inst-${instanceIdRef.current}${
         optionsRef.current.filter
           ? `:${optionsRef.current.filter.column}=eq.${optionsRef.current.filter.value}`
           : ''
@@ -165,5 +165,5 @@ export const useRealtime = <
         supabase.removeChannel(channelRef).catch(() => {});
       }
     };
-  }, [instanceId]); // instanceId is stable (useId); options are read via ref.
+  }, []); // instanceIdRef is stable after mount; options are read via ref.
 };

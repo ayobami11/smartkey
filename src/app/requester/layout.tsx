@@ -1,5 +1,6 @@
 import { AppSidebar } from './_components/sidebar';
 import { DashboardHeader } from './_components/dashboard-header';
+import { OfflineBanner } from '@/components/smartkey/offline-banner';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 
 export default function RequesterLayout({
@@ -12,6 +13,7 @@ export default function RequesterLayout({
       <AppSidebar />
       <SidebarInset>
         <DashboardHeader />
+        <OfflineBanner />
         {children}
       </SidebarInset>
     </SidebarProvider>

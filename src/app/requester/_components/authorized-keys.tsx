@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useConnectionStatus } from '@/hooks/useConnectionStatus';
 import { useRouter } from 'next/navigation';
 import { CalendarIcon, InboxIcon, KeyRoundIcon } from 'lucide-react';
 import { Controller, useForm } from 'react-hook-form';
@@ -39,6 +40,11 @@ import {
 } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { createBrowserClient } from '@/lib/supabase/client';
 import {
   weekdayRequestFormSchema,
@@ -136,6 +142,8 @@ const KeyTile = ({
 
 export const AuthorizedKeys = () => {
   const router = useRouter();
+  const connectionStatus = useConnectionStatus();
+  const isOffline = connectionStatus === 'offline';
   const [keys, setKeys] = useState<AuthorisedKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -488,9 +496,25 @@ export const AuthorizedKeys = () => {
                 </p>
               )}
 
-              <Button type="submit" className="w-full" disabled={!userId}>
-                Request key
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="w-full">
+                    <Button
+                      type="submit"
+                      className="w-full"
+                      disabled={!userId || isOffline}
+                      style={isOffline ? { pointerEvents: 'none' } : undefined}
+                    >
+                      Request key
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {isOffline && (
+                  <TooltipContent>
+                    Available again when you reconnect.
+                  </TooltipContent>
+                )}
+              </Tooltip>
             </form>
           )}
 
@@ -684,9 +708,26 @@ export const AuthorizedKeys = () => {
                   {submitError}
                 </p>
               )}
-              <Button type="submit" form="weekend-form" className="w-full">
-                Submit request
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="w-full">
+                    <Button
+                      type="submit"
+                      form="weekend-form"
+                      className="w-full"
+                      disabled={isOffline}
+                      style={isOffline ? { pointerEvents: 'none' } : undefined}
+                    >
+                      Submit request
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {isOffline && (
+                  <TooltipContent>
+                    Available again when you reconnect.
+                  </TooltipContent>
+                )}
+              </Tooltip>
             </div>
           )}
         </SheetContent>

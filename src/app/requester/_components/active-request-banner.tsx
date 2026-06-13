@@ -5,8 +5,14 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { KeyRoundIcon, XCircleIcon } from 'lucide-react';
 
 import { useRealtime } from '@/hooks/useRealtime';
+import { useConnectionStatus } from '@/hooks/useConnectionStatus';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { createBrowserClient } from '@/lib/supabase/client';
 
 // Types
@@ -62,6 +68,8 @@ const formatCountdown = (seconds: number) => {
 
 export const ActiveRequestBanner = () => {
   const queryClient = useQueryClient();
+  const connectionStatus = useConnectionStatus();
+  const isOffline = connectionStatus === 'offline';
   const [userId, setUserId] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(0);
   const [cancelling, setCancelling] = useState(false);
@@ -226,17 +234,28 @@ export const ActiveRequestBanner = () => {
               Show this to the security officer at the desk.
             </p>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleCancel}
-            disabled={cancelling}
-            aria-busy={cancelling}
-            className="shrink-0 gap-1.5"
-          >
-            <XCircleIcon className="size-3.5" aria-hidden="true" />
-            {cancelling ? 'Cancelling…' : 'Cancel request'}
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCancel}
+                  disabled={cancelling || isOffline}
+                  aria-busy={cancelling}
+                  className={`shrink-0 gap-1.5${isOffline ? ' pointer-events-none' : ''}`}
+                >
+                  <XCircleIcon className="size-3.5" aria-hidden="true" />
+                  {cancelling ? 'Cancelling…' : 'Cancel request'}
+                </Button>
+              </span>
+            </TooltipTrigger>
+            {isOffline && (
+              <TooltipContent>
+                Available again when you reconnect.
+              </TooltipContent>
+            )}
+          </Tooltip>
         </div>
       </div>
     );
