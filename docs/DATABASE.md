@@ -50,7 +50,7 @@ Authoritative schema lives in `supabase/migrations/`. This document is a human-r
 - `key_id` UUID FK keys
 - `type` enum: 'WEEKDAY' | 'WEEKEND'
 - `requested_for` date (weekday: today; weekend: future Sat/Sun)
-- `status` enum: 'PENDING_HOD' (weekend only) | 'CODE_ISSUED' | 'KEY_ISSUED' | 'KEY_RETURNED' | 'EXPIRED' | 'CANCELLED' | 'DECLINED'
+- `status` enum: 'PENDING_HOD' (weekend only) | 'APPROVED' (weekend only — HOD approved, awaiting on-the-day code) | 'CODE_ISSUED' | 'KEY_ISSUED' | 'KEY_RETURNED' | 'EXPIRED' | 'CANCELLED' | 'DECLINED'
 - `code` text (6-digit collection code, only present in CODE_ISSUED state)
 - `code_expires_at` timestamptz
 - `return_code` text (6-digit return code; set by `request_return` while KEY_ISSUED, cleared on return)
@@ -135,6 +135,8 @@ Authoritative schema lives in `supabase/migrations/`. This document is a human-r
 - `event` text (matches `AuditEvent` union in TS)
 - `actor_id` UUID FK profiles
 - `actor_role` enum (denormalised for query performance)
+- `actor_name` text nullable (denormalised at write time; snapshot of the actor's name)
+- `actor_department` text nullable (denormalised at write time; null for non-departmental roles e.g. CSO/Verifier)
 - `target_type` text
 - `target_id` UUID
 - `payload` jsonb (validated by zod schema in TS before write)
@@ -145,11 +147,13 @@ Authoritative schema lives in `supabase/migrations/`. This document is a human-r
 
 These wrap multi-table mutations in transactions and enforce business rules.
 
-- `create_request(key_id, return_time, type, weekend_date)` — creates request + audit entry; returns code.
+- `create_request(key_id, return_time, type, weekend_date)` — creates request + audit entry. WEEKDAY returns a code immediately (CODE_ISSUED); WEEKEND creates a PENDING_HOD request with no code.
+- `generate_weekend_code(request_id, requester_id)` — requester-initiated. On the requested weekend date only, mints a short-lived 6-digit code (10-min expiry) for an APPROVED weekend request → CODE_ISSUED. Audit `CODE_ISSUED`. Raises TOO_EARLY before the date.
+- `expire_request(request_id, requester_id)` — requester-initiated (fired automatically by the UI when a code lapses). Flips a genuinely-expired CODE_ISSUED request → EXPIRED, clears the code, audit `REQUEST_EXPIRED`. Idempotent (no-op if already moved on).
 - `issue_key(request_id, verifier_id)` — flips request status, sets issued_at, audit entry.
 - `request_return(request_id, requester_id)` — requester-initiated; generates a 6-digit return code (15-min expiry) for their own KEY_ISSUED request, audit entry (`RETURN_CODE_GENERATED`). Status stays KEY_ISSUED.
 - `return_key(request_id, verifier_id, code?, returner_id?, override_reason?)` — flips request status to KEY_RETURNED, sets returned_at, clears the return code. Requires either `code` (verified → `KEY_RETURNED`) or `override_reason` (unverified → `KEY_RETURNED_UNVERIFIED` + a `SUSPICIOUS_ACTIVITY` incident when an open shift exists).
-- `approve_weekend(request_id, hod_id, note?)` — runs signature verification, creates hod_decisions row, generates code, audit entry.
+- `approve_weekend(request_id, hod_id, note?)` — runs signature verification, creates hod_decisions row, moves request to APPROVED (no code is issued here — the requester mints one on the day via `generate_weekend_code`), audit entry.
 - `decline_weekend(request_id, hod_id, note?)` — creates hod_decisions row, audit entry.
 - `acknowledge_shift_handover(outgoing_shift_id, key_ids, bulk)` — creates handover row, audit entry per key.
 - `generate_shift_report(shift_id)` — server-side; calls Gemini, inserts shift_reports row, audit entry.

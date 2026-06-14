@@ -38,10 +38,23 @@ export const writeAuditEntry = async (
   // write bypasses RLS (the RPCs do the same via SECURITY DEFINER).
   const supabase = createAdminClient();
 
+  // Denormalise the actor's name and department onto the row, mirroring the
+  // `_write_audit` RPC helper so both audit write paths populate the same
+  // columns. Captured at write time so the entry preserves who the actor was
+  // at the moment of the event — an immutable journal must not be rewritten by
+  // a later rename or department move.
+  const { data: actor } = await supabase
+    .from('profiles')
+    .select('full_name, departments(name)')
+    .eq('id', actorId)
+    .maybeSingle();
+
   const { error } = await supabase.from('audit_log').insert({
     event,
     actor_id: actorId,
     actor_role: actorRole,
+    actor_name: actor?.full_name ?? null,
+    actor_department: actor?.departments?.name ?? null,
     target_type: targetType,
     target_id: targetId,
     payload,

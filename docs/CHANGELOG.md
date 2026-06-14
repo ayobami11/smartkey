@@ -8,6 +8,35 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-06-14 — Weekend collection code deferred to the day + auto-expire
+
+- **Why**: `approve_weekend` issued the collection code at HOD approval with `code_expires_at = requested_for + 1 day`, so an approved weekend request had a working code valid for the whole week until the date — defeating the point of a short-lived OTP. Separately, an expired weekday code lingered in `CODE_ISSUED` and forced the requester to manually cancel a dead code.
+- `supabase/migrations/20260614000003_request_status_add_approved.sql` + `20260614000004_weekend_deferred_code_and_expiry.sql` (applied to remote): new `APPROVED` request status; `create_request` (WEEKEND) no longer mints a code; `approve_weekend` moves to `APPROVED` with no code; new `generate_weekend_code(request_id, requester_id)` mints a 10-min code on the requested date only; new `expire_request(request_id, requester_id)` flips a genuinely-expired `CODE_ISSUED` → `EXPIRED` (audit `REQUEST_EXPIRED`).
+- Routes: `POST /api/requests/weekend-code`, `POST /api/requests/expire`. `hod-decision` now reports `APPROVED` on approval.
+- UI: new `WeekendRequestsPanel` on the requester dashboard shows weekend request status (Awaiting HOD / Approved / Declined) with a "Get collection code" action on the day. The active-request banner and the code page auto-fire `/api/requests/expire` when the countdown hits 0, replacing the manual cancel for expired codes.
+- `src/types/database.ts`: `APPROVED` added to `request_status`; `generate_weekend_code` + `expire_request` signatures; `approve_weekend` code now nullable.
+
+### 2026-06-14 — Audit auth events (login + password change)
+
+- **Why**: the audit log had no record of authentication, so an incident timeline couldn't show when someone actually accessed the system. Added `LOGIN_SUCCEEDED` and `PASSWORD_CHANGED`.
+- `LOGIN_SUCCEEDED` is written at the _completed_ login, not the password step (an OTP prompt isn't a login — the user may abandon it). For CSO/HOD/VERIFIER that's after OTP in `src/app/api/auth/verify-otp/route.ts`; for REQUESTER (no MFA) it's the successful return in `src/app/api/auth/login/route.ts`. Payload records the `method` (`OTP` / `PASSWORD`).
+- `PASSWORD_CHANGED` is written after a successful update in `src/app/api/auth/change-password/route.ts`.
+- All three are best-effort (wrapped in try/catch + logged): a session/password change has already happened, so an audit failure must not fail the user's request.
+- `src/app/cso/audit/_components/audit-table.tsx` — maps the new events (`LOGIN` and `SETTINGS` UI types) so they display and filter; the previously dead "Login" filter chip now returns rows.
+- Suggested next (not yet added): `LOGOUT` (needs the logout route to resolve the role cookie namespace to attribute the actor), `LOGIN_FAILED` (failed OTP/password — security-relevant), `PASSWORD_RESET_COMPLETED`.
+
+### 2026-06-14 — Fix Realtime in production (explicit websocket auth)
+
+- **Why**: live updates worked locally but not in the deployed app (same Supabase backend), so the verifier queue / issue / return flows needed a manual refresh. Root cause was client-side: nothing called `realtime.setAuth()`, so the websocket relied on `@supabase/ssr` propagating the JWT implicitly. The session is read from cookies asynchronously, so a channel could join before it resolved and authenticate as `anon` — RLS then silently withheld every `postgres_changes` event while the channel still reported `SUBSCRIBED`. Dev StrictMode's double-mount re-subscribed after the token was ready and masked the race; production's single mount lost it.
+- `src/lib/supabase/client.ts` — the singleton browser client now sets the Realtime token from the persisted session immediately and refreshes it on every `onAuthStateChange`. `setAuth` also pushes the token to already-joined channels, so it heals a channel that joined as `anon`. No DB change was needed (publication + replica identity were already correct and shared with localhost). Requires a redeploy to take effect.
+
+### 2026-06-14 — Denormalise actor name + department onto audit_log
+
+- **Why**: the CSO audit page is read-heavy (server-side pagination, counts, filters on every page change) and showed only a truncated `actor_id`, which carries no investigative value. Joining `profiles`/`departments` on every read would put the cost on the hot path. The table already denormalises `actor_role` for the same reason — this extends that pattern. Capturing the values at write time is also semantically correct for an immutable journal: each entry records who the actor was at the moment of the event, so a later rename or department move cannot rewrite history.
+- `supabase/migrations/20260614000002_audit_log_actor_denormalisation.sql` (applied to remote) — adds `audit_log.actor_name` + `actor_department`; populates them inside the `_write_audit` RPC helper via one by-PK lookup per write; backfills the 152 existing rows.
+- `src/lib/audit/index.ts` — the TS `writeAuditEntry` (used by the 4 routes that bypass the RPC helper) now looks up and denormalises the same two columns so both write paths stay consistent.
+- `src/app/cso/audit/_components/audit-table.tsx` — reads the new columns (name falls back to payload then truncated id), adds a Department column. `src/types/database.ts` — `audit_log` Row/Insert/Update gain the two nullable columns.
+
 ### 2026-06-14 — Requester-verified key return (return OTP)
 
 - **Why**: a key could be marked returned by the verifier alone, with no proof the requester actually handed it back — a malicious or careless officer could log phantom returns. This puts the requester back in the loop, mirroring the collection-code flow.

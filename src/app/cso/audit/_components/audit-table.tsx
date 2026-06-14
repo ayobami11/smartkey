@@ -79,6 +79,7 @@ type AuditEntry = {
   type: AuditEventType;
   actor: string;
   actorRole: string;
+  department?: string;
   description: string;
   keyCode?: string;
   timestamp: string;
@@ -210,9 +211,11 @@ function mapRow(e: Record<string, unknown>): AuditEntry {
     id: e.id as string,
     type: eventType,
     actor:
+      (e.actor_name as string | undefined) ??
       (payload.actor_name as string | undefined) ??
       (e.actor_id as string).slice(0, 8),
     actorRole: ROLE_LABEL[e.actor_role as string] ?? (e.actor_role as string),
+    department: (e.actor_department as string | undefined) ?? undefined,
     description: eventName?.replace(/_/g, ' ') ?? 'Event',
     keyCode: payload.key_code as string | undefined,
     timestamp: new Date(e.occurred_at as string).toLocaleString('en-GB', {
@@ -292,6 +295,15 @@ const columns: ColumnDef<AuditEntry>[] = [
         </span>
       );
     },
+  },
+  {
+    id: 'department',
+    header: 'Department',
+    cell: ({ row }) => (
+      <span className="text-sm text-muted-foreground">
+        {row.original.department ?? '—'}
+      </span>
+    ),
   },
   {
     id: 'description',
@@ -379,7 +391,9 @@ export const AuditTable = () => {
       const to = (pageIndex + 1) * pageSize - 1;
       let q = supabase
         .from('audit_log')
-        .select('id, event, actor_id, actor_role, payload, occurred_at')
+        .select(
+          'id, event, actor_id, actor_role, actor_name, actor_department, payload, occurred_at'
+        )
         .order('occurred_at', { ascending: false })
         .range(from, to);
       if (mappedEvents.length > 0) q = q.in('event', mappedEvents);

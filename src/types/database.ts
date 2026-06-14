@@ -18,6 +18,8 @@ export type Database = {
         Row: {
           actor_id: string;
           actor_role: Database['public']['Enums']['user_role'];
+          actor_name: string | null;
+          actor_department: string | null;
           event: string;
           id: string;
           occurred_at: string;
@@ -28,6 +30,8 @@ export type Database = {
         Insert: {
           actor_id: string;
           actor_role: Database['public']['Enums']['user_role'];
+          actor_name?: string | null;
+          actor_department?: string | null;
           event: string;
           id?: string;
           occurred_at?: string;
@@ -38,6 +42,8 @@ export type Database = {
         Update: {
           actor_id?: string;
           actor_role?: Database['public']['Enums']['user_role'];
+          actor_name?: string | null;
+          actor_department?: string | null;
           event?: string;
           id?: string;
           occurred_at?: string;
