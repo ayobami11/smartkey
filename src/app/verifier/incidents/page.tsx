@@ -180,7 +180,9 @@ export default function IncidentsPage() {
                       ))}
                     </SelectContent>
                   </Select>
-                  <FieldError errors={[fieldState.error]} />
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
                 </Field>
               )}
             />
@@ -214,7 +216,9 @@ export default function IncidentsPage() {
                       ))}
                     </SelectContent>
                   </Select>
-                  <FieldError errors={[fieldState.error]} />
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
                   {watchedSeverity === 'HIGH' && (
                     <p className="text-xs text-destructive">
                       High severity incidents notify the CSO immediately.
@@ -243,7 +247,9 @@ export default function IncidentsPage() {
                     aria-describedby="description-hint"
                     {...field}
                   />
-                  <FieldError errors={[fieldState.error]} />
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
                   <p
                     id="description-hint"
                     className="text-xs text-muted-foreground"

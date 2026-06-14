@@ -485,7 +485,9 @@ export const AuthorizedKeys = () => {
                         Defaults to today at 4PM (end of business day).
                       </p>
                     )}
-                    <FieldError errors={[fieldState.error]} />
+                    {fieldState.invalid && (
+                      <FieldError errors={[fieldState.error]} />
+                    )}
                   </Field>
                 )}
               />
@@ -582,7 +584,9 @@ export const AuthorizedKeys = () => {
                           ))}
                         </SelectContent>
                       </Select>
-                      <FieldError errors={[fieldState.error]} />
+                      {fieldState.invalid && (
+                        <FieldError errors={[fieldState.error]} />
+                      )}
                     </Field>
                   )}
                 />
@@ -607,7 +611,9 @@ export const AuthorizedKeys = () => {
                           Must be a Saturday or Sunday.
                         </p>
                       )}
-                      <FieldError errors={[fieldState.error]} />
+                      {fieldState.invalid && (
+                        <FieldError errors={[fieldState.error]} />
+                      )}
                     </Field>
                   )}
                 />
@@ -629,7 +635,9 @@ export const AuthorizedKeys = () => {
                         className="resize-none"
                         {...field}
                       />
-                      <FieldError errors={[fieldState.error]} />
+                      {fieldState.invalid && (
+                        <FieldError errors={[fieldState.error]} />
+                      )}
                     </Field>
                   )}
                 />

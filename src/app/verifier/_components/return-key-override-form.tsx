@@ -64,8 +64,7 @@ export const ReturnKeyOverrideForm = ({
                 {...field}
                 placeholder="e.g. Requester lost their phone; a colleague returned the key."
                 disabled={isOffline || isSubmitting}
-                rows={5}
-                className="resize-none"
+                className="resize-none min-h-32"
                 aria-invalid={fieldState.invalid}
               />
               {fieldState.invalid && <FieldError errors={[fieldState.error]} />}

@@ -483,7 +483,9 @@ export const LiveRequestQueue = () => {
                             />
                           </InputOTPGroup>
                         </InputOTP>
-                        <FieldError errors={[fieldState.error]} />
+                        {fieldState.invalid && (
+                          <FieldError errors={[fieldState.error]} />
+                        )}
                       </div>
                     </Field>
                   )}
