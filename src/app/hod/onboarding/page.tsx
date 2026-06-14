@@ -81,7 +81,7 @@ export default function HodOnboardingPage() {
                   </div>
                   {idx < steps.length - 1 && (
                     <div
-                      className={`mx-2 mt-[-18px] h-px flex-1 ${step > idx ? 'bg-primary' : 'bg-border'}`}
+                      className={`mx-2 -mt-4.5 h-px flex-1 ${step > idx ? 'bg-primary' : 'bg-border'}`}
                       aria-hidden="true"
                     />
                   )}

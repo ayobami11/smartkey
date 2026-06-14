@@ -1,20 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import {
-  ArrowLeftRightIcon,
-  CheckCircleIcon,
-  DownloadIcon,
-  KeyRoundIcon,
-  LogInIcon,
-  PlusIcon,
-  SearchIcon,
-  SettingsIcon,
-  SirenIcon,
-  ShieldAlertIcon,
-  ShieldCheckIcon,
-} from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import { DownloadIcon, PlusIcon, SirenIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -24,7 +11,6 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -44,29 +30,9 @@ import {
 } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
-import { createBrowserClient } from '@/lib/supabase/client';
+import { AuditTable } from '@/app/cso/audit/_components/audit-table';
 
 // Types
-
-type AuditEventType =
-  | 'REQUEST'
-  | 'ISSUE'
-  | 'RETURN'
-  | 'ANOMALY'
-  | 'HANDOVER'
-  | 'LOGIN'
-  | 'SETTINGS'
-  | 'SIGNATURE';
-
-type AuditEntry = {
-  id: string;
-  type: AuditEventType;
-  actor: string;
-  actorRole: string;
-  description: string;
-  keyCode?: string;
-  timestamp: string;
-};
 
 type IncidentType =
   | 'MISSING_KEY'
@@ -88,85 +54,6 @@ type Incident = {
 };
 
 // Constants
-
-const eventConfig: Record<
-  AuditEventType,
-  { icon: LucideIcon; label: string; iconClass: string }
-> = {
-  REQUEST: { icon: KeyRoundIcon, label: 'Request', iconClass: 'text-primary' },
-  ISSUE: { icon: KeyRoundIcon, label: 'Issue', iconClass: 'text-primary' },
-  RETURN: {
-    icon: CheckCircleIcon,
-    label: 'Return',
-    iconClass: 'text-emerald-600',
-  },
-  ANOMALY: {
-    icon: ShieldAlertIcon,
-    label: 'Anomaly',
-    iconClass: 'text-destructive',
-  },
-  HANDOVER: {
-    icon: ArrowLeftRightIcon,
-    label: 'Handover',
-    iconClass: 'text-muted-foreground',
-  },
-  LOGIN: {
-    icon: LogInIcon,
-    label: 'Login',
-    iconClass: 'text-muted-foreground',
-  },
-  SETTINGS: {
-    icon: SettingsIcon,
-    label: 'Settings change',
-    iconClass: 'text-muted-foreground',
-  },
-  SIGNATURE: {
-    icon: ShieldCheckIcon,
-    label: 'Signature',
-    iconClass: 'text-emerald-600',
-  },
-};
-
-const TYPE_CHIPS: { label: string; type?: AuditEventType }[] = [
-  { label: 'All types' },
-  { label: 'Request', type: 'REQUEST' },
-  { label: 'Issue', type: 'ISSUE' },
-  { label: 'Return', type: 'RETURN' },
-  { label: 'Anomaly', type: 'ANOMALY' },
-  { label: 'Handover', type: 'HANDOVER' },
-  { label: 'Login', type: 'LOGIN' },
-  { label: 'Settings', type: 'SETTINGS' },
-  { label: 'Signature', type: 'SIGNATURE' },
-];
-
-const ZONE_FILTERS = ['All zones', 'New Senate', 'Old Senate'] as const;
-type ZoneFilter = (typeof ZONE_FILTERS)[number];
-
-const ACTOR_ROLE_CLASS: Record<string, string> = {
-  CSO: 'bg-primary/10 text-primary',
-  HOD: 'bg-amber-100 text-amber-700',
-  Verifier: 'bg-blue-100 text-blue-700',
-  VERIFIER: 'bg-blue-100 text-blue-700',
-  Requester: 'bg-muted text-muted-foreground',
-  REQUESTER: 'bg-muted text-muted-foreground',
-  System: 'bg-muted text-muted-foreground',
-};
-
-const ROLE_LABEL: Record<string, string> = {
-  CSO: 'CSO',
-  HOD: 'HOD',
-  VERIFIER: 'Verifier',
-  REQUESTER: 'Requester',
-};
-
-const EVENT_TYPE_MAP: Record<string, AuditEventType> = {
-  key_issued: 'ISSUE',
-  key_returned: 'RETURN',
-  request_created: 'REQUEST',
-  shift_handover_acknowledged: 'HANDOVER',
-  user_provisioned: 'SETTINGS',
-  signature_mismatch: 'SIGNATURE',
-};
 
 const SEVERITY_CLASS: Record<IncidentSeverity, string> = {
   LOW: 'bg-muted text-muted-foreground',
@@ -201,17 +88,6 @@ const SEVERITY_CHIPS: { label: string; value: string }[] = [
 // Component
 
 export default function AuditLogPage() {
-  // Audit log state
-  const [entries, setEntries] = useState<AuditEntry[]>([]);
-  const [auditState, setAuditState] = useState<'loading' | 'ready' | 'error'>(
-    'loading'
-  );
-  const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState<AuditEventType | undefined>(
-    undefined
-  );
-  const [zoneFilter, setZoneFilter] = useState<ZoneFilter>('All zones');
-
   // Tab
   const [activeTab, setActiveTab] = useState<'audit' | 'incidents'>('audit');
 
@@ -232,60 +108,6 @@ export default function AuditLogPage() {
   const [logging, setLogging] = useState(false);
   const [logError, setLogError] = useState<string | null>(null);
   const [logRef, setLogRef] = useState<string | null>(null);
-
-  // Fetch audit log
-
-  const fetchAudit = async () => {
-    setAuditState('loading');
-    const supabase = createBrowserClient();
-    const { data, error } = await supabase
-      .from('audit_log')
-      .select(
-        'id, event, actor_id, actor_role, target_type, target_id, payload, occurred_at'
-      )
-      .order('occurred_at', { ascending: false })
-      .limit(50);
-
-    if (error) {
-      setAuditState('error');
-      return;
-    }
-
-    setEntries(
-      (data ?? []).map((e: Record<string, unknown>) => {
-        const payload =
-          typeof e.payload === 'object' && e.payload !== null
-            ? (e.payload as Record<string, unknown>)
-            : {};
-        const eventName = e.event as string | undefined;
-        const eventType: AuditEventType =
-          EVENT_TYPE_MAP[eventName ?? ''] ?? 'SETTINGS';
-        return {
-          id: e.id as string,
-          type: eventType,
-          actor:
-            (payload.actor_name as string | undefined) ??
-            (e.actor_id as string).slice(0, 8),
-          actorRole:
-            ROLE_LABEL[e.actor_role as string] ?? (e.actor_role as string),
-          description: eventName?.replace(/_/g, ' ') ?? 'Event',
-          keyCode: payload.key_code as string | undefined,
-          timestamp: new Date(e.occurred_at as string).toLocaleString('en-GB', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-          }),
-        };
-      })
-    );
-    setAuditState('ready');
-  };
-
-  useEffect(() => {
-    fetchAudit();
-  }, []);
 
   // Fetch incidents
 
@@ -374,22 +196,6 @@ export default function AuditLogPage() {
     setLogRef(null);
   };
 
-  // Computed (audit)
-
-  const filteredEntries = entries.filter((e) => {
-    if (typeFilter && e.type !== typeFilter) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      if (
-        !e.actor.toLowerCase().includes(q) &&
-        !e.description.toLowerCase().includes(q) &&
-        !(e.keyCode?.toLowerCase().includes(q) ?? false)
-      )
-        return false;
-    }
-    return true;
-  });
-
   // Render
 
   return (
@@ -445,173 +251,7 @@ export default function AuditLogPage() {
       </div>
 
       {/* Audit Log tab */}
-      {activeTab === 'audit' && (
-        <>
-          {/* Filter bar */}
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative min-w-56 flex-1">
-                <SearchIcon
-                  className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-                  aria-hidden="true"
-                />
-                <Input
-                  type="search"
-                  placeholder="Search by user, key code, or event"
-                  className="pl-9"
-                  aria-label="Search audit log"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              </div>
-              <div
-                className="flex items-center gap-1"
-                role="group"
-                aria-label="Filter by zone"
-              >
-                {ZONE_FILTERS.map((zone) => (
-                  <button
-                    key={zone}
-                    type="button"
-                    onClick={() => setZoneFilter(zone)}
-                    aria-pressed={zoneFilter === zone}
-                    className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
-                      zoneFilter === zone
-                        ? 'bg-primary text-primary-foreground'
-                        : 'border border-border bg-card text-foreground hover:bg-muted'
-                    }`}
-                  >
-                    {zone}
-                  </button>
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setSearch('');
-                  setTypeFilter(undefined);
-                  setZoneFilter('All zones');
-                }}
-                className="ml-auto text-sm text-muted-foreground underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-              >
-                Reset filters
-              </button>
-            </div>
-            <div
-              className="flex flex-wrap items-center gap-1.5"
-              role="group"
-              aria-label="Filter by event type"
-            >
-              {TYPE_CHIPS.map((chip) => (
-                <button
-                  key={chip.label}
-                  type="button"
-                  onClick={() => setTypeFilter(chip.type)}
-                  aria-pressed={typeFilter === chip.type}
-                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
-                    typeFilter === chip.type
-                      ? 'bg-primary text-primary-foreground'
-                      : 'border border-border bg-card text-foreground hover:bg-muted'
-                  }`}
-                >
-                  {chip.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Loading */}
-          {auditState === 'loading' && (
-            <div className="flex flex-col gap-2" aria-busy="true">
-              {[0, 1, 2, 3, 4].map((i) => (
-                <Skeleton key={i} className="h-14 rounded-lg" />
-              ))}
-            </div>
-          )}
-
-          {/* Error */}
-          {auditState === 'error' && (
-            <div
-              className="rounded-lg border border-destructive/30 bg-destructive/5 p-4"
-              role="alert"
-            >
-              <p className="text-sm text-destructive">
-                Failed to load audit log.
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-3"
-                onClick={fetchAudit}
-              >
-                Retry
-              </Button>
-            </div>
-          )}
-
-          {/* Entries */}
-          {auditState === 'ready' && (
-            <div className="flex flex-col rounded-lg border border-border bg-card shadow-[0_2px_4px_rgba(15,23,42,0.06)]">
-              {filteredEntries.length === 0 ? (
-                <div className="flex items-center justify-center p-8 text-center">
-                  <p className="text-sm text-muted-foreground">
-                    No events match these filters.
-                  </p>
-                </div>
-              ) : (
-                filteredEntries.map((entry, idx) => {
-                  const cfg = eventConfig[entry.type];
-                  const Icon = cfg.icon;
-                  const roleCls =
-                    ACTOR_ROLE_CLASS[entry.actorRole] ??
-                    'bg-muted text-muted-foreground';
-                  return (
-                    <div
-                      key={entry.id}
-                      className={`flex items-start gap-3 px-4 py-3 ${idx !== filteredEntries.length - 1 ? 'border-b border-border' : ''}`}
-                    >
-                      <Icon
-                        className={`mt-0.5 size-4 shrink-0 ${cfg.iconClass}`}
-                        aria-label={cfg.label}
-                      />
-                      <div className="flex min-w-0 flex-1 flex-col gap-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-sm font-medium text-foreground">
-                            {entry.actor}
-                          </span>
-                          <span
-                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${roleCls}`}
-                          >
-                            {entry.actorRole}
-                          </span>
-                          {entry.keyCode && (
-                            <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground">
-                              {entry.keyCode}
-                            </code>
-                          )}
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          {entry.description}
-                        </p>
-                      </div>
-                      <time className="mt-0.5 shrink-0 font-mono text-xs text-muted-foreground">
-                        {entry.timestamp}
-                      </time>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          )}
-
-          {auditState === 'ready' && (
-            <p className="text-center text-xs text-muted-foreground">
-              Showing {filteredEntries.length} event
-              {filteredEntries.length !== 1 ? 's' : ''}
-            </p>
-          )}
-        </>
-      )}
+      {activeTab === 'audit' && <AuditTable />}
 
       {/* Incidents tab */}
       {activeTab === 'incidents' && (
