@@ -5,6 +5,7 @@ import {
   CirclePlusIcon,
   DownloadIcon,
   PlusIcon,
+  SearchIcon,
   SirenIcon,
 } from 'lucide-react';
 
@@ -291,6 +292,7 @@ export default function AuditLogPage() {
         <>
           {/* Filters */}
           <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm text-muted-foreground">Filter by:</span>
             {/* Incident type multi-filter */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
