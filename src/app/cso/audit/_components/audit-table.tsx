@@ -420,13 +420,6 @@ export const AuditTable = () => {
     table.setPageIndex(0);
   };
 
-  const handleReset = () => {
-    setSearch('');
-    setTypeFilter([]);
-    setRoleFilter([]);
-    table.setPageIndex(0);
-  };
-
   const handleRoleToggle = (value: string) => {
     setRoleFilter((prev) =>
       prev.includes(value) ? prev.filter((r) => r !== value) : [...prev, value]
@@ -541,13 +534,6 @@ export const AuditTable = () => {
               )}
             </DropdownMenuContent>
           </DropdownMenu>
-          <button
-            type="button"
-            onClick={handleReset}
-            className="ml-auto text-sm text-muted-foreground underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-          >
-            Reset filters
-          </button>
         </div>
       </div>
 

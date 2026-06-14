@@ -376,21 +376,6 @@ export default function AuditLogPage() {
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
-
-            {(incidentTypeFilter.length > 0 ||
-              incidentSeverityFilter.length > 0) && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setIncidentTypeFilter([]);
-                  setIncidentSeverityFilter([]);
-                }}
-                className="text-muted-foreground"
-              >
-                Reset filters
-              </Button>
-            )}
           </div>
 
           {/* Loading */}
