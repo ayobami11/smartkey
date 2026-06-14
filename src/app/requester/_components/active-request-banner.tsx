@@ -78,6 +78,8 @@ export const ActiveRequestBanner = () => {
   const [requestingReturn, setRequestingReturn] = useState(false);
   const [returnError, setReturnError] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Guards the auto-expire call so it fires once per request, not every tick.
+  const expiredFiredRef = useRef<string | null>(null);
 
   // Resolve user ID once on mount
 
@@ -157,6 +159,44 @@ export const ActiveRequestBanner = () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [activeExpiry]);
+
+  // Auto-expire: once a collection code lapses, close the request server-side
+  // so the requester never has to manually cancel a dead code. The countdown
+  // dependency re-evaluates this each tick; the timestamp gate avoids firing on
+  // the initial countdown=0 before the timer has computed the real remaining
+  // time. Best-effort — the verifier already rejects an expired code, and the
+  // server only acts on a genuinely-expired request.
+  useEffect(() => {
+    if (
+      request?.status === 'CODE_ISSUED' &&
+      request.code_expires_at !== null &&
+      secondsRemaining(request.code_expires_at) === 0 &&
+      expiredFiredRef.current !== request.id
+    ) {
+      expiredFiredRef.current = request.id;
+      void fetch('/api/requests/expire', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ request_id: request.id }),
+      })
+        .then(() => {
+          queryClient.invalidateQueries({
+            queryKey: ['active-request', userId],
+          });
+        })
+        .catch(() => {
+          // best-effort; reset so a later mount can retry
+          expiredFiredRef.current = null;
+        });
+    }
+  }, [
+    request?.id,
+    request?.status,
+    request?.code_expires_at,
+    countdown,
+    queryClient,
+    userId,
+  ]);
 
   // Cancel
 
@@ -257,8 +297,7 @@ export const ActiveRequestBanner = () => {
 
         {isExpired ? (
           <p className="mt-2 text-sm text-muted-foreground">
-            This code has expired. Cancel this request and submit a new one to
-            continue.
+            This code has expired. Request a new one to continue.
           </p>
         ) : (
           <p
@@ -269,35 +308,35 @@ export const ActiveRequestBanner = () => {
           </p>
         )}
 
-        <div className="mt-4 flex items-center gap-2">
-          {!isExpired && (
+        {!isExpired && (
+          <div className="mt-4 flex items-center gap-2">
             <p className="flex-1 text-xs text-muted-foreground">
               Show this to the security officer at the desk.
             </p>
-          )}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleCancel}
-                  disabled={cancelling || isOffline}
-                  aria-busy={cancelling}
-                  className={`shrink-0 gap-1.5${isOffline ? ' pointer-events-none' : ''}`}
-                >
-                  <XCircleIcon className="size-3.5" aria-hidden="true" />
-                  {cancelling ? 'Cancelling…' : 'Cancel request'}
-                </Button>
-              </span>
-            </TooltipTrigger>
-            {isOffline && (
-              <TooltipContent>
-                Available again when you reconnect.
-              </TooltipContent>
-            )}
-          </Tooltip>
-        </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCancel}
+                    disabled={cancelling || isOffline}
+                    aria-busy={cancelling}
+                    className={`shrink-0 gap-1.5${isOffline ? ' pointer-events-none' : ''}`}
+                  >
+                    <XCircleIcon className="size-3.5" aria-hidden="true" />
+                    {cancelling ? 'Cancelling…' : 'Cancel request'}
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              {isOffline && (
+                <TooltipContent>
+                  Available again when you reconnect.
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </div>
+        )}
       </div>
     );
   }

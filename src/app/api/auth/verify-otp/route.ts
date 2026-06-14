@@ -2,6 +2,8 @@ import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
+import { writeAuditEntry } from '@/lib/audit';
+import { logger } from '@/lib/logger';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { DEFAULT_NAMESPACE, namespaceForRole } from '@/lib/supabase/cookies';
 import { createServerClient } from '@/lib/supabase/server';
@@ -73,6 +75,26 @@ export const POST = async (request: NextRequest) => {
   const {
     data: { session },
   } = await supabase.auth.getSession();
+
+  // Record the completed login — the user has passed MFA and now has a usable
+  // session. We log it here, not at the password step, because an OTP prompt is
+  // not a login: the user may never finish it. Best-effort: a logging failure
+  // must not block a legitimate sign-in.
+  try {
+    await writeAuditEntry({
+      event: 'LOGIN_SUCCEEDED',
+      actorId: profile.id,
+      actorRole: profile.role,
+      targetType: 'profile',
+      targetId: profile.id,
+      payload: { email, method: 'OTP' },
+    });
+  } catch (auditErr) {
+    logger.error('Failed to write LOGIN_SUCCEEDED audit entry', {
+      userId: profile.id,
+      err: String(auditErr),
+    });
+  }
 
   return NextResponse.json(ok({ session }));
 };

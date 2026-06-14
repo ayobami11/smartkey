@@ -175,7 +175,7 @@ export const POST = async (request: NextRequest) => {
 
       const result = Array.isArray(data) ? data[0] : data;
       return NextResponse.json(
-        ok({ request_id: result.request_id, status: 'CODE_ISSUED' })
+        ok({ request_id: result.request_id, status: 'APPROVED' })
       );
     }
 
@@ -204,7 +204,7 @@ export const POST = async (request: NextRequest) => {
 
     const result = Array.isArray(data) ? data[0] : data;
     return NextResponse.json(
-      ok({ request_id: result.request_id, status: 'CODE_ISSUED' })
+      ok({ request_id: result.request_id, status: 'APPROVED' })
     );
   } else {
     const { data, error } = await supabase.rpc('decline_weekend', {

@@ -3,12 +3,14 @@ import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
+import { writeAuditEntry } from '@/lib/audit';
 import { sendOtpEmail } from '@/lib/email/otp';
 import { logger } from '@/lib/logger';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { DEFAULT_NAMESPACE, namespaceForRole } from '@/lib/supabase/cookies';
 import { createServerClient } from '@/lib/supabase/server';
 import type { Database } from '@/lib/supabase/types';
+import type { UserRole } from '@/types/database';
 import { err, ok } from '@/types/api';
 
 const MFA_ROLES = new Set(['CSO', 'HOD', 'VERIFIER']);
@@ -84,6 +86,27 @@ export const POST = async (request: NextRequest) => {
     }
 
     return NextResponse.json(ok({ session: null, role, mfa_required: true }));
+  }
+
+  // Roles that skip MFA (REQUESTER) are fully signed in at this point, so this
+  // is the completed-login moment for them. Best-effort: never block sign-in on
+  // an audit failure.
+  if (role) {
+    try {
+      await writeAuditEntry({
+        event: 'LOGIN_SUCCEEDED',
+        actorId: authData.user.id,
+        actorRole: role as UserRole,
+        targetType: 'profile',
+        targetId: authData.user.id,
+        payload: { email, method: 'PASSWORD' },
+      });
+    } catch (auditErr) {
+      logger.error('Failed to write LOGIN_SUCCEEDED audit entry', {
+        userId: authData.user.id,
+        err: String(auditErr),
+      });
+    }
   }
 
   return NextResponse.json(
