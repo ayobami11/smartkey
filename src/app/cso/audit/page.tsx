@@ -292,7 +292,9 @@ export default function AuditLogPage() {
         <>
           {/* Filters */}
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm text-muted-foreground">Filter by:</span>
+            <span className="pl-2 text-sm font-semibold text-foreground">
+              Filter by:
+            </span>
             {/* Incident type multi-filter */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
