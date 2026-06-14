@@ -129,6 +129,7 @@ export const useRealtime = <
               setConnectionStatus('connected');
               retryCount = 0;
             } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+              retryCount += 1;
               const delay =
                 BACKOFF_DELAYS[Math.min(retryCount, BACKOFF_DELAYS.length - 1)];
               logger.warn('Realtime channel error; scheduling reconnect', {
@@ -148,14 +149,8 @@ export const useRealtime = <
 
               supabase.removeChannel(channel).catch(() => {});
 
-              if (
-                delay < MAX_BACKOFF_MS ||
-                retryCount < BACKOFF_DELAYS.length - 1
-              ) {
-                timeoutId = setTimeout(() => {
-                  retryCount += 1;
-                  subscribe();
-                }, delay);
+              if (retryCount < BACKOFF_DELAYS.length) {
+                timeoutId = setTimeout(subscribe, delay);
               } else {
                 logger.warn('Realtime max backoff reached; staying offline', {
                   table,
@@ -168,8 +163,9 @@ export const useRealtime = <
           });
       };
 
-      subscribe();
-
+      // Register the entry immediately (synchronously) so that other hook
+      // instances that call useRealtime for the same table while we are
+      // awaiting auth do not create a second channel.
       registry = {
         subscribers: new Set(),
         cleanup: () => {
@@ -180,8 +176,22 @@ export const useRealtime = <
           }
         },
       };
-
       channelRegistry.set(channelName, registry);
+
+      // A channel that joins the WebSocket before setAuth fires connects as
+      // `anon`. Even after setAuth() is called on an already-joined channel
+      // the Realtime server does NOT retroactively start delivering
+      // postgres_changes events — the RLS check is locked at join time.
+      // So we MUST call setAuth before we create the channel. getSession()
+      // reads from the in-memory session cache (populated from cookies during
+      // client construction) and resolves in one microtask tick, so this adds
+      // no perceptible latency.
+      supabase.auth.getSession().then(({ data }) => {
+        if (data.session?.access_token) {
+          supabase.realtime.setAuth(data.session.access_token);
+        }
+        subscribe();
+      });
     }
 
     // 3. Register this component instance to the shared channel

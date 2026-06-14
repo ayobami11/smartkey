@@ -39,19 +39,11 @@ export const createBrowserClient = (): SupabaseClient<Database> => {
     }
   );
 
-  // Authenticate the Realtime websocket as the signed-in user, and keep the
-  // token fresh. The @supabase/ssr browser client reads the session from
-  // cookies asynchronously, so without this a channel can join before the
-  // session loads and the socket authenticates as `anon` — RLS then silently
-  // withholds every postgres_changes event while the channel still reports
-  // SUBSCRIBED. In dev, StrictMode's double-mount re-subscribes after the token
-  // is ready and masks the race; in production the single mount loses it. Set
-  // the token immediately from the persisted session, then on every auth change.
-  void client.auth.getSession().then(({ data }) => {
-    if (data.session?.access_token) {
-      void client.realtime.setAuth(data.session.access_token);
-    }
-  });
+  // Keep the Realtime token fresh on every auth state change (e.g. after a
+  // token refresh). The initial setAuth before the first channel subscribes is
+  // handled inside useRealtime, which awaits getSession() before creating the
+  // channel — a channel that joins as `anon` never receives postgres_changes
+  // events even after setAuth is subsequently called.
   client.auth.onAuthStateChange((_event, session) => {
     void client.realtime.setAuth(session?.access_token ?? null);
   });

@@ -323,6 +323,42 @@ Requester-initiated. Generates a 6-digit **return code** (15-minute expiry) for 
 
 ---
 
+### POST /api/requests/weekend-code
+
+**File**: `src/app/api/requests/weekend-code/route.ts`
+**Roles**: REQUESTER
+**RPC**: `generate_weekend_code(request_id, requester_id)`
+
+Requester-initiated. For an `APPROVED` weekend request, on the requested date only, mints a short-lived 6-digit collection code (10-min expiry) and moves the request to `CODE_ISSUED` — mirroring the weekday flow so the code is never long-lived. Writes a `CODE_ISSUED` audit entry.
+
+| Field        | Type            | Required |
+| ------------ | --------------- | -------- |
+| `request_id` | `string` (uuid) | yes      |
+
+**Response `data`**: `{ "request_id": "<uuid>", "code": "123456", "code_expires_at": "<iso>" }`
+
+**Errors**: `403` not the requester's own request · `409` request not in APPROVED state · `422` before the requested date (TOO_EARLY) · `404` request not found
+
+---
+
+### POST /api/requests/expire
+
+**File**: `src/app/api/requests/expire/route.ts`
+**Roles**: REQUESTER
+**RPC**: `expire_request(request_id, requester_id)`
+
+Requester-initiated and fired automatically by the UI when a collection code's countdown reaches 0. Flips a genuinely-expired `CODE_ISSUED` request to `EXPIRED`, clears the code, and writes a `REQUEST_EXPIRED` audit entry. Idempotent — returns the current status with no error if the request already moved on.
+
+| Field        | Type            | Required |
+| ------------ | --------------- | -------- |
+| `request_id` | `string` (uuid) | yes      |
+
+**Response `data`**: `{ "request_id": "<uuid>", "status": "EXPIRED" }`
+
+**Errors**: `403` not the requester's own request · `409` code has not expired yet · `404` request not found
+
+---
+
 ## 3. Keys
 
 ### POST /api/keys/return
@@ -619,6 +655,8 @@ If `passed = false`, the caller raises a CSO alert and holds the approval.
 | ---------------------------- | --------------------------------- | ----------------------- |
 | `create_request`             | POST /api/requests/submit         | yes                     |
 | `issue_key`                  | POST /api/requests/collect        | yes                     |
+| `generate_weekend_code`      | POST /api/requests/weekend-code   | yes                     |
+| `expire_request`             | POST /api/requests/expire         | yes                     |
 | `request_return`             | POST /api/requests/request-return | yes                     |
 | `return_key`                 | POST /api/keys/return             | yes                     |
 | `approve_weekend`            | POST /api/requests/hod-decision   | yes                     |

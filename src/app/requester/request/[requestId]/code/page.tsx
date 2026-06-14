@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -146,6 +146,42 @@ export default function CodeDisplayPage() {
   const countdown = request?.code_expires_at
     ? secondsRemaining(request.code_expires_at)
     : 0;
+
+  // Auto-expire: close the request server-side once the code lapses, so the
+  // requester doesn't have to manually cancel a dead code. Fires once per
+  // request; best-effort.
+  const expiredFiredRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      request?.status === 'CODE_ISSUED' &&
+      request.code_expires_at !== null &&
+      secondsRemaining(request.code_expires_at) === 0 &&
+      expiredFiredRef.current !== request.id
+    ) {
+      expiredFiredRef.current = request.id;
+      void fetch('/api/requests/expire', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ request_id: request.id }),
+      })
+        .then(() => {
+          queryClient.invalidateQueries({
+            queryKey: ['request', requestId, userId],
+          });
+        })
+        .catch(() => {
+          expiredFiredRef.current = null;
+        });
+    }
+  }, [
+    request?.id,
+    request?.status,
+    request?.code_expires_at,
+    countdown,
+    queryClient,
+    requestId,
+    userId,
+  ]);
 
   // Copy to clipboard
 

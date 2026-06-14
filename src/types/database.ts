@@ -652,7 +652,7 @@ export type Database = {
           p_signature_verified?: boolean;
         };
         Returns: {
-          code: string;
+          code: string | null;
           decision_id: string;
           request_id: string;
         }[];
@@ -678,10 +678,25 @@ export type Database = {
           request_id: string;
         }[];
       };
+      expire_request: {
+        Args: { p_request_id: string; p_requester_id: string };
+        Returns: {
+          request_id: string;
+          status: string;
+        }[];
+      };
       generate_shift_report: {
         Args: { p_shift_id: string };
         Returns: {
           report_id: string;
+        }[];
+      };
+      generate_weekend_code: {
+        Args: { p_request_id: string; p_requester_id: string };
+        Returns: {
+          code: string;
+          code_expires_at: string;
+          request_id: string;
         }[];
       };
       issue_key: {
@@ -757,6 +772,7 @@ export type Database = {
       key_status: 'AVAILABLE' | 'ISSUED' | 'OVERDUE' | 'RETIRED';
       request_status:
         | 'PENDING_HOD'
+        | 'APPROVED'
         | 'CODE_ISSUED'
         | 'KEY_ISSUED'
         | 'KEY_RETURNED'
@@ -923,6 +939,7 @@ export const Constants = {
       key_status: ['AVAILABLE', 'ISSUED', 'OVERDUE', 'RETIRED'],
       request_status: [
         'PENDING_HOD',
+        'APPROVED',
         'CODE_ISSUED',
         'KEY_ISSUED',
         'KEY_RETURNED',
