@@ -136,6 +136,19 @@ export const issueKeyFormSchema = z.object({
     .length(6, "Enter the 6-digit code sent to the requester's email."),
 });
 
+export const returnKeyFormSchema = z.object({
+  return_code: z
+    .string()
+    .length(6, 'Enter the 6-digit return code from the requester.'),
+});
+
+export const returnKeyOverrideFormSchema = z.object({
+  override_reason: z
+    .string()
+    .trim()
+    .min(3, 'Give a brief reason for returning without a code.'),
+});
+
 export const collectKeySchema = z.object({
   /** The 6-digit code the requester presents at the desk. */
   code: z
@@ -255,4 +268,8 @@ export type AddReportCommentInput = z.infer<typeof addReportCommentSchema>;
 export type WeekdayRequestFormInput = z.infer<typeof weekdayRequestFormSchema>;
 export type WeekendRequestFormInput = z.infer<typeof weekendRequestFormSchema>;
 export type IssueKeyFormInput = z.infer<typeof issueKeyFormSchema>;
+export type ReturnKeyFormInput = z.infer<typeof returnKeyFormSchema>;
+export type ReturnKeyOverrideFormInput = z.infer<
+  typeof returnKeyOverrideFormSchema
+>;
 export type IncidentFormInput = z.infer<typeof incidentFormSchema>;

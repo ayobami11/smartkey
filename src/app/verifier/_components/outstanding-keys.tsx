@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { REGEXP_ONLY_DIGITS } from 'input-otp';
 import { InboxIcon, KeyRoundIcon } from 'lucide-react';
 
 import { useRealtime } from '@/hooks/useRealtime';
@@ -16,25 +15,20 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty';
 import {
-  InputOTP,
-  InputOTPGroup,
-  InputOTPSlot,
-} from '@/components/ui/input-otp';
-import { Label } from '@/components/ui/label';
-import {
   Sheet,
   SheetContent,
   SheetDescription,
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { Textarea } from '@/components/ui/textarea';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ReturnKeyForm } from './return-key-form';
+import { ReturnKeyOverrideForm } from './return-key-override-form';
 
 // Types
 
@@ -94,8 +88,6 @@ export const OutstandingKeys = () => {
   const [selectedKey, setSelectedKey] = useState<OutstandingKey | null>(null);
   const [returnStep, setReturnStep] = useState<ReturnStep>('confirm');
   const [returnMode, setReturnMode] = useState<ReturnMode>('code');
-  const [code, setCode] = useState('');
-  const [overrideReason, setOverrideReason] = useState('');
   const [verified, setVerified] = useState(true);
   const [returnError, setReturnError] = useState<string | null>(null);
 
@@ -156,8 +148,6 @@ export const OutstandingKeys = () => {
     setSelectedKey(key);
     setReturnStep('confirm');
     setReturnMode('code');
-    setCode('');
-    setOverrideReason('');
     setVerified(true);
     setReturnError(null);
     setSheetOpen(true);
@@ -168,8 +158,6 @@ export const OutstandingKeys = () => {
     setSelectedKey(null);
     setReturnStep('confirm');
     setReturnMode('code');
-    setCode('');
-    setOverrideReason('');
     setReturnError(null);
   };
 
@@ -178,28 +166,18 @@ export const OutstandingKeys = () => {
     setReturnError(null);
   };
 
-  const handleMarkReturned = async () => {
+  const doReturn = async (payload: {
+    code?: string;
+    override_reason?: string;
+  }) => {
     if (!selectedKey) return;
-    if (returnMode === 'code' && code.length !== 6) {
-      setReturnError('Enter the 6-digit return code.');
-      return;
-    }
-    if (returnMode === 'override' && overrideReason.trim().length < 3) {
-      setReturnError('Give a brief reason.');
-      return;
-    }
     setReturnStep('returning');
     setReturnError(null);
     try {
       const res = await fetch('/api/keys/return', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          request_id: selectedKey.id,
-          ...(returnMode === 'code'
-            ? { code }
-            : { override_reason: overrideReason.trim() }),
-        }),
+        body: JSON.stringify({ request_id: selectedKey.id, ...payload }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -220,13 +198,6 @@ export const OutstandingKeys = () => {
       setReturnStep('confirm');
     }
   };
-
-  const confirmDisabled =
-    isOffline ||
-    returnStep === 'returning' ||
-    (returnMode === 'code'
-      ? code.length !== 6
-      : overrideReason.trim().length < 3);
 
   // Render
 
@@ -409,101 +380,31 @@ export const OutstandingKeys = () => {
                   )}
                 </div>
 
-                {/* Verification — code entry (default) or flagged override */}
+                {/* Form — each mode is its own component with its own useForm */}
                 {returnMode === 'code' ? (
-                  <div className="flex flex-col gap-3">
-                    <Label htmlFor="return-code-input">Return code</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Ask {selectedKey.requester?.full_name ?? 'the requester'}{' '}
-                      for the 6-digit return code shown on their dashboard.
-                    </p>
-                    <InputOTP
-                      id="return-code-input"
-                      maxLength={6}
-                      pattern={REGEXP_ONLY_DIGITS}
-                      value={code}
-                      onChange={setCode}
-                      disabled={returnStep === 'returning'}
-                      autoComplete="one-time-code"
-                      aria-label="Return code"
-                    >
-                      <InputOTPGroup>
-                        {[0, 1, 2, 3, 4, 5].map((i) => (
-                          <InputOTPSlot
-                            key={i}
-                            index={i}
-                            className="size-12 font-mono text-base"
-                          />
-                        ))}
-                      </InputOTPGroup>
-                    </InputOTP>
-                    <button
-                      type="button"
-                      onClick={() => switchMode('override')}
-                      className="self-start text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
-                    >
-                      Requester can&rsquo;t provide a code?
-                    </button>
-                  </div>
+                  <ReturnKeyForm
+                    key={`${selectedKey.id}-code`}
+                    requesterName={
+                      selectedKey.requester?.full_name ?? 'the requester'
+                    }
+                    isOffline={isOffline}
+                    isSubmitting={returnStep === 'returning'}
+                    serverError={returnError}
+                    onSubmit={async (code) => doReturn({ code })}
+                    onSwitchMode={() => switchMode('override')}
+                  />
                 ) : (
-                  <div className="flex flex-col gap-3">
-                    <Label htmlFor="override-reason">
-                      Reason for returning without a code
-                    </Label>
-                    <p className="text-xs text-muted-foreground">
-                      This is recorded as an unverified return and raised to the
-                      CSO for review.
-                    </p>
-                    <Textarea
-                      id="override-reason"
-                      value={overrideReason}
-                      onChange={(e) => setOverrideReason(e.target.value)}
-                      placeholder="e.g. Requester lost their phone; a colleague returned the key."
-                      disabled={returnStep === 'returning'}
-                      rows={3}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => switchMode('code')}
-                      className="self-start text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
-                    >
-                      Enter a code instead
-                    </button>
-                  </div>
+                  <ReturnKeyOverrideForm
+                    key={`${selectedKey.id}-override`}
+                    isOffline={isOffline}
+                    isSubmitting={returnStep === 'returning'}
+                    serverError={returnError}
+                    onSubmit={async (reason) =>
+                      doReturn({ override_reason: reason })
+                    }
+                    onSwitchMode={() => switchMode('code')}
+                  />
                 )}
-
-                {returnError && (
-                  <p className="text-xs text-destructive" role="alert">
-                    {returnError}
-                  </p>
-                )}
-
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="w-full">
-                      <Button
-                        className="w-full"
-                        onClick={handleMarkReturned}
-                        disabled={confirmDisabled}
-                        aria-busy={returnStep === 'returning'}
-                        style={
-                          isOffline ? { pointerEvents: 'none' } : undefined
-                        }
-                      >
-                        {returnStep === 'returning'
-                          ? 'Marking returned…'
-                          : returnMode === 'code'
-                            ? 'Confirm return'
-                            : 'Return without code'}
-                      </Button>
-                    </span>
-                  </TooltipTrigger>
-                  {isOffline && (
-                    <TooltipContent>
-                      Available again when you reconnect.
-                    </TooltipContent>
-                  )}
-                </Tooltip>
               </>
             )}
 
