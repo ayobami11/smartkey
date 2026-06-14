@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/input-group';
 
 import { email, password } from '@/lib/validation/primitives';
-import { OtpForm } from './otp-form';
+import { OtpForm } from '@/app/(public)/login/_components/otp-form';
 
 // Schema
 

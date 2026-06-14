@@ -4,9 +4,9 @@ import { useState } from 'react';
 import { CheckIcon, CheckCircleIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { OnboardingForm } from './_components/onboarding-form';
-import { SignatureUploadStep } from './_components/signature-upload-step';
-import { StampUploadStep } from './_components/stamp-upload-step';
+import { OnboardingForm } from '@/app/hod/onboarding/_components/onboarding-form';
+import { SignatureUploadStep } from '@/app/hod/onboarding/_components/signature-upload-step';
+import { StampUploadStep } from '@/app/hod/onboarding/_components/stamp-upload-step';
 
 type Step = 0 | 1 | 2 | 3;
 

@@ -1,5 +1,5 @@
-import { AppSidebar } from './_components/sidebar';
-import { DashboardHeader } from './_components/dashboard-header';
+import { AppSidebar } from '@/app/requester/_components/sidebar';
+import { DashboardHeader } from '@/app/requester/_components/dashboard-header';
 import { OfflineBanner } from '@/components/smartkey/offline-banner';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 

@@ -27,8 +27,8 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ReturnKeyForm } from './return-key-form';
-import { ReturnKeyOverrideForm } from './return-key-override-form';
+import { ReturnKeyForm } from '@/app/verifier/_components/return-key-form';
+import { ReturnKeyOverrideForm } from '@/app/verifier/_components/return-key-override-form';
 
 // Types
 

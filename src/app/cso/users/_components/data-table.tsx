@@ -48,7 +48,7 @@ import {
   type UserRow,
   type UserStatus,
   createColumns,
-} from './columns';
+} from '@/app/cso/users/_components/columns';
 
 // Filter option lists
 

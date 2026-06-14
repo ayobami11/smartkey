@@ -15,7 +15,10 @@ import {
 } from '@/components/ui/empty';
 import { Skeleton } from '@/components/ui/skeleton';
 
-import { formatFactors, formatTime } from './helpers';
+import {
+  formatFactors,
+  formatTime,
+} from '@/app/cso/dashboard/_components/helpers';
 
 // Types
 

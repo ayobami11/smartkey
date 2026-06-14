@@ -24,13 +24,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { UsersDataTable } from './_components/data-table';
-import { ProvisionUserDialog } from './_components/provision-user-dialog';
+import { UsersDataTable } from '@/app/cso/users/_components/data-table';
+import { ProvisionUserDialog } from '@/app/cso/users/_components/provision-user-dialog';
 import {
   type UserRole,
   type UserRow,
   type UserStatus,
-} from './_components/columns';
+} from '@/app/cso/users/_components/columns';
 
 // Component
 

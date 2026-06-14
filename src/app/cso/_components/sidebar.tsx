@@ -21,9 +21,9 @@ import {
 
 import { useProfile } from '@/hooks/use-profile';
 
-import { NavMain } from './sidebar-main';
-import { SidebarBrand } from './sidebar-brand';
-import { SidebarUser } from './sidebar-user';
+import { NavMain } from '@/app/cso/_components/sidebar-main';
+import { SidebarBrand } from '@/app/cso/_components/sidebar-brand';
+import { SidebarUser } from '@/app/cso/_components/sidebar-user';
 
 const data = {
   team: {

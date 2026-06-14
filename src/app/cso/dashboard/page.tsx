@@ -8,9 +8,9 @@ import {
 
 import { Button } from '@/components/ui/button';
 
-import { LiveZoneCounts } from './_components/live-zone-counts';
-import { PendingReview } from './_components/pending-review';
-import { RiskAlerts } from './_components/risk-alerts';
+import { LiveZoneCounts } from '@/app/cso/dashboard/_components/live-zone-counts';
+import { PendingReview } from '@/app/cso/dashboard/_components/pending-review';
+import { RiskAlerts } from '@/app/cso/dashboard/_components/risk-alerts';
 
 export default function CsoDashboardPage() {
   return (
