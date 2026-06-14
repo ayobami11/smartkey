@@ -1,9 +1,23 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { DownloadIcon, PlusIcon, SirenIcon } from 'lucide-react';
+import {
+  CirclePlusIcon,
+  DownloadIcon,
+  PlusIcon,
+  SirenIcon,
+} from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Empty,
   EmptyContent,
@@ -69,20 +83,18 @@ const INCIDENT_TYPE_LABELS: Record<IncidentType, string> = {
   OTHER: 'Other',
 };
 
-const INCIDENT_TYPE_CHIPS: { label: string; value: string }[] = [
-  { label: 'All types', value: '' },
-  { label: 'Missing key', value: 'MISSING_KEY' },
-  { label: 'Suspicious activity', value: 'SUSPICIOUS_ACTIVITY' },
-  { label: 'Equipment fault', value: 'EQUIPMENT_FAULT' },
-  { label: 'Procedural', value: 'PROCEDURAL' },
-  { label: 'Other', value: 'OTHER' },
+const TYPE_OPTIONS: { value: IncidentType; label: string }[] = [
+  { value: 'MISSING_KEY', label: 'Missing key' },
+  { value: 'SUSPICIOUS_ACTIVITY', label: 'Suspicious activity' },
+  { value: 'EQUIPMENT_FAULT', label: 'Equipment fault' },
+  { value: 'PROCEDURAL', label: 'Procedural' },
+  { value: 'OTHER', label: 'Other' },
 ];
 
-const SEVERITY_CHIPS: { label: string; value: string }[] = [
-  { label: 'All severities', value: '' },
-  { label: 'Low', value: 'LOW' },
-  { label: 'Medium', value: 'MEDIUM' },
-  { label: 'High', value: 'HIGH' },
+const SEVERITY_OPTIONS: { value: IncidentSeverity; label: string }[] = [
+  { value: 'LOW', label: 'Low' },
+  { value: 'MEDIUM', label: 'Medium' },
+  { value: 'HIGH', label: 'High' },
 ];
 
 // Component
@@ -97,8 +109,12 @@ export default function AuditLogPage() {
   const [incidentState, setIncidentState] = useState<
     'idle' | 'loading' | 'ready' | 'error' | 'loadingMore'
   >('idle');
-  const [incidentTypeFilter, setIncidentTypeFilter] = useState('');
-  const [incidentSeverityFilter, setIncidentSeverityFilter] = useState('');
+  const [incidentTypeFilter, setIncidentTypeFilter] = useState<IncidentType[]>(
+    []
+  );
+  const [incidentSeverityFilter, setIncidentSeverityFilter] = useState<
+    IncidentSeverity[]
+  >([]);
 
   // Log incident sheet
   const [logOpen, setLogOpen] = useState(false);
@@ -115,9 +131,7 @@ export default function AuditLogPage() {
     if (reset) setIncidentState('loading');
     else setIncidentState('loadingMore');
 
-    const params = new URLSearchParams({ limit: '20' });
-    if (incidentTypeFilter) params.set('type', incidentTypeFilter);
-    if (incidentSeverityFilter) params.set('severity', incidentSeverityFilter);
+    const params = new URLSearchParams({ limit: '50' });
     if (cursor) params.set('cursor', cursor);
 
     try {
@@ -151,11 +165,30 @@ export default function AuditLogPage() {
     }
   }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    if (activeTab === 'incidents') {
-      fetchIncidents(true);
-    }
-  }, [incidentTypeFilter, incidentSeverityFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Client-side filtering
+
+  const filteredIncidents = incidents.filter((i) => {
+    if (incidentTypeFilter.length > 0 && !incidentTypeFilter.includes(i.type))
+      return false;
+    if (
+      incidentSeverityFilter.length > 0 &&
+      !incidentSeverityFilter.includes(i.severity)
+    )
+      return false;
+    return true;
+  });
+
+  const toggleTypeFilter = (value: IncidentType) => {
+    setIncidentTypeFilter((prev) =>
+      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
+    );
+  };
+
+  const toggleSeverityFilter = (value: IncidentSeverity) => {
+    setIncidentSeverityFilter((prev) =>
+      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
+    );
+  };
 
   // Log incident
 
@@ -258,48 +291,106 @@ export default function AuditLogPage() {
         <>
           {/* Filters */}
           <div className="flex flex-wrap items-center gap-2">
-            <div
-              className="flex flex-wrap items-center gap-1.5"
-              role="group"
-              aria-label="Filter by incident type"
-            >
-              {INCIDENT_TYPE_CHIPS.map((chip) => (
-                <button
-                  key={chip.value}
-                  type="button"
-                  onClick={() => setIncidentTypeFilter(chip.value)}
-                  aria-pressed={incidentTypeFilter === chip.value}
-                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
-                    incidentTypeFilter === chip.value
-                      ? 'bg-primary text-primary-foreground'
-                      : 'border border-border bg-card text-foreground hover:bg-muted'
-                  }`}
+            {/* Incident type multi-filter */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 border-dashed"
                 >
-                  {chip.label}
-                </button>
-              ))}
-            </div>
-            <div
-              className="flex flex-wrap items-center gap-1.5"
-              role="group"
-              aria-label="Filter by severity"
-            >
-              {SEVERITY_CHIPS.map((chip) => (
-                <button
-                  key={chip.value}
-                  type="button"
-                  onClick={() => setIncidentSeverityFilter(chip.value)}
-                  aria-pressed={incidentSeverityFilter === chip.value}
-                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
-                    incidentSeverityFilter === chip.value
-                      ? 'bg-primary text-primary-foreground'
-                      : 'border border-border bg-card text-foreground hover:bg-muted'
-                  }`}
+                  <CirclePlusIcon className="size-3.5" aria-hidden="true" />
+                  Type
+                  {incidentTypeFilter.length > 0 && (
+                    <span className="flex size-5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                      {incidentTypeFilter.length}
+                    </span>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-52">
+                <DropdownMenuLabel>Filter by type</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {TYPE_OPTIONS.map((opt) => (
+                  <DropdownMenuCheckboxItem
+                    key={opt.value}
+                    checked={incidentTypeFilter.includes(opt.value)}
+                    onCheckedChange={() => toggleTypeFilter(opt.value)}
+                  >
+                    {opt.label}
+                  </DropdownMenuCheckboxItem>
+                ))}
+                {incidentTypeFilter.length > 0 && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => setIncidentTypeFilter([])}
+                      className="text-muted-foreground"
+                    >
+                      Clear filter
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Severity multi-filter */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 border-dashed"
                 >
-                  {chip.label}
-                </button>
-              ))}
-            </div>
+                  <CirclePlusIcon className="size-3.5" aria-hidden="true" />
+                  Severity
+                  {incidentSeverityFilter.length > 0 && (
+                    <span className="flex size-5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                      {incidentSeverityFilter.length}
+                    </span>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-40">
+                <DropdownMenuLabel>Filter by severity</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {SEVERITY_OPTIONS.map((opt) => (
+                  <DropdownMenuCheckboxItem
+                    key={opt.value}
+                    checked={incidentSeverityFilter.includes(opt.value)}
+                    onCheckedChange={() => toggleSeverityFilter(opt.value)}
+                  >
+                    {opt.label}
+                  </DropdownMenuCheckboxItem>
+                ))}
+                {incidentSeverityFilter.length > 0 && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => setIncidentSeverityFilter([])}
+                      className="text-muted-foreground"
+                    >
+                      Clear filter
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {(incidentTypeFilter.length > 0 ||
+              incidentSeverityFilter.length > 0) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setIncidentTypeFilter([]);
+                  setIncidentSeverityFilter([]);
+                }}
+                className="text-muted-foreground"
+              >
+                Reset filters
+              </Button>
+            )}
           </div>
 
           {/* Loading */}
@@ -334,7 +425,7 @@ export default function AuditLogPage() {
           {/* Incidents list */}
           {(incidentState === 'ready' || incidentState === 'loadingMore') && (
             <>
-              {incidents.length === 0 ? (
+              {filteredIncidents.length === 0 ? (
                 <Empty className="border border-border bg-card">
                   <EmptyMedia variant="icon">
                     <SirenIcon
@@ -351,10 +442,10 @@ export default function AuditLogPage() {
                 </Empty>
               ) : (
                 <div className="flex flex-col rounded-lg border border-border bg-card shadow-[0_2px_4px_rgba(15,23,42,0.06)]">
-                  {incidents.map((incident, idx) => (
+                  {filteredIncidents.map((incident, idx) => (
                     <div
                       key={incident.id}
-                      className={`flex items-start gap-3 px-4 py-3 ${idx !== incidents.length - 1 ? 'border-b border-border' : ''}`}
+                      className={`flex items-start gap-3 px-4 py-3 ${idx !== filteredIncidents.length - 1 ? 'border-b border-border' : ''}`}
                     >
                       <div className="flex min-w-0 flex-1 flex-col gap-1">
                         <div className="flex flex-wrap items-center gap-2">
