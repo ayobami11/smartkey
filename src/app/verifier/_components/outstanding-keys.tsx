@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { REGEXP_ONLY_DIGITS } from 'input-otp';
 import { InboxIcon, KeyRoundIcon } from 'lucide-react';
 
+import { useRealtime } from '@/hooks/useRealtime';
 import { useConnectionStatus } from '@/hooks/useConnectionStatus';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,19 +16,25 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty';
 import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSlot,
+} from '@/components/ui/input-otp';
+import { Label } from '@/components/ui/label';
+import {
   Sheet,
   SheetContent,
   SheetDescription,
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
-import { createBrowserClient } from '@/lib/supabase/client';
 
 // Types
 
@@ -40,6 +48,7 @@ type OutstandingKey = {
 };
 
 type ReturnStep = 'confirm' | 'returning' | 'success';
+type ReturnMode = 'code' | 'override';
 
 // Helpers
 
@@ -79,23 +88,16 @@ export const OutstandingKeys = () => {
   const status = useConnectionStatus();
   const isOffline = status === 'offline';
   const queryClient = useQueryClient();
-  const [userId, setUserId] = useState<string | null>(null);
 
   // Return Sheet state
   const [sheetOpen, setSheetOpen] = useState(false);
   const [selectedKey, setSelectedKey] = useState<OutstandingKey | null>(null);
   const [returnStep, setReturnStep] = useState<ReturnStep>('confirm');
+  const [returnMode, setReturnMode] = useState<ReturnMode>('code');
+  const [code, setCode] = useState('');
+  const [overrideReason, setOverrideReason] = useState('');
+  const [verified, setVerified] = useState(true);
   const [returnError, setReturnError] = useState<string | null>(null);
-
-  // Resolve user ID once on mount (used in handleMarkReturned)
-
-  useEffect(() => {
-    createBrowserClient()
-      .auth.getUser()
-      .then(({ data: { user } }) => {
-        if (user) setUserId(user.id);
-      });
-  }, []);
 
   // Fetch outstanding keys via TanStack Query
 
@@ -121,11 +123,42 @@ export const OutstandingKeys = () => {
     },
   });
 
+  // Live updates — requests drive issued/returned transitions; keys drive overdue
+
+  useRealtime({
+    table: 'requests',
+    onInsert: (payload) => {
+      const row = payload.new as { status?: string };
+      if (row.status === 'KEY_ISSUED')
+        queryClient.invalidateQueries({ queryKey: ['keys', 'outstanding'] });
+    },
+    onUpdate: (payload) => {
+      const row = payload.new as { status?: string };
+      if (
+        ['KEY_ISSUED', 'KEY_OVERDUE', 'KEY_RETURNED'].includes(row.status ?? '')
+      )
+        queryClient.invalidateQueries({ queryKey: ['keys', 'outstanding'] });
+    },
+  });
+
+  useRealtime({
+    table: 'keys',
+    onUpdate: (payload) => {
+      const row = payload.new as { status?: string };
+      if (row.status === 'OVERDUE' || row.status === 'AVAILABLE')
+        queryClient.invalidateQueries({ queryKey: ['keys', 'outstanding'] });
+    },
+  });
+
   // Sheet helpers
 
   const openReturnSheet = (key: OutstandingKey) => {
     setSelectedKey(key);
     setReturnStep('confirm');
+    setReturnMode('code');
+    setCode('');
+    setOverrideReason('');
+    setVerified(true);
     setReturnError(null);
     setSheetOpen(true);
   };
@@ -134,11 +167,27 @@ export const OutstandingKeys = () => {
     setSheetOpen(false);
     setSelectedKey(null);
     setReturnStep('confirm');
+    setReturnMode('code');
+    setCode('');
+    setOverrideReason('');
+    setReturnError(null);
+  };
+
+  const switchMode = (mode: ReturnMode) => {
+    setReturnMode(mode);
     setReturnError(null);
   };
 
   const handleMarkReturned = async () => {
     if (!selectedKey) return;
+    if (returnMode === 'code' && code.length !== 6) {
+      setReturnError('Enter the 6-digit return code.');
+      return;
+    }
+    if (returnMode === 'override' && overrideReason.trim().length < 3) {
+      setReturnError('Give a brief reason.');
+      return;
+    }
     setReturnStep('returning');
     setReturnError(null);
     try {
@@ -147,7 +196,9 @@ export const OutstandingKeys = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           request_id: selectedKey.id,
-          verifier_id: userId,
+          ...(returnMode === 'code'
+            ? { code }
+            : { override_reason: overrideReason.trim() }),
         }),
       });
       const json = await res.json().catch(() => ({}));
@@ -159,6 +210,9 @@ export const OutstandingKeys = () => {
         setReturnStep('confirm');
         return;
       }
+      setVerified(
+        Boolean((json as { data?: { verified?: boolean } }).data?.verified)
+      );
       queryClient.invalidateQueries({ queryKey: ['keys', 'outstanding'] });
       setReturnStep('success');
     } catch {
@@ -166,6 +220,13 @@ export const OutstandingKeys = () => {
       setReturnStep('confirm');
     }
   };
+
+  const confirmDisabled =
+    isOffline ||
+    returnStep === 'returning' ||
+    (returnMode === 'code'
+      ? code.length !== 6
+      : overrideReason.trim().length < 3);
 
   // Render
 
@@ -311,7 +372,7 @@ export const OutstandingKeys = () => {
           <SheetHeader className="border-b border-border p-6">
             <SheetTitle>Mark key as returned</SheetTitle>
             <SheetDescription>
-              Confirm that the key has been physically received back.
+              Confirm the return with the code the requester generated.
             </SheetDescription>
           </SheetHeader>
 
@@ -348,6 +409,69 @@ export const OutstandingKeys = () => {
                   )}
                 </div>
 
+                {/* Verification — code entry (default) or flagged override */}
+                {returnMode === 'code' ? (
+                  <div className="flex flex-col gap-3">
+                    <Label htmlFor="return-code-input">Return code</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Ask {selectedKey.requester?.full_name ?? 'the requester'}{' '}
+                      for the 6-digit return code shown on their dashboard.
+                    </p>
+                    <InputOTP
+                      id="return-code-input"
+                      maxLength={6}
+                      pattern={REGEXP_ONLY_DIGITS}
+                      value={code}
+                      onChange={setCode}
+                      disabled={returnStep === 'returning'}
+                      autoComplete="one-time-code"
+                      aria-label="Return code"
+                    >
+                      <InputOTPGroup>
+                        {[0, 1, 2, 3, 4, 5].map((i) => (
+                          <InputOTPSlot
+                            key={i}
+                            index={i}
+                            className="size-12 font-mono text-base"
+                          />
+                        ))}
+                      </InputOTPGroup>
+                    </InputOTP>
+                    <button
+                      type="button"
+                      onClick={() => switchMode('override')}
+                      className="self-start text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                    >
+                      Requester can&rsquo;t provide a code?
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    <Label htmlFor="override-reason">
+                      Reason for returning without a code
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      This is recorded as an unverified return and raised to the
+                      CSO for review.
+                    </p>
+                    <Textarea
+                      id="override-reason"
+                      value={overrideReason}
+                      onChange={(e) => setOverrideReason(e.target.value)}
+                      placeholder="e.g. Requester lost their phone; a colleague returned the key."
+                      disabled={returnStep === 'returning'}
+                      rows={3}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => switchMode('code')}
+                      className="self-start text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                    >
+                      Enter a code instead
+                    </button>
+                  </div>
+                )}
+
                 {returnError && (
                   <p className="text-xs text-destructive" role="alert">
                     {returnError}
@@ -360,7 +484,7 @@ export const OutstandingKeys = () => {
                       <Button
                         className="w-full"
                         onClick={handleMarkReturned}
-                        disabled={isOffline || returnStep === 'returning'}
+                        disabled={confirmDisabled}
                         aria-busy={returnStep === 'returning'}
                         style={
                           isOffline ? { pointerEvents: 'none' } : undefined
@@ -368,7 +492,9 @@ export const OutstandingKeys = () => {
                       >
                         {returnStep === 'returning'
                           ? 'Marking returned…'
-                          : 'Mark returned'}
+                          : returnMode === 'code'
+                            ? 'Confirm return'
+                            : 'Return without code'}
                       </Button>
                     </span>
                   </TooltipTrigger>
@@ -414,6 +540,21 @@ export const OutstandingKeys = () => {
                     {selectedKey.requester?.full_name ?? '—'}
                   </p>
                 </div>
+
+                {!verified && (
+                  <div
+                    className="w-full rounded-lg border border-amber-300 bg-amber-50 p-4 text-left dark:border-amber-900 dark:bg-amber-950/30"
+                    role="status"
+                  >
+                    <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                      Unverified return
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Returned without a requester code. The CSO has been
+                      alerted for review.
+                    </p>
+                  </div>
+                )}
 
                 <Button className="mt-2 w-full" onClick={handleSheetClose}>
                   Done

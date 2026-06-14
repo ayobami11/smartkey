@@ -355,6 +355,8 @@ export type Database = {
           key_id: string;
           requested_for: string;
           requester_id: string;
+          return_code: string | null;
+          return_code_expires_at: string | null;
           return_deadline: string | null;
           returned_at: string | null;
           risk_factors: Json | null;
@@ -373,6 +375,8 @@ export type Database = {
           key_id: string;
           requested_for: string;
           requester_id: string;
+          return_code?: string | null;
+          return_code_expires_at?: string | null;
           return_deadline?: string | null;
           returned_at?: string | null;
           risk_factors?: Json | null;
@@ -391,6 +395,8 @@ export type Database = {
           key_id?: string;
           requested_for?: string;
           requester_id?: string;
+          return_code?: string | null;
+          return_code_expires_at?: string | null;
           return_deadline?: string | null;
           returned_at?: string | null;
           risk_factors?: Json | null;
@@ -707,8 +713,18 @@ export type Database = {
         Args: { p_key_id: string; p_requester_id: string };
         Returns: undefined;
       };
+      request_return: {
+        Args: { p_request_id: string; p_requester_id: string };
+        Returns: {
+          request_id: string;
+          return_code: string;
+          return_code_expires_at: string;
+        }[];
+      };
       return_key: {
         Args: {
+          p_code?: string;
+          p_override_reason?: string;
           p_request_id: string;
           p_returner_id?: string;
           p_verifier_id: string;
@@ -716,6 +732,7 @@ export type Database = {
         Returns: {
           request_id: string;
           returned_at: string;
+          verified: boolean;
         }[];
       };
       user_department_id: { Args: never; Returns: string };

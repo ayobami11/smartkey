@@ -1,7 +1,9 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangleIcon, CheckCircleIcon } from 'lucide-react';
+
+import { useRealtime } from '@/hooks/useRealtime';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -29,6 +31,22 @@ type RiskAlert = {
 // Component
 
 export const RiskAlerts = () => {
+  const queryClient = useQueryClient();
+
+  useRealtime({
+    table: 'requests',
+    onInsert: (payload) => {
+      const row = payload.new as { risk_tier?: string };
+      if (row.risk_tier === 'HIGH')
+        queryClient.invalidateQueries({ queryKey: ['cso', 'risk-alerts'] });
+    },
+    onUpdate: (payload) => {
+      const row = payload.new as { risk_tier?: string };
+      if (row.risk_tier === 'HIGH')
+        queryClient.invalidateQueries({ queryKey: ['cso', 'risk-alerts'] });
+    },
+  });
+
   const {
     data: alerts = [],
     isLoading,

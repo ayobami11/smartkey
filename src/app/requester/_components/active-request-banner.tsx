@@ -22,6 +22,8 @@ type ActiveRequest = {
   status: 'CODE_ISSUED' | 'KEY_ISSUED';
   code: string | null;
   code_expires_at: string | null;
+  return_code: string | null;
+  return_code_expires_at: string | null;
   return_deadline: string | null;
   key: { code: string; room_name: string } | null;
 };
@@ -73,6 +75,8 @@ export const ActiveRequestBanner = () => {
   const [userId, setUserId] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(0);
   const [cancelling, setCancelling] = useState(false);
+  const [requestingReturn, setRequestingReturn] = useState(false);
+  const [returnError, setReturnError] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Resolve user ID once on mount
@@ -95,7 +99,7 @@ export const ActiveRequestBanner = () => {
       const { data } = await supabase
         .from('requests')
         .select(
-          'id, status, code, code_expires_at, return_deadline, key:keys!key_id(code, room_name)'
+          'id, status, code, code_expires_at, return_code, return_code_expires_at, return_deadline, key:keys!key_id(code, room_name)'
         )
         .eq('requester_id', userId!)
         .in('status', ['CODE_ISSUED', 'KEY_ISSUED'])
@@ -105,6 +109,15 @@ export const ActiveRequestBanner = () => {
       return (data as ActiveRequest | null) ?? null;
     },
   });
+
+  // The expiry the countdown tracks: collection code before issue, return code
+  // after.
+  const activeExpiry =
+    request?.status === 'CODE_ISSUED'
+      ? request.code_expires_at
+      : request?.status === 'KEY_ISSUED'
+        ? request.return_code_expires_at
+        : null;
 
   // Real-time subscription — no server-side filter; check requester_id client-side
 
@@ -128,8 +141,8 @@ export const ActiveRequestBanner = () => {
   // Countdown timer
 
   useEffect(() => {
-    if (!request?.code_expires_at) return;
-    setCountdown(secondsRemaining(request.code_expires_at));
+    if (!activeExpiry) return;
+    setCountdown(secondsRemaining(activeExpiry));
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
       setCountdown((prev) => {
@@ -143,7 +156,7 @@ export const ActiveRequestBanner = () => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [request?.code_expires_at]);
+  }, [activeExpiry]);
 
   // Cancel
 
@@ -161,6 +174,34 @@ export const ActiveRequestBanner = () => {
       // fail silently — user can retry
     } finally {
       setCancelling(false);
+    }
+  };
+
+  // Request return — generates the return code shown to the verifier
+
+  const handleRequestReturn = async () => {
+    if (!request) return;
+    setRequestingReturn(true);
+    setReturnError(null);
+    try {
+      const res = await fetch('/api/requests/request-return', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ request_id: request.id }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setReturnError(
+          (json as { error?: string }).error ??
+            'Could not generate a return code. Please try again.'
+        );
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: ['active-request', userId] });
+    } catch {
+      setReturnError('Network error. Check your connection and try again.');
+    } finally {
+      setRequestingReturn(false);
     }
   };
 
@@ -261,7 +302,55 @@ export const ActiveRequestBanner = () => {
     );
   }
 
-  // KEY_ISSUED — show return deadline
+  // KEY_ISSUED — a return code is active when present and not yet expired
+  const hasReturnCode =
+    request.return_code !== null &&
+    request.return_code_expires_at !== null &&
+    countdown > 0;
+
+  if (hasReturnCode) {
+    return (
+      <div
+        className="rounded-lg border border-primary/20 bg-primary/5 p-5"
+        aria-live="polite"
+        aria-label="Your return code"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-col gap-1">
+            <p className="text-xs font-medium text-muted-foreground">
+              Your return code
+            </p>
+            {request.key && (
+              <p className="text-xs text-muted-foreground">
+                {request.key.code} · {request.key.room_name}
+              </p>
+            )}
+          </div>
+          {request.return_code_expires_at && (
+            <span
+              className="shrink-0 font-mono text-xs text-muted-foreground"
+              aria-label={`Expires in ${formatCountdown(countdown)}`}
+            >
+              {formatCountdown(countdown)}
+            </span>
+          )}
+        </div>
+
+        <p
+          className="mt-3 font-mono text-5xl font-semibold tracking-[0.3em] text-foreground"
+          aria-label={`Return code: ${request.return_code}`}
+        >
+          {request.return_code}
+        </p>
+
+        <p className="mt-4 text-xs text-muted-foreground">
+          Read this to the security officer when you hand back the key.
+        </p>
+      </div>
+    );
+  }
+
+  // KEY_ISSUED — no active return code: show deadline + "Return key"
   return (
     <div
       className="rounded-lg border border-emerald-200 bg-emerald-50 p-5 dark:border-emerald-900 dark:bg-emerald-950/30"
@@ -287,6 +376,36 @@ export const ActiveRequestBanner = () => {
           </span>
         </p>
       )}
+
+      {returnError && (
+        <p className="mt-3 text-xs text-destructive" role="alert">
+          {returnError}
+        </p>
+      )}
+
+      <div className="mt-4 flex items-center gap-2">
+        <p className="flex-1 text-xs text-muted-foreground">
+          Returning the key? Generate a code to confirm it with the officer.
+        </p>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span>
+              <Button
+                size="sm"
+                onClick={handleRequestReturn}
+                disabled={requestingReturn || isOffline}
+                aria-busy={requestingReturn}
+                className={`shrink-0${isOffline ? ' pointer-events-none' : ''}`}
+              >
+                {requestingReturn ? 'Generating…' : 'Return key'}
+              </Button>
+            </span>
+          </TooltipTrigger>
+          {isOffline && (
+            <TooltipContent>Available again when you reconnect.</TooltipContent>
+          )}
+        </Tooltip>
+      </div>
     </div>
   );
 };

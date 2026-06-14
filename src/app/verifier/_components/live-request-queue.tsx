@@ -28,7 +28,6 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
-import { createBrowserClient } from '@/lib/supabase/client';
 import {
   RiskAcknowledgement,
   RiskTierBadge,
@@ -100,7 +99,6 @@ export const LiveRequestQueue = () => {
   const [requests, setRequests] = useState<QueueRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const [verifierId, setVerifierId] = useState<string | null>(null);
 
   const issueForm = useForm<IssueKeyFormInput>({
     resolver: zodResolver(issueKeyFormSchema),
@@ -122,14 +120,6 @@ export const LiveRequestQueue = () => {
   // Init
 
   useEffect(() => {
-    const init = async () => {
-      const supabase = createBrowserClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (user) setVerifierId(user.id);
-    };
-    init();
     fetchQueue();
   }, []);
 
@@ -200,7 +190,6 @@ export const LiveRequestQueue = () => {
   };
 
   const handleIssue = issueForm.handleSubmit(async (values) => {
-    if (!verifierId) return;
     setIssuing(true);
     setIssueError(null);
     try {
@@ -209,7 +198,6 @@ export const LiveRequestQueue = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           code: values.verification_code,
-          verifier_id: verifierId,
         }),
       });
       const json = await res.json().catch(() => ({}));
@@ -518,7 +506,6 @@ export const LiveRequestQueue = () => {
                         disabled={
                           isOffline ||
                           issuing ||
-                          !verifierId ||
                           (contextRequest?.risk_tier === 'HIGH' &&
                             !acknowledged)
                         }
@@ -538,12 +525,6 @@ export const LiveRequestQueue = () => {
                     </TooltipContent>
                   )}
                 </Tooltip>
-
-                {!verifierId && (
-                  <p className="text-center text-xs text-muted-foreground">
-                    Loading session…
-                  </p>
-                )}
               </div>
             )}
 

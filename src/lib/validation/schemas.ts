@@ -153,6 +153,18 @@ export const returnKeySchema = z.object({
   verifier_id: z.string().min(1, 'Verifier ID is required'),
   /** UUID of the person returning the key, if different from the original requester. */
   returner_id: z.string().optional(),
+  /** The 6-digit return code the requester reads out at the desk. */
+  code: z
+    .string()
+    .regex(/^\d{6}$/, 'Code must be exactly 6 digits')
+    .optional(),
+  /** Reason for completing a return without a code (verifier override path). */
+  override_reason: z.string().min(3, 'Give a brief reason').optional(),
+});
+
+export const requestReturnSchema = z.object({
+  /** UUID of the requester's own request whose key is being returned. */
+  request_id: z.string().min(1, 'Request ID is required'),
 });
 
 export const markKeyLostSchema = z.object({
@@ -234,6 +246,7 @@ export type HodDecisionInput = z.infer<typeof hodDecisionSchema>;
 export type CsoDecisionInput = z.infer<typeof csoDecisionSchema>;
 export type CollectKeyInput = z.infer<typeof collectKeySchema>;
 export type ReturnKeyInput = z.infer<typeof returnKeySchema>;
+export type RequestReturnInput = z.infer<typeof requestReturnSchema>;
 export type MarkKeyLostInput = z.infer<typeof markKeyLostSchema>;
 export type LogIncidentInput = z.infer<typeof logIncidentSchema>;
 export type ShiftHandoverInput = z.infer<typeof shiftHandoverSchema>;

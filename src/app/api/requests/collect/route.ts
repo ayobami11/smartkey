@@ -10,7 +10,6 @@ const bodySchema = z.object({
     .string()
     .length(6)
     .regex(/^\d{6}$/, 'Code must be 6 digits'),
-  verifier_id: z.uuid(),
 });
 
 const mapRpcError = (msg: string): { status: number; message: string } => {
@@ -52,7 +51,7 @@ export const POST = async (request: NextRequest) => {
     return NextResponse.json(err('Invalid request body', 422), { status: 422 });
   }
 
-  const { code, verifier_id } = parsed.data;
+  const { code } = parsed.data;
 
   const { data: req } = await supabase
     .from('requests')
@@ -71,9 +70,10 @@ export const POST = async (request: NextRequest) => {
     return NextResponse.json(err('Code has expired', 404), { status: 404 });
   }
 
+  // IMPORTANT FIX: Use server-verified user.id instead of trusting client payload
   const { data: rpcData, error: rpcError } = await supabase.rpc('issue_key', {
     p_request_id: req.id,
-    p_verifier_id: verifier_id,
+    p_verifier_id: user.id,
   });
 
   if (rpcError) {
