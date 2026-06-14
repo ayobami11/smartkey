@@ -8,6 +8,17 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-06-14 — Requester-verified key return (return OTP)
+
+- **Why**: a key could be marked returned by the verifier alone, with no proof the requester actually handed it back — a malicious or careless officer could log phantom returns. This puts the requester back in the loop, mirroring the collection-code flow.
+- `supabase/migrations/20260614000001_return_code_flow.sql` (applied to remote) — adds `requests.return_code` + `return_code_expires_at`; new `request_return(request_id, requester_id)` RPC (generates a 6-digit return code, 15-min expiry, `RETURN_CODE_GENERATED` audit); replaces `return_key` with `return_key(request_id, verifier_id, code?, returner_id?, override_reason?)`.
+- `return_key` now requires either the requester's `code` (verified → `KEY_RETURNED`) or an `override_reason` (unverified → `KEY_RETURNED_UNVERIFIED` audit event + a `SUSPICIOUS_ACTIVITY` incident raised to the CSO when an open shift exists). Incident creation never blocks the return.
+- `src/app/api/requests/request-return/route.ts` — new REQUESTER route. `src/app/api/keys/return/route.ts` — accepts `code`/`override_reason`, uses the server-verified `user.id` as the verifier (no client-supplied id).
+- `src/app/requester/_components/active-request-banner.tsx` — "Return key" action on the issued-key banner; shows the return code with a countdown.
+- `src/app/verifier/_components/outstanding-keys.tsx` — return sheet now has a 6-digit code-entry step (reuses `InputOTP`) plus a flagged "return without code" override path.
+- `src/hooks/useRealtime.ts` — fixed a generic-variance type error in the registry→callback bridge (cast the base registry payload to the hook's `RealtimePayload<T>`).
+- Docs: `docs/API.md`, `docs/DATABASE.md` updated.
+
 ### 2026-06-12 — Supabase Edge Functions: overdue key check + daily shift summary (PR #24, branch: backend/feat/24-edge-functions)
 
 - `supabase/functions/overdue-key-check/index.ts` — Deno Edge Function. Calls `mark_key_overdue()` RPC with service-role client. Logs structured JSON (`overdue_check_complete`, `updated_count`). Deployed to Supabase Cloud.

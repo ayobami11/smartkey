@@ -51,8 +51,10 @@ Authoritative schema lives in `supabase/migrations/`. This document is a human-r
 - `type` enum: 'WEEKDAY' | 'WEEKEND'
 - `requested_for` date (weekday: today; weekend: future Sat/Sun)
 - `status` enum: 'PENDING_HOD' (weekend only) | 'CODE_ISSUED' | 'KEY_ISSUED' | 'KEY_RETURNED' | 'EXPIRED' | 'CANCELLED' | 'DECLINED'
-- `code` text (6-digit, only present in CODE_ISSUED state)
+- `code` text (6-digit collection code, only present in CODE_ISSUED state)
 - `code_expires_at` timestamptz
+- `return_code` text (6-digit return code; set by `request_return` while KEY_ISSUED, cleared on return)
+- `return_code_expires_at` timestamptz (15 minutes from generation)
 - `return_deadline` timestamptz
 - `risk_tier` enum: 'LOW' | 'MEDIUM' | 'HIGH' (computed at request time)
 - `risk_factors` jsonb (array of {rule, description, weight})
@@ -145,7 +147,8 @@ These wrap multi-table mutations in transactions and enforce business rules.
 
 - `create_request(key_id, return_time, type, weekend_date)` — creates request + audit entry; returns code.
 - `issue_key(request_id, verifier_id)` — flips request status, sets issued_at, audit entry.
-- `return_key(request_id, verifier_id, returner_id?)` — flips request status, sets returned_at, audit entry.
+- `request_return(request_id, requester_id)` — requester-initiated; generates a 6-digit return code (15-min expiry) for their own KEY_ISSUED request, audit entry (`RETURN_CODE_GENERATED`). Status stays KEY_ISSUED.
+- `return_key(request_id, verifier_id, code?, returner_id?, override_reason?)` — flips request status to KEY_RETURNED, sets returned_at, clears the return code. Requires either `code` (verified → `KEY_RETURNED`) or `override_reason` (unverified → `KEY_RETURNED_UNVERIFIED` + a `SUSPICIOUS_ACTIVITY` incident when an open shift exists).
 - `approve_weekend(request_id, hod_id, note?)` — runs signature verification, creates hod_decisions row, generates code, audit entry.
 - `decline_weekend(request_id, hod_id, note?)` — creates hod_decisions row, audit entry.
 - `acknowledge_shift_handover(outgoing_shift_id, key_ids, bulk)` — creates handover row, audit entry per key.
