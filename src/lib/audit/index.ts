@@ -43,11 +43,21 @@ export const writeAuditEntry = async (
   // columns. Captured at write time so the entry preserves who the actor was
   // at the moment of the event — an immutable journal must not be rewritten by
   // a later rename or department move.
-  const { data: actor } = await supabase
+  const { data: actor, error: profileError } = await supabase
     .from('profiles')
     .select('full_name, departments(name)')
     .eq('id', actorId)
     .maybeSingle();
+
+  if (profileError) {
+    // Non-fatal — the audit entry still writes; we just lose the denormalised
+    // name. Log so this doesn't silently corrupt the audit log display.
+    logger.warn('Could not resolve actor profile for audit entry', {
+      event,
+      actorId,
+      err: profileError.message,
+    });
+  }
 
   const { error } = await supabase.from('audit_log').insert({
     event,

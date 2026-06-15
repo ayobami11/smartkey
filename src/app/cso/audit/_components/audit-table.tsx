@@ -219,7 +219,7 @@ function mapRow(e: Record<string, unknown>): AuditEntry {
     actor:
       (e.actor_name as string | undefined) ??
       (payload.actor_name as string | undefined) ??
-      (e.actor_id as string).slice(0, 8),
+      'Unknown actor',
     actorRole: ROLE_LABEL[e.actor_role as string] ?? (e.actor_role as string),
     department:
       (e.actor_department as string | undefined) ??
@@ -376,8 +376,10 @@ export const AuditTable = () => {
         .from('audit_log')
         .select('*', { count: 'exact', head: true });
       if (mappedEvents.length > 0) q = q.in('event', mappedEvents);
-      if (debouncedSearch.trim())
-        q = q.ilike('event', `%${debouncedSearch.trim()}%`);
+      if (debouncedSearch.trim()) {
+        const term = `%${debouncedSearch.trim()}%`;
+        q = q.or(`event.ilike.${term},actor_name.ilike.${term}`);
+      }
       if (roleFilter.length > 0)
         q = q.in(
           'actor_role',
@@ -407,8 +409,10 @@ export const AuditTable = () => {
         .order('occurred_at', { ascending: false })
         .range(from, to);
       if (mappedEvents.length > 0) q = q.in('event', mappedEvents);
-      if (debouncedSearch.trim())
-        q = q.ilike('event', `%${debouncedSearch.trim()}%`);
+      if (debouncedSearch.trim()) {
+        const term = `%${debouncedSearch.trim()}%`;
+        q = q.or(`event.ilike.${term},actor_name.ilike.${term}`);
+      }
       if (roleFilter.length > 0)
         q = q.in(
           'actor_role',
@@ -463,9 +467,9 @@ export const AuditTable = () => {
             />
             <Input
               type="search"
-              placeholder="Search by event name"
+              placeholder="Search by event or actor name"
               className="pl-9"
-              aria-label="Search audit log"
+              aria-label="Search audit log by event or actor name"
               value={search}
               onChange={(e) => handleSearch(e.target.value)}
             />
