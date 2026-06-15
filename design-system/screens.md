@@ -41,6 +41,8 @@ Success criteria: 80–90% reduction in end-to-end request processing time vs th
 - `/activate/:token` — Account activation: set password, accept terms, email OTP.
 - `/forgot-password` — Email-OTP-based password reset.
 - `/help` — Static FAQ and contact-the-CSO instructions.
+- `/weekend-access` — External (non-registered) weekend request form: department, weekend date, work description, name/email/phone, ID document type + number, HOD authorisation letter upload.
+- `/weekend-access/:token` — Session-less guest status/code page reached via the request's `access_token`: shows status, the HOD-assigned key once present, and the 6-digit code with countdown on the requested date.
 
 ### 2.2 CSO area
 
@@ -245,6 +247,8 @@ CSO provisions an account by entering name, institutional email, and role. The s
 ### 5.3 Weekend access lifecycle
 
 A weekend request is a separate object from a weekday key request. A requester submits one through their dashboard; the HOD sees it in their pending panel and approves or declines. On approval, the system generates a code valid only on the requested weekend date, signed (by the HOD's onboarded signature reference), and recorded immutably. The verification code expires 24 hours after the requested date passes.
+
+**External (guest) variant.** The desk's real-world rule is that anyone may collect a key on the weekend provided they have HOD authorisation, so SmartKey also supports weekend requests from external people with no account. The guest submits at `/weekend-access` with their department, the weekend date, work description, name/email/phone, a declared ID document (type + number), and an uploaded HOD authorisation letter — they pick a department only, not a specific key. The request lands in the relevant HOD's pending panel flagged "External", showing the guest's details and letter. The HOD reviews the letter (no signature verification — guests have no reference signature), **assigns a key** from their department, and approves. The guest reaches a session-less status/code page via an unguessable token in their emailed link; on the requested date they mint the 6-digit code there, then present it at the desk, where the verifier checks the physical ID document (guests have no passport photo on file).
 
 ### 5.4 Shift handover
 

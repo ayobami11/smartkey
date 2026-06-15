@@ -24,6 +24,18 @@ Authoritative schema lives in `supabase/migrations/`. This document is a human-r
 - `name` text unique
 - `hod_id` UUID FK profiles (nullable, set when HOD assigned)
 
+### guest_requesters
+
+An external (non-registered) person who may collect a key for a single weekend. Guests are never a `profiles`/`auth.users` row (that would require an auth user and break the `invited_by` chain-of-trust); they are modelled as their own entity. RLS: CSO-only select — HOD and verifier see guest details through request joins via SECURITY DEFINER RPCs.
+
+- `id` UUID PK
+- `full_name` text
+- `email` text
+- `phone` text nullable
+- `id_document_type` text (ID document the guest declares at submit; the verifier checks the physical ID at the desk)
+- `id_document_number` text
+- `created_at` timestamptz
+
 ### keys
 
 - `id` UUID PK
@@ -46,8 +58,12 @@ Authoritative schema lives in `supabase/migrations/`. This document is a human-r
 ### requests
 
 - `id` UUID PK
-- `requester_id` UUID FK profiles
-- `key_id` UUID FK keys
+- `requester_id` UUID FK profiles nullable (null for external/guest requests)
+- `key_id` UUID FK keys nullable (null until the HOD assigns a key on a guest approval)
+- `guest_id` UUID FK guest_requesters nullable (set for external requests; null for registered-user requests)
+- `requested_department_id` UUID FK departments nullable (department a guest requests access within; drives HOD routing while `key_id` is null; null for registered-user requests)
+- `access_token` uuid nullable (unguessable token a guest uses to reach their session-less status/code page; present only for guest requests)
+- `letter_url` text nullable (path in the `weekend-letters` bucket to the HOD authorisation letter a guest uploaded at submit)
 - `type` enum: 'WEEKDAY' | 'WEEKEND'
 - `requested_for` date (weekday: today; weekend: future Sat/Sun)
 - `status` enum: 'PENDING_HOD' (weekend only) | 'APPROVED' (weekend only — HOD approved, awaiting on-the-day code) | 'CODE_ISSUED' | 'KEY_ISSUED' | 'KEY_RETURNED' | 'EXPIRED' | 'CANCELLED' | 'DECLINED'
@@ -63,6 +79,8 @@ Authoritative schema lives in `supabase/migrations/`. This document is a human-r
 - `issued_at` timestamptz nullable
 - `returned_at` timestamptz nullable
 - `created_at` timestamptz
+- Constraint `requests_one_requester_kind`: exactly one of `requester_id` / `guest_id` is set (`num_nonnulls(requester_id, guest_id) = 1`)
+- Constraint `requests_key_required_after_pending`: `key_id` may only be null while `status = 'PENDING_HOD'` (`key_id is not null or status = 'PENDING_HOD'`)
 
 ### hod_decisions (weekend approvals)
 
@@ -133,9 +151,9 @@ Authoritative schema lives in `supabase/migrations/`. This document is a human-r
 
 - `id` UUID PK
 - `event` text (matches `AuditEvent` union in TS)
-- `actor_id` UUID FK profiles
-- `actor_role` enum (denormalised for query performance)
-- `actor_name` text nullable (denormalised at write time; snapshot of the actor's name)
+- `actor_id` UUID FK profiles nullable (null for guest-initiated events — guests have no profile)
+- `actor_role` enum nullable (denormalised for query performance; null for guest-initiated events)
+- `actor_name` text nullable (denormalised at write time; snapshot of the actor's name; guest-initiated events carry `'<name> (external)'` with null `actor_id`/`actor_role`)
 - `actor_department` text nullable (denormalised at write time; null for non-departmental roles e.g. CSO/Verifier)
 - `target_type` text
 - `target_id` UUID
@@ -159,6 +177,16 @@ These wrap multi-table mutations in transactions and enforce business rules.
 - `generate_shift_report(shift_id)` — server-side; calls Gemini, inserts shift_reports row, audit entry.
 - `add_report_comment(report_id, text)` — inserts immutable comment, audit entry.
 - `provision_user(name, email, role, department_id?)` — creates profile, generates activation token, queues email, audit entry.
+
+### External (guest) weekend RPCs
+
+Guest analogues of the registered-user weekend flow. All are `SECURITY DEFINER`, key on an unguessable `access_token` instead of `auth.uid()` (guests have no session), and have execute revoked from `anon`/`public` — they are called only from server-side routes via the service-role admin client. `issue_key` is reused unchanged for the desk collection step.
+
+- `_write_audit_guest(event, target_type, target_id, actor_name, payload)` — audit chokepoint for actions with no profile actor. Mirrors `_write_audit` but records `actor_id`/`actor_role` null and a human-readable `actor_name` (e.g. `'Jane Doe (external)'`).
+- `create_guest_weekend_request(full_name, email, phone, id_type, id_number, department_id, weekend_date, return_deadline, letter_url)` — inserts a `guest_requesters` row + a WEEKEND request (`PENDING_HOD`, no code, `access_token` minted), audit `REQUEST_CREATED`. Returns `{request_id, access_token}`.
+- `approve_guest_weekend(request_id, hod_id, key_id, note?)` — validates the chosen key is in the HOD's department, sets `key_id`, creates the `hod_decisions` row, moves the request → APPROVED, audit `HOD_APPROVED`. Granted to `authenticated`. (No signature verification — the HOD reviews the uploaded letter manually.)
+- `generate_guest_weekend_code(access_token)` — on `requested_for = current_date` only, mints a 10-min code → CODE_ISSUED, audit `CODE_ISSUED`. Raises TOO_EARLY before the date.
+- `expire_guest_request(access_token)` — flips a genuinely-expired CODE_ISSUED request → EXPIRED, clears the code, audit `REQUEST_EXPIRED`. Idempotent.
 
 ## Migrations workflow
 

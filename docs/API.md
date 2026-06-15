@@ -195,7 +195,7 @@ The RPC runs the risk engine, generates the code, and writes the audit entry ato
 **File**: `src/app/api/requests/pending/route.ts`
 **Roles**: HOD
 
-Returns requests for the HOD's department with `status = 'PENDING_HOD'`.
+Returns requests for the HOD's department with `status = 'PENDING_HOD'`, including external (guest) requests for the department (joined `guest` details, `letter_url`, `requested_department_id`) so the HOD can review and assign a key before approving.
 
 **Response `data`**: `{ "requests": [...] }`
 
@@ -205,15 +205,18 @@ Returns requests for the HOD's department with `status = 'PENDING_HOD'`.
 
 **File**: `src/app/api/requests/hod-decision/route.ts`
 **Roles**: HOD
-**RPC**: `approve_weekend(request_id, hod_id, note?)` or `decline_weekend(request_id, hod_id, note?)`
+**RPC**: `approve_weekend(request_id, hod_id, note?)`, `approve_guest_weekend(request_id, hod_id, key_id, note?)`, or `decline_weekend(request_id, hod_id, note?)`
 
-| Field        | Type                       | Required |
-| ------------ | -------------------------- | -------- |
-| `request_id` | `string` (uuid)            | yes      |
-| `decision`   | `'APPROVED' \| 'DECLINED'` | yes      |
-| `note`       | `string`                   | no       |
+| Field        | Type                       | Required             |
+| ------------ | -------------------------- | -------------------- |
+| `request_id` | `string` (uuid)            | yes                  |
+| `decision`   | `'APPROVED' \| 'DECLINED'` | yes                  |
+| `key_id`     | `string` (uuid)            | guest approvals only |
+| `note`       | `string`                   | no                   |
 
 For approvals, the RPC runs signature verification. If the mismatch exceeds the threshold, the request is held and a CSO alert is raised — this is not a route-level error.
+
+For an external (guest) request (`guest_id` set), the route requires a `key_id` in the body and calls `approve_guest_weekend` instead — the HOD assigns the key at approval, and signature verification is skipped (guests have no HOD reference signature; the HOD reviews the uploaded letter manually). The decline path reuses `decline_weekend` unchanged.
 
 **Response `data`**: `{ "request_id": "<uuid>", "status": "CODE_ISSUED" }`
 
@@ -273,12 +276,32 @@ Returns all requests with `status = 'CODE_ISSUED'`, ordered by `created_at` asce
 
 The RPC looks up the request by code, validates it, marks the key issued, clears the code, and writes the audit entry.
 
-**Response `data`**:
+The response carries an `is_guest` flag. For an external (guest) request it is `true` and the `requester` block carries the declared ID document (type + number) with a null `photo_url` — the verifier checks the physical ID at the desk. The shape is additive, so registered-requester consumers are unaffected.
+
+**Response `data`** (registered requester):
 
 ```json
 {
   "request_id": "<uuid>",
+  "is_guest": false,
   "requester": { "full_name": "Dr. Bakare", "photo_url": "<url>" },
+  "key": { "code": "NS-304", "room_name": "Senate Hall A" },
+  "issued_at": "<iso>"
+}
+```
+
+**Response `data`** (external guest):
+
+```json
+{
+  "request_id": "<uuid>",
+  "is_guest": true,
+  "requester": {
+    "full_name": "Jane Doe",
+    "photo_url": null,
+    "id_document_type": "National ID",
+    "id_document_number": "A1234567"
+  },
   "key": { "code": "NS-304", "room_name": "Senate Hall A" },
   "issued_at": "<iso>"
 }
@@ -356,6 +379,105 @@ Requester-initiated and fired automatically by the UI when a collection code's c
 **Response `data`**: `{ "request_id": "<uuid>", "status": "EXPIRED" }`
 
 **Errors**: `403` not the requester's own request · `409` code has not expired yet · `404` request not found
+
+---
+
+### Public (external/guest) weekend requests
+
+These routes let an external person with no SmartKey account submit a weekend key request and reach their session-less status/code page. They require **no authentication** and run server-side via the service-role admin client (`createAdminClient`); the guest RPCs are revoked from `anon`/`public`, so nothing new is exposed to the browser. The guest is identified throughout by the unguessable `access_token` returned at submit.
+
+#### POST /api/public/weekend-request
+
+**File**: `src/app/api/public/weekend-request/route.ts`
+**Roles**: ALL (unauthenticated)
+**RPC**: `create_guest_weekend_request(full_name, email, phone, id_type, id_number, department_id, weekend_date, return_deadline, letter_url)`
+
+Multipart form. Uploads the HOD authorisation letter to the `weekend-letters` bucket, creates the guest + request (`PENDING_HOD`, no code), and emails the status link to the guest (via the shared email sender in `src/lib/email/`). Email failure is logged but does not fail the request. Returns `201`.
+
+| Field                | Type                       | Required |
+| -------------------- | -------------------------- | -------- |
+| `full_name`          | `string`                   | yes      |
+| `email`              | `string` (email)           | yes      |
+| `phone`              | `string`                   | no       |
+| `id_document_type`   | `string`                   | yes      |
+| `id_document_number` | `string`                   | yes      |
+| `department_id`      | `string` (uuid)            | yes      |
+| `weekend_date`       | `string` (ISO date)        | yes      |
+| `return_deadline`    | `string` (ISO timestamptz) | yes      |
+| `letter`             | `File` (image/PDF)         | yes      |
+
+**Response `data`**: `{ "access_token": "<uuid>", "request_id": "<uuid>" }`
+
+**Errors**: `404` department not found · `422` validation · `413` letter too large
+
+---
+
+#### GET /api/public/weekend-request/[token]
+
+**File**: `src/app/api/public/weekend-request/[token]/route.ts`
+**Roles**: ALL (unauthenticated)
+
+Returns safe status fields for the guest's status/code page, read by `access_token` via the admin client: current status, requested date, the assigned key/room once present, and the code + expiry while `CODE_ISSUED`.
+
+**Response `data`**:
+
+```json
+{
+  "request_id": "<uuid>",
+  "full_name": "Jane Doe",
+  "status": "APPROVED",
+  "requested_for": "2026-06-20",
+  "return_deadline": "<iso>",
+  "key": { "code": "NS-304", "room_name": "Senate Hall A" },
+  "code": null,
+  "code_expires_at": null
+}
+```
+
+`code` / `code_expires_at` are non-null only while `status = 'CODE_ISSUED'`; `key` is null until the HOD assigns one on approval.
+
+**Errors**: `404` token not found
+
+---
+
+#### POST /api/public/weekend-request/[token]/code
+
+**File**: `src/app/api/public/weekend-request/[token]/code/route.ts`
+**Roles**: ALL (unauthenticated)
+**RPC**: `generate_guest_weekend_code(access_token)`
+
+Mints a short-lived 6-digit collection code (10-min expiry) for an `APPROVED` guest request, on the requested date only, and moves it to `CODE_ISSUED`. Writes a `CODE_ISSUED` audit entry.
+
+**Response `data`**: `{ "request_id": "<uuid>", "code": "123456", "code_expires_at": "<iso>" }`
+
+**Errors**: `409` request not in APPROVED state · `422` before the requested date (TOO_EARLY) · `404` token not found
+
+---
+
+#### POST /api/public/weekend-request/[token]/expire
+
+**File**: `src/app/api/public/weekend-request/[token]/expire/route.ts`
+**Roles**: ALL (unauthenticated)
+**RPC**: `expire_guest_request(access_token)`
+
+Fired automatically by the status page when the collection code's countdown reaches 0. Flips a genuinely-expired `CODE_ISSUED` request to `EXPIRED`, clears the code, and writes a `REQUEST_EXPIRED` audit entry. Idempotent — returns the current status with no error if the request already moved on.
+
+**Response `data`**: `{ "request_id": "<uuid>", "status": "EXPIRED" }`
+
+**Errors**: `409` code has not expired yet · `404` token not found
+
+---
+
+### GET /api/requests/[id]/letter
+
+**File**: `src/app/api/requests/[id]/letter/route.ts`
+**Roles**: HOD
+
+Returns a short-lived (5-minute) signed URL for a guest request's HOD authorisation letter so the HOD can preview it before approving. The letter lives in the private `weekend-letters` bucket; signing happens server-side with the admin client. Access is gated to the HOD whose department owns the request (RLS plus a department check).
+
+**Response `data`**: `{ "url": "<signed-url>" }`
+
+**Errors**: `403` not an HOD / not the request's department · `404` request has no letter · `500` signing failure
 
 ---
 
@@ -651,20 +773,24 @@ If `passed = false`, the caller raises a CSO alert and holds the approval.
 
 ## RPC cross-reference
 
-| RPC                          | Called by route                   | Also writes audit entry |
-| ---------------------------- | --------------------------------- | ----------------------- |
-| `create_request`             | POST /api/requests/submit         | yes                     |
-| `issue_key`                  | POST /api/requests/collect        | yes                     |
-| `generate_weekend_code`      | POST /api/requests/weekend-code   | yes                     |
-| `expire_request`             | POST /api/requests/expire         | yes                     |
-| `request_return`             | POST /api/requests/request-return | yes                     |
-| `return_key`                 | POST /api/keys/return             | yes                     |
-| `approve_weekend`            | POST /api/requests/hod-decision   | yes                     |
-| `decline_weekend`            | POST /api/requests/hod-decision   | yes                     |
-| `acknowledge_shift_handover` | POST /api/shifts/handover         | yes — per key           |
-| `generate_shift_report`      | POST /api/reports/generate        | yes                     |
-| `add_report_comment`         | POST /api/reports/[id]/comments   | yes                     |
-| `provision_user`             | POST /api/admin/users             | yes                     |
+| RPC                            | Called by route                                 | Also writes audit entry |
+| ------------------------------ | ----------------------------------------------- | ----------------------- |
+| `create_request`               | POST /api/requests/submit                       | yes                     |
+| `issue_key`                    | POST /api/requests/collect                      | yes                     |
+| `generate_weekend_code`        | POST /api/requests/weekend-code                 | yes                     |
+| `expire_request`               | POST /api/requests/expire                       | yes                     |
+| `request_return`               | POST /api/requests/request-return               | yes                     |
+| `return_key`                   | POST /api/keys/return                           | yes                     |
+| `approve_weekend`              | POST /api/requests/hod-decision                 | yes                     |
+| `approve_guest_weekend`        | POST /api/requests/hod-decision                 | yes                     |
+| `decline_weekend`              | POST /api/requests/hod-decision                 | yes                     |
+| `create_guest_weekend_request` | POST /api/public/weekend-request                | yes                     |
+| `generate_guest_weekend_code`  | POST /api/public/weekend-request/[token]/code   | yes                     |
+| `expire_guest_request`         | POST /api/public/weekend-request/[token]/expire | yes                     |
+| `acknowledge_shift_handover`   | POST /api/shifts/handover                       | yes — per key           |
+| `generate_shift_report`        | POST /api/reports/generate                      | yes                     |
+| `add_report_comment`           | POST /api/reports/[id]/comments                 | yes                     |
+| `provision_user`               | POST /api/admin/users                           | yes                     |
 
 All RPCs are defined in `supabase/migrations/`. See `docs/DATABASE.md` for parameter signatures.
 

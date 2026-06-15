@@ -9,6 +9,7 @@ Terms specific to SmartKey or to UNILAG operations.
 | **HOD**                 | Head of Department. Faculty member responsible for authorising key collectors for their department.                                                                        |
 | **Verifier**            | Security personnel on duty at the Senate Building security desk. Two officers per shift, 24/7.                                                                             |
 | **Requester**           | University staff member requesting access to a room key.                                                                                                                   |
+| **External requester**  | A non-registered person who submits a weekend-only key request authorised by an HOD. Represented by a `guest_requesters` row, not a profile/auth user.                     |
 | **Authorisation slot**  | One of three positions per key where an HOD can whitelist a staff member. Maximum 3 authorised collectors per key.                                                         |
 | **Code**                | The 6-digit numeric verification code generated when a request is approved. Valid 10 minutes. Required at the desk to collect a key.                                       |
 | **Risk tier**           | Low / Medium / High. Computed at request time by the rule-based engine. Visible to verifiers.                                                                              |
