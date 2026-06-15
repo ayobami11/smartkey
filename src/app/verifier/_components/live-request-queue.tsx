@@ -4,7 +4,13 @@ import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { REGEXP_ONLY_DIGITS } from 'input-otp';
-import { CheckCircleIcon, InboxIcon, KeyRoundIcon } from 'lucide-react';
+import {
+  CheckCircleIcon,
+  IdCardIcon,
+  InboxIcon,
+  KeyRoundIcon,
+  UserRoundIcon,
+} from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -61,7 +67,16 @@ type QueueRequest = {
 
 type IssueResult = {
   request_id: string;
-  requester: { full_name: string | null; photo_url: string | null };
+  // For an external (non-registered) guest, `is_guest` is true and the requester
+  // block carries the declared ID document instead of a passport photo, so the
+  // desk verifies the physical ID.
+  is_guest: boolean;
+  requester: {
+    full_name: string | null;
+    photo_url: string | null;
+    id_document_type?: string | null;
+    id_document_number?: string | null;
+  };
   key: { code: string | null; room_name: string | null };
   issued_at: string;
 };
@@ -540,11 +555,42 @@ export const LiveRequestQueue = () => {
                     Issued successfully
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {issueResult.requester.full_name
-                      ? `Key ${issueResult.key.code ?? ''} issued to ${issueResult.requester.full_name} at ${formatTime(issueResult.issued_at)}.`
-                      : `Key issued at ${formatTime(issueResult.issued_at)}.`}
+                    {(() => {
+                      const name = issueResult.requester.full_name;
+                      return name
+                        ? `Key ${issueResult.key.code ?? ''} issued to ${name} at ${formatTime(issueResult.issued_at)}.`
+                        : `Key issued at ${formatTime(issueResult.issued_at)}.`;
+                    })()}
                   </p>
                 </div>
+
+                {/* External requester — no passport photo, so the desk verifies
+                    the declared physical ID document. */}
+                {issueResult.is_guest && (
+                  <div className="w-full rounded-lg border border-amber-200 bg-amber-50 p-4 text-left dark:border-amber-900 dark:bg-amber-950/30">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 dark:text-amber-400">
+                      <UserRoundIcon className="size-3.5" aria-hidden="true" />
+                      External requester — verify physical ID
+                    </div>
+                    {issueResult.requester.full_name && (
+                      <p className="mt-2 text-sm font-medium text-foreground">
+                        {issueResult.requester.full_name}
+                      </p>
+                    )}
+                    {issueResult.requester.id_document_type &&
+                      issueResult.requester.id_document_number && (
+                        <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <IdCardIcon className="size-3.5" aria-hidden="true" />
+                          <span className="font-medium text-foreground">
+                            {issueResult.requester.id_document_type}:
+                          </span>
+                          <span className="font-mono">
+                            {issueResult.requester.id_document_number}
+                          </span>
+                        </p>
+                      )}
+                  </div>
+                )}
 
                 {/* Persistent confirmation card */}
                 <div className="w-full rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-left dark:border-emerald-900 dark:bg-emerald-950/30">
@@ -562,16 +608,19 @@ export const LiveRequestQueue = () => {
                       {issueResult.key.room_name}
                     </p>
                   )}
-                  {issueResult.requester.full_name && (
-                    <div className="mt-2 flex items-center gap-2">
-                      <div className="flex size-6 items-center justify-center rounded-full bg-muted text-xs font-medium text-foreground">
-                        {avatarInitials(issueResult.requester.full_name)}
+                  {(() => {
+                    const collectorName = issueResult.requester.full_name;
+                    return collectorName ? (
+                      <div className="mt-2 flex items-center gap-2">
+                        <div className="flex size-6 items-center justify-center rounded-full bg-muted text-xs font-medium text-foreground">
+                          {avatarInitials(collectorName)}
+                        </div>
+                        <span className="text-xs text-foreground">
+                          {collectorName}
+                        </span>
                       </div>
-                      <span className="text-xs text-foreground">
-                        {issueResult.requester.full_name}
-                      </span>
-                    </div>
-                  )}
+                    ) : null;
+                  })()}
                   <p className="mt-2 font-mono text-xs text-muted-foreground">
                     {formatTime(issueResult.issued_at)}
                   </p>

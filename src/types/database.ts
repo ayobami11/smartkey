@@ -16,10 +16,10 @@ export type Database = {
     Tables: {
       audit_log: {
         Row: {
-          actor_id: string;
-          actor_role: Database['public']['Enums']['user_role'];
-          actor_name: string | null;
           actor_department: string | null;
+          actor_id: string | null;
+          actor_name: string | null;
+          actor_role: Database['public']['Enums']['user_role'] | null;
           event: string;
           id: string;
           occurred_at: string;
@@ -28,10 +28,10 @@ export type Database = {
           target_type: string;
         };
         Insert: {
-          actor_id: string;
-          actor_role: Database['public']['Enums']['user_role'];
-          actor_name?: string | null;
           actor_department?: string | null;
+          actor_id?: string | null;
+          actor_name?: string | null;
+          actor_role?: Database['public']['Enums']['user_role'] | null;
           event: string;
           id?: string;
           occurred_at?: string;
@@ -40,10 +40,10 @@ export type Database = {
           target_type: string;
         };
         Update: {
-          actor_id?: string;
-          actor_role?: Database['public']['Enums']['user_role'];
-          actor_name?: string | null;
           actor_department?: string | null;
+          actor_id?: string | null;
+          actor_name?: string | null;
+          actor_role?: Database['public']['Enums']['user_role'] | null;
           event?: string;
           id?: string;
           occurred_at?: string;
@@ -132,6 +132,36 @@ export type Database = {
             referencedColumns: ['id'];
           },
         ];
+      };
+      guest_requesters: {
+        Row: {
+          created_at: string;
+          email: string;
+          full_name: string;
+          id: string;
+          id_document_number: string;
+          id_document_type: string;
+          phone: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          email: string;
+          full_name: string;
+          id?: string;
+          id_document_number: string;
+          id_document_type: string;
+          phone?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          email?: string;
+          full_name?: string;
+          id?: string;
+          id_document_number?: string;
+          id_document_type?: string;
+          phone?: string | null;
+        };
+        Relationships: [];
       };
       hod_decisions: {
         Row: {
@@ -351,16 +381,20 @@ export type Database = {
       };
       requests: {
         Row: {
+          access_token: string | null;
           code: string | null;
           code_expires_at: string | null;
           created_at: string;
+          guest_id: string | null;
           hod_decision_id: string | null;
           id: string;
           issued_at: string | null;
           issued_by: string | null;
-          key_id: string;
+          key_id: string | null;
+          letter_url: string | null;
+          requested_department_id: string | null;
           requested_for: string;
-          requester_id: string;
+          requester_id: string | null;
           return_code: string | null;
           return_code_expires_at: string | null;
           return_deadline: string | null;
@@ -371,16 +405,20 @@ export type Database = {
           type: Database['public']['Enums']['request_type'];
         };
         Insert: {
+          access_token?: string | null;
           code?: string | null;
           code_expires_at?: string | null;
           created_at?: string;
+          guest_id?: string | null;
           hod_decision_id?: string | null;
           id?: string;
           issued_at?: string | null;
           issued_by?: string | null;
-          key_id: string;
+          key_id?: string | null;
+          letter_url?: string | null;
+          requested_department_id?: string | null;
           requested_for: string;
-          requester_id: string;
+          requester_id?: string | null;
           return_code?: string | null;
           return_code_expires_at?: string | null;
           return_deadline?: string | null;
@@ -391,16 +429,20 @@ export type Database = {
           type: Database['public']['Enums']['request_type'];
         };
         Update: {
+          access_token?: string | null;
           code?: string | null;
           code_expires_at?: string | null;
           created_at?: string;
+          guest_id?: string | null;
           hod_decision_id?: string | null;
           id?: string;
           issued_at?: string | null;
           issued_by?: string | null;
-          key_id?: string;
+          key_id?: string | null;
+          letter_url?: string | null;
+          requested_department_id?: string | null;
           requested_for?: string;
-          requester_id?: string;
+          requester_id?: string | null;
           return_code?: string | null;
           return_code_expires_at?: string | null;
           return_deadline?: string | null;
@@ -411,6 +453,13 @@ export type Database = {
           type?: Database['public']['Enums']['request_type'];
         };
         Relationships: [
+          {
+            foreignKeyName: 'requests_guest_id_fkey';
+            columns: ['guest_id'];
+            isOneToOne: false;
+            referencedRelation: 'guest_requesters';
+            referencedColumns: ['id'];
+          },
           {
             foreignKeyName: 'requests_hod_decision_id_fkey';
             columns: ['hod_decision_id'];
@@ -430,6 +479,13 @@ export type Database = {
             columns: ['key_id'];
             isOneToOne: false;
             referencedRelation: 'keys';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'requests_requested_department_id_fkey';
+            columns: ['requested_department_id'];
+            isOneToOne: false;
+            referencedRelation: 'departments';
             referencedColumns: ['id'];
           },
           {
@@ -625,6 +681,16 @@ export type Database = {
         };
         Returns: undefined;
       };
+      _write_audit_guest: {
+        Args: {
+          p_actor_name: string;
+          p_event: string;
+          p_payload?: Json;
+          p_target_id: string;
+          p_target_type: string;
+        };
+        Returns: undefined;
+      };
       acknowledge_shift_handover: {
         Args: {
           p_bulk: boolean;
@@ -643,6 +709,18 @@ export type Database = {
           created_at: string;
         }[];
       };
+      approve_guest_weekend: {
+        Args: {
+          p_hod_id: string;
+          p_key_id: string;
+          p_note?: string;
+          p_request_id: string;
+        };
+        Returns: {
+          decision_id: string;
+          request_id: string;
+        }[];
+      };
       approve_weekend: {
         Args: {
           p_hod_id: string;
@@ -652,8 +730,25 @@ export type Database = {
           p_signature_verified?: boolean;
         };
         Returns: {
-          code: string | null;
+          code: string;
           decision_id: string;
+          request_id: string;
+        }[];
+      };
+      create_guest_weekend_request: {
+        Args: {
+          p_department_id: string;
+          p_email: string;
+          p_full_name: string;
+          p_id_number: string;
+          p_id_type: string;
+          p_letter_url: string;
+          p_phone: string;
+          p_return_deadline: string;
+          p_weekend_date: string;
+        };
+        Returns: {
+          access_token: string;
           request_id: string;
         }[];
       };
@@ -678,11 +773,26 @@ export type Database = {
           request_id: string;
         }[];
       };
+      expire_guest_request: {
+        Args: { p_access_token: string };
+        Returns: {
+          request_id: string;
+          status: string;
+        }[];
+      };
       expire_request: {
         Args: { p_request_id: string; p_requester_id: string };
         Returns: {
           request_id: string;
           status: string;
+        }[];
+      };
+      generate_guest_weekend_code: {
+        Args: { p_access_token: string };
+        Returns: {
+          code: string;
+          code_expires_at: string;
+          request_id: string;
         }[];
       };
       generate_shift_report: {
@@ -772,13 +882,13 @@ export type Database = {
       key_status: 'AVAILABLE' | 'ISSUED' | 'OVERDUE' | 'RETIRED';
       request_status:
         | 'PENDING_HOD'
-        | 'APPROVED'
         | 'CODE_ISSUED'
         | 'KEY_ISSUED'
         | 'KEY_RETURNED'
         | 'EXPIRED'
         | 'CANCELLED'
-        | 'DECLINED';
+        | 'DECLINED'
+        | 'APPROVED';
       request_type: 'WEEKDAY' | 'WEEKEND';
       risk_tier: 'LOW' | 'MEDIUM' | 'HIGH';
       user_role: 'CSO' | 'HOD' | 'VERIFIER' | 'REQUESTER';
@@ -939,13 +1049,13 @@ export const Constants = {
       key_status: ['AVAILABLE', 'ISSUED', 'OVERDUE', 'RETIRED'],
       request_status: [
         'PENDING_HOD',
-        'APPROVED',
         'CODE_ISSUED',
         'KEY_ISSUED',
         'KEY_RETURNED',
         'EXPIRED',
         'CANCELLED',
         'DECLINED',
+        'APPROVED',
       ],
       request_type: ['WEEKDAY', 'WEEKEND'],
       risk_tier: ['LOW', 'MEDIUM', 'HIGH'],

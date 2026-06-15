@@ -109,6 +109,44 @@ export const weekendRequestFormSchema = z.object({
   description: z.string().trim().min(1, 'Reason for access is required.'),
 });
 
+/** Allowed government / institutional ID document types a guest may declare. */
+export const ID_DOCUMENT_TYPES = [
+  'Staff ID',
+  'National ID (NIN)',
+  "Driver's licence",
+  'International passport',
+] as const;
+
+/**
+ * Public (non-registered) weekend access request form.
+ *
+ * Mirrors the multipart body accepted by POST /api/public/weekend-request.
+ * The `letter` file is validated separately at submit time (a real File is not
+ * available during SSR), so it is kept out of this object schema.
+ */
+export const guestWeekendRequestFormSchema = z.object({
+  full_name: z.string().trim().min(1, 'Your full name is required.'),
+  email: z.email('Enter a valid email address.'),
+  phone: z.string().trim().optional(),
+  id_document_type: z.enum(ID_DOCUMENT_TYPES, {
+    error: 'Select an ID document type.',
+  }),
+  id_document_number: z
+    .string()
+    .trim()
+    .min(1, 'Enter the number on your ID document.'),
+  department_id: z.string().min(1, 'Select the department you are visiting.'),
+  weekend_date: z
+    .string()
+    .min(1, 'Date is required.')
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD')
+    .refine((val) => {
+      const [y, m, d] = val.split('-').map(Number);
+      const day = new Date(y, m - 1, d).getDay();
+      return day === 0 || day === 6;
+    }, 'Must be a Saturday or Sunday.'),
+});
+
 export const cancelRequestSchema = z.object({
   /** UUID of the request to cancel. Must be in CODE_ISSUED status. */
   request_id: z.string().min(1, 'Request ID is required'),
@@ -267,6 +305,9 @@ export type GenerateReportInput = z.infer<typeof generateReportSchema>;
 export type AddReportCommentInput = z.infer<typeof addReportCommentSchema>;
 export type WeekdayRequestFormInput = z.infer<typeof weekdayRequestFormSchema>;
 export type WeekendRequestFormInput = z.infer<typeof weekendRequestFormSchema>;
+export type GuestWeekendRequestFormInput = z.infer<
+  typeof guestWeekendRequestFormSchema
+>;
 export type IssueKeyFormInput = z.infer<typeof issueKeyFormSchema>;
 export type ReturnKeyFormInput = z.infer<typeof returnKeyFormSchema>;
 export type ReturnKeyOverrideFormInput = z.infer<

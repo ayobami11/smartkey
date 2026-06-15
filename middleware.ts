@@ -22,6 +22,16 @@ const PROTECTED_ROUTES: Array<{ prefix: string; role: UserRole }> = [
 // this point, so the role gate must not apply. Each page handles its own auth.
 const ACTIVATION_PATHS = ['/hod/onboarding'];
 
+// Fully public, session-less surfaces. The external (non-registered) weekend
+// request flow and its supporting API live here. They must never be redirected
+// to /login and need no Supabase session resolution.
+const PUBLIC_PREFIXES = ['/weekend-access', '/api/public'];
+
+const isPublicPath = (pathname: string): boolean =>
+  PUBLIC_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+  );
+
 const redirectTo = (request: NextRequest, destination: string): NextResponse =>
   NextResponse.redirect(new URL(destination, request.url));
 
@@ -29,6 +39,12 @@ export const middleware = async (
   request: NextRequest
 ): Promise<NextResponse> => {
   const { pathname } = request.nextUrl;
+
+  // Public, session-less routes (e.g. the external weekend-request flow) bypass
+  // all auth resolution and role gating entirely.
+  if (isPublicPath(pathname)) {
+    return NextResponse.next();
+  }
 
   // Guard: if Supabase env vars are missing the whole site would crash.
   // Fail open so non-auth pages still render; protected routes redirect to login.

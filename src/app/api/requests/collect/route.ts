@@ -55,7 +55,7 @@ export const POST = async (request: NextRequest) => {
 
   const { data: req } = await supabase
     .from('requests')
-    .select('id, status, code_expires_at, key_id, requester_id')
+    .select('id, status, code_expires_at, key_id, requester_id, guest_id')
     .eq('code', code)
     .eq('status', 'CODE_ISSUED')
     .single();
@@ -100,22 +100,56 @@ export const POST = async (request: NextRequest) => {
     });
   }
 
-  const [{ data: requesterProfile }, { data: keyData }] = await Promise.all([
-    supabase
-      .from('profiles')
-      .select('full_name, photo_url')
-      .eq('id', req.requester_id)
-      .single(),
-    supabase
-      .from('keys')
-      .select('code, room_name')
-      .eq('id', req.key_id)
-      .single(),
-  ]);
+  const { data: keyData } = req.key_id
+    ? await supabase
+        .from('keys')
+        .select('code, room_name')
+        .eq('id', req.key_id)
+        .single()
+    : { data: null };
+
+  // External (guest) requests have a guest_id and no requester_id. The verifier
+  // checks the declared physical ID document at the desk instead of a passport
+  // photo. The shape is additive so the verifier UI can branch on `is_guest`.
+  if (req.guest_id) {
+    const { data: guest } = await supabase
+      .from('guest_requesters')
+      .select('full_name, id_document_type, id_document_number')
+      .eq('id', req.guest_id)
+      .single();
+
+    return NextResponse.json(
+      ok({
+        request_id: result.request_id,
+        is_guest: true,
+        requester: {
+          full_name: guest?.full_name ?? null,
+          photo_url: null,
+          id_document_type: guest?.id_document_type ?? null,
+          id_document_number: guest?.id_document_number ?? null,
+        },
+        key: {
+          code: keyData?.code ?? null,
+          room_name: keyData?.room_name ?? null,
+        },
+        issued_at: result.issued_at,
+      }),
+      { status: 200 }
+    );
+  }
+
+  const { data: requesterProfile } = req.requester_id
+    ? await supabase
+        .from('profiles')
+        .select('full_name, photo_url')
+        .eq('id', req.requester_id)
+        .single()
+    : { data: null };
 
   return NextResponse.json(
     ok({
       request_id: result.request_id,
+      is_guest: false,
       requester: {
         full_name: requesterProfile?.full_name ?? null,
         photo_url: requesterProfile?.photo_url ?? null,

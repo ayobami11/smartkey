@@ -46,6 +46,16 @@ export default async function LoginPage({
             Get help
           </Link>
         </p>
+
+        <p className="mt-2 text-center text-sm text-muted-foreground">
+          No account?{' '}
+          <Link
+            href="/weekend-access"
+            className="text-primary underline-offset-4 hover:underline"
+          >
+            Request weekend access
+          </Link>
+        </p>
       </div>
     </main>
   );

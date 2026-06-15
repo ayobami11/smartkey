@@ -51,9 +51,26 @@ export default function LandingPage() {
                 size="lg"
                 className="w-full sm:w-auto"
               >
-                <Link href="/help">Get help</Link>
+                <Link href="/weekend-access">Request weekend access</Link>
               </Button>
             </div>
+            <p className="mt-6 text-sm text-muted-foreground">
+              No account? Visitors and contractors can{' '}
+              <Link
+                href="/weekend-access"
+                className="text-primary underline-offset-4 hover:underline"
+              >
+                request weekend access
+              </Link>{' '}
+              with an HOD letter. Need a hand?{' '}
+              <Link
+                href="/help"
+                className="text-primary underline-offset-4 hover:underline"
+              >
+                Get help
+              </Link>
+              .
+            </p>
           </div>
         </section>
 

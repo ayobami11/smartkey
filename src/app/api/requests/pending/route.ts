@@ -10,7 +10,8 @@ export const GET = async () => {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json(err('Unauthorized', 401), { status: 401 });
+  if (!user)
+    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
 
   const { data: profile } = await supabase
     .from('profiles')
@@ -35,9 +36,12 @@ export const GET = async () => {
       risk_tier,
       risk_factors,
       created_at,
+      letter_url,
+      requested_department_id,
       requester:profiles!requester_id(id, full_name, photo_url, institutional_email),
+      guest:guest_requesters!guest_id(id, full_name, email, phone, id_document_type, id_document_number),
       key:keys!key_id(id, code, room_name, zone)
-    `,
+    `
     )
     .eq('status', 'PENDING_HOD')
     .order('created_at', { ascending: true });
@@ -45,7 +49,9 @@ export const GET = async () => {
   if (error) {
     const ref = crypto.randomUUID();
     logger.error('requests/pending query failed', { err: error.message, ref });
-    return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), { status: 500 });
+    return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
+      status: 500,
+    });
   }
 
   return NextResponse.json(ok({ requests }));
