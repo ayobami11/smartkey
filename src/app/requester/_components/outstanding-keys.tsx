@@ -194,6 +194,7 @@ export const OutstandingKeys = () => {
   } = useQuery({
     queryKey: ['outstanding-keys', userId],
     enabled: !!userId,
+    refetchInterval: connectionStatus !== 'connected' ? 10_000 : false,
     queryFn: async () => {
       const supabase = createBrowserClient();
       const { data, error } = await supabase

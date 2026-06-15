@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangleIcon, CheckCircleIcon } from 'lucide-react';
 
 import { useRealtime } from '@/hooks/useRealtime';
+import { useConnectionStatus } from '@/hooks/useConnectionStatus';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -35,6 +36,7 @@ type RiskAlert = {
 
 export const RiskAlerts = () => {
   const queryClient = useQueryClient();
+  const connectionStatus = useConnectionStatus();
 
   useRealtime({
     table: 'requests',
@@ -57,6 +59,7 @@ export const RiskAlerts = () => {
     refetch,
   } = useQuery({
     queryKey: ['cso', 'risk-alerts'],
+    refetchInterval: connectionStatus !== 'connected' ? 10_000 : false,
     queryFn: async () => {
       const res = await fetch('/api/ai/risk-alerts');
       const json = await res.json();

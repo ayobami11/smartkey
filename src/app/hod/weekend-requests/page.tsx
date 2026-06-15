@@ -124,7 +124,8 @@ const initials = (name: string) =>
 
 export default function WeekendRequestsPage() {
   const queryClient = useQueryClient();
-  const isOffline = useConnectionStatus() === 'offline';
+  const connectionStatus = useConnectionStatus();
+  const isOffline = connectionStatus === 'offline';
   const [selected, setSelected] = useState<PendingRequest | null>(null);
   const [note, setNote] = useState('');
   const [keyId, setKeyId] = useState('');
@@ -149,6 +150,7 @@ export default function WeekendRequestsPage() {
     refetch,
   } = useQuery({
     queryKey: ['requests', 'pending-weekend'],
+    refetchInterval: connectionStatus !== 'connected' ? 10_000 : false,
     queryFn: async () => {
       const res = await fetch('/api/requests/pending');
       const json = await res.json();

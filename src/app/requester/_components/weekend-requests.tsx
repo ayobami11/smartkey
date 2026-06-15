@@ -151,6 +151,7 @@ export const WeekendRequests = () => {
   const { data: requests = [], isLoading: loading } = useQuery({
     queryKey: ['weekend-requests', userId],
     enabled: !!userId,
+    refetchInterval: connectionStatus !== 'connected' ? 10_000 : false,
     queryFn: async () => {
       const supabase = createBrowserClient();
       const { data } = await supabase

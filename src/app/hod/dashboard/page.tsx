@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 
 import { useRealtime } from '@/hooks/useRealtime';
+import { useConnectionStatus } from '@/hooks/useConnectionStatus';
 import { Skeleton } from '@/components/ui/skeleton';
 import { createBrowserClient } from '@/lib/supabase/client';
 
@@ -56,6 +57,7 @@ type FilterTab = (typeof filterTabs)[number];
 
 export default function HodDashboardPage() {
   const queryClient = useQueryClient();
+  const connectionStatus = useConnectionStatus();
   const [fullName, setFullName] = useState('');
   const [deptName, setDeptName] = useState('');
   const [deptKeys, setDeptKeys] = useState<DeptKey[]>([]);
@@ -64,6 +66,7 @@ export default function HodDashboardPage() {
 
   const { data: pendingRequests = [], isLoading: loadingRequests } = useQuery({
     queryKey: ['requests', 'pending-weekend'],
+    refetchInterval: connectionStatus !== 'connected' ? 10_000 : false,
     queryFn: async () => {
       const res = await fetch('/api/requests/pending');
       if (!res.ok) return [];

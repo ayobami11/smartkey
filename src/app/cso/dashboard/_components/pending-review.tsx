@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircleIcon, ShieldAlertIcon } from 'lucide-react';
 
 import { useRealtime } from '@/hooks/useRealtime';
+import { useConnectionStatus } from '@/hooks/useConnectionStatus';
 import { Button } from '@/components/ui/button';
 import {
   Empty,
@@ -37,6 +38,7 @@ type CsoRequest = {
 
 export const PendingReview = () => {
   const queryClient = useQueryClient();
+  const connectionStatus = useConnectionStatus();
   const [decidingId, setDecidingId] = useState<string | null>(null);
   const [decisionError, setDecisionError] = useState<string | null>(null);
 
@@ -47,6 +49,7 @@ export const PendingReview = () => {
     refetch,
   } = useQuery({
     queryKey: ['cso', 'pending-review'],
+    refetchInterval: connectionStatus !== 'connected' ? 10_000 : false,
     queryFn: async () => {
       const res = await fetch('/api/requests/cso-queue');
       const json = await res.json();

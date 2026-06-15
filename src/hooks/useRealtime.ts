@@ -54,6 +54,10 @@ export const useRealtime = <
     optionsRef.current = options;
   });
 
+  const tableDep = options.table;
+  const filterColumnDep = options.filter?.column;
+  const filterValueDep = options.filter?.value;
+
   useEffect(() => {
     const { table, filter } = optionsRef.current;
 
@@ -197,7 +201,7 @@ export const useRealtime = <
     // 3. Register this component instance to the shared channel
     registry.subscribers.add(subscriber);
 
-    // 4. Cleanup on unmount
+    // 4. Cleanup on unmount or on dependency changes
     return () => {
       const currentRegistry = channelRegistry.get(channelName);
       if (currentRegistry) {
@@ -210,5 +214,5 @@ export const useRealtime = <
         }
       }
     };
-  }, []); // Empty deps array: we only evaluate setup once per component mount
+  }, [tableDep, filterColumnDep, filterValueDep]);
 };

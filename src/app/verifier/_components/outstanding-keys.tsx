@@ -100,6 +100,7 @@ export const OutstandingKeys = () => {
     refetch,
   } = useQuery({
     queryKey: ['keys', 'outstanding'],
+    refetchInterval: status !== 'connected' ? 10_000 : false,
     queryFn: async () => {
       const res = await fetch('/api/keys/out');
       const json = await res.json();

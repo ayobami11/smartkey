@@ -76,6 +76,7 @@ export const ActiveRequestBanner = () => {
   const { data: request = null, isLoading: loading } = useQuery({
     queryKey: ['active-request', userId],
     enabled: !!userId,
+    refetchInterval: connectionStatus !== 'connected' ? 10_000 : false,
     queryFn: async () => {
       const supabase = createBrowserClient();
       const { data } = await supabase

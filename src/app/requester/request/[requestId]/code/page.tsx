@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 
 import { useRealtime } from '@/hooks/useRealtime';
+import { useConnectionStatus } from '@/hooks/useConnectionStatus';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { createBrowserClient } from '@/lib/supabase/client';
@@ -85,6 +86,7 @@ const statusMessage: Record<string, string> = {
 export default function CodeDisplayPage() {
   const { requestId } = useParams<{ requestId: string }>();
   const queryClient = useQueryClient();
+  const connectionStatus = useConnectionStatus();
 
   const [userId, setUserId] = useState<string | null>(null);
   const [, forceUpdate] = useState(0);
@@ -105,6 +107,7 @@ export default function CodeDisplayPage() {
   const { data: request = null, isLoading: loading } = useQuery({
     queryKey: ['request', requestId, userId],
     enabled: !!userId,
+    refetchInterval: connectionStatus !== 'connected' ? 10_000 : false,
     queryFn: async () => {
       const supabase = createBrowserClient();
       const { data } = await supabase
