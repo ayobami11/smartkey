@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   AlertCircleIcon,
   ClockIcon,
@@ -10,6 +10,7 @@ import {
   SearchIcon,
   XCircleIcon,
 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -94,18 +95,8 @@ const tabs: { label: string; value: ActiveTab }[] = [
 // Component
 
 export default function KeyInventoryPage() {
-  const [keys, setKeys] = useState<Key[]>([]);
-  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>(
-    'loading'
-  );
-  const [fetchError, setFetchError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>('All');
   const [search, setSearch] = useState('');
-  const [outstandingKeys, setOutstandingKeys] = useState<OutstandingKey[]>([]);
-  const [outstandingState, setOutstandingState] = useState<
-    'idle' | 'loading' | 'ready' | 'error'
-  >('idle');
-  const [outstandingError, setOutstandingError] = useState<string | null>(null);
   const [lostTarget, setLostTarget] = useState<{
     id: string;
     code: string;
@@ -114,27 +105,28 @@ export default function KeyInventoryPage() {
   const [marking, setMarking] = useState(false);
   const [markError, setMarkError] = useState<string | null>(null);
 
-  // Fetch
+  // Keys inventory query
 
-  const fetchKeys = async () => {
-    setLoadState('loading');
-    setFetchError(null);
-    const supabase = createBrowserClient();
-    const { data, error } = await supabase
-      .from('keys')
-      .select(
-        'id, code, zone, room_name, status, department:departments!department_id(name, hod:profiles!hod_id(full_name, status))'
-      )
-      .order('code', { ascending: true });
+  const {
+    data: keys = [],
+    isLoading: keysLoading,
+    isError: keysError,
+    error: keysErrorObj,
+    refetch: refetchKeys,
+  } = useQuery<Key[]>({
+    queryKey: ['cso', 'keys'],
+    queryFn: async () => {
+      const supabase = createBrowserClient();
+      const { data, error } = await supabase
+        .from('keys')
+        .select(
+          'id, code, zone, room_name, status, department:departments!department_id(name, hod:profiles!hod_id(full_name, status))'
+        )
+        .order('code', { ascending: true });
 
-    if (error) {
-      setFetchError('Failed to load key inventory.');
-      setLoadState('error');
-      return;
-    }
+      if (error) throw new Error('Failed to load key inventory.');
 
-    setKeys(
-      (data ?? []).map((k: Record<string, unknown>) => {
+      return (data ?? []).map((k: Record<string, unknown>) => {
         const dept = k.department as Record<string, unknown> | null;
         const hod = dept?.hod as Record<string, unknown> | null;
         return {
@@ -147,69 +139,53 @@ export default function KeyInventoryPage() {
           hodPending: hod?.status === 'PENDING_ACTIVATION',
           status: k.status as KeyStatus,
         };
-      })
-    );
-    setLoadState('ready');
-  };
+      });
+    },
+    staleTime: 5 * 60_000,
+  });
 
-  useEffect(() => {
-    fetchKeys();
-  }, []);
+  // Outstanding keys query — only fetches when the Outstanding tab is active
 
-  useEffect(() => {
-    if (activeTab !== 'Outstanding') return;
-    if (outstandingState !== 'idle') return;
-    const fetchOutstanding = async () => {
-      setOutstandingState('loading');
-      setOutstandingError(null);
-      try {
-        const res = await fetch('/api/keys/out');
-        const json = await res.json();
-        if (!res.ok) {
-          setOutstandingError(
-            (json as { error?: string }).error ??
-              'Failed to load outstanding keys.'
-          );
-          setOutstandingState('error');
-          return;
-        }
-        const raw =
-          (json as { data?: { outstanding?: Record<string, unknown>[] } }).data
-            ?.outstanding ?? [];
-        setOutstandingKeys(
-          raw.map((item) => {
-            const key = item.key as {
-              id: string;
-              code: string;
-              room_name: string;
-              zone: string;
-            } | null;
-            const requester = item.requester as {
-              full_name: string;
-            } | null;
-            return {
-              requestId: item.id as string,
-              keyId: key?.id ?? '',
-              keyCode: key?.code ?? '—',
-              roomName: key?.room_name ?? '—',
-              zone: key?.zone ?? '—',
-              requesterName: requester?.full_name ?? '—',
-              issuedAt: item.issued_at as string,
-              returnDeadline: item.return_deadline as string,
-              isOverdue: new Date() > new Date(item.return_deadline as string),
-            };
-          })
-        );
-        setOutstandingState('ready');
-      } catch {
-        setOutstandingError(
-          'Network error. Check your connection and try again.'
-        );
-        setOutstandingState('error');
-      }
-    };
-    fetchOutstanding();
-  }, [activeTab, outstandingState]);
+  const {
+    data: outstandingKeys = [],
+    isLoading: outstandingLoading,
+    isError: outstandingIsError,
+    error: outstandingErrorObj,
+    refetch: refetchOutstanding,
+  } = useQuery<OutstandingKey[]>({
+    queryKey: ['cso', 'keys', 'outstanding'],
+    queryFn: async () => {
+      const res = await fetch('/api/keys/out');
+      const json = await res.json();
+      if (!res.ok)
+        throw new Error(json.error ?? 'Failed to load outstanding keys.');
+      const raw =
+        (json as { data?: { outstanding?: Record<string, unknown>[] } }).data
+          ?.outstanding ?? [];
+      return raw.map((item) => {
+        const key = item.key as {
+          id: string;
+          code: string;
+          room_name: string;
+          zone: string;
+        } | null;
+        const requester = item.requester as { full_name: string } | null;
+        return {
+          requestId: item.id as string,
+          keyId: key?.id ?? '',
+          keyCode: key?.code ?? '—',
+          roomName: key?.room_name ?? '—',
+          zone: key?.zone ?? '—',
+          requesterName: requester?.full_name ?? '—',
+          issuedAt: item.issued_at as string,
+          returnDeadline: item.return_deadline as string,
+          isOverdue: new Date() > new Date(item.return_deadline as string),
+        };
+      });
+    },
+    enabled: activeTab === 'Outstanding',
+    staleTime: 30_000,
+  });
 
   // Mark as lost
 
@@ -228,13 +204,10 @@ export default function KeyInventoryPage() {
         setMarkError(json.error ?? 'Failed to mark key as lost.');
         return;
       }
-      setKeys((prev) =>
-        prev.map((k) =>
-          k.id === lostTarget.id ? { ...k, status: 'RETIRED' as KeyStatus } : k
-        )
-      );
       setLostTarget(null);
       setLostNote('');
+      refetchKeys();
+      refetchOutstanding();
     } catch {
       setMarkError('Something went wrong. Check your connection.');
     } finally {
@@ -332,7 +305,7 @@ export default function KeyInventoryPage() {
       </div>
 
       {/* Loading */}
-      {loadState === 'loading' && activeTab !== 'Outstanding' && (
+      {keysLoading && activeTab !== 'Outstanding' && (
         <div
           className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
           aria-busy="true"
@@ -345,7 +318,7 @@ export default function KeyInventoryPage() {
       )}
 
       {/* Error */}
-      {loadState === 'error' && activeTab !== 'Outstanding' && (
+      {keysError && activeTab !== 'Outstanding' && (
         <div
           className="rounded-lg border border-destructive/30 bg-destructive/5 p-4"
           role="alert"
@@ -353,14 +326,16 @@ export default function KeyInventoryPage() {
           <p className="text-sm font-medium text-destructive">
             Failed to load key inventory
           </p>
-          {fetchError && (
-            <p className="mt-1 text-xs text-destructive/80">{fetchError}</p>
+          {keysErrorObj instanceof Error && (
+            <p className="mt-1 text-xs text-destructive/80">
+              {keysErrorObj.message}
+            </p>
           )}
           <Button
             variant="outline"
             size="sm"
             className="mt-3"
-            onClick={fetchKeys}
+            onClick={() => refetchKeys()}
           >
             Retry
           </Button>
@@ -370,7 +345,7 @@ export default function KeyInventoryPage() {
       {/* Outstanding tab */}
       {activeTab === 'Outstanding' && (
         <>
-          {outstandingState === 'loading' && (
+          {outstandingLoading && (
             <div className="flex flex-col gap-3" aria-busy="true">
               {[0, 1, 2, 3].map((i) => (
                 <Skeleton key={i} className="h-16 rounded-lg" />
@@ -378,7 +353,7 @@ export default function KeyInventoryPage() {
             </div>
           )}
 
-          {outstandingState === 'error' && (
+          {outstandingIsError && (
             <div
               className="rounded-lg border border-destructive/30 bg-destructive/5 p-4"
               role="alert"
@@ -386,23 +361,23 @@ export default function KeyInventoryPage() {
               <p className="text-sm font-medium text-destructive">
                 Failed to load outstanding keys
               </p>
-              {outstandingError && (
+              {outstandingErrorObj instanceof Error && (
                 <p className="mt-1 text-xs text-destructive/80">
-                  {outstandingError}
+                  {outstandingErrorObj.message}
                 </p>
               )}
               <Button
                 variant="outline"
                 size="sm"
                 className="mt-3"
-                onClick={() => setOutstandingState('idle')}
+                onClick={() => refetchOutstanding()}
               >
                 Retry
               </Button>
             </div>
           )}
 
-          {outstandingState === 'ready' && (
+          {!outstandingLoading && !outstandingIsError && (
             <>
               {outstandingFiltered.length === 0 ? (
                 <Empty className="border border-border bg-card">
@@ -520,7 +495,7 @@ export default function KeyInventoryPage() {
       )}
 
       {/* Content */}
-      {loadState === 'ready' && activeTab !== 'Outstanding' && (
+      {!keysLoading && !keysError && activeTab !== 'Outstanding' && (
         <>
           {filtered.length === 0 ? (
             <Empty className="border border-border bg-card">

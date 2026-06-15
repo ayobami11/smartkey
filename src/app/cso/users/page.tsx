@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { RefreshCwIcon } from 'lucide-react';
+import { useState } from 'react';
 import { toast } from 'sonner';
+import { useQuery } from '@tanstack/react-query';
 
 import {
   AlertDialog,
@@ -15,17 +15,9 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import { UsersDataTable } from '@/app/cso/users/_components/data-table';
 import { ProvisionUserDialog } from '@/app/cso/users/_components/provision-user-dialog';
+import { UsersTableSkeleton } from '@/app/cso/users/_components/users-table-skeleton';
 import {
   type UserRole,
   type UserRow,
@@ -35,13 +27,6 @@ import {
 // Component
 
 export default function UsersPage() {
-  const [users, setUsers] = useState<UserRow[]>([]);
-  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>(
-    'loading'
-  );
-  const [fetchError, setFetchError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
-
   // Revoke dialog
   const [revokeTarget, setRevokeTarget] = useState<{
     id: string;
@@ -53,49 +38,41 @@ export default function UsersPage() {
   // Resend invite
   const [resendingId, setResendingId] = useState<string | null>(null);
 
-  // Fetch all users
-  const fetchUsers = async () => {
-    setLoadState('loading');
-    setFetchError(null);
-
-    try {
+  // Fetch users
+  const {
+    data: users = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery<UserRow[]>({
+    queryKey: ['cso', 'users'],
+    queryFn: async () => {
       const res = await fetch('/api/admin/users');
       const json = await res.json();
-      if (!res.ok) {
-        setFetchError(json.error ?? 'Failed to load users.');
-        setLoadState('error');
-        return;
-      }
-      const incoming: UserRow[] = (
-        (json.data?.users ?? []) as Record<string, unknown>[]
-      ).map((u) => {
-        const role = u.role as UserRole;
-        const deptName = (u.department as Record<string, unknown> | null)
-          ?.name as string | undefined;
-        return {
-          id: u.id as string,
-          full_name: u.full_name as string,
-          institutional_email: u.institutional_email as string,
-          role,
-          department:
-            role === 'CSO' || role === 'VERIFIER'
-              ? (deptName ?? 'Security')
-              : deptName,
-          status: u.status as UserStatus,
-          last_sign_in_at: (u.last_sign_in_at as string | null) ?? null,
-        };
-      });
-      setUsers(incoming);
-      setLoadState('ready');
-    } catch {
-      setFetchError('Something went wrong. Check your connection.');
-      setLoadState('error');
-    }
-  };
-
-  useEffect(() => {
-    fetchUsers();
-  }, []);
+      if (!res.ok) throw new Error(json.error ?? 'Failed to load users.');
+      return ((json.data?.users ?? []) as Record<string, unknown>[]).map(
+        (u) => {
+          const role = u.role as UserRole;
+          const deptName = (u.department as Record<string, unknown> | null)
+            ?.name as string | undefined;
+          return {
+            id: u.id as string,
+            full_name: u.full_name as string,
+            institutional_email: u.institutional_email as string,
+            role,
+            department:
+              role === 'CSO' || role === 'VERIFIER'
+                ? (deptName ?? 'Security')
+                : deptName,
+            status: u.status as UserStatus,
+            last_sign_in_at: (u.last_sign_in_at as string | null) ?? null,
+          };
+        }
+      );
+    },
+    staleTime: 60_000,
+  });
 
   // Revoke access
   const handleRevoke = async () => {
@@ -111,14 +88,8 @@ export default function UsersPage() {
         setRevokeError(json.error ?? 'Failed to revoke access.');
         return;
       }
-      setUsers((prev) =>
-        prev.map((u) =>
-          u.id === revokeTarget.id
-            ? { ...u, status: 'DEACTIVATED' as UserStatus }
-            : u
-        )
-      );
       setRevokeTarget(null);
+      refetch();
     } catch {
       setRevokeError('Something went wrong. Check your connection.');
     } finally {
@@ -156,63 +127,14 @@ export default function UsersPage() {
             Manage SmartKey accounts across all roles.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            aria-label="Refresh users list"
-            disabled={refreshing || loadState === 'loading'}
-            onClick={async () => {
-              setRefreshing(true);
-              await fetchUsers();
-              setRefreshing(false);
-            }}
-          >
-            <RefreshCwIcon
-              className={`size-4 ${refreshing ? 'animate-spin' : ''}`}
-              aria-hidden="true"
-            />
-            Refresh
-          </Button>
-          <ProvisionUserDialog onSuccess={() => fetchUsers()} />
-        </div>
+        <ProvisionUserDialog onSuccess={() => refetch()} />
       </div>
 
       {/* Loading skeleton */}
-      {loadState === 'loading' && (
-        <div
-          className="rounded-lg border border-border bg-card shadow-[0_2px_4px_rgba(15,23,42,0.06)]"
-          aria-busy="true"
-        >
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Department</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Last sign-in</TableHead>
-                <TableHead className="sr-only">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {[0, 1, 2, 3, 4].map((i) => (
-                <TableRow key={i}>
-                  {[0, 1, 2, 3, 4, 5, 6].map((j) => (
-                    <TableCell key={j}>
-                      <Skeleton className="h-4 w-full" />
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+      {isLoading && <UsersTableSkeleton />}
 
       {/* Error */}
-      {loadState === 'error' && (
+      {isError && (
         <div
           className="rounded-lg border border-destructive/30 bg-destructive/5 p-4"
           role="alert"
@@ -220,14 +142,14 @@ export default function UsersPage() {
           <p className="text-sm font-medium text-destructive">
             Failed to load users
           </p>
-          {fetchError && (
-            <p className="mt-1 text-xs text-destructive/80">{fetchError}</p>
+          {error instanceof Error && (
+            <p className="mt-1 text-xs text-destructive/80">{error.message}</p>
           )}
           <Button
             variant="outline"
             size="sm"
             className="mt-3"
-            onClick={() => fetchUsers()}
+            onClick={() => refetch()}
           >
             Retry
           </Button>
@@ -235,7 +157,7 @@ export default function UsersPage() {
       )}
 
       {/* Data table */}
-      {loadState === 'ready' && (
+      {!isLoading && !isError && (
         <UsersDataTable
           data={users}
           onRevoke={(user) =>

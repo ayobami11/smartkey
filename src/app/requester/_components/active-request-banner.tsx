@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { KeyRoundIcon, XCircleIcon } from 'lucide-react';
+import { XCircleIcon } from 'lucide-react';
 
 import { useRealtime } from '@/hooks/useRealtime';
 import { useConnectionStatus } from '@/hooks/useConnectionStatus';
@@ -19,31 +19,13 @@ import { createBrowserClient } from '@/lib/supabase/client';
 
 type ActiveRequest = {
   id: string;
-  status: 'CODE_ISSUED' | 'KEY_ISSUED';
+  status: 'CODE_ISSUED';
   code: string | null;
   code_expires_at: string | null;
-  return_code: string | null;
-  return_code_expires_at: string | null;
-  return_deadline: string | null;
   key: { code: string; room_name: string } | null;
 };
 
 // Helpers
-
-const formatDeadline = (iso: string) => {
-  const date = new Date(iso);
-  const now = new Date();
-  const isToday = date.toDateString() === now.toDateString();
-  return isToday
-    ? `today at ${date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`
-    : date.toLocaleDateString('en-GB', {
-        weekday: 'short',
-        day: 'numeric',
-        month: 'short',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-};
 
 const secondsRemaining = (isoExpiry: string) =>
   Math.max(0, Math.floor((new Date(isoExpiry).getTime() - Date.now()) / 1000));
@@ -75,8 +57,6 @@ export const ActiveRequestBanner = () => {
   const [userId, setUserId] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(0);
   const [cancelling, setCancelling] = useState(false);
-  const [requestingReturn, setRequestingReturn] = useState(false);
-  const [returnError, setReturnError] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Guards the auto-expire call so it fires once per request, not every tick.
   const expiredFiredRef = useRef<string | null>(null);
@@ -101,10 +81,10 @@ export const ActiveRequestBanner = () => {
       const { data } = await supabase
         .from('requests')
         .select(
-          'id, status, code, code_expires_at, return_code, return_code_expires_at, return_deadline, key:keys!key_id(code, room_name)'
+          'id, status, code, code_expires_at, key:keys!key_id(code, room_name)'
         )
         .eq('requester_id', userId!)
-        .in('status', ['CODE_ISSUED', 'KEY_ISSUED'])
+        .in('status', ['CODE_ISSUED'])
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -112,14 +92,8 @@ export const ActiveRequestBanner = () => {
     },
   });
 
-  // The expiry the countdown tracks: collection code before issue, return code
-  // after.
   const activeExpiry =
-    request?.status === 'CODE_ISSUED'
-      ? request.code_expires_at
-      : request?.status === 'KEY_ISSUED'
-        ? request.return_code_expires_at
-        : null;
+    request?.status === 'CODE_ISSUED' ? request.code_expires_at : null;
 
   // Real-time subscription — no server-side filter; check requester_id client-side
 
@@ -217,34 +191,6 @@ export const ActiveRequestBanner = () => {
     }
   };
 
-  // Request return — generates the return code shown to the verifier
-
-  const handleRequestReturn = async () => {
-    if (!request) return;
-    setRequestingReturn(true);
-    setReturnError(null);
-    try {
-      const res = await fetch('/api/requests/request-return', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ request_id: request.id }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setReturnError(
-          (json as { error?: string }).error ??
-            'Could not generate a return code. Please try again.'
-        );
-        return;
-      }
-      queryClient.invalidateQueries({ queryKey: ['active-request', userId] });
-    } catch {
-      setReturnError('Network error. Check your connection and try again.');
-    } finally {
-      setRequestingReturn(false);
-    }
-  };
-
   // Render
 
   if (loading) {
@@ -258,193 +204,81 @@ export const ActiveRequestBanner = () => {
     request.code_expires_at !== null &&
     countdown === 0;
 
-  // CODE_ISSUED — show the collection code
-  if (request.status === 'CODE_ISSUED') {
-    return (
-      <div
-        className={`rounded-lg border p-5 ${
-          isExpired
-            ? 'border-muted bg-muted/40'
-            : 'border-primary/20 bg-primary/5'
-        }`}
-        aria-live="polite"
-        aria-label={
-          isExpired
-            ? 'Your collection code has expired'
-            : 'Your collection code'
-        }
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex flex-col gap-1">
-            <p className="text-xs font-medium text-muted-foreground">
-              {isExpired ? 'Code expired' : 'Your collection code'}
-            </p>
-            {request.key && (
-              <p className="text-xs text-muted-foreground">
-                {request.key.code} · {request.key.room_name}
-              </p>
-            )}
-          </div>
-          {!isExpired && request.code_expires_at && (
-            <span
-              className="shrink-0 font-mono text-xs text-muted-foreground"
-              aria-label={`Expires in ${formatCountdown(countdown)}`}
-            >
-              {formatCountdown(countdown)}
-            </span>
-          )}
-        </div>
-
-        {isExpired ? (
-          <p className="mt-2 text-sm text-muted-foreground">
-            This code has expired. Request a new one to continue.
-          </p>
-        ) : (
-          <p
-            className="mt-3 font-mono text-5xl font-semibold tracking-[0.3em] text-foreground"
-            aria-label={`Collection code: ${request.code}`}
-          >
-            {request.code}
-          </p>
-        )}
-
-        {!isExpired && (
-          <div className="mt-4 flex items-center gap-2">
-            <p className="flex-1 text-xs text-muted-foreground">
-              Show this to the security officer at the desk.
-            </p>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleCancel}
-                    disabled={cancelling || isOffline}
-                    aria-busy={cancelling}
-                    className={`shrink-0 gap-1.5${isOffline ? ' pointer-events-none' : ''}`}
-                  >
-                    <XCircleIcon className="size-3.5" aria-hidden="true" />
-                    {cancelling ? 'Cancelling…' : 'Cancel request'}
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              {isOffline && (
-                <TooltipContent>
-                  Available again when you reconnect.
-                </TooltipContent>
-              )}
-            </Tooltip>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // KEY_ISSUED — a return code is active when present and not yet expired
-  const hasReturnCode =
-    request.return_code !== null &&
-    request.return_code_expires_at !== null &&
-    countdown > 0;
-
-  if (hasReturnCode) {
-    return (
-      <div
-        className="rounded-lg border border-primary/20 bg-primary/5 p-5"
-        aria-live="polite"
-        aria-label="Your return code"
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex flex-col gap-1">
-            <p className="text-xs font-medium text-muted-foreground">
-              Your return code
-            </p>
-            {request.key && (
-              <p className="text-xs text-muted-foreground">
-                {request.key.code} · {request.key.room_name}
-              </p>
-            )}
-          </div>
-          {request.return_code_expires_at && (
-            <span
-              className="shrink-0 font-mono text-xs text-muted-foreground"
-              aria-label={`Expires in ${formatCountdown(countdown)}`}
-            >
-              {formatCountdown(countdown)}
-            </span>
-          )}
-        </div>
-
-        <p
-          className="mt-3 font-mono text-5xl font-semibold tracking-[0.3em] text-foreground"
-          aria-label={`Return code: ${request.return_code}`}
-        >
-          {request.return_code}
-        </p>
-
-        <p className="mt-4 text-xs text-muted-foreground">
-          Read this to the security officer when you hand back the key.
-        </p>
-      </div>
-    );
-  }
-
-  // KEY_ISSUED — no active return code: show deadline + "Return key"
   return (
     <div
-      className="rounded-lg border border-emerald-200 bg-emerald-50 p-5 dark:border-emerald-900 dark:bg-emerald-950/30"
-      aria-label="Key issued"
+      className={`rounded-lg border p-5 ${
+        isExpired
+          ? 'border-muted bg-muted/40'
+          : 'border-primary/20 bg-primary/5'
+      }`}
+      aria-live="polite"
+      aria-label={
+        isExpired ? 'Your collection code has expired' : 'Your collection code'
+      }
     >
-      <div className="flex items-center gap-2">
-        <KeyRoundIcon
-          className="size-4 shrink-0 text-emerald-600"
-          aria-hidden="true"
-        />
-        <p className="text-sm font-medium text-foreground">
-          Key issued
-          {request.key
-            ? ` — ${request.key.code} (${request.key.room_name})`
-            : ''}
-        </p>
-      </div>
-      {request.return_deadline && (
-        <p className="mt-1 text-xs text-muted-foreground">
-          Return by{' '}
-          <span className="font-medium text-foreground">
-            {formatDeadline(request.return_deadline)}
-          </span>
-        </p>
-      )}
-
-      {returnError && (
-        <p className="mt-3 text-xs text-destructive" role="alert">
-          {returnError}
-        </p>
-      )}
-
-      <div className="mt-4 flex items-center gap-2">
-        <p className="flex-1 text-xs text-muted-foreground">
-          Returning the key? Generate a code to confirm it with the officer.
-        </p>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span>
-              <Button
-                size="sm"
-                onClick={handleRequestReturn}
-                disabled={requestingReturn || isOffline}
-                aria-busy={requestingReturn}
-                className={`shrink-0${isOffline ? ' pointer-events-none' : ''}`}
-              >
-                {requestingReturn ? 'Generating…' : 'Return key'}
-              </Button>
-            </span>
-          </TooltipTrigger>
-          {isOffline && (
-            <TooltipContent>Available again when you reconnect.</TooltipContent>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <p className="text-xs font-medium text-muted-foreground">
+            {isExpired ? 'Code expired' : 'Your collection code'}
+          </p>
+          {request.key && (
+            <p className="text-xs text-muted-foreground">
+              {request.key.code} · {request.key.room_name}
+            </p>
           )}
-        </Tooltip>
+        </div>
+        {!isExpired && request.code_expires_at && (
+          <span
+            className="shrink-0 font-mono text-xs text-muted-foreground"
+            aria-label={`Expires in ${formatCountdown(countdown)}`}
+          >
+            {formatCountdown(countdown)}
+          </span>
+        )}
       </div>
+
+      {isExpired ? (
+        <p className="mt-2 text-sm text-muted-foreground">
+          This code has expired. Request a new one to continue.
+        </p>
+      ) : (
+        <p
+          className="mt-3 font-mono text-5xl font-semibold tracking-[0.3em] text-foreground"
+          aria-label={`Collection code: ${request.code}`}
+        >
+          {request.code}
+        </p>
+      )}
+
+      {!isExpired && (
+        <div className="mt-4 flex items-center gap-2">
+          <p className="flex-1 text-xs text-muted-foreground">
+            Show this to the security officer at the desk.
+          </p>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCancel}
+                  disabled={cancelling || isOffline}
+                  aria-busy={cancelling}
+                  className={`shrink-0 gap-1.5${isOffline ? ' pointer-events-none' : ''}`}
+                >
+                  <XCircleIcon className="size-3.5" aria-hidden="true" />
+                  {cancelling ? 'Cancelling…' : 'Cancel request'}
+                </Button>
+              </span>
+            </TooltipTrigger>
+            {isOffline && (
+              <TooltipContent>
+                Available again when you reconnect.
+              </TooltipContent>
+            )}
+          </Tooltip>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useConnectionStatus } from '@/hooks/useConnectionStatus';
 import { useRouter } from 'next/navigation';
 import { InboxIcon, KeyRoundIcon } from 'lucide-react';
@@ -74,10 +75,6 @@ export const AuthorizedKeys = () => {
   const router = useRouter();
   const connectionStatus = useConnectionStatus();
   const isOffline = connectionStatus === 'offline';
-  const [keys, setKeys] = useState<AuthorisedKey[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [fetchError, setFetchError] = useState<string | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
 
   // Dialog state
   const [weekdayOpen, setWeekdayOpen] = useState(false);
@@ -92,41 +89,34 @@ export const AuthorizedKeys = () => {
 
   // Fetch authorized keys
 
-  const fetchKeys = useCallback(async () => {
-    try {
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['requester', 'authorized-keys'],
+    queryFn: async () => {
       const supabase = createBrowserClient();
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (!user) return;
-      setUserId(user.id);
-      setFetchError(null);
+      if (!user) return { keys: [] as AuthorisedKey[], userId: null };
 
       const { data, error } = await supabase
         .from('authorisations')
         .select('key:keys!key_id(id, code, zone, room_name, status)')
         .eq('profile_id', user.id);
 
-      if (error) {
-        setFetchError('Failed to load your authorised keys.');
-      } else {
-        // Generated types have Relationships:[] for authorisations, so the
-        // nested select type resolves to SelectQueryError. The runtime query
-        // is correct; cast through unknown until types are regenerated.
-        setKeys((data ?? []) as unknown as AuthorisedKey[]);
-      }
-    } catch {
-      setFetchError(
-        'Failed to load your authorised keys. Check your connection.'
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, []); // setState setters are stable refs — no deps needed
+      // Generated types have Relationships:[] for authorisations, so the
+      // nested select type resolves to SelectQueryError. The runtime query
+      // is correct; cast through unknown until types are regenerated.
+      if (error) throw new Error('Failed to load your authorised keys.');
+      return {
+        keys: (data ?? []) as unknown as AuthorisedKey[],
+        userId: user.id,
+      };
+    },
+    staleTime: 2 * 60_000,
+  });
 
-  useEffect(() => {
-    fetchKeys();
-  }, [fetchKeys]);
+  const keys = data?.keys ?? [];
+  const userId = data?.userId ?? null;
 
   // Overlay helpers
 
@@ -201,7 +191,7 @@ export const AuthorizedKeys = () => {
       <h2 className="text-sm font-semibold text-foreground">Authorised keys</h2>
 
       {/* Loading */}
-      {loading && (
+      {isLoading && (
         <div
           className="flex flex-col gap-3"
           aria-busy="true"
@@ -214,22 +204,20 @@ export const AuthorizedKeys = () => {
       )}
 
       {/* Error */}
-      {!loading && fetchError && (
+      {isError && (
         <div
           className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
           role="alert"
         >
           <p className="font-medium">Failed to load your keys</p>
-          <p className="mt-1 text-destructive/80">{fetchError}</p>
+          <p className="mt-1 text-destructive/80">
+            Failed to load your authorised keys. Check your connection.
+          </p>
           <Button
             variant="outline"
             size="sm"
             className="mt-3 border-destructive/30 text-destructive hover:bg-destructive/10"
-            onClick={() => {
-              setLoading(true);
-              setFetchError(null);
-              void fetchKeys();
-            }}
+            onClick={() => refetch()}
           >
             Retry
           </Button>
@@ -237,7 +225,7 @@ export const AuthorizedKeys = () => {
       )}
 
       {/* Empty */}
-      {!loading && !fetchError && keys.length === 0 && (
+      {!isLoading && !isError && keys.length === 0 && (
         <Empty className="border border-border bg-card">
           <EmptyHeader>
             <EmptyMedia variant="icon">
@@ -271,7 +259,7 @@ export const AuthorizedKeys = () => {
       )}
 
       {/* Key grid */}
-      {!loading && !fetchError && keys.length > 0 && (
+      {!isLoading && !isError && keys.length > 0 && (
         <div className="flex flex-col gap-3">
           {keys.map((authorised) => {
             const { key } = authorised;

@@ -25,6 +25,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 
 import { createBrowserClient } from '@/lib/supabase/client';
+import { AuditTableSkeleton } from '@/app/cso/audit/_components/audit-table-skeleton';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -52,7 +53,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
   TableBody,
@@ -221,7 +221,11 @@ function mapRow(e: Record<string, unknown>): AuditEntry {
       (payload.actor_name as string | undefined) ??
       (e.actor_id as string).slice(0, 8),
     actorRole: ROLE_LABEL[e.actor_role as string] ?? (e.actor_role as string),
-    department: (e.actor_department as string | undefined) ?? undefined,
+    department:
+      (e.actor_department as string | undefined) ??
+      (['CSO', 'VERIFIER'].includes(e.actor_role as string)
+        ? 'Security'
+        : undefined),
     description: eventName?.replace(/_/g, ' ') ?? 'Event',
     keyCode: payload.key_code as string | undefined,
     timestamp: new Date(e.occurred_at as string).toLocaleString('en-GB', {
@@ -278,7 +282,7 @@ const columns: ColumnDef<AuditEntry>[] = [
   },
   {
     id: 'actor',
-    header: 'Actor',
+    header: 'Name',
     cell: ({ row }) => (
       <span className="text-sm font-medium text-foreground">
         {row.original.actor}
@@ -558,13 +562,7 @@ export const AuditTable = () => {
       </div>
 
       {/* Loading */}
-      {isLoading && (
-        <div className="flex flex-col gap-2" aria-busy="true">
-          {[0, 1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-14 rounded-lg" />
-          ))}
-        </div>
-      )}
+      {isLoading && <AuditTableSkeleton />}
 
       {/* Error */}
       {isError && (
@@ -592,7 +590,7 @@ export const AuditTable = () => {
               {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id}>
                   {headerGroup.headers.map((header) => (
-                    <TableHead key={header.id}>
+                    <TableHead key={header.id} className="px-4">
                       {header.isPlaceholder
                         ? null
                         : flexRender(
@@ -609,7 +607,7 @@ export const AuditTable = () => {
                 table.getRowModel().rows.map((row) => (
                   <TableRow key={row.id}>
                     {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id}>
+                      <TableCell key={cell.id} className="px-4 py-3">
                         {flexRender(
                           cell.column.columnDef.cell,
                           cell.getContext()
@@ -622,7 +620,7 @@ export const AuditTable = () => {
                 <TableRow>
                   <TableCell
                     colSpan={columns.length}
-                    className="h-24 text-center text-sm text-muted-foreground"
+                    className="h-24 px-4 text-center text-sm text-muted-foreground"
                   >
                     No events match these filters.
                   </TableCell>

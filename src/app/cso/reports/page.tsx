@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import {
   BotIcon,
@@ -13,6 +13,7 @@ import {
   MessageSquareIcon,
   RotateCcwIcon,
 } from 'lucide-react';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -126,20 +127,10 @@ const DATE_FILTER_LABELS: Record<DateFilter, string> = {
 // Component
 
 export default function ShiftReportsPage() {
-  const [reportGroups, setReportGroups] = useState<
-    { day: string; items: Report[] }[]
-  >([]);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>(
-    'loading'
-  );
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [fetchError, setFetchError] = useState<string | null>(null);
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
 
   // Generate sheet
   const [generateOpen, setGenerateOpen] = useState(false);
-  const [shifts, setShifts] = useState<ShiftOption[]>([]);
   const [selectedShiftId, setSelectedShiftId] = useState('');
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
@@ -157,94 +148,80 @@ export default function ShiftReportsPage() {
   const [commentError, setCommentError] = useState<string | null>(null);
   const [commentSuccess, setCommentSuccess] = useState(false);
 
-  // Fetch reports
+  // Reports query — infinite scroll with cursor pagination
 
-  const fetchReports = async (reset = true, cursor?: string) => {
-    if (reset) setLoadState('loading');
-    setFetchError(null);
+  const {
+    data: reportsData,
+    isLoading: reportsLoading,
+    isError: reportsIsError,
+    error: reportsError,
+    refetch: refetchReports,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryKey: ['cso', 'reports', dateFilter],
+    queryFn: async ({ pageParam }) => {
+      const params = new URLSearchParams({ limit: '20' });
+      if (dateFilter === '7d')
+        params.set(
+          'from',
+          new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+        );
+      else if (dateFilter === '30d')
+        params.set(
+          'from',
+          new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+        );
+      if (pageParam) params.set('cursor', pageParam);
 
-    const params = new URLSearchParams({ limit: '20' });
-    if (dateFilter === '7d') {
-      params.set(
-        'from',
-        new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-      );
-    } else if (dateFilter === '30d') {
-      params.set(
-        'from',
-        new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-      );
-    }
-    if (cursor) params.set('cursor', cursor);
-
-    try {
       const res = await fetch(`/api/reports?${params.toString()}`);
       const json = await res.json();
-      if (!res.ok) {
-        setFetchError(json.error ?? 'Failed to load reports.');
-        setLoadState('error');
-        return;
-      }
-      const incoming: Report[] = (
-        (json.data?.reports ?? []) as Record<string, unknown>[]
-      ).map(mapReport);
-      setNextCursor(json.data?.next_cursor ?? null);
+      if (!res.ok) throw new Error(json.error ?? 'Failed to load reports.');
 
-      if (reset) {
-        setReportGroups(groupByDay(incoming));
-      } else {
-        setReportGroups((prev) => {
-          const all = prev.flatMap((g) => g.items).concat(incoming);
-          return groupByDay(all);
-        });
-      }
-      setLoadState('ready');
-    } catch {
-      setFetchError('Something went wrong. Check your connection.');
-      setLoadState('error');
-    }
-  };
+      return {
+        reports: ((json.data?.reports ?? []) as Record<string, unknown>[]).map(
+          mapReport
+        ),
+        nextCursor: (json.data?.next_cursor as string | null) ?? null,
+      };
+    },
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    staleTime: 5 * 60_000,
+  });
 
-  useEffect(() => {
-    fetchReports(true);
-  }, [dateFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+  const allReports = reportsData?.pages.flatMap((p) => p.reports) ?? [];
+  const reportGroups = groupByDay(allReports);
 
-  // Load more
+  // Shifts query — fetches only when the generate dialog is open
 
-  const handleLoadMore = async () => {
-    if (!nextCursor) return;
-    setLoadingMore(true);
-    await fetchReports(false, nextCursor);
-    setLoadingMore(false);
-  };
-
-  // Fetch shifts (for generate sheet)
-
-  const fetchShifts = async () => {
-    const supabase = createBrowserClient();
-    const { data } = await supabase
-      .from('shifts')
-      .select('id, shift_number, started_at')
-      .order('started_at', { ascending: false })
-      .limit(20);
-
-    setShifts(
-      (data ?? []).map((s) => ({
+  const { data: shifts = [] } = useQuery<ShiftOption[]>({
+    queryKey: ['cso', 'shifts'],
+    queryFn: async () => {
+      const supabase = createBrowserClient();
+      const { data } = await supabase
+        .from('shifts')
+        .select('id, shift_number, started_at')
+        .order('started_at', { ascending: false })
+        .limit(20);
+      return (data ?? []).map((s) => ({
         id: s.id,
         label: `Shift ${s.shift_number} — ${formatDate(s.started_at)}`,
-      }))
-    );
-  };
+      }));
+    },
+    enabled: generateOpen,
+    staleTime: 5 * 60_000,
+  });
+
+  // Generate report
 
   const handleOpenGenerate = () => {
     setGenerateOpen(true);
     setSelectedShiftId('');
     setGenerateError(null);
     setGeneratedReportId(null);
-    fetchShifts();
   };
-
-  // Generate report
 
   const handleGenerate = async () => {
     if (!selectedShiftId) return;
@@ -262,7 +239,7 @@ export default function ShiftReportsPage() {
         return;
       }
       setGeneratedReportId(json.data?.report_id ?? null);
-      fetchReports(true);
+      refetchReports();
     } catch {
       setGenerateError('Something went wrong. Check your connection.');
     } finally {
@@ -359,7 +336,7 @@ export default function ShiftReportsPage() {
       </div>
 
       {/* Loading */}
-      {loadState === 'loading' && (
+      {reportsLoading && (
         <div className="flex flex-col gap-4" aria-busy="true">
           {[0, 1, 2].map((i) => (
             <Skeleton key={i} className="h-28 rounded-lg" />
@@ -368,7 +345,7 @@ export default function ShiftReportsPage() {
       )}
 
       {/* Error */}
-      {loadState === 'error' && (
+      {reportsIsError && (
         <div
           className="rounded-lg border border-destructive/30 bg-destructive/5 p-4"
           role="alert"
@@ -376,14 +353,16 @@ export default function ShiftReportsPage() {
           <p className="text-sm font-medium text-destructive">
             Failed to load reports
           </p>
-          {fetchError && (
-            <p className="mt-1 text-xs text-destructive/80">{fetchError}</p>
+          {reportsError instanceof Error && (
+            <p className="mt-1 text-xs text-destructive/80">
+              {reportsError.message}
+            </p>
           )}
           <Button
             variant="outline"
             size="sm"
             className="mt-3"
-            onClick={() => fetchReports(true)}
+            onClick={() => refetchReports()}
           >
             Retry
           </Button>
@@ -391,7 +370,7 @@ export default function ShiftReportsPage() {
       )}
 
       {/* Content */}
-      {loadState === 'ready' && (
+      {!reportsLoading && !reportsIsError && (
         <>
           {reportGroups.length === 0 ? (
             <Empty className="border border-border bg-card">
@@ -495,15 +474,15 @@ export default function ShiftReportsPage() {
             </div>
           )}
 
-          {nextCursor && (
+          {hasNextPage && (
             <div className="flex justify-center">
               <Button
                 variant="outline"
-                onClick={handleLoadMore}
-                disabled={loadingMore}
-                aria-busy={loadingMore}
+                onClick={() => fetchNextPage()}
+                disabled={isFetchingNextPage}
+                aria-busy={isFetchingNextPage}
               >
-                {loadingMore ? 'Loading…' : 'Load more'}
+                {isFetchingNextPage ? 'Loading…' : 'Load more'}
               </Button>
             </div>
           )}
