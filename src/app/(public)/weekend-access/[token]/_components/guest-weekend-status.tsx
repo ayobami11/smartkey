@@ -8,6 +8,7 @@ import {
   ClipboardCopyIcon,
   ClockIcon,
   KeyRoundIcon,
+  MapPinIcon,
   RefreshCwIcon,
   XCircleIcon,
 } from 'lucide-react';
@@ -32,6 +33,7 @@ type GuestStatusData = {
   status: GuestRequestStatus;
   requested_for: string;
   return_deadline: string | null;
+  requested_room: string | null;
   key: { code: string; room_name: string } | null;
   code: string | null;
   code_expires_at: string | null;
@@ -269,7 +271,10 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
           title="Awaiting HOD authorisation"
           body={`Thanks, ${firstName}. The Head of Department will review your request and the letter you uploaded. You'll be notified by email when they decide.`}
         />
-        <RequestMeta requestedFor={data.requested_for} />
+        <RequestMeta
+          requestedFor={data.requested_for}
+          requestedRoom={data.requested_room}
+        />
       </Shell>
     );
   }
@@ -405,7 +410,10 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
             </Button>
           </div>
         ) : (
-          <RequestMeta requestedFor={data.requested_for} />
+          <RequestMeta
+            requestedFor={data.requested_for}
+            requestedRoom={data.requested_room}
+          />
         )}
       </Shell>
     );
@@ -560,11 +568,26 @@ const StatusCard = ({
   );
 };
 
-const RequestMeta = ({ requestedFor }: { requestedFor: string }) => (
-  <p className="flex items-center justify-center gap-1.5 text-sm text-muted-foreground">
-    <CalendarClockIcon className="size-4" aria-hidden="true" />
-    {formatDate(requestedFor)}
-  </p>
+const RequestMeta = ({
+  requestedFor,
+  requestedRoom,
+}: {
+  requestedFor: string;
+  requestedRoom?: string | null;
+}) => (
+  <div className="flex flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
+    <p className="flex items-center gap-1.5">
+      <CalendarClockIcon className="size-4" aria-hidden="true" />
+      {formatDate(requestedFor)}
+    </p>
+    {requestedRoom && (
+      <p className="flex items-center gap-1.5 text-xs">
+        <MapPinIcon className="size-3.5" aria-hidden="true" />
+        Requested room:{' '}
+        <span className="font-semibold text-foreground">{requestedRoom}</span>
+      </p>
+    )}
+  </div>
 );
 
 const Shell = ({

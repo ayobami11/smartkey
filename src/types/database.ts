@@ -394,6 +394,7 @@ export type Database = {
           letter_url: string | null;
           requested_department_id: string | null;
           requested_for: string;
+          requested_room: string | null;
           requester_id: string | null;
           return_code: string | null;
           return_code_expires_at: string | null;
@@ -418,6 +419,7 @@ export type Database = {
           letter_url?: string | null;
           requested_department_id?: string | null;
           requested_for: string;
+          requested_room?: string | null;
           requester_id?: string | null;
           return_code?: string | null;
           return_code_expires_at?: string | null;
@@ -442,6 +444,7 @@ export type Database = {
           letter_url?: string | null;
           requested_department_id?: string | null;
           requested_for?: string;
+          requested_room?: string | null;
           requester_id?: string | null;
           return_code?: string | null;
           return_code_expires_at?: string | null;

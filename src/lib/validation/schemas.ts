@@ -112,9 +112,9 @@ export const weekendRequestFormSchema = z.object({
 /** Allowed government / institutional ID document types a guest may declare. */
 export const ID_DOCUMENT_TYPES = [
   'Staff ID',
+  'Student ID',
   'National ID (NIN)',
   "Driver's licence",
-  'International passport',
 ] as const;
 
 /**
@@ -135,6 +135,10 @@ export const guestWeekendRequestFormSchema = z.object({
     .string()
     .trim()
     .min(1, 'Enter the number on your ID document.'),
+  requested_room: z
+    .string()
+    .trim()
+    .min(1, 'Enter the name or number of the room you need access to.'),
   department_id: z.string().min(1, 'Select the department you are visiting.'),
   weekend_date: z
     .string()

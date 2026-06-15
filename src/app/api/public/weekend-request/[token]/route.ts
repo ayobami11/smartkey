@@ -31,6 +31,7 @@ export const GET = async (
       return_deadline,
       code,
       code_expires_at,
+      requested_room,
       keys ( code, room_name ),
       guest_requesters ( full_name )
     `
@@ -62,6 +63,7 @@ export const GET = async (
       status: data.status,
       requested_for: data.requested_for,
       return_deadline: data.return_deadline,
+      requested_room: data.requested_room ?? null,
       full_name: data.guest_requesters?.full_name ?? null,
       key: data.keys
         ? { code: data.keys.code, room_name: data.keys.room_name }

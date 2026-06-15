@@ -31,6 +31,7 @@ const fieldsSchema = z.object({
   phone: z.string().trim().max(50).optional(),
   id_document_type: z.string().trim().min(1).max(100),
   id_document_number: z.string().trim().min(1).max(100),
+  requested_room: z.string().trim().min(1).max(200),
   department_id: z.uuid(),
   weekend_date: z.iso.date(),
   return_deadline: z.iso.datetime({ offset: true }),
@@ -66,6 +67,7 @@ export const POST = async (request: NextRequest) => {
     phone: formData.get('phone') ?? undefined,
     id_document_type: formData.get('id_document_type'),
     id_document_number: formData.get('id_document_number'),
+    requested_room: formData.get('requested_room'),
     department_id: formData.get('department_id'),
     weekend_date: formData.get('weekend_date'),
     return_deadline: formData.get('return_deadline'),
@@ -146,6 +148,7 @@ export const POST = async (request: NextRequest) => {
       p_weekend_date: parsed.data.weekend_date,
       p_return_deadline: parsed.data.return_deadline,
       p_letter_url: letterUrlData.publicUrl,
+      p_requested_room: parsed.data.requested_room,
     }
   );
 

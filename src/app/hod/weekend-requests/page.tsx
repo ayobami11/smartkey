@@ -11,6 +11,7 @@ import {
   IdCardIcon,
   InboxIcon,
   KeyRoundIcon,
+  MapPinIcon,
   UserRoundIcon,
   XIcon,
 } from 'lucide-react';
@@ -83,6 +84,7 @@ type PendingRequest = {
   type: 'WEEKDAY' | 'WEEKEND';
   risk_tier: string;
   letter_url: string | null;
+  requested_room: string | null;
   requested_department_id: string | null;
 };
 
@@ -562,6 +564,20 @@ export default function WeekendRequestsPage() {
                         No key assigned yet. Choose one below to authorise this
                         request.
                       </p>
+                    )}
+                    {selected.requested_room && (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <MapPinIcon
+                          className="size-3.5 shrink-0"
+                          aria-hidden="true"
+                        />
+                        <span>
+                          Requested Room:{' '}
+                          <span className="font-medium text-foreground">
+                            {selected.requested_room}
+                          </span>
+                        </span>
+                      </div>
                     )}
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <CalendarIcon

@@ -64,6 +64,7 @@ export const GuestWeekendRequestForm = ({
       phone: '',
       id_document_type: undefined,
       id_document_number: '',
+      requested_room: '',
       department_id: '',
       weekend_date: '',
     },
@@ -111,6 +112,7 @@ export const GuestWeekendRequestForm = ({
     if (values.phone) formData.append('phone', values.phone);
     formData.append('id_document_type', values.id_document_type);
     formData.append('id_document_number', values.id_document_number);
+    formData.append('requested_room', values.requested_room);
     formData.append('department_id', values.department_id);
     formData.append('weekend_date', values.weekend_date);
     formData.append(
@@ -288,6 +290,30 @@ export const GuestWeekendRequestForm = ({
               aria-invalid={fieldState.invalid}
               {...field}
             />
+            {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+          </Field>
+        )}
+      />
+
+      <Controller
+        name="requested_room"
+        control={form.control}
+        render={({ field, fieldState }) => (
+          <Field data-invalid={fieldState.invalid}>
+            <FieldLabel htmlFor="guest-requested-room">
+              Requested Room
+            </FieldLabel>
+            <Input
+              id="guest-requested-room"
+              placeholder="e.g. Lab 102, Server Room"
+              aria-invalid={fieldState.invalid}
+              {...field}
+            />
+            {!fieldState.error && (
+              <p className="text-xs text-muted-foreground">
+                Enter the name or number of the room you need access to.
+              </p>
+            )}
             {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
           </Field>
         )}
