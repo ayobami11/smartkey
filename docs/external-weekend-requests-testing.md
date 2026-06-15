@@ -45,7 +45,7 @@ begin
   from public.create_guest_weekend_request(
     'Smoke Test','smoke@example.com','08000000000','National ID','NID-1',
     '10000000-0000-4000-8000-000000000002', current_date,
-    now() + interval '8 hours', 'weekend-letters/smoke.png'
+    now() + interval '8 hours', 'weekend-letters/smoke.png', 'Lab 102'
   );
 
   -- 2. HOD approves and assigns a key in their department
@@ -90,7 +90,7 @@ No error raised = pass (the `assert`s throw on failure).
 select public.create_guest_weekend_request(
   'Early Test','early@example.com',null,'National ID','NID-2',
   '10000000-0000-4000-8000-000000000002', current_date + 5,
-  now() + interval '8 hours', 'weekend-letters/early.png'
+  now() + interval '8 hours', 'weekend-letters/early.png', 'Lab 102'
 );
 -- grab the access_token from the result, approve it, then:
 --   select public.generate_guest_weekend_code('<token>');
@@ -107,8 +107,9 @@ select public.create_guest_weekend_request(
 1. Open an **incognito window** (prove no session is needed) → http://localhost:3000.
 2. From the landing page or `/login`, click **"Request weekend access"** → `/weekend-access`.
 3. Fill the form: name, email (use one you can open), optional phone, ID document type +
-   number, **department** (pick the HOD's department), **weekend date** (an upcoming
-   Sat/Sun), and **upload a letter** (any small PNG/JPG/PDF ≤ 5 MB).
+   number, **Requested Room** (enter a room name/number like "Lab 102"), **department**
+   (pick the HOD's department), **weekend date** (an upcoming Sat/Sun), and **upload a
+   letter** (any small PNG/JPG/PDF ≤ 5 MB).
 4. Submit. Expect a **persistent confirmation card** with a status link and a "check your
    email" note, then a redirect to `/weekend-access/<token>` showing **"Awaiting HOD
    authorisation"** (status `PENDING_HOD`). The status email should also arrive.
@@ -117,8 +118,8 @@ select public.create_guest_weekend_request(
 
 1. New normal window → log in as the **HOD** (`tunwaseayobami11@gmail.com`).
 2. Go to `/hod/weekend-requests`. The new request appears flagged **"External"** with the
-   guest's name, email, ID type + number, and a **"View authorisation letter"** button
-   (opens a signed URL in a new tab).
+   guest's name, email, ID type + number, the **Requested Room** name/number, and a
+   **"View authorisation letter"** button (opens a signed URL in a new tab).
 3. Pick a **key** from the department in the key selector — the **Approve** button stays
    disabled until a key is chosen. Approve.
 4. Back on the guest's `/weekend-access/<token>` page, refresh (focus or the Refresh
@@ -180,7 +181,7 @@ select public.create_guest_weekend_request(
   set local role anon;
   select public.create_guest_weekend_request(
     'x','x@x.com',null,'t','n','10000000-0000-4000-8000-000000000002',
-    current_date, now(), 'weekend-letters/x.png'
+    current_date, now(), 'weekend-letters/x.png', 'Lab 102'
   );
   reset role;
   ```
