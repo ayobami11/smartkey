@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { CalendarIcon, HistoryIcon, KeyRoundIcon } from 'lucide-react';
+import { CalendarIcon, HistoryIcon } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -47,15 +47,36 @@ const STATUS_CONFIG: Record<
   {
     label: string;
     variant: 'default' | 'secondary' | 'destructive' | 'outline';
+    stripe: string;
   }
 > = {
-  CODE_ISSUED: { label: 'Code issued', variant: 'secondary' },
-  KEY_ISSUED: { label: 'Key issued', variant: 'default' },
-  KEY_RETURNED: { label: 'Returned', variant: 'outline' },
-  EXPIRED: { label: 'Expired', variant: 'secondary' },
-  CANCELLED: { label: 'Cancelled', variant: 'secondary' },
-  DECLINED: { label: 'Declined', variant: 'destructive' },
-  PENDING_HOD: { label: 'Pending HOD', variant: 'secondary' },
+  CODE_ISSUED: {
+    label: 'Code issued',
+    variant: 'secondary',
+    stripe: 'bg-amber-400',
+  },
+  KEY_ISSUED: { label: 'Key issued', variant: 'default', stripe: 'bg-primary' },
+  KEY_RETURNED: {
+    label: 'Returned',
+    variant: 'outline',
+    stripe: 'bg-emerald-500',
+  },
+  EXPIRED: { label: 'Expired', variant: 'secondary', stripe: 'bg-slate-400' },
+  CANCELLED: {
+    label: 'Cancelled',
+    variant: 'secondary',
+    stripe: 'bg-slate-400',
+  },
+  DECLINED: {
+    label: 'Declined',
+    variant: 'destructive',
+    stripe: 'bg-destructive',
+  },
+  PENDING_HOD: {
+    label: 'Pending HOD',
+    variant: 'secondary',
+    stripe: 'bg-amber-400',
+  },
 };
 
 const formatDate = (iso: string) =>
@@ -68,20 +89,15 @@ const formatDate = (iso: string) =>
 // Skeleton rows
 
 const HistorySkeleton = () => (
-  <ul className="divide-y" aria-busy="true" aria-label="Loading history">
+  <div
+    className="flex flex-col gap-3"
+    aria-busy="true"
+    aria-label="Loading history"
+  >
     {Array.from({ length: 5 }).map((_, i) => (
-      <li key={i} className="flex items-center justify-between gap-4 py-4">
-        <div className="space-y-1.5">
-          <Skeleton className="h-4 w-32" />
-          <Skeleton className="h-3 w-24" />
-        </div>
-        <div className="flex items-center gap-2">
-          <Skeleton className="h-5 w-16 rounded-full" />
-          <Skeleton className="h-5 w-20 rounded-full" />
-        </div>
-      </li>
+      <Skeleton key={i} className="h-18 rounded-lg" />
     ))}
-  </ul>
+  </div>
 );
 
 // Component
@@ -136,17 +152,15 @@ export default function RequesterHistoryPage() {
 
   // Render
 
-  if (loading) {
-    return (
-      <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-        <HistorySkeleton />
-      </div>
-    );
-  }
+  return (
+    <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
+      <h2 className="text-sm font-semibold text-foreground">Request history</h2>
 
-  if (error) {
-    return (
-      <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
+      {/* Loading */}
+      {loading && <HistorySkeleton />}
+
+      {/* Error */}
+      {!loading && error && (
         <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4">
           <p className="text-sm font-medium text-destructive">
             Failed to load history
@@ -171,13 +185,10 @@ export default function RequesterHistoryPage() {
             Try again
           </Button>
         </div>
-      </div>
-    );
-  }
+      )}
 
-  if (requests.length === 0) {
-    return (
-      <div className="flex flex-1 flex-col items-center justify-center p-4 pt-0">
+      {/* Empty */}
+      {!loading && !error && requests.length === 0 && (
         <Empty className="border border-border bg-card">
           <EmptyMedia variant="icon">
             <HistoryIcon
@@ -193,84 +204,81 @@ export default function RequesterHistoryPage() {
             </EmptyDescription>
           </EmptyContent>
         </Empty>
-      </div>
-    );
-  }
+      )}
 
-  return (
-    <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-      <ul className="divide-y rounded-lg border" aria-label="Request history">
-        {requests.map((req) => {
-          const statusCfg = STATUS_CONFIG[req.status] ?? {
-            label: req.status,
-            variant: 'secondary' as const,
-          };
+      {/* Content */}
+      {!loading && !error && requests.length > 0 && (
+        <>
+          <ul className="flex flex-col gap-3" aria-label="Request history">
+            {requests.map((req) => {
+              const statusCfg = STATUS_CONFIG[req.status] ?? {
+                label: req.status,
+                variant: 'secondary' as const,
+                stripe: 'bg-slate-400',
+              };
 
-          return (
-            <li
-              key={req.id}
-              className="flex items-center justify-between gap-3 px-4 py-3"
-            >
-              {/* Left: date + key */}
-              <div className="min-w-0">
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <CalendarIcon
-                    className="size-3 shrink-0"
+              return (
+                <li
+                  key={req.id}
+                  className="flex overflow-hidden rounded-lg border border-border bg-card shadow-[0_2px_4px_rgba(15,23,42,0.06)]"
+                >
+                  <div
+                    className={`w-1 shrink-0 ${statusCfg.stripe}`}
                     aria-hidden="true"
                   />
-                  <span>{formatDate(req.created_at)}</span>
-                </div>
-                {req.key ? (
-                  <div className="mt-0.5 flex items-center gap-1.5">
-                    <KeyRoundIcon
-                      className="size-3 shrink-0 text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                    <span className="truncate font-mono text-sm font-medium">
-                      {req.key.code}
-                    </span>
-                    <span className="hidden truncate text-xs text-muted-foreground sm:block">
-                      · {req.key.room_name}
-                    </span>
+                  <div className="flex flex-1 items-center gap-3 p-4">
+                    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                      {/* Line 1: key code + status badge */}
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-sm font-medium text-foreground">
+                          {req.key?.code ?? '—'}
+                        </span>
+                        <Badge
+                          variant={statusCfg.variant}
+                          aria-label={`Status: ${statusCfg.label}`}
+                          className="text-xs"
+                        >
+                          {statusCfg.label}
+                        </Badge>
+                      </div>
+                      {/* Line 2: room name */}
+                      <p className="truncate text-xs text-muted-foreground">
+                        {req.key?.room_name ?? 'Key unavailable'}
+                      </p>
+                      {/* Line 3: date */}
+                      <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <CalendarIcon
+                          className="size-3 shrink-0"
+                          aria-hidden="true"
+                        />
+                        {formatDate(req.created_at)}
+                      </p>
+                    </div>
+                    {/* Right: type badge */}
+                    <Badge variant="outline" className="shrink-0 text-xs">
+                      {req.type === 'WEEKDAY' ? 'Weekday' : 'Weekend'}
+                    </Badge>
                   </div>
-                ) : (
-                  <p className="mt-0.5 text-sm text-muted-foreground">
-                    Key unavailable
-                  </p>
-                )}
-              </div>
+                </li>
+              );
+            })}
+          </ul>
 
-              {/* Right: type + status badges */}
-              <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-                <Badge variant="outline" className="text-xs">
-                  {req.type === 'WEEKDAY' ? 'Weekday' : 'Weekend'}
-                </Badge>
-                <Badge
-                  variant={statusCfg.variant}
-                  aria-label={`Status: ${statusCfg.label}`}
-                  className="text-xs"
-                >
-                  {statusCfg.label}
-                </Badge>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-
-      {/* Load more */}
-      {nextCursor && (
-        <div className="flex justify-center">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleLoadMore}
-            disabled={loadingMore}
-            aria-busy={loadingMore}
-          >
-            {loadingMore ? 'Loading…' : 'Load more'}
-          </Button>
-        </div>
+          {/* Load more */}
+          {nextCursor && (
+            <div className="flex justify-center">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleLoadMore}
+                disabled={loadingMore}
+                aria-busy={loadingMore}
+              >
+                {loadingMore ? 'Loading…' : 'Load more'}
+              </Button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

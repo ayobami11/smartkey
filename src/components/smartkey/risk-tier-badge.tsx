@@ -46,19 +46,19 @@ const RiskTierBadge = ({ tier, factors }: RiskTierBadgeProps) => {
   const triggerButton = (
     <button
       type="button"
-      className="mt-1 cursor-pointer text-xs text-muted-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+      className="cursor-pointer text-xs text-muted-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
     >
       View factors
     </button>
   );
 
   return (
-    <div className="inline-flex flex-col items-start gap-1">
+    <div className="inline-flex items-center gap-1.5">
       <span
         aria-label={`${tier.toLowerCase()} risk`}
-        className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium ${badgeClass}`}
+        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${badgeClass}`}
       >
-        <Icon size={16} strokeWidth={2} aria-hidden="true" />
+        <Icon size={12} strokeWidth={2} aria-hidden="true" />
         {label}
       </span>
       {factors.length > 0 && (

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useConnectionStatus } from '@/hooks/useConnectionStatus';
 import { useRouter } from 'next/navigation';
-import { CalendarIcon, InboxIcon, KeyRoundIcon } from 'lucide-react';
+import { InboxIcon, KeyRoundIcon } from 'lucide-react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
@@ -24,22 +24,7 @@ import {
 } from '@/components/ui/empty';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Textarea } from '@/components/ui/textarea';
 import {
   Tooltip,
   TooltipContent,
@@ -48,9 +33,7 @@ import {
 import { createBrowserClient } from '@/lib/supabase/client';
 import {
   weekdayRequestFormSchema,
-  weekendRequestFormSchema,
   type WeekdayRequestFormInput,
-  type WeekendRequestFormInput,
 } from '@/lib/validation/schemas';
 
 // Types
@@ -65,12 +48,7 @@ type AuthorisedKey = {
   };
 };
 
-type RequestStep =
-  | 'weekday_form'
-  | 'weekend_form'
-  | 'submitting'
-  | 'pending_hod'
-  | 'error';
+type RequestStep = 'weekday_form' | 'submitting' | 'error';
 
 // Helpers
 
@@ -90,54 +68,6 @@ const zoneLabel = (zone: string) =>
 const zoneStripe = (zone: string) =>
   zone === 'NEW_SENATE' ? 'bg-primary' : 'bg-blue-500';
 
-// KeyTile
-
-const KeyTile = ({
-  authorised,
-  onClick,
-}: {
-  authorised: AuthorisedKey;
-  onClick: () => void;
-}) => {
-  const { key } = authorised;
-  const retired = key.status === 'RETIRED';
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={retired}
-      aria-label={`Request key ${key.code} — ${key.room_name}`}
-      className={`group relative flex flex-col overflow-hidden rounded-lg border border-border bg-card text-left shadow-[0_2px_4px_rgba(15,23,42,0.06)] transition-shadow ${
-        retired
-          ? 'cursor-not-allowed opacity-50'
-          : 'cursor-pointer hover:shadow-[0_4px_8px_rgba(15,23,42,0.08)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring'
-      }`}
-    >
-      {/* Zone colour stripe at top */}
-      <div
-        className={`h-1 w-full ${zoneStripe(key.zone)}`}
-        aria-hidden="true"
-      />
-      <div className="flex flex-col gap-1 p-4">
-        <span className="text-xs font-medium text-muted-foreground">
-          {zoneLabel(key.zone)}
-        </span>
-        <span className="truncate text-sm font-medium text-foreground">
-          {key.room_name}
-        </span>
-        <span className="font-mono text-xs text-muted-foreground">
-          {key.code}
-        </span>
-        {retired && (
-          <span className="mt-1 w-fit rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-            Retired
-          </span>
-        )}
-      </div>
-    </button>
-  );
-};
-
 // Component
 
 export const AuthorizedKeys = () => {
@@ -149,9 +79,8 @@ export const AuthorizedKeys = () => {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
 
-  // Dialog / Sheet state
+  // Dialog state
   const [weekdayOpen, setWeekdayOpen] = useState(false);
-  const [weekendOpen, setWeekendOpen] = useState(false);
   const [step, setStep] = useState<RequestStep>('weekday_form');
   const [selectedKeyId, setSelectedKeyId] = useState<string>('');
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -159,11 +88,6 @@ export const AuthorizedKeys = () => {
   const weekdayForm = useForm<WeekdayRequestFormInput>({
     resolver: zodResolver(weekdayRequestFormSchema),
     defaultValues: { return_deadline: defaultReturnDeadline() },
-  });
-
-  const weekendForm = useForm<WeekendRequestFormInput>({
-    resolver: zodResolver(weekendRequestFormSchema),
-    defaultValues: { key_id: '', weekend_date: '', description: '' },
   });
 
   // Fetch authorized keys
@@ -214,28 +138,12 @@ export const AuthorizedKeys = () => {
     setWeekdayOpen(true);
   };
 
-  const openWeekendSheet = () => {
-    const firstActiveKeyId =
-      keys.find((k) => k.key.status !== 'RETIRED')?.key.id ?? '';
-    setSelectedKeyId(firstActiveKeyId);
-    weekendForm.reset({
-      key_id: firstActiveKeyId,
-      weekend_date: '',
-      description: '',
-    });
-    setSubmitError(null);
-    setStep('weekend_form');
-    setWeekendOpen(true);
-  };
-
   const resetSheet = () => {
     setWeekdayOpen(false);
-    setWeekendOpen(false);
     setSelectedKeyId('');
     weekdayForm.reset();
     setSubmitError(null);
     setStep('weekday_form');
-    weekendForm.reset();
   };
 
   // Submit weekday request
@@ -282,63 +190,25 @@ export const AuthorizedKeys = () => {
     }
   };
 
-  // Submit weekend request
-
-  const handleWeekendSubmit = async (values: WeekendRequestFormInput) => {
-    setStep('submitting');
-    setSubmitError(null);
-    try {
-      const res = await fetch('/api/requests/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          key_id: values.key_id,
-          type: 'WEEKEND',
-          return_deadline: new Date(
-            `${values.weekend_date}T23:59:00`
-          ).toISOString(),
-          weekend_date: values.weekend_date,
-        }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setSubmitError(
-          (json as { error?: string }).error ?? 'Failed to submit request.'
-        );
-        setStep('weekend_form');
-        return;
-      }
-      const data = (json as { data?: { request_id: string } }).data;
-      if (!data) {
-        setSubmitError('Unexpected server response. Please try again.');
-        setStep('weekend_form');
-        return;
-      }
-      setStep('pending_hod');
-    } catch {
-      setSubmitError('Network error. Check your connection and try again.');
-      setStep('weekend_form');
-    }
-  };
-
   // Derived values
 
   const selectedKey = keys.find((k) => k.key.id === selectedKeyId)?.key;
-  const activeKeys = keys.filter((k) => k.key.status !== 'RETIRED');
 
   // Render
 
   return (
     <section className="flex flex-col gap-4">
+      <h2 className="text-sm font-semibold text-foreground">Authorised keys</h2>
+
       {/* Loading */}
       {loading && (
         <div
-          className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4"
+          className="flex flex-col gap-3"
           aria-busy="true"
           aria-label="Loading your keys"
         >
-          {[0, 1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-28 rounded-lg" />
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="h-[72px] rounded-lg" />
           ))}
         </div>
       )}
@@ -383,7 +253,7 @@ export const AuthorizedKeys = () => {
       )}
 
       {/* Conflict / submit error (shown outside the dialog after it closes) */}
-      {!weekdayOpen && !weekendOpen && submitError && (
+      {!weekdayOpen && submitError && (
         <div
           className="flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100"
           role="alert"
@@ -400,36 +270,66 @@ export const AuthorizedKeys = () => {
         </div>
       )}
 
-      {/* Key grid + weekend CTA */}
+      {/* Key grid */}
       {!loading && !fetchError && keys.length > 0 && (
-        <>
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-foreground">
-              Your authorised keys
-            </h2>
-            {activeKeys.length > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={openWeekendSheet}
-                aria-label="Request weekend access"
+        <div className="flex flex-col gap-3">
+          {keys.map((authorised) => {
+            const { key } = authorised;
+            const retired = key.status === 'RETIRED';
+            return (
+              <div
+                key={key.id}
+                className="flex overflow-hidden rounded-lg border border-border bg-card shadow-[0_2px_4px_rgba(15,23,42,0.06)]"
               >
-                <CalendarIcon className="size-3.5" aria-hidden="true" />
-                Weekend access
-              </Button>
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {keys.map((authorised) => (
-              <KeyTile
-                key={authorised.key.id}
-                authorised={authorised}
-                onClick={() => openWeekdaySheet(authorised.key.id)}
-              />
-            ))}
-          </div>
-        </>
+                <div
+                  className={`w-1 shrink-0 ${zoneStripe(key.zone)}`}
+                  aria-hidden="true"
+                />
+                <div className="flex flex-1 items-center gap-3 p-4">
+                  <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-sm font-medium text-foreground">
+                        {key.code}
+                      </span>
+                      {retired && (
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                          Retired
+                        </span>
+                      )}
+                    </div>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {key.room_name}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {zoneLabel(key.zone)}
+                    </p>
+                  </div>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openWeekdaySheet(key.id)}
+                          disabled={retired || isOffline}
+                          aria-label={`Request key ${key.code} — ${key.room_name}`}
+                          className={`shrink-0${isOffline && !retired ? ' pointer-events-none' : ''}`}
+                        >
+                          Request
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    {isOffline && !retired && (
+                      <TooltipContent>
+                        Available again when you reconnect.
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
 
       {/* Weekday Request Dialog */}
@@ -530,216 +430,6 @@ export const AuthorizedKeys = () => {
           )}
         </DialogContent>
       </Dialog>
-
-      {/* Weekend Request Sheet */}
-      <Sheet
-        open={weekendOpen}
-        onOpenChange={(open) => {
-          if (!open) resetSheet();
-        }}
-      >
-        <SheetContent side="bottom" className="flex flex-col gap-0 p-0">
-          <SheetHeader className="border-b border-border p-6">
-            <SheetTitle>Request weekend access</SheetTitle>
-            <SheetDescription>
-              {step === 'pending_hod'
-                ? 'Your HOD will be notified to approve this request.'
-                : 'Select a key, choose a date, and describe your reason.'}
-            </SheetDescription>
-          </SheetHeader>
-
-          <div className="flex flex-1 flex-col overflow-y-auto p-6">
-            {/* Weekend form */}
-            {step === 'weekend_form' && (
-              <form
-                id="weekend-form"
-                onSubmit={weekendForm.handleSubmit(handleWeekendSubmit)}
-                className="flex flex-col gap-5"
-              >
-                {/* Key selector */}
-                <Controller
-                  name="key_id"
-                  control={weekendForm.control}
-                  render={({ field, fieldState }) => (
-                    <Field data-invalid={fieldState.invalid}>
-                      <FieldLabel htmlFor="weekend-key">Key</FieldLabel>
-                      <Select
-                        value={field.value}
-                        onValueChange={(val) => {
-                          field.onChange(val);
-                          setSelectedKeyId(val);
-                        }}
-                      >
-                        <SelectTrigger id="weekend-key">
-                          <SelectValue placeholder="Select a key…" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {activeKeys.map((a) => (
-                            <SelectItem key={a.key.id} value={a.key.id}>
-                              <span className="font-mono">{a.key.code}</span>
-                              <span className="ml-2 text-muted-foreground">
-                                — {a.key.room_name}
-                              </span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {fieldState.invalid && (
-                        <FieldError errors={[fieldState.error]} />
-                      )}
-                    </Field>
-                  )}
-                />
-
-                {/* Weekend date */}
-                <Controller
-                  name="weekend_date"
-                  control={weekendForm.control}
-                  render={({ field, fieldState }) => (
-                    <Field data-invalid={fieldState.invalid}>
-                      <FieldLabel htmlFor="weekend-date">
-                        Weekend date
-                      </FieldLabel>
-                      <Input
-                        id="weekend-date"
-                        type="date"
-                        min={new Date().toISOString().slice(0, 10)}
-                        {...field}
-                      />
-                      {!fieldState.error && (
-                        <p className="text-xs text-muted-foreground">
-                          Must be a Saturday or Sunday.
-                        </p>
-                      )}
-                      {fieldState.invalid && (
-                        <FieldError errors={[fieldState.error]} />
-                      )}
-                    </Field>
-                  )}
-                />
-
-                {/* Description */}
-                <Controller
-                  name="description"
-                  control={weekendForm.control}
-                  render={({ field, fieldState }) => (
-                    <Field data-invalid={fieldState.invalid}>
-                      <FieldLabel htmlFor="weekend-desc">
-                        Reason for access
-                      </FieldLabel>
-                      <Textarea
-                        id="weekend-desc"
-                        placeholder="Describe the work you need to carry out…"
-                        rows={4}
-                        aria-required="true"
-                        className="resize-none"
-                        {...field}
-                      />
-                      {fieldState.invalid && (
-                        <FieldError errors={[fieldState.error]} />
-                      )}
-                    </Field>
-                  )}
-                />
-              </form>
-            )}
-
-            {/* Submitting */}
-            {step === 'submitting' && weekendOpen && (
-              <div className="flex flex-1 items-center justify-center">
-                <p className="text-sm text-muted-foreground">
-                  Submitting request…
-                </p>
-              </div>
-            )}
-
-            {/* Pending HOD approval */}
-            {step === 'pending_hod' && (
-              <div className="flex flex-col items-center gap-4 text-center">
-                <div className="flex size-12 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950/40">
-                  <CalendarIcon
-                    className="size-6 text-amber-600"
-                    aria-hidden="true"
-                  />
-                </div>
-                <div>
-                  <p className="font-medium text-foreground">
-                    Waiting for approval
-                  </p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Your HOD will review and approve or decline this request.
-                    {"You'll"} be notified by email when they decide.
-                  </p>
-                </div>
-
-                {/* Confirmation card */}
-                <div className="w-full rounded-lg border border-amber-200 bg-amber-50 p-4 text-left dark:border-amber-900 dark:bg-amber-950/30">
-                  <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
-                    Weekend request submitted
-                  </p>
-                  {selectedKey && (
-                    <>
-                      <p className="mt-1.5 font-mono text-sm font-medium text-foreground">
-                        {selectedKey.code}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {selectedKey.room_name}
-                      </p>
-                    </>
-                  )}
-                  {weekendForm.getValues('weekend_date') && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {new Date(
-                        `${weekendForm.getValues('weekend_date')}T00:00:00`
-                      ).toLocaleDateString('en-GB', {
-                        weekday: 'long',
-                        day: 'numeric',
-                        month: 'long',
-                        year: 'numeric',
-                      })}
-                    </p>
-                  )}
-                </div>
-
-                <Button className="w-full" onClick={resetSheet}>
-                  Done
-                </Button>
-              </div>
-            )}
-          </div>
-
-          {/* Sticky footer — weekend form submit */}
-          {step === 'weekend_form' && (
-            <div className="border-t border-border p-6 pt-4">
-              {submitError && (
-                <p className="mb-3 text-xs text-destructive" role="alert">
-                  {submitError}
-                </p>
-              )}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="w-full">
-                    <Button
-                      type="submit"
-                      form="weekend-form"
-                      className="w-full"
-                      disabled={isOffline}
-                      style={isOffline ? { pointerEvents: 'none' } : undefined}
-                    >
-                      Submit request
-                    </Button>
-                  </span>
-                </TooltipTrigger>
-                {isOffline && (
-                  <TooltipContent>
-                    Available again when you reconnect.
-                  </TooltipContent>
-                )}
-              </Tooltip>
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
     </section>
   );
 };

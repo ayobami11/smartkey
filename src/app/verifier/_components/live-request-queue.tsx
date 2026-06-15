@@ -324,54 +324,52 @@ export const LiveRequestQueue = () => {
                   aria-hidden="true"
                 />
                 <div className="flex flex-1 items-center gap-3 p-4">
-                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                  <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                     <div className="flex items-center gap-2">
-                      <span className="truncate text-sm font-medium text-foreground">
-                        {req.requester?.full_name ?? '—'}
+                      <span className="font-mono text-sm font-medium text-foreground">
+                        {req.key?.code ?? '—'}
                       </span>
                       <RiskTierBadge
                         tier={req.risk_tier}
                         factors={req.risk_factors}
                       />
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs text-muted-foreground">
-                        {req.key?.code}
-                      </span>
-                      <span className="text-xs text-muted-foreground">·</span>
-                      <span className="text-xs text-muted-foreground">
-                        {req.key?.room_name}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 flex-col items-end gap-2">
-                    <time className="font-mono text-xs text-muted-foreground">
+                    <p className="truncate text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">
+                        Requested by:
+                      </span>{' '}
+                      {req.requester?.full_name ?? '—'}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {req.key?.room_name ?? ''}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
                       {relativeTime(req.created_at)}
-                    </time>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openSheet(req)}
-                            disabled={isOffline}
-                            aria-label={`Issue key for ${req.requester?.full_name ?? 'requester'}`}
-                            className={
-                              isOffline ? 'pointer-events-none' : undefined
-                            }
-                          >
-                            Issue
-                          </Button>
-                        </span>
-                      </TooltipTrigger>
-                      {isOffline && (
-                        <TooltipContent>
-                          Available again when you reconnect.
-                        </TooltipContent>
-                      )}
-                    </Tooltip>
+                    </p>
                   </div>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openSheet(req)}
+                          disabled={isOffline}
+                          aria-label={`Issue key for ${req.requester?.full_name ?? 'requester'}`}
+                          className={
+                            isOffline ? 'pointer-events-none' : undefined
+                          }
+                        >
+                          Issue
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    {isOffline && (
+                      <TooltipContent>
+                        Available again when you reconnect.
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
                 </div>
               </div>
             );

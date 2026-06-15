@@ -6,14 +6,24 @@ import {
   AlertTriangleIcon,
   CalendarIcon,
   CheckCircleIcon,
-  ClockIcon,
+  InboxIcon,
   KeyRoundIcon,
   XIcon,
 } from 'lucide-react';
 
 import { useRealtime } from '@/hooks/useRealtime';
+import { useConnectionStatus } from '@/hooks/useConnectionStatus';
+import { RiskTierBadge } from '@/components/smartkey/risk-tier-badge';
+import type { RiskTier } from '@/lib/ai/risk/types';
 
 import { Button } from '@/components/ui/button';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty';
 import { Label } from '@/components/ui/label';
 import {
   Sheet,
@@ -23,6 +33,11 @@ import {
 } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 // Types
 
@@ -68,6 +83,7 @@ const formatDate = (iso: string) =>
 
 export default function WeekendRequestsPage() {
   const queryClient = useQueryClient();
+  const isOffline = useConnectionStatus() === 'offline';
   const [activeTab, setActiveTab] = useState(0);
   const [selected, setSelected] = useState<PendingRequest | null>(null);
   const [note, setNote] = useState('');
@@ -202,7 +218,7 @@ export default function WeekendRequestsPage() {
       {loading && activeTab === 0 && (
         <div className="flex flex-col gap-3">
           {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-24 rounded-lg" />
+            <Skeleton key={i} className="h-28 rounded-lg" />
           ))}
         </div>
       )}
@@ -231,71 +247,108 @@ export default function WeekendRequestsPage() {
       {!loading && !fetchError && (
         <>
           {activeTab === 0 && visibleRequests.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-lg border border-border bg-card p-12 text-center">
-              <p className="text-sm font-medium text-foreground">
-                No pending requests right now.
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Weekend requests appear here when staff submit them.
-              </p>
+            <div>
+              <Empty className="border border-border bg-card">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <InboxIcon />
+                  </EmptyMedia>
+                  <EmptyTitle>No pending requests</EmptyTitle>
+                  <EmptyDescription>
+                    Weekend requests appear here when staff submit them.
+                  </EmptyDescription>
+                </EmptyHeader>
+              </Empty>
             </div>
           ) : (
             <div className="flex flex-col gap-3">
-              {(activeTab === 0 ? visibleRequests : []).map((req) => (
-                <div
-                  key={req.id}
-                  className="flex flex-col gap-4 rounded-lg border border-border bg-card p-5 shadow-[0_2px_4px_rgba(15,23,42,0.06)] sm:flex-row sm:items-start"
-                >
-                  <div className="flex min-w-0 flex-1 items-start gap-3">
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-semibold text-muted-foreground">
-                      {req.requester.full_name
-                        .split(' ')
-                        .map((n) => n[0])
-                        .join('')
-                        .slice(0, 2)}
-                    </div>
-                    <div className="flex min-w-0 flex-1 flex-col gap-1">
-                      <span className="text-sm font-semibold text-foreground">
-                        {req.requester.full_name}
-                      </span>
-                      <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <KeyRoundIcon
-                            className="size-3.5 text-primary"
-                            aria-hidden="true"
+              {(activeTab === 0 ? visibleRequests : []).map((req) => {
+                const stripeClass =
+                  req.risk_tier === 'HIGH'
+                    ? 'bg-destructive'
+                    : req.risk_tier === 'MEDIUM'
+                      ? 'bg-amber-500'
+                      : 'bg-emerald-500';
+                return (
+                  <div
+                    key={req.id}
+                    className="flex overflow-hidden rounded-lg border border-border bg-card shadow-[0_2px_4px_rgba(15,23,42,0.06)]"
+                  >
+                    <div
+                      className={`w-1 shrink-0 ${stripeClass}`}
+                      aria-hidden="true"
+                    />
+                    <div className="flex flex-1 items-center gap-3 p-4">
+                      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-sm font-medium text-foreground">
+                            {req.key.code}
+                          </span>
+                          <RiskTierBadge
+                            tier={req.risk_tier as RiskTier}
+                            factors={[]}
                           />
-                          <code className="font-mono">{req.key.code}</code> —{' '}
+                          <span className="ml-1 text-xs text-muted-foreground">
+                            &middot; {relativeTime(req.created_at)}
+                          </span>
+                        </div>
+                        <p className="truncate text-xs text-muted-foreground">
                           {req.key.room_name}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <CalendarIcon
-                            className="size-3.5"
-                            aria-hidden="true"
-                          />
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          <span className="font-medium text-foreground">
+                            Requested by:
+                          </span>{' '}
+                          {req.requester.full_name}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          <span className="font-medium text-foreground">
+                            For:
+                          </span>{' '}
                           {formatDate(req.requested_for)}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <ClockIcon className="size-3.5" aria-hidden="true" />
-                          {relativeTime(req.created_at)}
-                        </span>
+                        </p>
                       </div>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setSelected(req)}
+                              disabled={isOffline}
+                              aria-label={`Review weekend request from ${req.requester.full_name}`}
+                              className={
+                                isOffline ? 'pointer-events-none' : undefined
+                              }
+                            >
+                              Review
+                            </Button>
+                          </span>
+                        </TooltipTrigger>
+                        {isOffline && (
+                          <TooltipContent>
+                            Available again when you reconnect.
+                          </TooltipContent>
+                        )}
+                      </Tooltip>
                     </div>
                   </div>
-                  <Button
-                    size="sm"
-                    onClick={() => setSelected(req)}
-                    className="shrink-0"
-                  >
-                    Review
-                  </Button>
-                </div>
-              ))}
+                );
+              })}
 
               {activeTab !== 0 && (
-                <div className="flex flex-col items-center justify-center rounded-lg border border-border bg-card p-12 text-center">
-                  <p className="text-sm text-muted-foreground">
-                    No requests in this view.
-                  </p>
+                <div>
+                  <Empty className="border border-border bg-card">
+                    <EmptyHeader>
+                      <EmptyMedia variant="icon">
+                        <InboxIcon />
+                      </EmptyMedia>
+                      <EmptyTitle>No requests</EmptyTitle>
+                      <EmptyDescription>
+                        No requests in this view yet.
+                      </EmptyDescription>
+                    </EmptyHeader>
+                  </Empty>
                 </div>
               )}
             </div>
