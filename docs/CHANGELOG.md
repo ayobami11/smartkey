@@ -8,6 +8,12 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-06-16 — Guest audit actor_name stored without "(external)" suffix
+
+- **Why**: `_write_audit_guest` callers stored `actor_name` as `'<name> (external)'`. The suffix was display cruft — a guest event is already identified by `actor_id IS NULL` and `payload->>'external' = true`, so the name itself should be the plain guest name. The CSO audit table had a UI band-aid stripping the suffix; this fixes it at the source.
+- `supabase/migrations/20260616130000_guest_audit_drop_external_suffix.sql` (applied to remote): recreates `create_guest_weekend_request`, `generate_guest_weekend_code`, and `expire_guest_request` to pass the bare guest name to `_write_audit_guest`; the `external: true` payload boolean (the real discriminator) is unchanged. No code reads the name suffix for logic. Verified via a rolled-back smoke test: `actor_name` plain, `actor_id`/`actor_role` null, `payload.external = true`.
+- The CSO audit table keeps its `(external)`-stripping fallback as a harmless guard for any rows written by older function versions in other environments.
+
 ### 2026-06-16 — guest_requesters RLS: HOD and VERIFIER read access
 
 - **Why**: `guest_requesters` only had a CSO-all SELECT policy. PostgREST silently nulled the `guest_requesters` join in the HOD pending-requests query, causing "Unknown requester" on the HOD dashboard. The verifier collect route had the same gap for guest key issuance.

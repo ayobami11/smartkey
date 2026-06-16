@@ -154,7 +154,7 @@ An external (non-registered) person who may collect a key for a single weekend. 
 - `event` text (matches `AuditEvent` union in TS)
 - `actor_id` UUID FK profiles nullable (null for guest-initiated events — guests have no profile)
 - `actor_role` enum nullable (denormalised for query performance; null for guest-initiated events)
-- `actor_name` text nullable (denormalised at write time; snapshot of the actor's name; guest-initiated events carry `'<name> (external)'` with null `actor_id`/`actor_role`)
+- `actor_name` text nullable (denormalised at write time; snapshot of the actor's name; guest-initiated events carry the plain guest name with null `actor_id`/`actor_role` — the `external` boolean in `payload` is the discriminator, not the name)
 - `actor_department` text nullable (denormalised at write time; null for non-departmental roles e.g. CSO/Verifier)
 - `target_type` text
 - `target_id` UUID
@@ -183,7 +183,7 @@ These wrap multi-table mutations in transactions and enforce business rules.
 
 Guest analogues of the registered-user weekend flow. All are `SECURITY DEFINER`, key on an unguessable `access_token` instead of `auth.uid()` (guests have no session), and have execute revoked from `anon`/`public` — they are called only from server-side routes via the service-role admin client. `issue_key` is reused unchanged for the desk collection step.
 
-- `_write_audit_guest(event, target_type, target_id, actor_name, payload)` — audit chokepoint for actions with no profile actor. Mirrors `_write_audit` but records `actor_id`/`actor_role` null and a human-readable `actor_name` (e.g. `'Jane Doe (external)'`).
+- `_write_audit_guest(event, target_type, target_id, actor_name, payload)` — audit chokepoint for actions with no profile actor. Mirrors `_write_audit` but records `actor_id`/`actor_role` null and the plain guest `actor_name` (e.g. `'Jane Doe'`); callers set `payload->>'external' = true` as the discriminator.
 - `create_guest_weekend_request(full_name, email, phone, id_type, id_number, department_id, weekend_date, return_deadline, letter_url, requested_room)` — inserts a `guest_requesters` row + a WEEKEND request (`PENDING_HOD`, no code, `access_token` minted), audit `REQUEST_CREATED`. Returns `{request_id, access_token}`.
 - `approve_guest_weekend(request_id, hod_id, key_id, note?)` — validates the chosen key is in the HOD's department, sets `key_id`, creates the `hod_decisions` row, moves the request → APPROVED, audit `HOD_APPROVED`. Granted to `authenticated`. (No signature verification — the HOD reviews the uploaded letter manually.)
 - `generate_guest_weekend_code(access_token)` — on `requested_for = current_date` only, mints a 10-min code → CODE_ISSUED, audit `CODE_ISSUED`. Raises TOO_EARLY before the date.
