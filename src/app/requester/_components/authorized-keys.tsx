@@ -198,7 +198,7 @@ export const AuthorizedKeys = () => {
           aria-label="Loading your keys"
         >
           {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-[72px] rounded-lg" />
+            <Skeleton key={i} className="h-18 rounded-lg" />
           ))}
         </div>
       )}
