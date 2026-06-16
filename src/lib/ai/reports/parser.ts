@@ -13,15 +13,21 @@ const geminiOutputSchema = z.object({
   timeline: z.array(timelineEntrySchema).default([]),
 });
 
-// Parse Gemini's JSON response into { markdown, timeline }. Returns null on any
-// failure (non-JSON, missing fields, wrong shape) so the caller can fall back to
-// the template report rather than persisting a broken body.
+// Parse Gemini's response into { markdown, timeline }. Strips markdown code
+// fences before parsing since Gemini often wraps JSON in ```json blocks even
+// when asked not to. Returns null on any failure so the caller falls back to
+// the template report.
 export const parseGeminiOutput = (
   rawText: string
 ): { markdown: string; timeline: TimelineEntry[] } | null => {
+  const stripped = rawText
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```\s*$/, '')
+    .trim();
+
   let json: unknown;
   try {
-    json = JSON.parse(rawText);
+    json = JSON.parse(stripped);
   } catch {
     return null;
   }
