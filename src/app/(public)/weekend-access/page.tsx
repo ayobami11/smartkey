@@ -57,10 +57,9 @@ export default async function WeekendAccessPage() {
             Request weekend key access
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            For visitors and contractors without a SmartKey account. Submit your
-            details and the Head of Department&apos;s authorisation letter. Once
-            the HOD approves, you will receive a 6-digit code to collect the key
-            at the security desk on the requested day.
+            No SmartKey account needed. Upload your HOD&apos;s authorisation
+            letter — once approved, you&apos;ll get a 6-digit code to collect
+            the key on the day.
           </p>
         </div>
 

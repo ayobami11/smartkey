@@ -160,8 +160,8 @@ export const GuestWeekendRequestForm = ({
           Request submitted
         </h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          Your request is awaiting HOD authorisation. We have emailed you a link
-          to track its status and collect your code. Keep this page bookmarked.
+          We&apos;ve emailed you a link to track your request and collect your
+          code when it&apos;s ready.
         </p>
         <Button
           className="mt-6 w-full"
