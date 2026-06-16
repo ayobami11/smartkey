@@ -17,13 +17,14 @@ import {
 // Types
 
 type RequestStatus =
+  | 'PENDING_HOD'
+  | 'APPROVED'
   | 'CODE_ISSUED'
   | 'KEY_ISSUED'
   | 'KEY_RETURNED'
   | 'EXPIRED'
   | 'CANCELLED'
-  | 'DECLINED'
-  | 'PENDING_HOD';
+  | 'DECLINED';
 
 type RequestType = 'WEEKDAY' | 'WEEKEND';
 
@@ -73,9 +74,14 @@ const STATUS_CONFIG: Record<
     stripe: 'bg-destructive',
   },
   PENDING_HOD: {
-    label: 'Pending HOD',
+    label: 'Pending approval',
     variant: 'secondary',
     stripe: 'bg-amber-400',
+  },
+  APPROVED: {
+    label: 'Approved',
+    variant: 'secondary',
+    stripe: 'bg-emerald-500',
   },
 };
 
