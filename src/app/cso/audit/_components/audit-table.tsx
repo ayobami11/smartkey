@@ -216,7 +216,9 @@ function mapRow(e: Record<string, unknown>): AuditEntry {
   return {
     id: e.id as string,
     type: eventType,
-    actor:
+    // Strip the " (external)" suffix the guest audit writer stores on the
+    // snapshot — it's recorded for the immutable record, not for display.
+    actor: (
       (e.actor_name as string | undefined) ??
       (payload.actor_name as string | undefined) ??
       // Last-resort fallback for legacy rows written before the actor_name
@@ -225,7 +227,8 @@ function mapRow(e: Record<string, unknown>): AuditEntry {
       ((e.actor_profile as { full_name?: string } | null)?.full_name as
         | string
         | undefined) ??
-      'Unknown actor',
+      'Unknown actor'
+    ).replace(/\s*\(external\)\s*$/, ''),
     actorRole: ROLE_LABEL[e.actor_role as string] ?? (e.actor_role as string),
     department:
       (e.actor_department as string | undefined) ??
