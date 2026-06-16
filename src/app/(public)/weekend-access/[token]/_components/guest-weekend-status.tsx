@@ -597,12 +597,10 @@ const Shell = ({
   children: React.ReactNode;
   onRefresh: () => void;
 }) => (
-  <div className="w-full max-w-sm space-y-5">
+  <div className="w-full max-w-sm space-y-5 text-center">
     {children}
     <Button
-      variant="ghost"
       size="sm"
-      className="w-full"
       onClick={onRefresh}
       aria-label="Refresh request status"
     >

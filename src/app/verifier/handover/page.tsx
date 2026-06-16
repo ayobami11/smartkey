@@ -432,7 +432,6 @@ export default function HandoverPage() {
                       onClick={() => submitHandover(false)}
                       disabled={isOffline || submitting}
                       aria-busy={submitting}
-                      className="w-full"
                       style={isOffline ? { pointerEvents: 'none' } : undefined}
                     >
                       {submitting
