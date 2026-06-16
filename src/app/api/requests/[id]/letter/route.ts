@@ -53,10 +53,26 @@ export const GET = async (
     return NextResponse.json(err('Forbidden', 403), { status: 403 });
   }
 
+  // letter_url is stored as a full Supabase Storage public URL; extract the
+  // bucket-relative path that createSignedUrl expects.
+  const bucketMarker = '/weekend-letters/';
+  const markerIdx = req.letter_url.indexOf(bucketMarker);
+  if (markerIdx === -1) {
+    const ref = crypto.randomUUID();
+    logger.error('weekend-letter: malformed letter_url', {
+      ref,
+      letter_url: req.letter_url,
+    });
+    return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
+      status: 500,
+    });
+  }
+  const storagePath = req.letter_url.slice(markerIdx + bucketMarker.length);
+
   const admin = createAdminClient();
   const { data: signed, error: signError } = await admin.storage
     .from('weekend-letters')
-    .createSignedUrl(req.letter_url, SIGNED_URL_TTL_SECONDS);
+    .createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS);
 
   if (signError || !signed) {
     const ref = crypto.randomUUID();

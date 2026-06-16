@@ -497,7 +497,7 @@ export default function WeekendRequestsPage() {
                           className="size-3.5 shrink-0 text-muted-foreground"
                           aria-hidden="true"
                         />
-                        External requester (no SmartKey account)
+                        External requester
                       </div>
                       <div className="flex items-start gap-2 text-xs text-muted-foreground">
                         <IdCardIcon
