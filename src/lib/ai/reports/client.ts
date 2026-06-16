@@ -9,7 +9,7 @@ import type { GeneratedReport, ReportEvent } from './types';
 // Default to the latest stable Flash model. Overridable without a code change
 // via GEMINI_MODEL (e.g. when Google ships a newer release). Server-side only —
 // GEMINI_API_KEY must never be exposed to the browser.
-const MODEL = process.env.GEMINI_MODEL ?? 'gemini-2.0-flash';
+const MODEL = process.env.GEMINI_MODEL ?? 'gemini-3.5-flash';
 
 // Generate a shift report from the shift's audit events. Calls Gemini via the
 // official SDK and falls back to a deterministic template when the key is
