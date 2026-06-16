@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Controller, useForm } from 'react-hook-form';
 import {
   AlertTriangleIcon,
   CalendarIcon,
@@ -24,8 +26,8 @@ import type { RiskTier } from '@/lib/ai/risk/types';
 import { Button } from '@/components/ui/button';
 import {
   Empty,
-  EmptyDescription,
   EmptyHeader,
+  EmptyDescription,
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty';
@@ -51,6 +53,10 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { createBrowserClient } from '@/lib/supabase/client';
+import {
+  hodWeekendDecisionFormSchema,
+  type HodWeekendDecisionFormInput,
+} from '@/lib/validation/schemas';
 
 // Types
 
@@ -127,8 +133,10 @@ export default function WeekendRequestsPage() {
   const connectionStatus = useConnectionStatus();
   const isOffline = connectionStatus === 'offline';
   const [selected, setSelected] = useState<PendingRequest | null>(null);
-  const [note, setNote] = useState('');
-  const [keyId, setKeyId] = useState('');
+  const form = useForm<HodWeekendDecisionFormInput>({
+    resolver: zodResolver(hodWeekendDecisionFormSchema),
+    defaultValues: { note: '', key_id: '', is_guest: false },
+  });
   const [decision, setDecision] = useState<'approved' | 'declined' | null>(
     null
   );
@@ -206,13 +214,13 @@ export default function WeekendRequestsPage() {
 
   const handleSelect = (req: PendingRequest) => {
     setSelected(req);
+    form.reset({ note: '', key_id: '', is_guest: !!req.guest });
     setLetterUrl(null);
   };
 
   const handleClose = () => {
     setSelected(null);
-    setNote('');
-    setKeyId('');
+    form.reset({ note: '', key_id: '', is_guest: false });
     setDecision(null);
     setSubmitError(null);
     setSubmitting(false);
@@ -242,14 +250,12 @@ export default function WeekendRequestsPage() {
     }
   };
 
-  const handleDecision = async (choice: 'APPROVED' | 'DECLINED') => {
+  const handleDecision = async (
+    choice: 'APPROVED' | 'DECLINED',
+    values: HodWeekendDecisionFormInput
+  ) => {
     if (!selected) return;
     const isGuest = !!selected.guest;
-
-    if (choice === 'APPROVED' && isGuest && !keyId) {
-      setSubmitError('Select a key to assign before approving.');
-      return;
-    }
 
     setSubmitting(true);
     setSubmitError(null);
@@ -260,8 +266,10 @@ export default function WeekendRequestsPage() {
         body: JSON.stringify({
           request_id: selected.id,
           decision: choice,
-          note: note.trim() || undefined,
-          ...(choice === 'APPROVED' && isGuest ? { key_id: keyId } : {}),
+          note: values.note?.trim() || undefined,
+          ...(choice === 'APPROVED' && isGuest
+            ? { key_id: values.key_id }
+            : {}),
         }),
       });
       const json = await res.json();
@@ -324,7 +332,7 @@ export default function WeekendRequestsPage() {
 
       {/* Empty */}
       {!loading && !fetchError && visibleRequests.length === 0 && (
-        <Empty className="border border-border bg-card">
+        <Empty className="flex-none border border-border bg-card">
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <InboxIcon />
@@ -592,31 +600,51 @@ export default function WeekendRequestsPage() {
 
                   {/* Key picker — guest requests must have a key chosen */}
                   {selected.guest && (
-                    <div className="flex flex-col gap-2">
-                      <Label htmlFor="assign-key" className="text-xs">
-                        Assign a key
-                      </Label>
-                      <Select value={keyId} onValueChange={setKeyId}>
-                        <SelectTrigger id="assign-key">
-                          <SelectValue placeholder="Select a key from your department…" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {deptKeys.map((k) => (
-                            <SelectItem key={k.id} value={k.id}>
-                              <span className="font-mono">{k.code}</span>
-                              <span className="ml-2 text-muted-foreground">
-                                — {k.room_name}
-                              </span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {deptKeys.length === 0 && (
-                        <p className="text-xs text-muted-foreground">
-                          No keys available in your department.
-                        </p>
+                    <Controller
+                      name="key_id"
+                      control={form.control}
+                      render={({ field, fieldState }) => (
+                        <div className="flex flex-col gap-2">
+                          <Label htmlFor="assign-key" className="text-xs">
+                            Assign a key
+                          </Label>
+                          <Select
+                            value={field.value}
+                            onValueChange={field.onChange}
+                          >
+                            <SelectTrigger
+                              id="assign-key"
+                              aria-invalid={fieldState.invalid}
+                            >
+                              <SelectValue placeholder="Select a key from your department…" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {deptKeys.map((k) => (
+                                <SelectItem key={k.id} value={k.id}>
+                                  <span className="font-mono">{k.code}</span>
+                                  <span className="ml-2 text-muted-foreground">
+                                    — {k.room_name}
+                                  </span>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {deptKeys.length === 0 && (
+                            <p className="text-xs text-muted-foreground">
+                              No keys available in your department.
+                            </p>
+                          )}
+                          {fieldState.invalid && (
+                            <p
+                              className="text-xs text-destructive"
+                              role="alert"
+                            >
+                              {fieldState.error?.message}
+                            </p>
+                          )}
+                        </div>
                       )}
-                    </div>
+                    />
                   )}
 
                   {/* High-risk warning */}
@@ -640,38 +668,47 @@ export default function WeekendRequestsPage() {
                   )}
 
                   {/* Note */}
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="hod-note" className="text-xs">
-                      Note to requester{' '}
-                      <span className="text-muted-foreground">(optional)</span>
-                    </Label>
-                    <Textarea
-                      id="hod-note"
-                      placeholder="Included in the notification email…"
-                      value={note}
-                      onChange={(e) => setNote(e.target.value)}
-                      rows={3}
-                      className="resize-none text-sm"
-                    />
-                  </div>
+                  <Controller
+                    name="note"
+                    control={form.control}
+                    render={({ field }) => (
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="hod-note" className="text-xs">
+                          Note to requester{' '}
+                          <span className="text-muted-foreground">
+                            (optional)
+                          </span>
+                        </Label>
+                        <Textarea
+                          id="hod-note"
+                          placeholder="Included in the notification email…"
+                          rows={3}
+                          className="resize-none text-sm"
+                          {...field}
+                        />
+                      </div>
+                    )}
+                  />
 
                   {/* Decision buttons */}
                   <div className="flex flex-col gap-3 sm:flex-row">
                     <Button
-                      className="flex-1"
-                      disabled={
-                        submitting || isOffline || (!!selected.guest && !keyId)
-                      }
+                      className="h-auto flex-1 px-4 py-2.5"
+                      disabled={submitting || isOffline}
                       aria-busy={submitting}
-                      onClick={() => handleDecision('APPROVED')}
+                      onClick={form.handleSubmit((values) =>
+                        handleDecision('APPROVED', values)
+                      )}
                     >
                       {submitting ? 'Submitting…' : 'Approve'}
                     </Button>
                     <Button
                       variant="outline"
-                      className="flex-1 border-destructive text-destructive hover:bg-destructive/5 hover:text-destructive"
+                      className="h-auto flex-1 px-4 py-2.5 border-destructive text-destructive hover:bg-destructive/5 hover:text-destructive"
                       disabled={submitting || isOffline}
-                      onClick={() => handleDecision('DECLINED')}
+                      onClick={() =>
+                        handleDecision('DECLINED', form.getValues())
+                      }
                     >
                       Decline
                     </Button>
