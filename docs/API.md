@@ -390,7 +390,7 @@ These routes let an external person with no SmartKey account submit a weekend ke
 
 **File**: `src/app/api/public/weekend-request/route.ts`
 **Roles**: ALL (unauthenticated)
-**RPC**: `create_guest_weekend_request(full_name, email, phone, id_type, id_number, department_id, weekend_date, return_deadline, letter_url)`
+**RPC**: `create_guest_weekend_request(full_name, email, phone, id_type, id_number, department_id, weekend_date, return_deadline, letter_url, requested_room)`
 
 Multipart form. Uploads the HOD authorisation letter to the `weekend-letters` bucket, creates the guest + request (`PENDING_HOD`, no code), and emails the status link to the guest (via the shared email sender in `src/lib/email/`). Email failure is logged but does not fail the request. Returns `201`.
 
@@ -402,6 +402,7 @@ Multipart form. Uploads the HOD authorisation letter to the `weekend-letters` bu
 | `id_document_type`   | `string`                   | yes      |
 | `id_document_number` | `string`                   | yes      |
 | `department_id`      | `string` (uuid)            | yes      |
+| `requested_room`     | `string` (max 200)         | yes      |
 | `weekend_date`       | `string` (ISO date)        | yes      |
 | `return_deadline`    | `string` (ISO timestamptz) | yes      |
 | `letter`             | `File` (image/PDF)         | yes      |
@@ -417,7 +418,7 @@ Multipart form. Uploads the HOD authorisation letter to the `weekend-letters` bu
 **File**: `src/app/api/public/weekend-request/[token]/route.ts`
 **Roles**: ALL (unauthenticated)
 
-Returns safe status fields for the guest's status/code page, read by `access_token` via the admin client: current status, requested date, the assigned key/room once present, and the code + expiry while `CODE_ISSUED`.
+Returns safe status fields for the guest's status/code page, read by `access_token` via the admin client: current status, requested date, the room the guest stated they need, the assigned key/room once present, and the code + expiry while `CODE_ISSUED`.
 
 **Response `data`**:
 
@@ -428,6 +429,7 @@ Returns safe status fields for the guest's status/code page, read by `access_tok
   "status": "APPROVED",
   "requested_for": "2026-06-20",
   "return_deadline": "<iso>",
+  "requested_room": "Senate Hall A",
   "key": { "code": "NS-304", "room_name": "Senate Hall A" },
   "code": null,
   "code_expires_at": null

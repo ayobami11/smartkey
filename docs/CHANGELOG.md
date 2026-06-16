@@ -8,6 +8,12 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-06-16 — Guest weekend request: requested room field
+
+- **Why**: a guest picks a department only (the HOD assigns the actual key on approval), but the HOD had no indication of which room/area the guest actually needs. This adds a free-text `requested_room` the guest states at submit and the HOD sees before assigning a key.
+- `supabase/migrations/20260615000003_add_requested_room_to_guest_requests.sql` (applied to remote): adds `requests.requested_room text` and recreates `create_guest_weekend_request` with a 10th param `p_requested_room` (drops the old 9-arg signature to avoid an overload conflict; execute revoked from `public`/`anon`/`authenticated`). The value is stored on the request and included in the `REQUEST_CREATED` audit payload.
+- `POST /api/public/weekend-request` validates `requested_room` (zod, max 200) and passes it to the RPC; `GET /api/public/weekend-request/[token]` returns it; the public form, status page, and `src/types/database.ts` all carry the field.
+
 ### 2026-06-15 — External (non-registered) weekend key requests
 
 - **Why**: the security desk's real-world rule is that anyone may collect a key on the weekend provided they have HOD authorisation, but SmartKey only supported weekend requests from registered users (those with a `profiles` + `auth.users` account). This adds a guest path so an external person, with no account, can submit a weekend request that an HOD authorises, ultimately producing a 6-digit collection code for the desk. Registered-user flows are unchanged.
