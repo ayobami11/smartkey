@@ -8,6 +8,14 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-06-16 — Gemini shift report generation (issue #21)
+
+- **Why**: shift-report generation was half-built — a working Gemini-with-fallback implementation lived inline in `POST /api/reports/generate`, but it wasn't factored into the named library, used a raw `fetch` instead of the SDK, never wrote the summary counts the list card reads (always showed 0), and there was no detail page to actually read a report (the generate dialog linked to a 404).
+- New `src/lib/ai/reports/`: `types.ts`, `prompts.ts` (`buildReportPrompt` + `buildTemplateReport`), `parser.ts` (`parseGeminiOutput` + `computeMetadataCounts`), `client.ts` (`generateShiftReport` via the `@google/generative-ai` SDK with deterministic template fallback). Model defaults to `gemini-3.5-flash` (the prior `gemini-2.0-flash` was discontinued 2026-06-01), overridable via `GEMINI_MODEL`.
+- `POST /api/reports/generate` refactored to call the library and persist `{ markdown, timeline, metadata }` (counts + source) via the admin client.
+- New `/cso/reports/[id]` detail page (RSC): markdown body via `react-markdown` + `remark-gfm` (token-styled, no raw HTML), `<ShiftTimeline>` (`src/components/smartkey/shift-timeline.tsx`), immutable comments list + comment form, the AI disclosure, and a Markdown download. The reports list card title now links here.
+- 12 new Vitest unit tests (`parser.test.ts`, `prompts.test.ts`). Added `react-markdown` + `remark-gfm` deps and `GEMINI_MODEL` to `.env.local.example`.
+
 ### 2026-06-16 — Guest audit actor_name stored without "(external)" suffix
 
 - **Why**: `_write_audit_guest` callers stored `actor_name` as `'<name> (external)'`. The suffix was display cruft — a guest event is already identified by `actor_id IS NULL` and `payload->>'external' = true`, so the name itself should be the plain guest name. The CSO audit table had a UI band-aid stripping the suffix; this fixes it at the source.
