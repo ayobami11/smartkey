@@ -7,6 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import {
   CalendarCheckIcon,
   CheckCircleIcon,
+  ClipboardCopyIcon,
   CloudUploadIcon,
   FileTextIcon,
   RefreshCwIcon,
@@ -55,6 +56,7 @@ export const GuestWeekendRequestForm = ({
   const [letterError, setLetterError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const form = useForm<GuestWeekendRequestFormInput>({
     resolver: zodResolver(guestWeekendRequestFormSchema),
@@ -148,23 +150,58 @@ export const GuestWeekendRequestForm = ({
   // Success confirmation
 
   if (accessToken) {
+    const statusUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/weekend-access/${accessToken}`;
+
+    const handleCopyLink = async () => {
+      await navigator.clipboard.writeText(statusUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    };
+
     return (
-      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-6 text-center dark:border-emerald-900 dark:bg-emerald-950/30">
+      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-6 dark:border-emerald-900 dark:bg-emerald-950/30">
         <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/50">
           <CheckCircleIcon
             className="size-6 text-emerald-700 dark:text-emerald-400"
             aria-hidden="true"
           />
         </div>
-        <h2 className="text-lg font-semibold text-foreground">
+        <h2 className="text-center text-lg font-semibold text-foreground">
           Request submitted
         </h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          We&apos;ve emailed you a link to track your request and collect your
-          code when it&apos;s ready.
+        <p className="mt-2 text-center text-sm text-muted-foreground">
+          We&apos;ve emailed you a link to track your request. You can also save
+          or copy it below — you&apos;ll need it to collect your code on the
+          day.
         </p>
+
+        {/* Status link — copyable fallback in case email is delayed */}
+        <div className="mt-4 rounded-md border border-emerald-200 bg-white p-3 dark:border-emerald-800 dark:bg-emerald-950/50">
+          <p className="mb-1.5 text-xs font-medium text-muted-foreground">
+            Your status link
+          </p>
+          <div className="flex items-center gap-2">
+            <p className="min-w-0 flex-1 truncate font-mono text-xs text-foreground">
+              {statusUrl}
+            </p>
+            <button
+              type="button"
+              onClick={handleCopyLink}
+              aria-label="Copy status link to clipboard"
+              className="shrink-0 rounded p-1 text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              <ClipboardCopyIcon className="size-4" aria-hidden="true" />
+            </button>
+          </div>
+          {copied && (
+            <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">
+              Copied!
+            </p>
+          )}
+        </div>
+
         <Button
-          className="mt-6 w-full"
+          className="mt-4 w-full"
           onClick={() => router.push(`/weekend-access/${accessToken}`)}
         >
           View request status
