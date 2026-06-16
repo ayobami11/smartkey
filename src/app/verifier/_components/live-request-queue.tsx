@@ -62,6 +62,7 @@ type QueueRequest = {
   risk_factors: RiskFactor[];
   created_at: string;
   requester: { id: string; full_name: string; photo_url: string | null } | null;
+  guest: { id: string; full_name: string } | null;
   key: { id: string; code: string; room_name: string; zone: string } | null;
 };
 
@@ -141,16 +142,13 @@ export const LiveRequestQueue = () => {
   useRealtime<{ id: string; status: string }>({
     table: 'requests',
     onInsert: (payload) => {
-      if (
-        (payload.new as { id: string; status: string }).status === 'CODE_ISSUED'
-      )
-        fetchQueue();
+      const row = payload.new as { id: string; status: string };
+      if (row.status === 'CODE_ISSUED') fetchSingleRequest(row.id, 'prepend');
     },
     onUpdate: (payload) => {
       const row = payload.new as { id: string; status: string };
       if (row.status === 'CODE_ISSUED') {
-        // Row transitioned into CODE_ISSUED (e.g. HOD approved a weekend request via UPDATE)
-        fetchQueue();
+        fetchSingleRequest(row.id, 'upsert');
       } else {
         setRequests((prev) => prev.filter((r) => r.id !== row.id));
       }
@@ -177,6 +175,24 @@ export const LiveRequestQueue = () => {
       setFetchError('Network error. Check your connection and try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSingleRequest = async (id: string, mode: 'prepend' | 'upsert') => {
+    try {
+      const res = await fetch(`/api/requests/live-queue?id=${id}`);
+      if (!res.ok) return;
+      const json = await res.json();
+      const item = (json as { data?: { request?: QueueRequest } }).data
+        ?.request;
+      if (!item) return;
+      setRequests((prev) => {
+        const without = prev.filter((r) => r.id !== item.id);
+        return mode === 'prepend' ? [item, ...without] : [...without, item];
+      });
+    } catch {
+      // Silent — the full queue already loaded; a missed live item is recovered
+      // on next manual refresh or when the user re-opens the dashboard.
     }
   };
 
@@ -353,7 +369,7 @@ export const LiveRequestQueue = () => {
                       <span className="font-medium text-foreground">
                         Requested by:
                       </span>{' '}
-                      {req.requester?.full_name ?? '—'}
+                      {req.requester?.full_name ?? req.guest?.full_name ?? '—'}
                     </p>
                     <p className="truncate text-xs text-muted-foreground">
                       {req.key?.room_name ?? ''}
@@ -370,7 +386,7 @@ export const LiveRequestQueue = () => {
                           size="sm"
                           onClick={() => openSheet(req)}
                           disabled={isOffline}
-                          aria-label={`Issue key for ${req.requester?.full_name ?? 'requester'}`}
+                          aria-label={`Issue key for ${req.requester?.full_name ?? req.guest?.full_name ?? 'requester'}`}
                           className={
                             isOffline ? 'pointer-events-none' : undefined
                           }
@@ -425,7 +441,9 @@ export const LiveRequestQueue = () => {
                 </div>
                 <div className="mt-2 flex flex-col gap-1">
                   <p className="text-sm font-medium text-foreground">
-                    {contextRequest.requester?.full_name ?? '—'}
+                    {contextRequest.requester?.full_name ??
+                      contextRequest.guest?.full_name ??
+                      '—'}
                   </p>
                   <p className="font-mono text-xs text-muted-foreground">
                     {contextRequest.key?.code} · {contextRequest.key?.room_name}
