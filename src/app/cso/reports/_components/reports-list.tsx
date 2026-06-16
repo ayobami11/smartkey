@@ -1,10 +1,6 @@
-import {
-  BotIcon,
-  DownloadIcon,
-  FlagIcon,
-  KeyRoundIcon,
-  RotateCcwIcon,
-} from 'lucide-react';
+import Link from 'next/link';
+
+import { BotIcon, FlagIcon, KeyRoundIcon, RotateCcwIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 
@@ -80,22 +76,18 @@ export const ReportsList = ({
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex flex-col gap-0.5">
-                    <span className="text-sm font-semibold text-foreground">
+                    <Link
+                      href={`/cso/reports/${report.id}`}
+                      className="text-sm font-semibold text-foreground underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                    >
                       Shift {report.shift} — {report.date}, {report.timeRange}
-                    </span>
+                    </Link>
                     <span className="text-xs text-muted-foreground">
                       {report.officers.join(', ')}
                     </span>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <ReportsDialog report={report} />
-                    <button
-                      type="button"
-                      aria-label={`Download Shift ${report.shift} report`}
-                      className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                    >
-                      <DownloadIcon className="size-4" aria-hidden="true" />
-                    </button>
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-4 text-xs">
