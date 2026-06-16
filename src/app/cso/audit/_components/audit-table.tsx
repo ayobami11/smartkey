@@ -130,9 +130,10 @@ const ACTOR_ROLE_CLASS: Record<string, string> = {
   HOD: 'bg-amber-100 text-amber-700',
   Verifier: 'bg-blue-100 text-blue-700',
   VERIFIER: 'bg-blue-100 text-blue-700',
-  Requester: 'bg-muted text-muted-foreground',
-  REQUESTER: 'bg-muted text-muted-foreground',
+  Requester: 'bg-teal-100 text-teal-700',
+  REQUESTER: 'bg-teal-100 text-teal-700',
   System: 'bg-muted text-muted-foreground',
+  Guest: 'bg-muted text-muted-foreground',
 };
 
 const ROLE_LABEL: Record<string, string> = {
@@ -196,11 +197,15 @@ const TYPE_CHIPS: { label: string; type?: AuditEventType }[] = [
   { label: 'Signature', type: 'SIGNATURE' },
 ];
 
-const ROLE_OPTIONS: { value: string; label: string }[] = [
+type DbRole = 'CSO' | 'HOD' | 'VERIFIER' | 'REQUESTER';
+type RoleFilterValue = DbRole | 'GUEST';
+
+const ROLE_OPTIONS: { value: RoleFilterValue; label: string }[] = [
   { value: 'CSO', label: 'CSO' },
   { value: 'HOD', label: 'HOD' },
   { value: 'VERIFIER', label: 'Verifier' },
   { value: 'REQUESTER', label: 'Requester' },
+  { value: 'GUEST', label: 'Guest' },
 ];
 
 // Helpers
@@ -213,6 +218,9 @@ function mapRow(e: Record<string, unknown>): AuditEntry {
   const eventName = e.event as string | undefined;
   const eventType: AuditEventType =
     EVENT_TYPE_MAP[eventName ?? ''] ?? 'SETTINGS';
+  // Guest-initiated events carry a null actor_role (see docs/DATABASE.md);
+  // payload.external is the discriminator written by _write_audit_guest.
+  const isGuest = !e.actor_role && payload.external === true;
   return {
     id: e.id as string,
     type: eventType,
@@ -229,17 +237,20 @@ function mapRow(e: Record<string, unknown>): AuditEntry {
         | undefined) ??
       'Unknown actor'
     ).replace(/\s*\(external\)\s*$/, ''),
-    actorRole: ROLE_LABEL[e.actor_role as string] ?? (e.actor_role as string),
-    department:
-      (e.actor_department as string | undefined) ??
-      // Same legacy fallback as the actor name: resolve the department live
-      // from the actor's profile for rows written before the denormalisation
-      // was fixed.
-      ((e.actor_profile as { departments?: { name?: string } | null } | null)
-        ?.departments?.name as string | undefined) ??
-      (['CSO', 'VERIFIER'].includes(e.actor_role as string)
-        ? 'Security'
-        : undefined),
+    actorRole: isGuest
+      ? 'Guest'
+      : (ROLE_LABEL[e.actor_role as string] ?? (e.actor_role as string)),
+    department: isGuest
+      ? 'N/A'
+      : ((e.actor_department as string | undefined) ??
+        // Same legacy fallback as the actor name: resolve the department live
+        // from the actor's profile for rows written before the denormalisation
+        // was fixed.
+        ((e.actor_profile as { departments?: { name?: string } | null } | null)
+          ?.departments?.name as string | undefined) ??
+        (['CSO', 'VERIFIER'].includes(e.actor_role as string)
+          ? 'Security'
+          : undefined)),
     description: eventName?.replace(/_/g, ' ') ?? 'Event',
     keyCode: payload.key_code as string | undefined,
     timestamp: new Date(e.occurred_at as string).toLocaleString('en-GB', {
@@ -366,7 +377,7 @@ export const AuditTable = () => {
   const [typeFilter, setTypeFilter] = useState<AuditEventType[]>([]);
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search);
-  const [roleFilter, setRoleFilter] = useState<string[]>([]);
+  const [roleFilter, setRoleFilter] = useState<RoleFilterValue[]>([]);
 
   const { pageIndex, pageSize } = pagination;
 
@@ -394,11 +405,17 @@ export const AuditTable = () => {
         const term = `%${debouncedSearch.trim()}%`;
         q = q.or(`event.ilike.${term},actor_name.ilike.${term}`);
       }
-      if (roleFilter.length > 0)
-        q = q.in(
-          'actor_role',
-          roleFilter as ('CSO' | 'HOD' | 'VERIFIER' | 'REQUESTER')[]
-        );
+      if (roleFilter.length > 0) {
+        const realRoles = roleFilter.filter((r): r is DbRole => r !== 'GUEST');
+        const includesGuest = roleFilter.includes('GUEST');
+        if (includesGuest && realRoles.length > 0) {
+          q = q.or(`actor_role.in.(${realRoles.join(',')}),actor_role.is.null`);
+        } else if (includesGuest) {
+          q = q.is('actor_role', null);
+        } else {
+          q = q.in('actor_role', realRoles);
+        }
+      }
       const { count, error } = await q;
       if (error) throw new Error('Failed to count audit log.');
       return count ?? 0;
@@ -427,11 +444,17 @@ export const AuditTable = () => {
         const term = `%${debouncedSearch.trim()}%`;
         q = q.or(`event.ilike.${term},actor_name.ilike.${term}`);
       }
-      if (roleFilter.length > 0)
-        q = q.in(
-          'actor_role',
-          roleFilter as ('CSO' | 'HOD' | 'VERIFIER' | 'REQUESTER')[]
-        );
+      if (roleFilter.length > 0) {
+        const realRoles = roleFilter.filter((r): r is DbRole => r !== 'GUEST');
+        const includesGuest = roleFilter.includes('GUEST');
+        if (includesGuest && realRoles.length > 0) {
+          q = q.or(`actor_role.in.(${realRoles.join(',')}),actor_role.is.null`);
+        } else if (includesGuest) {
+          q = q.is('actor_role', null);
+        } else {
+          q = q.in('actor_role', realRoles);
+        }
+      }
       const { data, error } = await q;
       if (error) throw new Error('Failed to load audit log.');
       return (data ?? []).map((e) => mapRow(e as Record<string, unknown>));
@@ -462,7 +485,7 @@ export const AuditTable = () => {
     table.setPageIndex(0);
   };
 
-  const handleRoleToggle = (value: string) => {
+  const handleRoleToggle = (value: RoleFilterValue) => {
     setRoleFilter((prev) =>
       prev.includes(value) ? prev.filter((r) => r !== value) : [...prev, value]
     );
@@ -471,114 +494,6 @@ export const AuditTable = () => {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Filter bar */}
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-56 flex-1">
-            <SearchIcon
-              className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <Input
-              type="search"
-              placeholder="Search by event or actor name"
-              className="pl-9"
-              aria-label="Search audit log by event or actor name"
-              value={search}
-              onChange={(e) => handleSearch(e.target.value)}
-            />
-          </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5 border-dashed"
-              >
-                <CirclePlusIcon className="size-3.5" aria-hidden="true" />
-                Role
-                {roleFilter.length > 0 && (
-                  <span className="flex size-5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-                    {roleFilter.length}
-                  </span>
-                )}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-44">
-              <DropdownMenuLabel>Filter by role</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {ROLE_OPTIONS.map((opt) => (
-                <DropdownMenuCheckboxItem
-                  key={opt.value}
-                  checked={roleFilter.includes(opt.value)}
-                  onCheckedChange={() => handleRoleToggle(opt.value)}
-                >
-                  {opt.label}
-                </DropdownMenuCheckboxItem>
-              ))}
-              {roleFilter.length > 0 && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setRoleFilter([]);
-                      table.setPageIndex(0);
-                    }}
-                    className="text-muted-foreground"
-                  >
-                    Clear filter
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5 border-dashed"
-              >
-                <CirclePlusIcon className="size-3.5" aria-hidden="true" />
-                Event
-                {typeFilter.length > 0 && (
-                  <span className="flex size-5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-                    {typeFilter.length}
-                  </span>
-                )}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-48">
-              <DropdownMenuLabel>Filter by event type</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {TYPE_CHIPS.filter((c) => c.type !== undefined).map((chip) => (
-                <DropdownMenuCheckboxItem
-                  key={chip.label}
-                  checked={typeFilter.includes(chip.type!)}
-                  onCheckedChange={() => handleTypeToggle(chip.type!)}
-                >
-                  {chip.label}
-                </DropdownMenuCheckboxItem>
-              ))}
-              {typeFilter.length > 0 && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setTypeFilter([]);
-                      table.setPageIndex(0);
-                    }}
-                    className="text-muted-foreground"
-                  >
-                    Clear filter
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
-
       {/* Loading */}
       {isLoading && <AuditTableSkeleton />}
 
@@ -597,6 +512,116 @@ export const AuditTable = () => {
           >
             Retry
           </Button>
+        </div>
+      )}
+
+      {/* Filter bar */}
+      {!isLoading && !isError && (
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative min-w-56 flex-1">
+              <SearchIcon
+                className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <Input
+                type="search"
+                placeholder="Search by event or actor name"
+                className="pl-9"
+                aria-label="Search audit log by event or actor name"
+                value={search}
+                onChange={(e) => handleSearch(e.target.value)}
+              />
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 border-dashed"
+                >
+                  <CirclePlusIcon className="size-3.5" aria-hidden="true" />
+                  Role
+                  {roleFilter.length > 0 && (
+                    <span className="flex size-5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                      {roleFilter.length}
+                    </span>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-44">
+                <DropdownMenuLabel>Filter by role</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {ROLE_OPTIONS.map((opt) => (
+                  <DropdownMenuCheckboxItem
+                    key={opt.value}
+                    checked={roleFilter.includes(opt.value)}
+                    onCheckedChange={() => handleRoleToggle(opt.value)}
+                  >
+                    {opt.label}
+                  </DropdownMenuCheckboxItem>
+                ))}
+                {roleFilter.length > 0 && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setRoleFilter([]);
+                        table.setPageIndex(0);
+                      }}
+                      className="text-muted-foreground"
+                    >
+                      Clear filter
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 border-dashed"
+                >
+                  <CirclePlusIcon className="size-3.5" aria-hidden="true" />
+                  Event
+                  {typeFilter.length > 0 && (
+                    <span className="flex size-5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                      {typeFilter.length}
+                    </span>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-48">
+                <DropdownMenuLabel>Filter by event type</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {TYPE_CHIPS.filter((c) => c.type !== undefined).map((chip) => (
+                  <DropdownMenuCheckboxItem
+                    key={chip.label}
+                    checked={typeFilter.includes(chip.type!)}
+                    onCheckedChange={() => handleTypeToggle(chip.type!)}
+                  >
+                    {chip.label}
+                  </DropdownMenuCheckboxItem>
+                ))}
+                {typeFilter.length > 0 && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setTypeFilter([]);
+                        table.setPageIndex(0);
+                      }}
+                      className="text-muted-foreground"
+                    >
+                      Clear filter
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       )}
 

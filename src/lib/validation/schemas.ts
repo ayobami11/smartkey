@@ -163,6 +163,28 @@ export const hodDecisionSchema = z.object({
   note: z.string().optional(),
 });
 
+/**
+ * Client-side form for the HOD weekend-decision sheet. The Approve action is
+ * always clickable; this schema's superRefine surfaces the "key required for
+ * a guest approval" rule as a field error instead of disabling the button.
+ */
+export const hodWeekendDecisionFormSchema = z
+  .object({
+    note: z.string().optional(),
+    key_id: z.string().optional(),
+    /** Hidden discriminator — true when reviewing an external (guest) request. */
+    is_guest: z.boolean(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.is_guest && !data.key_id) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Select a key to assign before approving.',
+        path: ['key_id'],
+      });
+    }
+  });
+
 export const csoDecisionSchema = z.object({
   /** UUID of the request being decided. */
   request_id: z.string().min(1, 'Request ID is required'),
@@ -226,6 +248,11 @@ export const markKeyLostSchema = z.object({
   /** UUID of the key to mark as lost/retired. */
   key_id: z.string().min(1, 'Key is required'),
   note: z.string().min(1, 'Reason is required'),
+});
+
+/** Client-side form for the CSO "mark as lost" dialog — key_id comes from component state, not a form field. */
+export const markKeyLostFormSchema = z.object({
+  note: z.string().trim().min(1, 'Describe when and how the key went missing.'),
 });
 
 // Incidents
@@ -298,11 +325,15 @@ export type AuthoriseCollectorInput = z.infer<typeof authoriseCollectorSchema>;
 export type SubmitRequestInput = z.infer<typeof submitRequestSchema>;
 export type CancelRequestInput = z.infer<typeof cancelRequestSchema>;
 export type HodDecisionInput = z.infer<typeof hodDecisionSchema>;
+export type HodWeekendDecisionFormInput = z.infer<
+  typeof hodWeekendDecisionFormSchema
+>;
 export type CsoDecisionInput = z.infer<typeof csoDecisionSchema>;
 export type CollectKeyInput = z.infer<typeof collectKeySchema>;
 export type ReturnKeyInput = z.infer<typeof returnKeySchema>;
 export type RequestReturnInput = z.infer<typeof requestReturnSchema>;
 export type MarkKeyLostInput = z.infer<typeof markKeyLostSchema>;
+export type MarkKeyLostFormInput = z.infer<typeof markKeyLostFormSchema>;
 export type LogIncidentInput = z.infer<typeof logIncidentSchema>;
 export type ShiftHandoverInput = z.infer<typeof shiftHandoverSchema>;
 export type GenerateReportInput = z.infer<typeof generateReportSchema>;
