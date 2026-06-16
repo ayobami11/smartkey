@@ -43,9 +43,13 @@ export const writeAuditEntry = async (
   // columns. Captured at write time so the entry preserves who the actor was
   // at the moment of the event — an immutable journal must not be rewritten by
   // a later rename or department move.
+  // Name the FK explicitly: `profiles` and `departments` are joined by two
+  // relationships (profiles.department_id and departments.hod_id), so an
+  // unqualified `departments(name)` embed is ambiguous and PostgREST rejects
+  // the whole query — which previously left actor_name/department null.
   const { data: actor, error: profileError } = await supabase
     .from('profiles')
-    .select('full_name, departments(name)')
+    .select('full_name, departments!profiles_department_id_fkey(name)')
     .eq('id', actorId)
     .maybeSingle();
 

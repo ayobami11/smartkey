@@ -219,6 +219,12 @@ function mapRow(e: Record<string, unknown>): AuditEntry {
     actor:
       (e.actor_name as string | undefined) ??
       (payload.actor_name as string | undefined) ??
+      // Last-resort fallback for legacy rows written before the actor_name
+      // denormalisation was fixed: resolve the name live from the actor's
+      // profile. Newer rows always carry the immutable point-in-time snapshot.
+      ((e.actor_profile as { full_name?: string } | null)?.full_name as
+        | string
+        | undefined) ??
       'Unknown actor',
     actorRole: ROLE_LABEL[e.actor_role as string] ?? (e.actor_role as string),
     department:
@@ -404,7 +410,7 @@ export const AuditTable = () => {
       let q = supabase
         .from('audit_log')
         .select(
-          'id, event, actor_id, actor_role, actor_name, actor_department, payload, occurred_at'
+          'id, event, actor_id, actor_role, actor_name, actor_department, payload, occurred_at, actor_profile:profiles!audit_log_actor_id_fkey(full_name)'
         )
         .order('occurred_at', { ascending: false })
         .range(from, to);
