@@ -524,7 +524,7 @@ Track progress here after every merged PR. Update the status column; link the PR
 | Supabase Realtime subscriptions                   | ✅ Done        | #39 |
 | Rule-based risk scoring engine + unit tests       | ✅ Done        | #38 |
 | Risk tier UI (RiskTierBadge, RiskFactorPopover)   | ✅ Done        | #40 |
-| Gemini shift report generation                    | ⬜ Not started | —   |
+| Gemini shift report generation                    | ✅ Done        | #21 |
 | Signature verification (Sharp + Pixelmatch)       | ✅ Done        | #22 |
 | Supabase Storage (photos, signatures, letters)    | ✅ Done        | #32 |
 | Shift handover + incident + report API routes     | ✅ Done        | #37 |
