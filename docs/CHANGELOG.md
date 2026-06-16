@@ -8,6 +8,12 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-06-16 — guest_requesters RLS: HOD and VERIFIER read access
+
+- **Why**: `guest_requesters` only had a CSO-all SELECT policy. PostgREST silently nulled the `guest_requesters` join in the HOD pending-requests query, causing "Unknown requester" on the HOD dashboard. The verifier collect route had the same gap for guest key issuance.
+- `supabase/migrations/20260616115021_guest_requesters_rls_hod_verifier.sql`: adds two SELECT policies. HOD reads guests whose request is scoped to their department (via `requested_department_id` while pending, or `key_id → keys.department_id` after assignment). VERIFIER reads guests where a `CODE_ISSUED` / `KEY_ISSUED` request exists.
+- No code changes; the existing queries now return real data instead of null.
+
 ### 2026-06-16 — Guest weekend request: requested room field
 
 - **Why**: a guest picks a department only (the HOD assigns the actual key on approval), but the HOD had no indication of which room/area the guest actually needs. This adds a free-text `requested_room` the guest states at submit and the HOD sees before assigning a key.

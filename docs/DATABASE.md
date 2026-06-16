@@ -26,7 +26,7 @@ Authoritative schema lives in `supabase/migrations/`. This document is a human-r
 
 ### guest_requesters
 
-An external (non-registered) person who may collect a key for a single weekend. Guests are never a `profiles`/`auth.users` row (that would require an auth user and break the `invited_by` chain-of-trust); they are modelled as their own entity. RLS: CSO-only select — HOD and verifier see guest details through request joins via SECURITY DEFINER RPCs.
+An external (non-registered) person who may collect a key for a single weekend. Guests are never a `profiles`/`auth.users` row (that would require an auth user and break the `invited_by` chain-of-trust); they are modelled as their own entity. RLS: CSO reads all. HOD reads guests whose request is routed to their department (`requested_department_id` or key's `department_id`). VERIFIER reads guests where a `CODE_ISSUED` or `KEY_ISSUED` request exists (operational need only).
 
 - `id` UUID PK
 - `full_name` text
