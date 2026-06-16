@@ -229,6 +229,11 @@ function mapRow(e: Record<string, unknown>): AuditEntry {
     actorRole: ROLE_LABEL[e.actor_role as string] ?? (e.actor_role as string),
     department:
       (e.actor_department as string | undefined) ??
+      // Same legacy fallback as the actor name: resolve the department live
+      // from the actor's profile for rows written before the denormalisation
+      // was fixed.
+      ((e.actor_profile as { departments?: { name?: string } | null } | null)
+        ?.departments?.name as string | undefined) ??
       (['CSO', 'VERIFIER'].includes(e.actor_role as string)
         ? 'Security'
         : undefined),
@@ -410,7 +415,7 @@ export const AuditTable = () => {
       let q = supabase
         .from('audit_log')
         .select(
-          'id, event, actor_id, actor_role, actor_name, actor_department, payload, occurred_at, actor_profile:profiles!audit_log_actor_id_fkey(full_name)'
+          'id, event, actor_id, actor_role, actor_name, actor_department, payload, occurred_at, actor_profile:profiles!audit_log_actor_id_fkey(full_name, departments!profiles_department_id_fkey(name))'
         )
         .order('occurred_at', { ascending: false })
         .range(from, to);
