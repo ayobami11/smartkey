@@ -19,8 +19,9 @@ import { createBrowserClient } from '@/lib/supabase/client';
 
 type PendingRequest = {
   id: string;
-  requester: { full_name: string };
-  key: { code: string };
+  requester: { full_name: string } | null;
+  guest: { full_name: string } | null;
+  key: { code: string } | null;
   requested_for: string;
   type: 'WEEKDAY' | 'WEEKEND';
 };
@@ -205,7 +206,7 @@ export default function HodDashboardPage() {
                 >
                   <div className="flex items-start gap-2">
                     <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
-                      {req.requester.full_name
+                      {(req.requester?.full_name ?? req.guest?.full_name ?? '?')
                         .split(' ')
                         .map((n) => n[0])
                         .join('')
@@ -213,10 +214,12 @@ export default function HodDashboardPage() {
                     </div>
                     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <span className="text-sm font-medium text-foreground">
-                        {req.requester.full_name}
+                        {req.requester?.full_name ??
+                          req.guest?.full_name ??
+                          'External requester'}
                       </span>
                       <span className="font-mono text-xs text-muted-foreground">
-                        {req.key.code}
+                        {req.key?.code ?? 'No key assigned'}
                       </span>
                     </div>
                   </div>
