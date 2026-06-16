@@ -17,7 +17,7 @@ import { ModeToggle } from '@/components/smartkey/mode-toggle';
 function getPageTitle(pathname: string): string {
   if (pathname === '/hod/weekend-requests') return 'Weekend Requests';
   if (pathname === '/hod/onboarding') return 'Setup';
-  if (pathname === '/hod/profile') return 'Profile';
+  if (pathname === '/hod/settings') return 'Settings';
   if (pathname.startsWith('/hod/keys/')) return 'Key Slot Management';
   return 'Dashboard';
 }

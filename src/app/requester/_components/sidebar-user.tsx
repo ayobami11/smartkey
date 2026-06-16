@@ -111,9 +111,9 @@ export const SidebarUser = ({
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuItem asChild>
-                <a href="/requester/profile">
+                <a href="/requester/settings">
                   <BadgeCheck />
-                  Profile
+                  Settings
                 </a>
               </DropdownMenuItem>
             </DropdownMenuGroup>

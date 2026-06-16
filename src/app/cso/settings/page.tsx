@@ -40,12 +40,13 @@ export default function SettingsPage() {
           <TabsTrigger
             key={s.id}
             value={s.id}
-            className="data-active:text-primary after:bg-primary"
+            className="px-4 py-2 data-active:text-primary! lg:data-active:bg-primary/10! after:bg-primary lg:after:hidden"
           >
             {s.label}
           </TabsTrigger>
         ))}
       </TabsList>
+      <Separator orientation="vertical" className="hidden lg:block" />
       {/* Section content */}
       <div className="flex flex-1 flex-col gap-6">
         <TabsContent value="operational">

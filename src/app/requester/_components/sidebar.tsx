@@ -5,7 +5,7 @@ import {
   GalleryVerticalEnd,
   HistoryIcon,
   LayoutDashboardIcon,
-  UserIcon,
+  SettingsIcon,
 } from 'lucide-react';
 
 import {
@@ -35,7 +35,7 @@ const data = {
       icon: LayoutDashboardIcon,
     },
     { title: 'History', url: '/requester/history', icon: HistoryIcon },
-    { title: 'Profile', url: '/requester/profile', icon: UserIcon },
+    { title: 'Settings', url: '/requester/settings', icon: SettingsIcon },
   ],
 };
 

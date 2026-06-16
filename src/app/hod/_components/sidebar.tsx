@@ -5,7 +5,7 @@ import {
   CalendarClockIcon,
   GalleryVerticalEnd,
   LayoutDashboardIcon,
-  UserCircleIcon,
+  SettingsIcon,
 } from 'lucide-react';
 
 import {
@@ -35,7 +35,7 @@ const data = {
       url: '/hod/weekend-requests',
       icon: CalendarClockIcon,
     },
-    { title: 'Profile', url: '/hod/profile', icon: UserCircleIcon },
+    { title: 'Settings', url: '/hod/settings', icon: SettingsIcon },
   ],
 };
 

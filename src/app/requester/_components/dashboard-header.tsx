@@ -17,7 +17,7 @@ import { ModeToggle } from '@/components/smartkey/mode-toggle';
 const ROUTES: Record<string, string> = {
   '/requester/dashboard': 'Dashboard',
   '/requester/history': 'History',
-  '/requester/profile': 'Profile',
+  '/requester/settings': 'Settings',
 };
 
 export const DashboardHeader = () => {
