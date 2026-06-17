@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 
 import { createBrowserClient } from '@/lib/supabase/client';
 
-import { DepartmentKeys } from '@/app/hod/dashboard/_components/department-keys';
 import { WeekendRequests } from '@/app/hod/dashboard/_components/weekend-requests';
 
 const getGreeting = () => {
@@ -17,7 +16,6 @@ const getGreeting = () => {
 export default function HodDashboardPage() {
   const [fullName, setFullName] = useState('');
   const [deptName, setDeptName] = useState('');
-  const [deptId, setDeptId] = useState<string | null>(null);
 
   useEffect(() => {
     const init = async () => {
@@ -39,7 +37,6 @@ export default function HodDashboardPage() {
         setFullName((profile.full_name as string | null) ?? '');
         const dept = profile.department as { name: string } | null;
         setDeptName(dept?.name ?? '');
-        setDeptId((profile.department_id as string | null) ?? null);
       }
     };
 
@@ -58,12 +55,7 @@ export default function HodDashboardPage() {
         </p>
       </div>
 
-      <div className="grid flex-1 items-start gap-6 lg:grid-cols-3">
-        <WeekendRequests />
-        <div className="lg:col-span-2">
-          <DepartmentKeys deptId={deptId} />
-        </div>
-      </div>
+      <WeekendRequests />
     </div>
   );
 }

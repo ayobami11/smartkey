@@ -24,8 +24,8 @@ export const NavMain = ({
   const pathname = usePathname();
 
   const isActive = (url: string) => {
-    if (url === '/hod/dashboard') {
-      return pathname === '/hod/dashboard' || pathname.startsWith('/hod/keys/');
+    if (url === '/hod/keys') {
+      return pathname === '/hod/keys' || pathname.startsWith('/hod/keys/');
     }
     return pathname === url;
   };

@@ -4,9 +4,11 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AlertCircleIcon, KeyRoundIcon } from 'lucide-react';
 
-import { createBrowserClient } from '@/lib/supabase/client';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { createBrowserClient } from '@/lib/supabase/client';
 
 type DeptKey = {
   id: string;
@@ -92,6 +94,7 @@ export const DepartmentKeys = ({ deptId }: Props) => {
   const [deptKeys, setDeptKeys] = useState<DeptKey[]>([]);
   const [loadingKeys, setLoadingKeys] = useState(true);
   const [activeFilter, setActiveFilter] = useState<FilterTab>('All keys');
+  const isDesktop = useMediaQuery('(min-width: 1024px)');
 
   useEffect(() => {
     if (!deptId) return;
@@ -161,33 +164,41 @@ export const DepartmentKeys = ({ deptId }: Props) => {
       <Tabs
         value={activeFilter}
         onValueChange={(v) => setActiveFilter(v as FilterTab)}
+        orientation={isDesktop ? 'vertical' : 'horizontal'}
+        className="flex-1 gap-6 lg:gap-8"
       >
-        <TabsList variant="line" aria-label="Filter keys">
+        <TabsList
+          variant="line"
+          aria-label="Filter keys"
+          className="lg:w-48 lg:shrink-0"
+        >
           {filterTabs.map((tab) => (
             <TabsTrigger
               key={tab}
               value={tab}
-              className="px-4 py-2 data-active:text-primary! after:bg-primary"
+              className="px-4 py-2 data-active:text-primary! lg:data-active:bg-primary/10! after:bg-primary lg:after:hidden"
             >
               {tab}
             </TabsTrigger>
           ))}
         </TabsList>
-
-        {filterTabs.map((tab) => {
-          const filtered = getFiltered(tab);
-          return (
-            <TabsContent key={tab} value={tab}>
-              {loadingKeys ? (
-                <LoadingSkeleton />
-              ) : filtered.length === 0 ? (
-                <EmptyState tab={tab} />
-              ) : (
-                <KeyGrid keys={filtered} />
-              )}
-            </TabsContent>
-          );
-        })}
+        <Separator orientation="vertical" className="hidden lg:block" />
+        <div className="flex flex-1 flex-col gap-6">
+          {filterTabs.map((tab) => {
+            const filtered = getFiltered(tab);
+            return (
+              <TabsContent key={tab} value={tab}>
+                {loadingKeys ? (
+                  <LoadingSkeleton />
+                ) : filtered.length === 0 ? (
+                  <EmptyState tab={tab} />
+                ) : (
+                  <KeyGrid keys={filtered} />
+                )}
+              </TabsContent>
+            );
+          })}
+        </div>
       </Tabs>
     </div>
   );

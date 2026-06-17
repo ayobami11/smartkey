@@ -4,6 +4,7 @@ import * as React from 'react';
 import {
   CalendarClockIcon,
   GalleryVerticalEnd,
+  KeyRoundIcon,
   LayoutDashboardIcon,
   SettingsIcon,
 } from 'lucide-react';
@@ -30,6 +31,7 @@ const data = {
   },
   navMain: [
     { title: 'Dashboard', url: '/hod/dashboard', icon: LayoutDashboardIcon },
+    { title: 'Keys', url: '/hod/keys', icon: KeyRoundIcon },
     {
       title: 'Weekend Requests',
       url: '/hod/weekend-requests',
