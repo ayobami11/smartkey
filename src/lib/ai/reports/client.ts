@@ -36,10 +36,7 @@ export const generateShiftReport = async (
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: MODEL,
-      generationConfig: { responseMimeType: 'application/json' },
-    });
+    const model = genAI.getGenerativeModel({ model: MODEL });
 
     const result = await model.generateContent(buildReportPrompt(events));
     const parsed = parseGeminiOutput(result.response.text());
