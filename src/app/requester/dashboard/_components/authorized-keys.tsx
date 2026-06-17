@@ -10,12 +10,12 @@ import { zodResolver } from '@hookform/resolvers/zod';
 
 import { Button } from '@/components/ui/button';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import {
   Empty,
   EmptyDescription,
@@ -320,77 +320,95 @@ export const AuthorizedKeys = () => {
         </div>
       )}
 
-      {/* Weekday Request Dialog */}
-      <Dialog
+      {/* Weekday Request Sheet */}
+      <Sheet
         open={weekdayOpen}
         onOpenChange={(open) => {
           if (!open) resetSheet();
         }}
       >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Request a key</DialogTitle>
-            <DialogDescription>
+        <SheetContent side="right" className="flex flex-col gap-0 p-0">
+          <SheetHeader className="border-b border-border p-6">
+            <SheetTitle>Request a key</SheetTitle>
+            <SheetDescription>
               Confirm the return deadline and submit your request.
-            </DialogDescription>
-          </DialogHeader>
+            </SheetDescription>
+          </SheetHeader>
 
-          {/* Weekday form */}
-          {step === 'weekday_form' && selectedKey && (
-            <form
-              id="weekday-form"
-              onSubmit={weekdayForm.handleSubmit(handleWeekdaySubmit)}
-              className="flex flex-col gap-5"
-            >
-              {/* Key context */}
-              <div className="rounded-lg border border-border bg-muted/40 p-4">
-                <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                  <KeyRoundIcon className="size-3.5" aria-hidden="true" />
-                  Key
+          <div className="flex flex-1 flex-col overflow-y-auto p-6">
+            {/* Weekday form */}
+            {step === 'weekday_form' && selectedKey && (
+              <form
+                id="weekday-form"
+                onSubmit={weekdayForm.handleSubmit(handleWeekdaySubmit)}
+                className="flex flex-col gap-5"
+              >
+                {/* Key context */}
+                <div className="rounded-lg border border-border bg-muted/40 p-4">
+                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                    <KeyRoundIcon className="size-3.5" aria-hidden="true" />
+                    Key
+                  </div>
+                  <p className="mt-1.5 font-mono text-sm font-medium text-foreground">
+                    {selectedKey.code}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {selectedKey.room_name} · {zoneLabel(selectedKey.zone)}
+                  </p>
                 </div>
-                <p className="mt-1.5 font-mono text-sm font-medium text-foreground">
-                  {selectedKey.code}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {selectedKey.room_name} · {zoneLabel(selectedKey.zone)}
+
+                {/* Return deadline */}
+                <Controller
+                  name="return_deadline"
+                  control={weekdayForm.control}
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel htmlFor="return-deadline">
+                        Return by
+                      </FieldLabel>
+                      <Input
+                        id="return-deadline"
+                        type="datetime-local"
+                        {...field}
+                      />
+                      {!fieldState.error && (
+                        <p className="text-xs text-muted-foreground">
+                          Defaults to today at 4PM (end of business day).
+                        </p>
+                      )}
+                      {fieldState.invalid && (
+                        <FieldError errors={[fieldState.error]} />
+                      )}
+                    </Field>
+                  )}
+                />
+              </form>
+            )}
+
+            {/* Submitting */}
+            {step === 'submitting' && (
+              <div className="flex flex-1 items-center justify-center">
+                <p className="text-sm text-muted-foreground">
+                  Submitting request…
                 </p>
               </div>
+            )}
+          </div>
 
-              {/* Return deadline */}
-              <Controller
-                name="return_deadline"
-                control={weekdayForm.control}
-                render={({ field, fieldState }) => (
-                  <Field data-invalid={fieldState.invalid}>
-                    <FieldLabel htmlFor="return-deadline">Return by</FieldLabel>
-                    <Input
-                      id="return-deadline"
-                      type="datetime-local"
-                      {...field}
-                    />
-                    {!fieldState.error && (
-                      <p className="text-xs text-muted-foreground">
-                        Defaults to today at 4PM (end of business day).
-                      </p>
-                    )}
-                    {fieldState.invalid && (
-                      <FieldError errors={[fieldState.error]} />
-                    )}
-                  </Field>
-                )}
-              />
-
+          {/* Sticky footer */}
+          {step === 'weekday_form' && (
+            <div className="border-t border-border p-6 pt-4">
               {submitError && (
-                <p className="text-xs text-destructive" role="alert">
+                <p className="mb-3 text-xs text-destructive" role="alert">
                   {submitError}
                 </p>
               )}
-
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="w-full">
                     <Button
                       type="submit"
+                      form="weekday-form"
                       className="w-full"
                       disabled={!userId || isOffline}
                       style={isOffline ? { pointerEvents: 'none' } : undefined}
@@ -405,19 +423,10 @@ export const AuthorizedKeys = () => {
                   </TooltipContent>
                 )}
               </Tooltip>
-            </form>
-          )}
-
-          {/* Submitting */}
-          {step === 'submitting' && weekdayOpen && (
-            <div className="flex items-center justify-center py-8">
-              <p className="text-sm text-muted-foreground">
-                Submitting request…
-              </p>
             </div>
           )}
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
     </section>
   );
 };

@@ -1,112 +1,21 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { CalendarIcon, HistoryIcon } from 'lucide-react';
-
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyMedia,
-  EmptyTitle,
-} from '@/components/ui/empty';
+
+import { type RequestRow } from '@/app/requester/history/_components/request-card';
+import { HistoryEmpty } from '@/app/requester/history/_components/history-empty';
+import { HistorySkeleton } from '@/app/requester/history/_components/history-skeleton';
+import { RequestList } from '@/app/requester/history/_components/request-list';
 
 // Types
-
-type RequestStatus =
-  | 'PENDING_HOD'
-  | 'APPROVED'
-  | 'CODE_ISSUED'
-  | 'KEY_ISSUED'
-  | 'KEY_RETURNED'
-  | 'EXPIRED'
-  | 'CANCELLED'
-  | 'DECLINED';
-
-type RequestType = 'WEEKDAY' | 'WEEKEND';
-
-type RequestRow = {
-  id: string;
-  created_at: string;
-  type: RequestType;
-  status: RequestStatus;
-  key: { code: string; room_name: string } | null;
-};
 
 type ApiResponse = {
   requests: RequestRow[];
   next_cursor: string | null;
 };
 
-// Helpers
-
-const STATUS_CONFIG: Record<
-  RequestStatus,
-  {
-    label: string;
-    variant: 'default' | 'secondary' | 'destructive' | 'outline';
-    stripe: string;
-  }
-> = {
-  CODE_ISSUED: {
-    label: 'Code issued',
-    variant: 'secondary',
-    stripe: 'bg-amber-400',
-  },
-  KEY_ISSUED: { label: 'Key issued', variant: 'default', stripe: 'bg-primary' },
-  KEY_RETURNED: {
-    label: 'Returned',
-    variant: 'outline',
-    stripe: 'bg-emerald-500',
-  },
-  EXPIRED: { label: 'Expired', variant: 'secondary', stripe: 'bg-slate-400' },
-  CANCELLED: {
-    label: 'Cancelled',
-    variant: 'secondary',
-    stripe: 'bg-slate-400',
-  },
-  DECLINED: {
-    label: 'Declined',
-    variant: 'destructive',
-    stripe: 'bg-destructive',
-  },
-  PENDING_HOD: {
-    label: 'Pending approval',
-    variant: 'secondary',
-    stripe: 'bg-amber-400',
-  },
-  APPROVED: {
-    label: 'Approved',
-    variant: 'secondary',
-    stripe: 'bg-emerald-500',
-  },
-};
-
-const formatDate = (iso: string) =>
-  new Date(iso).toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
-
-// Skeleton rows
-
-const HistorySkeleton = () => (
-  <div
-    className="flex flex-col gap-3"
-    aria-busy="true"
-    aria-label="Loading history"
-  >
-    {Array.from({ length: 5 }).map((_, i) => (
-      <Skeleton key={i} className="h-18 rounded-lg" />
-    ))}
-  </div>
-);
-
-// Component
+// Page
 
 export default function RequesterHistoryPage() {
   const [requests, setRequests] = useState<RequestRow[]>([]);
@@ -128,8 +37,6 @@ export default function RequesterHistoryPage() {
     return json.data;
   }, []);
 
-  // Initial load
-
   useEffect(() => {
     fetchHistory()
       .then((data) => {
@@ -139,8 +46,6 @@ export default function RequesterHistoryPage() {
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, [fetchHistory]);
-
-  // Load more
 
   const handleLoadMore = async () => {
     if (!nextCursor) return;
@@ -156,16 +61,12 @@ export default function RequesterHistoryPage() {
     }
   };
 
-  // Render
-
   return (
     <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
       <h2 className="text-sm font-semibold text-foreground">Request history</h2>
 
-      {/* Loading */}
       {loading && <HistorySkeleton />}
 
-      {/* Error */}
       {!loading && error && (
         <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4">
           <p className="text-sm font-medium text-destructive">
@@ -193,98 +94,15 @@ export default function RequesterHistoryPage() {
         </div>
       )}
 
-      {/* Empty */}
-      {!loading && !error && requests.length === 0 && (
-        <Empty className="border border-border bg-card">
-          <EmptyMedia variant="icon">
-            <HistoryIcon
-              className="size-8 text-muted-foreground"
-              aria-hidden="true"
-            />
-          </EmptyMedia>
-          <EmptyContent>
-            <EmptyTitle>No requests yet</EmptyTitle>
-            <EmptyDescription>
-              You have not requested a key yet. Your request history will appear
-              here.
-            </EmptyDescription>
-          </EmptyContent>
-        </Empty>
-      )}
+      {!loading && !error && requests.length === 0 && <HistoryEmpty />}
 
-      {/* Content */}
       {!loading && !error && requests.length > 0 && (
-        <>
-          <ul className="flex flex-col gap-3" aria-label="Request history">
-            {requests.map((req) => {
-              const statusCfg = STATUS_CONFIG[req.status] ?? {
-                label: req.status,
-                variant: 'secondary' as const,
-                stripe: 'bg-slate-400',
-              };
-
-              return (
-                <li
-                  key={req.id}
-                  className="flex overflow-hidden rounded-lg border border-border bg-card shadow-[0_2px_4px_rgba(15,23,42,0.06)]"
-                >
-                  <div
-                    className={`w-1 shrink-0 ${statusCfg.stripe}`}
-                    aria-hidden="true"
-                  />
-                  <div className="flex flex-1 items-center gap-3 p-4">
-                    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                      {/* Line 1: key code + status badge */}
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-sm font-medium text-foreground">
-                          {req.key?.code ?? '—'}
-                        </span>
-                        <Badge
-                          variant={statusCfg.variant}
-                          aria-label={`Status: ${statusCfg.label}`}
-                          className="text-xs"
-                        >
-                          {statusCfg.label}
-                        </Badge>
-                      </div>
-                      {/* Line 2: room name */}
-                      <p className="truncate text-xs text-muted-foreground">
-                        {req.key?.room_name ?? 'Key unavailable'}
-                      </p>
-                      {/* Line 3: date */}
-                      <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <CalendarIcon
-                          className="size-3 shrink-0"
-                          aria-hidden="true"
-                        />
-                        {formatDate(req.created_at)}
-                      </p>
-                    </div>
-                    {/* Right: type badge */}
-                    <Badge variant="outline" className="shrink-0 text-xs">
-                      {req.type === 'WEEKDAY' ? 'Weekday' : 'Weekend'}
-                    </Badge>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-
-          {/* Load more */}
-          {nextCursor && (
-            <div className="flex justify-center">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleLoadMore}
-                disabled={loadingMore}
-                aria-busy={loadingMore}
-              >
-                {loadingMore ? 'Loading…' : 'Load more'}
-              </Button>
-            </div>
-          )}
-        </>
+        <RequestList
+          requests={requests}
+          nextCursor={nextCursor}
+          loadingMore={loadingMore}
+          onLoadMore={handleLoadMore}
+        />
       )}
     </div>
   );

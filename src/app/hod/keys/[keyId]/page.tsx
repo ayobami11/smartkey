@@ -404,9 +404,9 @@ export default function KeySlotManagementPage() {
                   </div>
                 ) : (
                   <Button
-                    variant="ghost"
+                    variant="destructive"
                     size="sm"
-                    className="w-full text-xs text-destructive hover:bg-destructive/5 hover:text-destructive"
+                    className="w-full text-xs"
                     aria-label={`Remove ${slot.name}`}
                     onClick={() => {
                       setRemoveTarget(slot);

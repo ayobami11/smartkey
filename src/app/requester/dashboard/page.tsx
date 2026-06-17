@@ -1,7 +1,7 @@
-import { ActiveRequestBanner } from '@/app/requester/_components/active-request-banner';
-import { AuthorizedKeys } from '@/app/requester/_components/authorized-keys';
-import { OutstandingKeys } from '@/app/requester/_components/outstanding-keys';
-import { WeekendRequests } from '@/app/requester/_components/weekend-requests';
+import { ActiveRequestBanner } from '@/app/requester/dashboard/_components/active-request-banner';
+import { AuthorizedKeys } from '@/app/requester/dashboard/_components/authorized-keys';
+import { OutstandingKeys } from '@/app/requester/dashboard/_components/outstanding-keys';
+import { WeekendRequests } from '@/app/requester/dashboard/_components/weekend-requests';
 
 export default function RequesterDashboardPage() {
   return (
