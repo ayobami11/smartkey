@@ -36,7 +36,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from '@/components/ui/input-group';
 import {
   Pagination,
   PaginationContent,
@@ -519,20 +523,21 @@ export const AuditTable = () => {
       {!isLoading && !isError && (
         <div className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="relative min-w-56 flex-1">
-              <SearchIcon
-                className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-                aria-hidden="true"
-              />
-              <Input
+            <InputGroup className="min-w-56 flex-1">
+              <InputGroupInput
                 type="search"
                 placeholder="Search by event or actor name"
-                className="pl-9"
                 aria-label="Search audit log by event or actor name"
                 value={search}
                 onChange={(e) => handleSearch(e.target.value)}
               />
-            </div>
+              <InputGroupAddon align="inline-start">
+                <SearchIcon
+                  className="size-4 text-muted-foreground"
+                  aria-hidden="true"
+                />
+              </InputGroupAddon>
+            </InputGroup>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button

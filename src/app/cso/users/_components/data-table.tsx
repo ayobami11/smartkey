@@ -24,7 +24,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from '@/components/ui/input-group';
 import {
   Select,
   SelectContent,
@@ -121,15 +125,10 @@ export const UsersDataTable = ({
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
         {/* Global search */}
-        <div className="relative min-w-56 flex-1">
-          <SearchIcon
-            className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <Input
+        <InputGroup className="min-w-56 flex-1">
+          <InputGroupInput
             type="search"
             placeholder="Search by name or email"
-            className="pl-9"
             aria-label="Search users"
             value={globalFilter}
             onChange={(e) => {
@@ -137,7 +136,13 @@ export const UsersDataTable = ({
               table.setPageIndex(0);
             }}
           />
-        </div>
+          <InputGroupAddon align="inline-start">
+            <SearchIcon
+              className="size-4 text-muted-foreground"
+              aria-hidden="true"
+            />
+          </InputGroupAddon>
+        </InputGroup>
 
         {/* Role multi-filter */}
         <DropdownMenu>

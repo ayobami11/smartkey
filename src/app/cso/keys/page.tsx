@@ -4,10 +4,16 @@ import { useState } from 'react';
 import { PlusIcon, SearchIcon } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from '@/components/ui/input-group';
+import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { createBrowserClient } from '@/lib/supabase/client';
 
 import {
@@ -51,6 +57,8 @@ export default function KeyInventoryPage() {
     id: string;
     code: string;
   } | null>(null);
+
+  const isDesktop = useMediaQuery('(min-width: 1024px)');
 
   // Keys inventory query
 
@@ -183,108 +191,114 @@ export default function KeyInventoryPage() {
         </Button>
       </div>
 
-      {/* Zone tabs */}
       <Tabs
         value={activeTab}
         onValueChange={(value) => setActiveTab(value as ActiveTab)}
+        orientation={isDesktop ? 'vertical' : 'horizontal'}
+        className="flex-1 gap-6 lg:gap-8"
       >
         <TabsList
           variant="line"
           aria-label="Filter by zone"
-          className="h-auto w-fit justify-start rounded-none border-b border-border bg-transparent p-0"
+          className="lg:w-48 lg:shrink-0"
         >
           {tabs.map((tab) => (
             <TabsTrigger
               key={tab.value}
               value={tab.value}
-              className="rounded-none px-4 py-2 text-sm font-medium data-active:text-primary after:bg-primary"
+              className="px-4 py-2 data-active:text-primary! lg:data-active:bg-primary/10! after:bg-primary lg:after:hidden"
             >
               {tab.label}
             </TabsTrigger>
           ))}
         </TabsList>
+        <Separator orientation="vertical" className="hidden lg:block" />
+        <div className="flex flex-1 flex-col gap-6">
+          {/* Search */}
+          <InputGroup>
+            <InputGroupInput
+              type="search"
+              value={search}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setSearch(e.target.value)
+              }
+              placeholder="Search by key code, room, department, or HOD…"
+              aria-label="Search keys"
+            />
+            <InputGroupAddon align="inline-start">
+              <SearchIcon
+                className="size-4 text-muted-foreground"
+                aria-hidden="true"
+              />
+            </InputGroupAddon>
+          </InputGroup>
+
+          {/* Outstanding */}
+          <TabsContent value="Outstanding">
+            <OutstandingKeys
+              items={outstandingFiltered}
+              isLoading={outstandingLoading}
+              isError={outstandingIsError}
+              error={outstandingErrorObj}
+              onRetry={() => refetchOutstanding()}
+              onMarkLost={setLostTarget}
+            />
+          </TabsContent>
+
+          {/* All / zone / Retired */}
+          {tabs
+            .filter((t) => t.value !== 'Outstanding')
+            .map((t) => (
+              <TabsContent key={t.value} value={t.value}>
+                {keysLoading && (
+                  <div
+                    className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+                    aria-busy="true"
+                    aria-label="Loading keys"
+                  >
+                    {[0, 1, 2, 3, 4, 5].map((i) => (
+                      <Skeleton key={i} className="h-36 rounded-lg" />
+                    ))}
+                  </div>
+                )}
+                {keysError && (
+                  <div
+                    className="rounded-lg border border-destructive/30 bg-destructive/5 p-4"
+                    role="alert"
+                  >
+                    <p className="text-sm font-medium text-destructive">
+                      Failed to load key inventory
+                    </p>
+                    {keysErrorObj instanceof Error && (
+                      <p className="mt-1 text-xs text-destructive/80">
+                        {keysErrorObj.message}
+                      </p>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-3"
+                      onClick={() => refetchKeys()}
+                    >
+                      Retry
+                    </Button>
+                  </div>
+                )}
+                {!keysLoading &&
+                  !keysError &&
+                  (filtered.length === 0 ? (
+                    <KeysEmpty
+                      title="No keys found"
+                      description="No keys match the selected filter."
+                    />
+                  ) : (
+                    <KeyCards keys={filtered} onMarkLost={setLostTarget} />
+                  ))}
+              </TabsContent>
+            ))}
+        </div>
       </Tabs>
 
-      {/* Search */}
-      <div className="relative max-w-md">
-        <SearchIcon
-          className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-          aria-hidden="true"
-        />
-        <Input
-          type="search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by key code, room, department, or HOD…"
-          className="pl-9"
-          aria-label="Search keys"
-        />
-      </div>
-
-      {/* Loading */}
-      {keysLoading && activeTab !== 'Outstanding' && (
-        <div
-          className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
-          aria-busy="true"
-          aria-label="Loading keys"
-        >
-          {[0, 1, 2, 3, 4, 5].map((i) => (
-            <Skeleton key={i} className="h-36 rounded-lg" />
-          ))}
-        </div>
-      )}
-
-      {/* Error */}
-      {keysError && activeTab !== 'Outstanding' && (
-        <div
-          className="rounded-lg border border-destructive/30 bg-destructive/5 p-4"
-          role="alert"
-        >
-          <p className="text-sm font-medium text-destructive">
-            Failed to load key inventory
-          </p>
-          {keysErrorObj instanceof Error && (
-            <p className="mt-1 text-xs text-destructive/80">
-              {keysErrorObj.message}
-            </p>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-3"
-            onClick={() => refetchKeys()}
-          >
-            Retry
-          </Button>
-        </div>
-      )}
-
-      {/* Outstanding tab */}
-      {activeTab === 'Outstanding' && (
-        <OutstandingKeys
-          items={outstandingFiltered}
-          isLoading={outstandingLoading}
-          isError={outstandingIsError}
-          error={outstandingErrorObj}
-          onRetry={() => refetchOutstanding()}
-          onMarkLost={setLostTarget}
-        />
-      )}
-
-      {/* Content */}
-      {!keysLoading &&
-        !keysError &&
-        activeTab !== 'Outstanding' &&
-        (filtered.length === 0 ? (
-          <KeysEmpty
-            title="No keys found"
-            description="No keys match the selected filter."
-          />
-        ) : (
-          <KeyCards keys={filtered} onMarkLost={setLostTarget} />
-        ))}
-
-      {/* Mark as lost Dialog */}
       <MarkKeyLostDialog
         target={lostTarget}
         onClose={() => setLostTarget(null)}
