@@ -1,11 +1,22 @@
 'use client';
 
-import { useState } from 'react';
+import * as React from 'react';
+import { useEffect, useState } from 'react';
 import { PlusIcon, SearchIcon } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { Button } from '@/components/ui/button';
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxGroup,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxLabel,
+  ComboboxList,
+  ComboboxSeparator,
+} from '@/components/ui/combobox';
 import {
   InputGroup,
   InputGroupAddon,
@@ -38,7 +49,11 @@ type ActiveTab =
   | 'Outstanding'
   | 'Retired';
 
+type Department = { id: string; name: string; faculty: string };
+
 // Constants
+
+const ALL_DEPTS_VALUE = 'All departments';
 
 const tabs: { label: string; value: ActiveTab }[] = [
   { label: 'All', value: 'All' },
@@ -53,12 +68,22 @@ const tabs: { label: string; value: ActiveTab }[] = [
 export default function KeyInventoryPage() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('All');
   const [search, setSearch] = useState('');
+  const [selectedDeptName, setSelectedDeptName] = useState<string | null>(null);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [inputValue, setInputValue] = useState('');
   const [lostTarget, setLostTarget] = useState<{
     id: string;
     code: string;
   } | null>(null);
 
   const isDesktop = useMediaQuery('(min-width: 1024px)');
+
+  // Fetch departments for filter
+  useEffect(() => {
+    fetch('/api/admin/departments')
+      .then((r) => r.json())
+      .then((json) => setDepartments(json.data?.departments ?? []));
+  }, []);
 
   // Keys inventory query
 
@@ -163,14 +188,41 @@ export default function KeyInventoryPage() {
       )
     : tabFiltered;
 
-  const outstandingFiltered = query
-    ? outstandingKeys.filter(
-        (item) =>
-          item.keyCode.toLowerCase().includes(query) ||
-          item.roomName.toLowerCase().includes(query) ||
-          item.requesterName.toLowerCase().includes(query)
-      )
-    : outstandingKeys;
+  const deptFiltered = !selectedDeptName
+    ? filtered
+    : filtered.filter((k) => k.department === selectedDeptName);
+
+  const outstandingFiltered = (() => {
+    let items = query
+      ? outstandingKeys.filter(
+          (item) =>
+            item.keyCode.toLowerCase().includes(query) ||
+            item.roomName.toLowerCase().includes(query) ||
+            item.requesterName.toLowerCase().includes(query)
+        )
+      : outstandingKeys;
+
+    if (selectedDeptName) {
+      const deptKeyIds = new Set(
+        keys.filter((k) => k.department === selectedDeptName).map((k) => k.id)
+      );
+      items = items.filter((item) => deptKeyIds.has(item.keyId));
+    }
+
+    return items;
+  })();
+
+  const isFiltering = inputValue.trim() !== '';
+  const lowerInput = inputValue.toLowerCase().trim();
+  const deptSuggestions = isFiltering
+    ? departments.filter((d) => d.name.toLowerCase().includes(lowerInput))
+    : departments;
+  const suggestionsByFaculty = deptSuggestions.reduce<
+    Record<string, Department[]>
+  >((acc, d) => {
+    (acc[d.faculty || 'Other'] ??= []).push(d);
+    return acc;
+  }, {});
 
   // Render
 
@@ -214,24 +266,81 @@ export default function KeyInventoryPage() {
         </TabsList>
         <Separator orientation="vertical" className="hidden lg:block" />
         <div className="flex flex-1 flex-col gap-6">
-          {/* Search */}
-          <InputGroup>
-            <InputGroupInput
-              type="search"
-              value={search}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                setSearch(e.target.value)
-              }
-              placeholder="Search by key code, room, department, or HOD…"
-              aria-label="Search keys"
-            />
-            <InputGroupAddon align="inline-start">
-              <SearchIcon
-                className="size-4 text-muted-foreground"
-                aria-hidden="true"
+          {/* Search + department filter */}
+          <div className="flex flex-wrap items-center gap-3">
+            <InputGroup className="flex-1">
+              <InputGroupInput
+                type="search"
+                value={search}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setSearch(e.target.value)
+                }
+                placeholder="Search by key code, room, department, or HOD…"
+                aria-label="Search keys"
               />
-            </InputGroupAddon>
-          </InputGroup>
+              <InputGroupAddon align="inline-start">
+                <SearchIcon
+                  className="size-4 text-muted-foreground"
+                  aria-hidden="true"
+                />
+              </InputGroupAddon>
+            </InputGroup>
+
+            <Combobox
+              items={[ALL_DEPTS_VALUE, ...departments.map((d) => d.name)]}
+              value={selectedDeptName}
+              onValueChange={(name) => {
+                const n = name as string | null;
+                setSelectedDeptName(!n || n === ALL_DEPTS_VALUE ? null : n);
+              }}
+              onOpenChange={(open) => {
+                if (!open) setInputValue('');
+              }}
+            >
+              <ComboboxInput
+                placeholder="All departments"
+                aria-label="Filter by department"
+                showClear={!!selectedDeptName}
+                className="w-64"
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setInputValue(e.target.value)
+                }
+              />
+              <ComboboxContent>
+                <ComboboxList>
+                  {!isFiltering && (
+                    <>
+                      <ComboboxItem value={ALL_DEPTS_VALUE}>
+                        All departments
+                      </ComboboxItem>
+                      {departments.length > 0 && <ComboboxSeparator />}
+                    </>
+                  )}
+                  {deptSuggestions.length === 0 ? (
+                    <p className="py-2 text-center text-sm text-muted-foreground">
+                      No departments found.
+                    </p>
+                  ) : (
+                    Object.entries(suggestionsByFaculty).map(
+                      ([faculty, depts], idx, arr) => (
+                        <React.Fragment key={faculty}>
+                          <ComboboxGroup>
+                            <ComboboxLabel>{faculty}</ComboboxLabel>
+                            {depts.map((d) => (
+                              <ComboboxItem key={d.id} value={d.name}>
+                                {d.name}
+                              </ComboboxItem>
+                            ))}
+                          </ComboboxGroup>
+                          {idx < arr.length - 1 && <ComboboxSeparator />}
+                        </React.Fragment>
+                      )
+                    )
+                  )}
+                </ComboboxList>
+              </ComboboxContent>
+            </Combobox>
+          </div>
 
           {/* Outstanding */}
           <TabsContent value="Outstanding">
@@ -286,13 +395,13 @@ export default function KeyInventoryPage() {
                 )}
                 {!keysLoading &&
                   !keysError &&
-                  (filtered.length === 0 ? (
+                  (deptFiltered.length === 0 ? (
                     <KeysEmpty
                       title="No keys found"
                       description="No keys match the selected filter."
                     />
                   ) : (
-                    <KeyCards keys={filtered} onMarkLost={setLostTarget} />
+                    <KeyCards keys={deptFiltered} onMarkLost={setLostTarget} />
                   ))}
               </TabsContent>
             ))}
