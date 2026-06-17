@@ -50,7 +50,7 @@ const ROLE_CLASS: Record<UserRole, string> = {
   CSO: 'bg-primary/10 text-primary',
   HOD: 'bg-amber-100 text-amber-700',
   VERIFIER: 'bg-blue-100 text-blue-700',
-  REQUESTER: 'bg-muted text-muted-foreground',
+  REQUESTER: 'bg-teal-100 text-teal-700',
 };
 
 export const STATUS_LABEL: Record<UserStatus, string> = {

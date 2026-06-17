@@ -159,8 +159,6 @@ export const DepartmentKeys = ({ deptId }: Props) => {
 
   return (
     <div className="flex flex-col gap-4">
-      <h2 className="text-sm font-semibold text-foreground">Department Keys</h2>
-
       <Tabs
         value={activeFilter}
         onValueChange={(v) => setActiveFilter(v as FilterTab)}
