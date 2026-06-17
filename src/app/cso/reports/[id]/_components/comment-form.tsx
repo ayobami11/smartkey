@@ -4,50 +4,58 @@ import { useState } from 'react';
 
 import { useRouter } from 'next/navigation';
 
+import { zodResolver } from '@hookform/resolvers/zod';
 import { CheckCircleIcon } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
 
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 
+const commentSchema = z.object({
+  text: z.string().min(1, 'Comment is required.'),
+});
+
+type CommentFormValues = z.infer<typeof commentSchema>;
+
 type Props = { reportId: string };
 
-// Posts an immutable comment to POST /api/reports/[id]/comments, then refreshes
-// the server component so the new comment renders. Mirrors the success/error UX
-// used in reports-dialog.tsx.
 export const CommentForm = ({ reportId }: Props) => {
   const router = useRouter();
-  const [text, setText] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  const handleSubmit = async () => {
-    if (!text.trim()) return;
-    setSaving(true);
-    setError(null);
+  const form = useForm<CommentFormValues>({
+    resolver: zodResolver(commentSchema),
+    defaultValues: { text: '' },
+  });
+
+  const { isSubmitting, errors } = form.formState;
+
+  const handleSubmit = form.handleSubmit(async ({ text }) => {
     try {
       const res = await fetch(`/api/reports/${reportId}/comments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: text.trim() }),
+        body: JSON.stringify({ text }),
       });
       const json = await res.json();
       if (!res.ok) {
-        setError(
-          (json as { error?: string }).error ?? 'Failed to save comment.'
-        );
+        form.setError('root', {
+          message:
+            (json as { error?: string }).error ?? 'Failed to save comment.',
+        });
         return;
       }
       setSuccess(true);
-      setText('');
+      form.reset();
       router.refresh();
     } catch {
-      setError('Network error. Check your connection and try again.');
-    } finally {
-      setSaving(false);
+      form.setError('root', {
+        message: 'Network error. Check your connection and try again.',
+      });
     }
-  };
+  });
 
   if (success) {
     return (
@@ -74,33 +82,39 @@ export const CommentForm = ({ reportId }: Props) => {
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-2" noValidate>
       <Label htmlFor="report-comment">Add a comment</Label>
       <Textarea
         id="report-comment"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
         placeholder="Add a note or observation to this report…"
-        rows={4}
+        className="min-h-32 resize-none"
         aria-required="true"
+        aria-invalid={!!errors.text}
+        aria-describedby={errors.text ? 'comment-text-error' : undefined}
+        {...form.register('text')}
       />
       <p className="text-xs text-muted-foreground">
         Comments are saved permanently and cannot be edited or deleted.
       </p>
-      {error && (
+      {errors.text && (
+        <p
+          id="comment-text-error"
+          className="text-sm text-destructive"
+          role="alert"
+        >
+          {errors.text.message}
+        </p>
+      )}
+      {errors.root && (
         <p className="text-sm text-destructive" role="alert">
-          {error}
+          {errors.root.message}
         </p>
       )}
       <div className="flex justify-end">
-        <Button
-          disabled={!text.trim() || saving}
-          aria-busy={saving}
-          onClick={handleSubmit}
-        >
-          {saving ? 'Saving…' : 'Save comment'}
+        <Button type="submit" disabled={isSubmitting} aria-busy={isSubmitting}>
+          {isSubmitting ? 'Saving…' : 'Save comment'}
         </Button>
       </div>
-    </div>
+    </form>
   );
 };
