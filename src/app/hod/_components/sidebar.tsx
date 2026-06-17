@@ -31,7 +31,7 @@ const data = {
   },
   navMain: [
     { title: 'Dashboard', url: '/hod/dashboard', icon: LayoutDashboardIcon },
-    { title: 'Keys', url: '/hod/keys', icon: KeyRoundIcon },
+    { title: 'Key Inventory', url: '/hod/keys', icon: KeyRoundIcon },
     {
       title: 'Weekend Requests',
       url: '/hod/weekend-requests',

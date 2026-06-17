@@ -1,29 +1,32 @@
 'use client';
 
 import * as React from 'react';
+import { useState } from 'react';
 import {
   FileClockIcon,
   FileTextIcon,
   GalleryVerticalEnd,
   KeyRoundIcon,
   LayoutDashboardIcon,
+  LogOutIcon,
   SettingsIcon,
   UsersIcon,
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
   SidebarRail,
 } from '@/components/ui/sidebar';
 
-import { useProfile } from '@/hooks/use-profile';
-
 import { NavMain } from '@/app/cso/_components/sidebar-main';
 import { SidebarBrand } from '@/app/cso/_components/sidebar-brand';
-import { SidebarUser } from '@/app/cso/_components/sidebar-user';
 
 const data = {
   team: {
@@ -44,7 +47,15 @@ const data = {
 export const AppSidebar = ({
   ...props
 }: React.ComponentProps<typeof Sidebar>) => {
-  const user = useProfile();
+  const router = useRouter();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    await fetch('/api/auth/logout', { method: 'POST' });
+    router.push('/login');
+  };
+
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
@@ -54,7 +65,20 @@ export const AppSidebar = ({
         <NavMain items={data.navMain} />
       </SidebarContent>
       <SidebarFooter>
-        <SidebarUser user={user} />
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              aria-busy={isLoggingOut}
+              tooltip="Sign out"
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+            >
+              <LogOutIcon aria-hidden="true" />
+              <span>{isLoggingOut ? 'Signing out…' : 'Sign out'}</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
