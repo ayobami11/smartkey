@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { LogOutIcon, UploadIcon } from 'lucide-react';
+import { UploadIcon } from 'lucide-react';
 
 import { ChangePasswordForm } from '@/components/smartkey/change-password-form';
 
@@ -99,6 +99,7 @@ export const AccountSettings = () => {
             )}
           </div>
         </div>
+        <Button className="w-fit">Update profile</Button>
       </div>
 
       {/* Change password */}
@@ -107,14 +108,6 @@ export const AccountSettings = () => {
           Change password
         </h3>
         <ChangePasswordForm />
-      </div>
-
-      <div className="flex items-center justify-between">
-        <Button>Save account settings</Button>
-        <Button variant="destructive">
-          <LogOutIcon className="size-4" aria-hidden="true" />
-          Sign out
-        </Button>
       </div>
     </div>
   );
