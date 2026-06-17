@@ -26,10 +26,11 @@ const ROUTES: Record<string, string> = {
 export const DashboardHeader = () => {
   const pathname = usePathname();
   const isHome = pathname === '/cso/dashboard';
+  const isReportDetail = /^\/cso\/reports\/[^/]+$/.test(pathname);
   const pageTitle = ROUTES[pathname] ?? 'Dashboard';
 
   return (
-    <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
+    <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 border-b border-border mb-6">
       <div className="flex items-center gap-2 px-4">
         <SidebarTrigger className="-ml-1" />
         <div>
@@ -40,7 +41,25 @@ export const DashboardHeader = () => {
         </div>
         <Breadcrumb>
           <BreadcrumbList>
-            {isHome ? (
+            {isReportDetail ? (
+              <>
+                <BreadcrumbItem className="hidden md:block">
+                  <BreadcrumbLink href="/cso/dashboard">
+                    Dashboard
+                  </BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator className="hidden md:block" />
+                <BreadcrumbItem className="hidden md:block">
+                  <BreadcrumbLink href="/cso/reports">
+                    Shift Reports
+                  </BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator className="hidden md:block" />
+                <BreadcrumbItem>
+                  <BreadcrumbPage>Report Details</BreadcrumbPage>
+                </BreadcrumbItem>
+              </>
+            ) : isHome ? (
               <BreadcrumbItem>
                 <BreadcrumbPage>Dashboard</BreadcrumbPage>
               </BreadcrumbItem>

@@ -1,7 +1,6 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
-import { ArrowLeftIcon, BotIcon } from 'lucide-react';
+import { BotIcon } from 'lucide-react';
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -137,13 +136,6 @@ export default async function ReportDetailPage({
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 p-4 pt-0">
       <div className="flex flex-col gap-3">
-        <Link
-          href="/cso/reports"
-          className="inline-flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-        >
-          <ArrowLeftIcon className="size-4" aria-hidden="true" />
-          Back to reports
-        </Link>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-xl font-semibold text-foreground">
