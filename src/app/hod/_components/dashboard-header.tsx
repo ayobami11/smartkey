@@ -14,21 +14,21 @@ import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { ModeToggle } from '@/components/smartkey/mode-toggle';
 
-function getPageTitle(pathname: string): string {
-  if (pathname === '/hod/weekend-requests') return 'Weekend Requests';
-  if (pathname === '/hod/onboarding') return 'Setup';
-  if (pathname === '/hod/settings') return 'Settings';
-  if (pathname.startsWith('/hod/keys/')) return 'Key Slot Management';
-  return 'Dashboard';
-}
+const ROUTES: Record<string, string> = {
+  '/hod/keys': 'Key Inventory',
+  '/hod/weekend-requests': 'Weekend Requests',
+  '/hod/onboarding': 'Setup',
+  '/hod/settings': 'Settings',
+};
 
 export const DashboardHeader = () => {
   const pathname = usePathname();
   const isHome = pathname === '/hod/dashboard';
-  const pageTitle = getPageTitle(pathname);
+  const isKeyDetail = /^\/hod\/keys\/[^/]+$/.test(pathname);
+  const pageTitle = ROUTES[pathname] ?? 'Dashboard';
 
   return (
-    <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
+    <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 border-b border-border mb-6">
       <div className="flex items-center gap-2 px-4">
         <SidebarTrigger className="-ml-1" />
         <div>
@@ -39,7 +39,25 @@ export const DashboardHeader = () => {
         </div>
         <Breadcrumb>
           <BreadcrumbList>
-            {isHome ? (
+            {isKeyDetail ? (
+              <>
+                <BreadcrumbItem className="hidden md:block">
+                  <BreadcrumbLink href="/hod/dashboard">
+                    Dashboard
+                  </BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator className="hidden md:block" />
+                <BreadcrumbItem className="hidden md:block">
+                  <BreadcrumbLink href="/hod/keys">
+                    Key Inventory
+                  </BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator className="hidden md:block" />
+                <BreadcrumbItem>
+                  <BreadcrumbPage>Key Slot Management</BreadcrumbPage>
+                </BreadcrumbItem>
+              </>
+            ) : isHome ? (
               <BreadcrumbItem>
                 <BreadcrumbPage>Dashboard</BreadcrumbPage>
               </BreadcrumbItem>

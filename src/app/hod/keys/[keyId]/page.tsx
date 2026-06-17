@@ -1,15 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import {
-  ArrowLeftIcon,
-  KeyRoundIcon,
-  PlusIcon,
-  Trash2Icon,
-  UserIcon,
-} from 'lucide-react';
+import { KeyRoundIcon, PlusIcon, Trash2Icon, UserIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -280,13 +273,6 @@ export default function KeySlotManagementPage() {
   if (fetchError) {
     return (
       <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
-        <Link
-          href="/hod/keys"
-          className="flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeftIcon className="size-4" aria-hidden="true" />
-          Back to dashboard
-        </Link>
         <div
           className="rounded-lg border border-destructive/30 bg-destructive/5 p-4"
           role="alert"
@@ -299,15 +285,6 @@ export default function KeySlotManagementPage() {
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
-      {/* Back link */}
-      <Link
-        href="/hod/keys"
-        className="flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-      >
-        <ArrowLeftIcon className="size-4" aria-hidden="true" />
-        Back to dashboard
-      </Link>
-
       {/* Key header */}
       <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-5 shadow-[0_2px_4px_rgba(15,23,42,0.06)] sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
