@@ -45,7 +45,7 @@ const steps = [
   {
     n: '02',
     title: 'Collect at the desk',
-    body: 'Present the code to the security verifier. The officer confirms identity and marks the key as issued in real time — no paper, no delay.',
+    body: 'Present the code to the security verifier. The officer confirms identity and marks the key as issued in real time. No paper, no delay.',
   },
   {
     n: '03',
@@ -180,8 +180,8 @@ export default function LandingPage() {
                 From request to return in minutes
               </h2>
               <p className="mt-4 text-base text-muted-foreground">
-                The entire flow — from submitting a request to physically
-                returning a key — is tracked, audited, and visible to the right
+                The entire flow, from submitting a request to physically
+                returning a key, is tracked, audited, and visible to the right
                 people in real time.
               </p>
             </div>
