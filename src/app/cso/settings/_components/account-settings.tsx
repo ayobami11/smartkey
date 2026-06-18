@@ -88,6 +88,9 @@ export const AccountSettings = () => {
                 className="cursor-not-allowed bg-muted/50 text-muted-foreground"
               />
             )}
+            <p className="text-xs text-muted-foreground">
+              Your institutional email can&apos;t be changed.
+            </p>
           </div>
         </div>
         <Button className="w-fit">Update profile</Button>

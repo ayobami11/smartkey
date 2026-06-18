@@ -32,6 +32,7 @@ export type UserRow = {
 };
 
 export type ColumnCallbacks = {
+  onEdit: (user: UserRow) => void;
   onRevoke: (user: UserRow) => void;
   onResend: (user: UserRow) => void;
   resendingId: string | null;
@@ -245,7 +246,7 @@ export const createColumns = (
     enableHiding: false,
     cell: ({ row }) => {
       const user = row.original;
-      const { onRevoke, onResend, resendingId } = callbacks;
+      const { onEdit, onRevoke, onResend, resendingId } = callbacks;
       return (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -261,6 +262,9 @@ export const createColumns = (
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuItem onClick={() => onEdit(user)}>
+              Edit details
+            </DropdownMenuItem>
             {user.status === 'PENDING_ACTIVATION' && (
               <DropdownMenuItem
                 disabled={resendingId === user.id}

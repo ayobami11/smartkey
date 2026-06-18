@@ -598,6 +598,24 @@ No request body. Sets `profiles.status = 'DEACTIVATED'`. Supabase Auth session i
 
 ---
 
+### PATCH /api/admin/users/[id]
+
+**File**: `src/app/api/admin/users/[id]/route.ts`
+**Roles**: CSO
+
+Edits an existing user's `full_name` and — for departmental roles (HOD, REQUESTER) — `department_id`. Email and role are intentionally **not** editable here: the email is the auth login identity and chain-of-trust anchor, and role changes are out of scope. Writes a `USER_UPDATED` audit entry recording only the fields that actually changed. When an HOD moves department, the `departments.hod_id` reverse link is kept in sync.
+
+| Field           | Type            | Required                  |
+| --------------- | --------------- | ------------------------- |
+| `full_name`     | `string`        | yes                       |
+| `department_id` | `string` (uuid) | HOD and REQUESTER targets |
+
+**Response `data`**: `{ "profile_id": "<uuid>", "full_name": "<name>", "department_id": "<uuid|null>" }`
+
+**Errors**: `404` user not found · `409` destination department already has an HOD · `422` validation / department required / department not found
+
+---
+
 ### POST /api/admin/authorisations
 
 **File**: `src/app/api/admin/authorisations/route.ts`

@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { UsersDataTable } from '@/app/cso/users/_components/data-table';
+import { EditUserDialog } from '@/app/cso/users/_components/edit-user-dialog';
 import { ProvisionUserDialog } from '@/app/cso/users/_components/provision-user-dialog';
 import { UsersTableSkeleton } from '@/app/cso/users/_components/users-table-skeleton';
 import {
@@ -34,6 +35,9 @@ export default function UsersPage() {
   } | null>(null);
   const [revoking, setRevoking] = useState(false);
   const [revokeError, setRevokeError] = useState<string | null>(null);
+
+  // Edit dialog
+  const [editTarget, setEditTarget] = useState<UserRow | null>(null);
 
   // Resend invite
   const [resendingId, setResendingId] = useState<string | null>(null);
@@ -160,6 +164,7 @@ export default function UsersPage() {
       {!isLoading && !isError && (
         <UsersDataTable
           data={users}
+          onEdit={(user) => setEditTarget(user)}
           onRevoke={(user) =>
             setRevokeTarget({ id: user.id, name: user.full_name })
           }
@@ -167,6 +172,13 @@ export default function UsersPage() {
           resendingId={resendingId}
         />
       )}
+
+      {/* Edit user */}
+      <EditUserDialog
+        user={editTarget}
+        onClose={() => setEditTarget(null)}
+        onSuccess={() => refetch()}
+      />
 
       {/* Revoke access confirmation */}
       <AlertDialog

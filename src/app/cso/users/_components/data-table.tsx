@@ -75,6 +75,7 @@ type UsersDataTableProps = { data: UserRow[] } & ColumnCallbacks;
 
 export const UsersDataTable = ({
   data,
+  onEdit,
   onRevoke,
   onResend,
   resendingId,
@@ -88,8 +89,8 @@ export const UsersDataTable = ({
   });
 
   const columns = useMemo(
-    () => createColumns({ onRevoke, onResend, resendingId }),
-    [onRevoke, onResend, resendingId]
+    () => createColumns({ onEdit, onRevoke, onResend, resendingId }),
+    [onEdit, onRevoke, onResend, resendingId]
   );
 
   const table = useReactTable({

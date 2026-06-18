@@ -93,7 +93,7 @@ export const AccountSettings = () => {
               />
             )}
             <p className="text-xs text-muted-foreground">
-              Managed by CSO. Contact them to update.
+              Your institutional email can&apos;t be changed.
             </p>
           </div>
           <div className="flex flex-col gap-1.5 sm:col-span-2">
@@ -108,6 +108,9 @@ export const AccountSettings = () => {
                 className="cursor-not-allowed bg-muted/50 text-muted-foreground"
               />
             )}
+            <p className="text-xs text-muted-foreground">
+              Managed by your CSO. Contact them to update.
+            </p>
           </div>
         </div>
         <Button className="w-fit">Update profile</Button>

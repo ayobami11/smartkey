@@ -63,6 +63,15 @@ export const provisionUserSchema = z
     }
   });
 
+// Editing an existing user. Email is intentionally immutable (it is the auth
+// login identity and chain-of-trust anchor); role is not editable here. Only
+// the full name and — for departmental roles — the department can change.
+export const editUserSchema = z.object({
+  full_name: z.string().trim().min(1, 'Full name is required'),
+  /** Required when the target is an HOD or REQUESTER. UUID from GET /api/admin/departments. */
+  department_id: z.string().optional(),
+});
+
 export const authoriseCollectorSchema = z.object({
   /** UUID of the key to authorise the requester for. */
   key_id: z.string().min(1, 'Key is required'),
@@ -321,6 +330,7 @@ export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 export type ProvisionUserInput = z.infer<typeof provisionUserSchema>;
+export type EditUserInput = z.infer<typeof editUserSchema>;
 export type AuthoriseCollectorInput = z.infer<typeof authoriseCollectorSchema>;
 export type SubmitRequestInput = z.infer<typeof submitRequestSchema>;
 export type CancelRequestInput = z.infer<typeof cancelRequestSchema>;
