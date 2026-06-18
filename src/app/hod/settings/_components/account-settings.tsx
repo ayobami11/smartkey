@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { UploadIcon } from 'lucide-react';
 
 import { ChangePasswordForm } from '@/components/smartkey/change-password-form';
+import { ProfilePhotoUploader } from '@/components/smartkey/profile-photo-uploader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,6 +15,7 @@ export const AccountSettings = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [department, setDepartment] = useState('');
+  const [photoUrl, setPhotoUrl] = useState('');
   const [profileLoading, setProfileLoading] = useState(true);
 
   useEffect(() => {
@@ -30,13 +31,14 @@ export const AccountSettings = () => {
       const { data } = await supabase
         .from('profiles')
         .select(
-          'full_name, institutional_email, department:departments!department_id(name)'
+          'full_name, institutional_email, photo_url, department:departments!department_id(name)'
         )
         .eq('id', user.id)
         .single();
       if (data) {
         setName((data.full_name as string | null) ?? '');
         setEmail((data.institutional_email as string | null) ?? '');
+        setPhotoUrl((data.photo_url as string | null) ?? '');
         const dept = data.department as { name: string } | null;
         setDepartment(dept?.name ?? '');
       }
@@ -59,22 +61,11 @@ export const AccountSettings = () => {
       {/* Profile card */}
       <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-5">
         <h3 className="text-sm font-semibold text-foreground">Profile</h3>
-        <div className="flex items-center gap-4">
-          <div className="flex size-16 shrink-0 items-center justify-center rounded-full bg-primary/10 text-lg font-semibold text-primary">
-            {profileLoading
-              ? '…'
-              : name
-                  .split(' ')
-                  .map((w) => w[0])
-                  .slice(0, 2)
-                  .join('')
-                  .toUpperCase() || '?'}
-          </div>
-          <Button variant="outline" size="sm">
-            <UploadIcon className="size-3.5" aria-hidden="true" />
-            Upload photo
-          </Button>
-        </div>
+        <ProfilePhotoUploader
+          name={name}
+          loading={profileLoading}
+          initialUrl={photoUrl}
+        />
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="hod-name">Full name</Label>

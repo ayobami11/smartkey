@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { type MutableRefObject, useEffect, useState } from 'react';
 
 import { useDebounce } from '@/hooks/useDebounce';
 import {
@@ -24,6 +24,7 @@ import {
 } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
 
+import { toCsv, downloadCsv } from '@/lib/csv';
 import { createBrowserClient } from '@/lib/supabase/client';
 import { AuditTableSkeleton } from '@/app/cso/audit/_components/audit-table-skeleton';
 import { Button } from '@/components/ui/button';
@@ -373,7 +374,26 @@ const columns: ColumnDef<AuditEntry>[] = [
 
 // Component
 
-export const AuditTable = () => {
+// Cap an export to a sane upper bound — the audit log can grow unbounded and a
+// CSV is meant for a working slice, not a full archive dump.
+const EXPORT_MAX_ROWS = 5000;
+
+const EXPORT_HEADERS = [
+  'Time',
+  'Name',
+  'Role',
+  'Department',
+  'Event',
+  'Key code',
+];
+
+export const AuditTable = ({
+  exportRef,
+}: {
+  // The parent owns the "Export CSV" button in the page header; it calls this
+  // ref so the export reflects the filters that live inside this component.
+  exportRef?: MutableRefObject<(() => Promise<void>) | null>;
+}) => {
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
     pageSize: 10,
@@ -465,6 +485,65 @@ export const AuditTable = () => {
     },
     placeholderData: (prev) => prev,
     staleTime: 60_000,
+  });
+
+  // Export the current filtered slice as CSV. Mirrors the data-query filters
+  // (minus pagination) so the file matches what the CSO is looking at.
+  const exportCsv = async () => {
+    if (earlyEmpty) {
+      downloadCsv(
+        `audit-log-${new Date().toISOString().slice(0, 10)}.csv`,
+        toCsv(EXPORT_HEADERS, [])
+      );
+      return;
+    }
+    const supabase = createBrowserClient();
+    let q = supabase
+      .from('audit_log')
+      .select(
+        'id, event, actor_id, actor_role, actor_name, actor_department, payload, occurred_at, actor_profile:profiles!audit_log_actor_id_fkey(full_name, departments!profiles_department_id_fkey(name))'
+      )
+      .order('occurred_at', { ascending: false })
+      .range(0, EXPORT_MAX_ROWS - 1);
+    if (mappedEvents.length > 0) q = q.in('event', mappedEvents);
+    if (debouncedSearch.trim()) {
+      const term = `%${debouncedSearch.trim()}%`;
+      q = q.or(`event.ilike.${term},actor_name.ilike.${term}`);
+    }
+    if (roleFilter.length > 0) {
+      const realRoles = roleFilter.filter((r): r is DbRole => r !== 'GUEST');
+      const includesGuest = roleFilter.includes('GUEST');
+      if (includesGuest && realRoles.length > 0) {
+        q = q.or(`actor_role.in.(${realRoles.join(',')}),actor_role.is.null`);
+      } else if (includesGuest) {
+        q = q.is('actor_role', null);
+      } else {
+        q = q.in('actor_role', realRoles);
+      }
+    }
+    const { data: exportData, error } = await q;
+    if (error) throw new Error('Failed to export audit log.');
+    const rows = (exportData ?? []).map((e) =>
+      mapRow(e as Record<string, unknown>)
+    );
+    const csv = toCsv(
+      EXPORT_HEADERS,
+      rows.map((r) => [
+        r.timestamp,
+        r.actor,
+        r.actorRole,
+        r.department ?? '',
+        r.description,
+        r.keyCode ?? '',
+      ])
+    );
+    downloadCsv(`audit-log-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+  };
+
+  // Re-register on every render so the parent always invokes the closure that
+  // captures the latest filter state.
+  useEffect(() => {
+    if (exportRef) exportRef.current = exportCsv;
   });
 
   const table = useReactTable({

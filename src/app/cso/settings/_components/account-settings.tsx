@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { UploadIcon } from 'lucide-react';
 
 import { ChangePasswordForm } from '@/components/smartkey/change-password-form';
+import { ProfilePhotoUploader } from '@/components/smartkey/profile-photo-uploader';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +15,7 @@ import { createBrowserClient } from '@/lib/supabase/client';
 export const AccountSettings = () => {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
+  const [photoUrl, setPhotoUrl] = useState('');
   const [profileLoading, setProfileLoading] = useState(true);
 
   useEffect(() => {
@@ -29,12 +30,13 @@ export const AccountSettings = () => {
       }
       const { data } = await supabase
         .from('profiles')
-        .select('full_name, institutional_email')
+        .select('full_name, institutional_email, photo_url')
         .eq('id', user.id)
         .single();
       if (data) {
         setFullName(data.full_name ?? '');
         setEmail(data.institutional_email ?? '');
+        setPhotoUrl(data.photo_url ?? '');
       }
       setProfileLoading(false);
     };
@@ -55,22 +57,11 @@ export const AccountSettings = () => {
       {/* Profile */}
       <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-5">
         <h3 className="text-sm font-semibold text-foreground">Profile</h3>
-        <div className="flex items-center gap-4">
-          <div className="flex size-16 shrink-0 items-center justify-center rounded-full bg-primary/10 text-lg font-semibold text-primary">
-            {profileLoading
-              ? '…'
-              : fullName
-                  .split(' ')
-                  .map((w) => w[0])
-                  .slice(0, 2)
-                  .join('')
-                  .toUpperCase() || '?'}
-          </div>
-          <Button variant="outline" size="sm">
-            <UploadIcon className="size-3.5" aria-hidden="true" />
-            Upload photo
-          </Button>
-        </div>
+        <ProfilePhotoUploader
+          name={fullName}
+          loading={profileLoading}
+          initialUrl={photoUrl}
+        />
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="full-name">Full name</Label>

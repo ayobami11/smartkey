@@ -1,13 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   CirclePlusIcon,
   DownloadIcon,
   PlusIcon,
-  SearchIcon,
   SirenIcon,
 } from 'lucide-react';
+
+import { toCsv, downloadCsv } from '@/lib/csv';
+import { logger } from '@/lib/logger';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -116,6 +118,10 @@ export default function AuditLogPage() {
   const [incidentSeverityFilter, setIncidentSeverityFilter] = useState<
     IncidentSeverity[]
   >([]);
+
+  // Export
+  const auditExportRef = useRef<(() => Promise<void>) | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   // Log incident sheet
   const [logOpen, setLogOpen] = useState(false);
@@ -230,6 +236,38 @@ export default function AuditLogPage() {
     setLogRef(null);
   };
 
+  // Export the active tab's data as CSV. The audit tab delegates to the table
+  // (which owns its filters); the incidents tab exports the filtered list here.
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      if (activeTab === 'audit') {
+        await auditExportRef.current?.();
+      } else {
+        const csv = toCsv(
+          ['Reference', 'Type', 'Severity', 'Description', 'Occurred at'],
+          filteredIncidents.map((i) => [
+            i.reference,
+            INCIDENT_TYPE_LABELS[i.type],
+            i.severity,
+            i.description,
+            new Date(i.occurred_at).toISOString(),
+          ])
+        );
+        downloadCsv(
+          `incidents-${new Date().toISOString().slice(0, 10)}.csv`,
+          csv
+        );
+      }
+    } catch (e) {
+      logger.error('audit: CSV export failed', {
+        err: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   // Render
 
   return (
@@ -253,9 +291,17 @@ export default function AuditLogPage() {
               Log incident
             </Button>
           )}
-          <Button variant="outline">
+          <Button
+            variant="outline"
+            onClick={handleExport}
+            disabled={
+              exporting ||
+              (activeTab === 'incidents' && filteredIncidents.length === 0)
+            }
+            aria-busy={exporting}
+          >
             <DownloadIcon className="size-4" aria-hidden="true" />
-            Export CSV
+            {exporting ? 'Exporting…' : 'Export CSV'}
           </Button>
         </div>
       </div>
@@ -285,7 +331,7 @@ export default function AuditLogPage() {
       </div>
 
       {/* Audit Log tab */}
-      {activeTab === 'audit' && <AuditTable />}
+      {activeTab === 'audit' && <AuditTable exportRef={auditExportRef} />}
 
       {/* Incidents tab */}
       {activeTab === 'incidents' && (
