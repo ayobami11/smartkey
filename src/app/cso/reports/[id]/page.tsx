@@ -1,6 +1,8 @@
 import { notFound } from 'next/navigation';
 
 import { BotIcon } from 'lucide-react';
+
+export const metadata = { title: 'Shift Report Details' };
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 

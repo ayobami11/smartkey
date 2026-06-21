@@ -2,6 +2,11 @@ import Link from 'next/link';
 
 import { GuestWeekendStatus } from './_components/guest-weekend-status';
 
+export const metadata = {
+  title: 'Weekend Access Status',
+  robots: { index: false },
+};
+
 export default async function GuestWeekendStatusPage({
   params,
 }: {

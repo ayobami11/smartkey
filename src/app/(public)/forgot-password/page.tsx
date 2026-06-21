@@ -2,6 +2,8 @@ import Link from 'next/link';
 
 import { ForgotPasswordForm } from '@/app/(public)/forgot-password/forgot-password-form';
 
+export const metadata = { title: 'Forgot Password' };
+
 export default function ForgotPasswordPage() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-background px-4 py-12">

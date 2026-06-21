@@ -129,7 +129,7 @@ export const ProvisionUserDialog = ({ onSuccess }: Props) => {
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Provision new user</DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="">
             Create an account and send an activation link to the user&apos;s
             email.
           </DialogDescription>

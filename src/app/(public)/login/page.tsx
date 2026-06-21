@@ -2,6 +2,8 @@ import Link from 'next/link';
 
 import { LoginForm } from '@/app/(public)/login/_components/login-form';
 
+export const metadata = { title: 'Sign In' };
+
 export default async function LoginPage({
   searchParams,
 }: {

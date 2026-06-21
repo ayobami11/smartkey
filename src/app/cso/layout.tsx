@@ -3,6 +3,8 @@ import { DashboardHeader } from '@/app/cso/_components/dashboard-header';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { OfflineBanner } from '@/components/smartkey/offline-banner';
 
+export const metadata = { robots: { index: false, follow: false } };
+
 export default function CsoLayout({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider>

@@ -6,6 +6,8 @@ import {
   UserPlusIcon,
 } from 'lucide-react';
 
+export const metadata = { title: 'Dashboard' };
+
 import { Button } from '@/components/ui/button';
 
 import { LiveZoneCounts } from '@/app/cso/dashboard/_components/live-zone-counts';

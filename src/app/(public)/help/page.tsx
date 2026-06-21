@@ -11,7 +11,9 @@ import {
 import { Button } from '@/components/ui/button';
 
 export const metadata = {
-  title: 'Help — SmartKey',
+  title: 'Help',
+  description:
+    'Get help with SmartKey accounts, verification codes, and key requests.',
 };
 
 const faqs = [
@@ -72,7 +74,7 @@ export default function HelpPage() {
               SmartKey
             </span>
           </Link>
-          <Button asChild variant="outline" size="sm">
+          <Button asChild size="sm">
             <Link href="/login">Sign in</Link>
           </Button>
         </div>

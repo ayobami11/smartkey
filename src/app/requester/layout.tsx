@@ -3,6 +3,8 @@ import { DashboardHeader } from '@/app/requester/_components/dashboard-header';
 import { OfflineBanner } from '@/components/smartkey/offline-banner';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 
+export const metadata = { robots: { index: false, follow: false } };
+
 export default function RequesterLayout({
   children,
 }: {

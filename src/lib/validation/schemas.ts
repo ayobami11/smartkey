@@ -316,7 +316,7 @@ export const shiftHandoverSchema = z.object({
 
 export const generateReportSchema = z.object({
   /** UUID of the shift to generate a report for. */
-  shift_id: z.string().min(1, 'Shift ID is required'),
+  shift_id: z.string().min(1, 'Please select a shift.'),
 });
 
 export const addReportCommentSchema = z.object({

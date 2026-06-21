@@ -24,7 +24,10 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'SmartKey',
+  title: {
+    default: 'SmartKey',
+    template: '%s | SmartKey',
+  },
   description:
     'Key management system for the University of Lagos Senate Building',
 };

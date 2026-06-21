@@ -6,6 +6,17 @@ import {
   ShieldCheckIcon,
 } from 'lucide-react';
 
+export const metadata = {
+  description:
+    'Digital key management for the University of Lagos Senate Building.',
+  openGraph: {
+    title: 'SmartKey',
+    description:
+      'Digital key management for the University of Lagos Senate Building.',
+    type: 'website',
+  },
+};
+
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 

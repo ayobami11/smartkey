@@ -5,6 +5,11 @@ import { logger } from '@/lib/logger';
 
 import { GuestWeekendRequestForm } from './_components/guest-weekend-request-form';
 
+export const metadata = {
+  title: 'Weekend Access Request',
+  description: 'Request weekend building access at the UNILAG Senate Building.',
+};
+
 // Departments are world-readable, but a guest has no session, so we read them
 // server-side with the service-role admin client (server-only) and pass the
 // list to the client form. The service key never reaches the browser.

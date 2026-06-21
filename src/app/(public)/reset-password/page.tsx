@@ -3,6 +3,8 @@ import { Suspense } from 'react';
 
 import { ResetPasswordForm } from '@/app/(public)/reset-password/reset-password-form';
 
+export const metadata = { title: 'Reset Password' };
+
 export default function ResetPasswordPage() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-background px-4 py-12">

@@ -5,6 +5,8 @@ import { useState } from 'react';
 import Link from 'next/link';
 
 import { useQuery } from '@tanstack/react-query';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Controller, useForm } from 'react-hook-form';
 import { CalendarIcon, FileTextIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -27,6 +29,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { createBrowserClient } from '@/lib/supabase/client';
+import {
+  generateReportSchema,
+  type GenerateReportInput,
+} from '@/lib/validation/schemas';
 
 import { formatDate } from '@/app/cso/reports/_components/reports-list';
 
@@ -36,12 +42,16 @@ type Props = { onGenerated?: () => void };
 
 export const GenerateReportDialog = ({ onGenerated }: Props) => {
   const [open, setOpen] = useState(false);
-  const [selectedShiftId, setSelectedShiftId] = useState('');
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [generatedReportId, setGeneratedReportId] = useState<string | null>(
     null
   );
+
+  const form = useForm<GenerateReportInput>({
+    resolver: zodResolver(generateReportSchema),
+    defaultValues: { shift_id: '' },
+  });
 
   const { data: shifts = [] } = useQuery<ShiftOption[]>({
     queryKey: ['cso', 'shifts'],
@@ -64,21 +74,20 @@ export const GenerateReportDialog = ({ onGenerated }: Props) => {
   const handleOpenChange = (next: boolean) => {
     setOpen(next);
     if (next) {
-      setSelectedShiftId('');
+      form.reset({ shift_id: '' });
       setGenerateError(null);
       setGeneratedReportId(null);
     }
   };
 
-  const handleGenerate = async () => {
-    if (!selectedShiftId) return;
+  const handleGenerate = async (values: GenerateReportInput) => {
     setGenerating(true);
     setGenerateError(null);
     try {
       const res = await fetch('/api/reports/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shift_id: selectedShiftId }),
+        body: JSON.stringify({ shift_id: values.shift_id }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -128,30 +137,41 @@ export const GenerateReportDialog = ({ onGenerated }: Props) => {
             </div>
           ) : (
             <>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="shift-select">Shift</Label>
-                <Select
-                  value={selectedShiftId}
-                  onValueChange={setSelectedShiftId}
-                >
-                  <SelectTrigger id="shift-select">
-                    <SelectValue placeholder="Select a shift…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {shifts.length === 0 ? (
-                      <SelectItem value="__none" disabled>
-                        No shifts available
-                      </SelectItem>
-                    ) : (
-                      shifts.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.label}
-                        </SelectItem>
-                      ))
+              <Controller
+                name="shift_id"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="shift-select">Shift</Label>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger
+                        id="shift-select"
+                        aria-invalid={fieldState.invalid}
+                      >
+                        <SelectValue placeholder="Select a shift…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {shifts.length === 0 ? (
+                          <SelectItem value="__none" disabled>
+                            No shifts available
+                          </SelectItem>
+                        ) : (
+                          shifts.map((s) => (
+                            <SelectItem key={s.id} value={s.id}>
+                              {s.label}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                    {fieldState.invalid && (
+                      <p className="text-sm text-destructive" role="alert">
+                        {fieldState.error?.message}
+                      </p>
                     )}
-                  </SelectContent>
-                </Select>
-              </div>
+                  </div>
+                )}
+              />
               {generateError && (
                 <p className="text-sm text-destructive" role="alert">
                   {generateError}
@@ -171,9 +191,9 @@ export const GenerateReportDialog = ({ onGenerated }: Props) => {
                 <Button variant="outline">Cancel</Button>
               </DialogClose>
               <Button
-                disabled={!selectedShiftId || generating}
+                disabled={generating}
                 aria-busy={generating}
-                onClick={handleGenerate}
+                onClick={form.handleSubmit(handleGenerate)}
               >
                 {generating ? 'Generating…' : 'Generate'}
               </Button>
