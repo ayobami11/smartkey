@@ -402,10 +402,10 @@ export const HandoverView = () => {
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>
+                    <AlertDialogTitle className="text-lg">
                       Bulk acknowledge all keys?
                     </AlertDialogTitle>
-                    <AlertDialogDescription>
+                    <AlertDialogDescription className="text-base">
                       You are confirming responsibility for{' '}
                       {outstandingKeys.length} outstanding{' '}
                       {outstandingKeys.length === 1 ? 'key' : 'keys'} without

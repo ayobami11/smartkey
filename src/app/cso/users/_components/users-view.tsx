@@ -192,10 +192,10 @@ export const UsersView = () => {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>
+            <AlertDialogTitle className="text-lg">
               Revoke access for {revokeTarget?.name}?
             </AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescription className="text-base">
               This will immediately deactivate their account and invalidate
               their session. They will not be able to sign in until access is
               reinstated.
