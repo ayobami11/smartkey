@@ -16,6 +16,8 @@ const eslintConfig = defineConfig([
     'next-env.d.ts',
     // Agent worktrees contain compiled artifacts — not source
     '.claude/worktrees/**',
+    // Dev-only test/utility scripts — not held to production lint rules
+    'scripts/**',
   ]),
 ]);
 

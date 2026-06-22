@@ -24,7 +24,9 @@ export const GET = async () => {
 
   const { data, error } = await supabase
     .from('departments')
-    .select('id, name, faculty, hod_id')
+    .select(
+      'id, name, faculty, hod_id, hod:profiles!hod_id(status), keys(status, retired_at)'
+    )
     .order('faculty', { ascending: true })
     .order('name', { ascending: true });
 
@@ -34,5 +36,18 @@ export const GET = async () => {
     });
   }
 
-  return NextResponse.json(ok({ departments: data ?? [] }), { status: 200 });
+  const departments = (data ?? []).map(({ hod, hod_id, keys, ...dept }) => ({
+    ...dept,
+    hod_id,
+    // true when an ACTIVE HOD is already assigned — frontend should disable this dept in the HOD role picker
+    has_hod:
+      hod_id !== null &&
+      (hod as { status: string } | null)?.status === 'ACTIVE',
+    // true when at least one non-retired key in this department is currently available to borrow
+    has_slot_today: (
+      keys as { status: string; retired_at: string | null }[]
+    ).some((k) => k.status === 'AVAILABLE' && k.retired_at === null),
+  }));
+
+  return NextResponse.json(ok({ departments }), { status: 200 });
 };
