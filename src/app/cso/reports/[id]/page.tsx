@@ -150,17 +150,11 @@ export default async function ReportDetailPage({
           </div>
           {!isPending && (
             <DownloadReport
-              fileName={`shift-${shift?.shift_number ?? 'report'}-${id.slice(0, 8)}.pdf`}
-              shiftLabel={`Shift ${shift?.shift_number ?? '—'} report`}
-              metaLine={`${formatDate(report.generated_at)} · ${startTime}–${endTime}${
-                officers.length > 0 ? ` · ${officers.join(', ')}` : ''
-              }`}
+              fileName={`shift-${shift?.shift_number ?? 'report'}-${id.slice(0, 8)}.md`}
               markdown={report.markdown}
-              timeline={timeline}
-              isTemplate={source === 'template'}
               comments={comments.map((c) => ({
                 author: c.author?.full_name ?? 'Unknown',
-                created_at: `${formatDate(c.created_at)} ${formatTime(c.created_at)}`,
+                created_at: formatDate(c.created_at),
                 text: c.text,
               }))}
             />
