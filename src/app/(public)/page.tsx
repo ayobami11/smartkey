@@ -1,3 +1,4 @@
+import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import {
   ArrowRightIcon,
@@ -126,11 +127,16 @@ export default function LandingPage() {
         {/* Stats bar */}
         <section className="border-b border-border bg-card">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <dl className="grid grid-cols-2 divide-x divide-y divide-border sm:grid-cols-4 sm:divide-y-0">
-              {stats.map((s) => (
+            <dl className="grid grid-cols-2 sm:grid-cols-4">
+              {stats.map((s, i) => (
                 <div
                   key={s.label}
-                  className="flex flex-col items-center px-6 py-8 text-center"
+                  className={cn(
+                    'flex flex-col items-center border-border px-6 py-8 text-center',
+                    i % 2 === 0 && 'border-r',
+                    i === 1 && 'sm:border-r',
+                    i >= 2 && 'border-t sm:border-t-0'
+                  )}
                 >
                   <dt className="font-display text-3xl font-semibold text-primary sm:text-4xl">
                     {s.value}

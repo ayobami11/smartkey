@@ -549,8 +549,8 @@ export const AuditView = () => {
           className="flex flex-col gap-0 p-0 sm:max-w-md"
         >
           <SheetHeader className="border-b border-border p-6">
-            <SheetTitle>Log incident</SheetTitle>
-            <SheetDescription>
+            <SheetTitle className="text-lg">Log incident</SheetTitle>
+            <SheetDescription className="text-base">
               Record a security or operational incident. HIGH severity incidents
               notify the CSO immediately.
             </SheetDescription>

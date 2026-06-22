@@ -20,10 +20,19 @@ const ROUTES: Record<string, string> = {
   '/requester/settings': 'Settings',
 };
 
+const DYNAMIC_ROUTES: Array<{ pattern: RegExp; title: string }> = [
+  { pattern: /^\/requester\/request\/[^/]+\/code$/, title: 'Collection Code' },
+];
+
+const getPageTitle = (pathname: string): string =>
+  ROUTES[pathname] ??
+  DYNAMIC_ROUTES.find(({ pattern }) => pattern.test(pathname))?.title ??
+  'Dashboard';
+
 export const DashboardHeader = () => {
   const pathname = usePathname();
   const isHome = pathname === '/requester/dashboard';
-  const pageTitle = ROUTES[pathname] ?? 'Dashboard';
+  const pageTitle = getPageTitle(pathname);
 
   return (
     <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 border-b border-border mb-6">

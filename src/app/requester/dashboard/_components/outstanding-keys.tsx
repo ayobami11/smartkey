@@ -1,12 +1,18 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ClockIcon, InboxIcon, KeyRoundIcon } from 'lucide-react';
+import { ClockIcon, InboxIcon, KeyRoundIcon, XCircleIcon } from 'lucide-react';
 
 import { useRealtime } from '@/hooks/useRealtime';
 import { useConnectionStatus } from '@/hooks/useConnectionStatus';
 import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+} from '@/components/ui/card';
 import {
   Empty,
   EmptyContent,
@@ -14,6 +20,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty';
+import { Progress } from '@/components/ui/progress';
 import {
   Sheet,
   SheetContent,
@@ -45,12 +52,11 @@ type SheetPhase =
   | { phase: 'idle' }
   | { phase: 'generating' }
   | { phase: 'code_active'; code: string; expires_at: string }
+  | { phase: 'expired' }
+  | { phase: 'returned' }
   | { phase: 'error'; message: string };
 
 // Helpers
-
-const secondsRemaining = (iso: string) =>
-  Math.max(0, Math.floor((new Date(iso).getTime() - Date.now()) / 1000));
 
 const formatCountdown = (s: number): string => {
   if (s >= 86400) {
@@ -90,8 +96,11 @@ const formatDeadline = (iso: string) => {
       });
 };
 
-// Return code countdown — isolated so the interval only runs while the sheet
-// is open and in code_active phase.
+// Return code lifetime per request_return RPC — always now + 15 min
+const RETURN_CODE_LIFETIME_MS = 15 * 60 * 1000;
+
+// Return code countdown — Card-based, mirrors the code-view countdown design.
+// Active state only — calls onExpired() when countdown reaches 0.
 
 const ReturnCodeDisplay = ({
   code,
@@ -102,63 +111,73 @@ const ReturnCodeDisplay = ({
   expiresAt: string;
   onExpired: () => void;
 }) => {
-  const [countdown, setCountdown] = useState(() => secondsRemaining(expiresAt));
+  const [now, setNow] = useState(() => Date.now());
+  const onExpiredRef = useRef(onExpired);
 
   useEffect(() => {
-    const id = setInterval(() => {
-      setCountdown(secondsRemaining(expiresAt));
-    }, 1000);
+    onExpiredRef.current = onExpired;
+  });
+
+  // 100ms tick for smooth progress animation
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 100);
     return () => clearInterval(id);
-  }, [expiresAt]);
+  }, []);
+
+  const countdown = Math.max(
+    0,
+    Math.floor((new Date(expiresAt).getTime() - now) / 1000)
+  );
+
+  // Fire onExpired once when countdown hits 0
+  useEffect(() => {
+    if (countdown === 0) {
+      onExpiredRef.current();
+    }
+  }, [countdown]);
+
+  const progressValue = Math.max(
+    0,
+    Math.min(
+      100,
+      ((new Date(expiresAt).getTime() - now) / RETURN_CODE_LIFETIME_MS) * 100
+    )
+  );
 
   return (
-    <div
-      className="rounded-lg border border-primary/20 bg-primary/5 p-5 text-center"
-      aria-live="polite"
-    >
-      <p className="text-xs font-medium text-muted-foreground">Return code</p>
-      <div className="mt-1 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-        <ClockIcon className="size-3.5" aria-hidden="true" />
-        <span
-          className="font-mono"
-          aria-label={
-            countdown > 0
-              ? `Expires in ${formatCountdown(countdown)}`
-              : 'Expired'
-          }
-        >
-          {countdown > 0 ? formatCountdown(countdown) : 'Expired'}
-        </span>
+    <Card className="border-primary/20 bg-primary/5" aria-live="polite">
+      <div>
+        <CardHeader className="pb-0 text-center">
+          <CardDescription className="text-base">
+            Your return code
+          </CardDescription>
+        </CardHeader>
+        <div className="flex items-center justify-center gap-1.5 pb-5 pt-2 text-sm text-muted-foreground">
+          <ClockIcon className="size-3.5" aria-hidden="true" />
+          <span
+            className="font-mono"
+            aria-label={`Expires in ${formatCountdown(countdown)}`}
+          >
+            {formatCountdown(countdown)}
+          </span>
+        </div>
+        <Progress
+          value={progressValue}
+          className="h-1 rounded-none **:data-[slot=progress-indicator]:duration-200 **:data-[slot=progress-indicator]:ease-linear"
+        />
       </div>
-
-      {countdown > 0 ? (
-        <>
-          <p
-            className="mt-3 font-mono text-5xl font-semibold tracking-[0.3em] text-foreground"
-            aria-label={`Return code: ${code}`}
-          >
-            {code}
-          </p>
-          <p className="mt-4 text-xs text-muted-foreground">
-            Read this to the security officer when you hand back the key.
-          </p>
-        </>
-      ) : (
-        <>
-          <p className="mt-3 text-sm text-muted-foreground">
-            Code expired. Generate a new one.
-          </p>
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-3"
-            onClick={onExpired}
-          >
-            Generate new code
-          </Button>
-        </>
-      )}
-    </div>
+      <CardContent className="pb-6 pt-6 text-center">
+        <p
+          className="font-mono text-5xl font-semibold tracking-[0.3em] text-foreground"
+          aria-label={`Return code: ${code}`}
+        >
+          {code}
+        </p>
+        <p className="mt-4 text-sm text-muted-foreground">
+          Read this to the security officer when you hand back the key.
+        </p>
+      </CardContent>
+    </Card>
   );
 };
 
@@ -173,6 +192,9 @@ export const OutstandingKeys = () => {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [selectedKey, setSelectedKey] = useState<OutstandingKey | null>(null);
   const [sheetPhase, setSheetPhase] = useState<SheetPhase>({ phase: 'idle' });
+
+  // Stale-closure-safe ref for the currently-selected key ID
+  const selectedKeyIdRef = useRef<string | null>(null);
 
   // Resolve user ID once on mount
 
@@ -221,19 +243,29 @@ export const OutstandingKeys = () => {
     },
   });
 
-  // Live updates — KEY_RETURNED transitions remove the row; KEY_ISSUED keeps it visible
+  // Live updates — KEY_RETURNED on the selected key transitions to returned phase;
+  // KEY_ISSUED / KEY_RETURNED transitions refresh the list.
 
   useRealtime({
     table: 'requests',
     onUpdate: (payload) => {
-      const row = payload.new as { status?: string; requester_id?: string };
-      if (
-        row.requester_id === userId &&
-        ['KEY_ISSUED', 'KEY_RETURNED'].includes(row.status ?? '')
-      ) {
-        queryClient.invalidateQueries({
-          queryKey: ['outstanding-keys', userId],
-        });
+      const row = payload.new as {
+        id?: string;
+        status?: string;
+        requester_id?: string;
+      };
+      if (row.requester_id === userId) {
+        if (
+          row.status === 'KEY_RETURNED' &&
+          row.id === selectedKeyIdRef.current
+        ) {
+          setSheetPhase({ phase: 'returned' });
+        }
+        if (['KEY_ISSUED', 'KEY_RETURNED'].includes(row.status ?? '')) {
+          queryClient.invalidateQueries({
+            queryKey: ['outstanding-keys', userId],
+          });
+        }
       }
     },
   });
@@ -242,6 +274,7 @@ export const OutstandingKeys = () => {
 
   const openReturnSheet = (item: OutstandingKey) => {
     setSelectedKey(item);
+    selectedKeyIdRef.current = item.id;
 
     setSheetPhase(
       item.return_code !== null && item.return_code_expires_at !== null
@@ -260,6 +293,7 @@ export const OutstandingKeys = () => {
     setTimeout(() => {
       setSelectedKey(null);
       setSheetPhase({ phase: 'idle' });
+      selectedKeyIdRef.current = null;
     }, 200);
   };
 
@@ -448,8 +482,8 @@ export const OutstandingKeys = () => {
           className="flex flex-col gap-0 p-0 sm:max-w-md"
         >
           <SheetHeader className="border-b border-border p-6">
-            <SheetTitle>Return key</SheetTitle>
-            <SheetDescription>
+            <SheetTitle className="text-lg">Return key</SheetTitle>
+            <SheetDescription className="text-base">
               Generate a code to confirm the handover with the security officer.
             </SheetDescription>
           </SheetHeader>
@@ -518,8 +552,65 @@ export const OutstandingKeys = () => {
                     key={sheetPhase.expires_at}
                     code={sheetPhase.code}
                     expiresAt={sheetPhase.expires_at}
-                    onExpired={() => setSheetPhase({ phase: 'idle' })}
+                    onExpired={() => setSheetPhase({ phase: 'expired' })}
                   />
+                )}
+
+                {/* Phase: expired */}
+                {sheetPhase.phase === 'expired' && (
+                  <Card>
+                    <CardContent className="flex flex-col items-center gap-4 py-10 text-center">
+                      <XCircleIcon
+                        className="size-10 text-muted-foreground"
+                        aria-hidden="true"
+                      />
+                      <div>
+                        <p className="font-medium text-foreground">
+                          Code expired
+                        </p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          This code has expired. Generate a new one to continue.
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleGenerateCode}
+                        disabled={isOffline}
+                      >
+                        Generate new code
+                      </Button>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Phase: returned */}
+                {sheetPhase.phase === 'returned' && (
+                  <Card>
+                    <CardContent className="flex flex-col items-center gap-4 py-10 text-center">
+                      <KeyRoundIcon
+                        className="size-10 text-emerald-500"
+                        aria-hidden="true"
+                      />
+                      <div>
+                        <p className="font-medium text-foreground">
+                          Key returned
+                        </p>
+                        {selectedKey.key && (
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            {selectedKey.key.code} · {selectedKey.key.room_name}
+                          </p>
+                        )}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleSheetClose}
+                      >
+                        Close
+                      </Button>
+                    </CardContent>
+                  </Card>
                 )}
 
                 {/* Phase: error */}

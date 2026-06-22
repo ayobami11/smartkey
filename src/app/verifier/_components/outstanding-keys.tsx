@@ -7,6 +7,7 @@ import { InboxIcon, KeyRoundIcon } from 'lucide-react';
 import { useRealtime } from '@/hooks/useRealtime';
 import { useConnectionStatus } from '@/hooks/useConnectionStatus';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import {
   Empty,
   EmptyDescription,
@@ -342,8 +343,8 @@ export const OutstandingKeys = () => {
           className="flex flex-col gap-0 p-0 sm:max-w-md"
         >
           <SheetHeader className="border-b border-border p-6">
-            <SheetTitle>Mark key as returned</SheetTitle>
-            <SheetDescription>
+            <SheetTitle className="text-lg">Mark key as returned</SheetTitle>
+            <SheetDescription className="text-base">
               Confirm the return with the code the requester generated.
             </SheetDescription>
           </SheetHeader>
@@ -411,57 +412,49 @@ export const OutstandingKeys = () => {
 
             {/* Success */}
             {returnStep === 'success' && selectedKey && (
-              <div className="flex flex-col items-center gap-4 py-4 text-center">
-                <div className="flex size-10 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950/40">
+              <Card>
+                <CardContent className="flex flex-col items-center gap-4 py-10 text-center">
                   <KeyRoundIcon
-                    className="size-5 text-emerald-600"
+                    className="size-10 text-emerald-500"
                     aria-hidden="true"
                   />
-                </div>
-                <div>
-                  <p className="font-medium text-foreground">
-                    Returned successfully
-                  </p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {`Key ${selectedKey.key?.code ?? '—'} returned by ${selectedKey.requester?.full_name ?? '—'} at ${formatTime(new Date().toISOString())}.`}
-                  </p>
-                </div>
-
-                {/* Persistent confirmation card */}
-                <div className="w-full rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-left dark:border-emerald-900 dark:bg-emerald-950/30">
-                  <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
-                    Returned
-                  </p>
-                  <p className="mt-1.5 font-mono text-sm font-medium text-foreground">
-                    {selectedKey.key?.code}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {selectedKey.key?.room_name}
-                  </p>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {selectedKey.requester?.full_name ?? '—'}
-                  </p>
-                </div>
-
-                {!verified && (
-                  <div
-                    className="w-full rounded-lg border border-amber-300 bg-amber-50 p-4 text-left dark:border-amber-900 dark:bg-amber-950/30"
-                    role="status"
-                  >
-                    <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
-                      Unverified return
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Returned without a requester code. The CSO has been
-                      alerted for review.
-                    </p>
+                  <div>
+                    <p className="font-medium text-foreground">Key returned</p>
+                    {selectedKey.key && (
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {selectedKey.key.code} · {selectedKey.key.room_name}
+                      </p>
+                    )}
+                    {selectedKey.requester?.full_name && (
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Returned by{' '}
+                        <span className="font-medium text-foreground">
+                          {selectedKey.requester.full_name}
+                        </span>{' '}
+                        at{' '}
+                        <span className="font-medium text-foreground">
+                          {formatTime(new Date().toISOString())}
+                        </span>
+                      </p>
+                    )}
                   </div>
-                )}
-
-                <Button className="mt-2 w-full" onClick={handleSheetClose}>
-                  Done
-                </Button>
-              </div>
+                  {!verified && (
+                    <p
+                      className="text-sm text-amber-600 dark:text-amber-400"
+                      role="status"
+                    >
+                      Returned without a requester code — CSO alerted.
+                    </p>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSheetClose}
+                  >
+                    Done
+                  </Button>
+                </CardContent>
+              </Card>
             )}
           </div>
         </SheetContent>

@@ -4,15 +4,10 @@ import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { REGEXP_ONLY_DIGITS } from 'input-otp';
-import {
-  CheckCircleIcon,
-  IdCardIcon,
-  InboxIcon,
-  KeyRoundIcon,
-  UserRoundIcon,
-} from 'lucide-react';
+import { InboxIcon, KeyRoundIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import {
   Empty,
   EmptyDescription,
@@ -98,14 +93,6 @@ const formatTime = (iso: string) =>
     hour: '2-digit',
     minute: '2-digit',
   });
-
-const avatarInitials = (name: string) =>
-  name
-    .split(' ')
-    .slice(0, 2)
-    .map((n) => n[0])
-    .join('')
-    .toUpperCase();
 
 // Component
 
@@ -262,31 +249,9 @@ export const LiveRequestQueue = () => {
 
   return (
     <section className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-4">
-        <h2 className="text-sm font-semibold text-foreground">
-          Pending requests
-        </h2>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => openSheet()}
-                disabled={isOffline}
-                aria-label="Enter 6-digit code to issue a key"
-                className={isOffline ? 'pointer-events-none' : undefined}
-              >
-                <KeyRoundIcon className="size-3.5" aria-hidden="true" />
-                Enter code
-              </Button>
-            </span>
-          </TooltipTrigger>
-          {isOffline && (
-            <TooltipContent>Available again when you reconnect.</TooltipContent>
-          )}
-        </Tooltip>
-      </div>
+      <h2 className="text-sm font-semibold text-foreground">
+        Pending requests
+      </h2>
 
       {/* Loading */}
       {loading && (
@@ -420,8 +385,8 @@ export const LiveRequestQueue = () => {
           className="flex flex-col gap-0 p-0 sm:max-w-md"
         >
           <SheetHeader className="border-b border-border p-6">
-            <SheetTitle>Issue a key</SheetTitle>
-            <SheetDescription>
+            <SheetTitle className="text-lg">Issue a key</SheetTitle>
+            <SheetDescription className="text-base">
               {sheetStep === 'code'
                 ? 'Ask the requester for the 6-digit code from their email.'
                 : 'Key issued successfully.'}
@@ -563,91 +528,67 @@ export const LiveRequestQueue = () => {
 
             {/* Success step */}
             {sheetStep === 'success' && issueResult && (
-              <div className="flex flex-col items-center gap-4 py-4 text-center">
-                <CheckCircleIcon
-                  className="size-10 text-emerald-600"
-                  aria-hidden="true"
-                />
-                <div>
-                  <p className="font-medium text-foreground">
-                    Issued successfully
-                  </p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {(() => {
-                      const name = issueResult.requester.full_name;
-                      return name
-                        ? `Key ${issueResult.key.code ?? ''} issued to ${name} at ${formatTime(issueResult.issued_at)}.`
-                        : `Key issued at ${formatTime(issueResult.issued_at)}.`;
-                    })()}
-                  </p>
-                </div>
-
-                {/* External requester — no passport photo, so the desk verifies
-                    the declared physical ID document. */}
-                {issueResult.is_guest && (
-                  <div className="w-full rounded-lg border border-amber-200 bg-amber-50 p-4 text-left dark:border-amber-900 dark:bg-amber-950/30">
-                    <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 dark:text-amber-400">
-                      <UserRoundIcon className="size-3.5" aria-hidden="true" />
-                      External requester — verify physical ID
-                    </div>
-                    {issueResult.requester.full_name && (
-                      <p className="mt-2 text-sm font-medium text-foreground">
-                        {issueResult.requester.full_name}
+              <Card>
+                <CardContent className="flex flex-col items-center gap-4 py-10 text-center">
+                  <KeyRoundIcon
+                    className="size-10 text-emerald-500"
+                    aria-hidden="true"
+                  />
+                  <div>
+                    <p className="font-medium text-foreground">Key issued</p>
+                    {issueResult.key.code && issueResult.key.room_name && (
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {issueResult.key.code} · {issueResult.key.room_name}
                       </p>
                     )}
-                    {issueResult.requester.id_document_type &&
-                      issueResult.requester.id_document_number && (
-                        <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <IdCardIcon className="size-3.5" aria-hidden="true" />
+                    {!issueResult.is_guest &&
+                      issueResult.requester.full_name && (
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Issued to{' '}
                           <span className="font-medium text-foreground">
-                            {issueResult.requester.id_document_type}:
-                          </span>
-                          <span className="font-mono">
-                            {issueResult.requester.id_document_number}
+                            {issueResult.requester.full_name}
+                          </span>{' '}
+                          at{' '}
+                          <span className="font-medium text-foreground">
+                            {formatTime(issueResult.issued_at)}
                           </span>
                         </p>
                       )}
-                  </div>
-                )}
-
-                {/* Persistent confirmation card */}
-                <div className="w-full rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-left dark:border-emerald-900 dark:bg-emerald-950/30">
-                  <div className="flex items-center gap-2 text-xs font-medium text-emerald-700 dark:text-emerald-400">
-                    <CheckCircleIcon className="size-3.5" aria-hidden="true" />
-                    Issued
-                  </div>
-                  {issueResult.key.code && (
-                    <p className="mt-1.5 font-mono text-sm font-medium text-foreground">
-                      {issueResult.key.code}
-                    </p>
-                  )}
-                  {issueResult.key.room_name && (
-                    <p className="text-xs text-muted-foreground">
-                      {issueResult.key.room_name}
-                    </p>
-                  )}
-                  {(() => {
-                    const collectorName = issueResult.requester.full_name;
-                    return collectorName ? (
-                      <div className="mt-2 flex items-center gap-2">
-                        <div className="flex size-6 items-center justify-center rounded-full bg-muted text-xs font-medium text-foreground">
-                          {avatarInitials(collectorName)}
-                        </div>
-                        <span className="text-xs text-foreground">
-                          {collectorName}
+                    {issueResult.is_guest && (
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Issued at{' '}
+                        <span className="font-medium text-foreground">
+                          {formatTime(issueResult.issued_at)}
                         </span>
-                      </div>
-                    ) : null;
-                  })()}
-                  <p className="mt-2 font-mono text-xs text-muted-foreground">
-                    {formatTime(issueResult.issued_at)}
-                  </p>
-                </div>
-
-                <Button className="mt-2 w-full" onClick={handleSheetClose}>
-                  Done
-                </Button>
-              </div>
+                      </p>
+                    )}
+                  </div>
+                  {issueResult.is_guest && issueResult.requester.full_name && (
+                    <p
+                      className="text-sm text-amber-600 dark:text-amber-400"
+                      role="status"
+                    >
+                      {issueResult.requester.full_name}
+                      {issueResult.requester.id_document_type &&
+                        issueResult.requester.id_document_number && (
+                          <span className="font-mono">
+                            {' '}
+                            · {issueResult.requester.id_document_type}{' '}
+                            {issueResult.requester.id_document_number}
+                          </span>
+                        )}{' '}
+                      — verify physical ID
+                    </p>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSheetClose}
+                  >
+                    Done
+                  </Button>
+                </CardContent>
+              </Card>
             )}
           </div>
         </SheetContent>

@@ -15,7 +15,7 @@ import {
   KeyRoundIcon,
   MapPinIcon,
   UserRoundIcon,
-  XIcon,
+  XCircleIcon,
 } from 'lucide-react';
 
 import { useRealtime } from '@/hooks/useRealtime';
@@ -24,6 +24,7 @@ import { RiskTierBadge } from '@/components/smartkey/risk-tier-badge';
 import type { RiskTier } from '@/lib/ai/risk/types';
 
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import {
   Empty,
   EmptyHeader,
@@ -428,7 +429,7 @@ export const WeekendRequestsView = () => {
           className="flex w-full flex-col gap-0 overflow-y-auto sm:max-w-lg"
         >
           <SheetHeader className="border-b border-border p-6">
-            <SheetTitle className="flex items-center gap-2 text-base">
+            <SheetTitle className="flex items-center gap-2 text-lg">
               Weekend access request
               {selected?.guest && <ExternalBadge />}
             </SheetTitle>
@@ -437,46 +438,44 @@ export const WeekendRequestsView = () => {
           {selected && (
             <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-6">
               {decision ? (
-                <div className="flex flex-col items-center gap-4 py-8 text-center">
-                  {decision === 'approved' ? (
-                    <>
-                      <div className="flex size-12 items-center justify-center rounded-full bg-emerald-100">
+                <Card>
+                  <CardContent className="flex flex-col items-center gap-4 py-10 text-center">
+                    {decision === 'approved' ? (
+                      <>
                         <CheckCircleIcon
-                          className="size-6 text-emerald-700"
+                          className="size-10 text-emerald-500"
                           aria-hidden="true"
                         />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-foreground">
-                          Approved.
-                        </p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {displayName(selected)} has been notified by email.
-                        </p>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="flex size-12 items-center justify-center rounded-full bg-muted">
-                        <XIcon
-                          className="size-6 text-muted-foreground"
+                        <div>
+                          <p className="font-medium text-foreground">
+                            Approved.
+                          </p>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            {displayName(selected)} has been notified by email.
+                          </p>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <XCircleIcon
+                          className="size-10 text-muted-foreground"
                           aria-hidden="true"
                         />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-foreground">
-                          Declined.
-                        </p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {displayName(selected)} has been notified.
-                        </p>
-                      </div>
-                    </>
-                  )}
-                  <Button variant="outline" onClick={handleClose}>
-                    Done
-                  </Button>
-                </div>
+                        <div>
+                          <p className="font-medium text-foreground">
+                            Declined.
+                          </p>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            {displayName(selected)} has been notified.
+                          </p>
+                        </div>
+                      </>
+                    )}
+                    <Button variant="outline" size="sm" onClick={handleClose}>
+                      Done
+                    </Button>
+                  </CardContent>
+                </Card>
               ) : (
                 <>
                   {/* Requester / guest */}

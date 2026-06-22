@@ -3,18 +3,20 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  CheckCircleIcon,
-  ClipboardCopyIcon,
-  ClockIcon,
-  KeyRoundIcon,
-  XCircleIcon,
-} from 'lucide-react';
+import { CheckCircleIcon, KeyRoundIcon, XCircleIcon } from 'lucide-react';
 
 import { useRealtime } from '@/hooks/useRealtime';
 import { useConnectionStatus } from '@/hooks/useConnectionStatus';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+} from '@/components/ui/card';
+import { CodeCountdown } from '@/app/requester/request/[requestId]/code/_components/code-countdown';
+import { CodeSkeleton } from '@/app/requester/request/[requestId]/code/_components/code-skeleton';
 import { createBrowserClient } from '@/lib/supabase/client';
 
 // Types
@@ -39,24 +41,6 @@ type RequestDetail = {
 
 const secondsRemaining = (isoExpiry: string) =>
   Math.max(0, Math.floor((new Date(isoExpiry).getTime() - Date.now()) / 1000));
-
-const formatCountdown = (seconds: number) => {
-  if (seconds >= 86400) {
-    const d = Math.floor(seconds / 86400);
-    const h = Math.floor((seconds % 86400) / 3600);
-    return `${d}d ${h}h`;
-  }
-  if (seconds >= 3600) {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    return `${h}h ${m}m`;
-  }
-  const m = Math.floor(seconds / 60)
-    .toString()
-    .padStart(2, '0');
-  const s = (seconds % 60).toString().padStart(2, '0');
-  return `${m}:${s}`;
-};
 
 const formatDeadline = (iso: string) => {
   const date = new Date(iso);
@@ -90,7 +74,6 @@ export const CodeView = () => {
 
   const [userId, setUserId] = useState<string | null>(null);
   const [, forceUpdate] = useState(0);
-  const [copied, setCopied] = useState(false);
 
   // Resolve user ID once on mount
 
@@ -186,45 +169,32 @@ export const CodeView = () => {
     userId,
   ]);
 
-  // Copy to clipboard
-
-  const handleCopy = async () => {
-    if (!request?.code) return;
-    await navigator.clipboard.writeText(request.code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   // Render
 
   if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center p-6">
-        <div className="w-full max-w-sm space-y-4">
-          <Skeleton className="h-6 w-40" />
-          <Skeleton className="h-32 rounded-lg" />
-          <Skeleton className="h-24 rounded-lg" />
-        </div>
-      </div>
-    );
+    return <CodeSkeleton />;
   }
 
   if (notFound) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-6 text-center">
-        <XCircleIcon
-          className="size-12 text-muted-foreground"
-          aria-hidden="true"
-        />
-        <div>
-          <p className="font-medium text-foreground">Request not found</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            It may have been cancelled or does not belong to your account.
-          </p>
-        </div>
-        <Button asChild variant="outline" size="sm">
-          <a href="/requester/dashboard">Back to dashboard</a>
-        </Button>
+      <div className="flex flex-1 overflow-y-auto items-center justify-center p-6">
+        <Card className="w-full max-w-sm">
+          <CardContent className="flex flex-col items-center gap-4 py-10 text-center">
+            <XCircleIcon
+              className="size-10 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <div>
+              <p className="font-medium text-foreground">Request not found</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                It may have been cancelled or does not belong to your account.
+              </p>
+            </div>
+            <Button asChild variant="outline" size="sm">
+              <a href="/requester/dashboard">Back to dashboard</a>
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -240,58 +210,64 @@ export const CodeView = () => {
 
   if (request.status === 'KEY_ISSUED') {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-6 p-6">
-        <div className="w-full max-w-sm rounded-lg border border-emerald-200 bg-emerald-50 p-6 text-center dark:border-emerald-900 dark:bg-emerald-950/30">
-          <div className="flex items-center justify-center gap-2">
+      <div className="flex flex-1 overflow-y-auto flex-col items-center justify-center gap-4 p-6">
+        <Card className="w-full max-w-sm">
+          <CardContent className="flex flex-col items-center gap-4 py-10 text-center">
             <KeyRoundIcon
-              className="size-5 text-emerald-600"
+              className="size-10 text-emerald-500"
               aria-hidden="true"
             />
-            <p className="font-medium text-foreground">Key issued</p>
-          </div>
-          {request.key && (
-            <p className="mt-1 text-sm text-muted-foreground">
-              {request.key.code} · {request.key.room_name}
-            </p>
-          )}
-          {request.return_deadline && (
-            <p className="mt-3 text-sm text-muted-foreground">
-              Return by{' '}
-              <span className="font-medium text-foreground">
-                {formatDeadline(request.return_deadline)}
-              </span>
-            </p>
-          )}
-        </div>
-        <Button asChild variant="outline" size="sm">
-          <a href="/requester/dashboard">Back to dashboard</a>
-        </Button>
+            <div>
+              <p className="font-medium text-foreground">Key issued</p>
+              {request.key && (
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {request.key.code} · {request.key.room_name}
+                </p>
+              )}
+              {request.return_deadline && (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Return by{' '}
+                  <span className="font-medium text-foreground">
+                    {formatDeadline(request.return_deadline)}
+                  </span>
+                </p>
+              )}
+            </div>
+            <Button asChild variant="outline" size="sm">
+              <a href="/requester/dashboard">Back to dashboard</a>
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   // Non-active statuses
 
-  if (request.status !== 'CODE_ISSUED') {
-    const msg =
-      statusMessage[request.status] ?? 'This request is no longer active.';
+  if (request.status !== 'CODE_ISSUED' || isExpired) {
+    const statusKey = isExpired ? 'EXPIRED' : request.status;
+    const msg = statusMessage[statusKey] ?? 'This request is no longer active.';
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-6 text-center">
-        <XCircleIcon
-          className="size-12 text-muted-foreground"
-          aria-hidden="true"
-        />
-        <div>
-          <p className="font-medium text-foreground">{msg}</p>
-          {request.key && (
-            <p className="mt-1 text-sm text-muted-foreground">
-              {request.key.code} · {request.key.room_name}
-            </p>
-          )}
-        </div>
-        <Button asChild variant="outline" size="sm">
-          <a href="/requester/dashboard">Back to dashboard</a>
-        </Button>
+      <div className="flex flex-1 overflow-y-auto flex-col items-center justify-center gap-4 p-6">
+        <Card className="w-full max-w-sm">
+          <CardContent className="flex flex-col items-center gap-4 py-10 text-center">
+            <XCircleIcon
+              className="size-10 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <div>
+              <p className="font-medium text-foreground">{msg}</p>
+              {request.key && (
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {request.key.code} · {request.key.room_name}
+                </p>
+              )}
+            </div>
+            <Button asChild variant="outline" size="sm">
+              <a href="/requester/dashboard">Back to dashboard</a>
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -299,13 +275,13 @@ export const CodeView = () => {
   // CODE_ISSUED
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-6 p-6">
+    <div className="flex flex-1 overflow-y-auto flex-col items-center justify-center gap-6 p-6">
       <div className="w-full max-w-sm space-y-6">
         {/* Key context */}
         {request.key && (
           <div className="text-center">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              {request.key.zone.replace('_', ' ')}
+              {request.key.zone.replace(/_/g, ' ')}
             </p>
             <p className="mt-0.5 font-medium text-foreground">
               {request.key.room_name}
@@ -317,74 +293,39 @@ export const CodeView = () => {
         )}
 
         {/* Code card */}
-        <div
-          className={`rounded-lg border p-6 text-center ${
-            isExpired
-              ? 'border-muted bg-muted/40'
-              : 'border-primary/20 bg-primary/5'
-          }`}
-          aria-live="polite"
-        >
-          {isExpired ? (
-            <>
-              <p className="font-medium text-foreground">Code expired</p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                This code has expired. Request a new one to continue.
-              </p>
-            </>
-          ) : (
-            <>
-              <p className="text-xs font-medium text-muted-foreground">
+        <Card className="border-primary/20 bg-primary/5" aria-live="polite">
+          <div>
+            <CardHeader className="pb-0 text-center">
+              <CardDescription className="text-base">
                 Your collection code
-              </p>
-
-              {/* Countdown */}
-              {request.code_expires_at && (
-                <div className="mt-2 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-                  <ClockIcon className="size-3.5" aria-hidden="true" />
-                  <span
-                    className="font-mono"
-                    aria-label={`Expires in ${formatCountdown(countdown)}`}
-                  >
-                    {formatCountdown(countdown)}
-                  </span>
-                </div>
-              )}
-
-              {/* Code */}
-              <p
-                className="mt-4 font-mono text-6xl font-semibold tracking-[0.3em] text-foreground"
-                aria-label={`Collection code: ${request.code}`}
-              >
-                {request.code}
-              </p>
-
-              <p className="mt-4 text-xs text-muted-foreground">
-                Show this to the security officer at the desk.
-              </p>
-
-              {/* Copy button */}
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-4 gap-1.5"
-                onClick={handleCopy}
-                aria-label="Copy code to clipboard"
-              >
-                <ClipboardCopyIcon className="size-3.5" aria-hidden="true" />
-                {copied ? 'Copied!' : 'Copy code'}
-              </Button>
-            </>
-          )}
-        </div>
-
-        {/* Confirmation icon */}
-        {!isExpired && (
-          <div className="flex items-center justify-center gap-2 text-emerald-600">
-            <CheckCircleIcon className="size-4" aria-hidden="true" />
-            <p className="text-sm font-medium">Request approved</p>
+              </CardDescription>
+            </CardHeader>
+            <CodeCountdown
+              countdown={countdown}
+              codeExpiresAt={request.code_expires_at}
+            />
           </div>
-        )}
+
+          <CardContent className="pb-6 pt-6 text-center">
+            <p
+              className="font-mono text-6xl font-semibold tracking-[0.3em] text-foreground"
+              aria-label={`Collection code: ${request.code}`}
+            >
+              {request.code}
+            </p>
+            <p className="mt-4 text-sm text-muted-foreground">
+              Show this code to the security officer at the desk.
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Confirmation badge */}
+        <div className="flex justify-center">
+          <Badge className="gap-1.5 border-transparent bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">
+            <CheckCircleIcon className="size-3.5" aria-hidden="true" />
+            Request approved
+          </Badge>
+        </div>
 
         <Button asChild variant="ghost" size="sm" className="w-full">
           <a href="/requester/dashboard">Back to dashboard</a>

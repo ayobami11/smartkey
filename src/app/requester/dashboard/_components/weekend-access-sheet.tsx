@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { CalendarIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import {
@@ -173,8 +174,8 @@ export const WeekendAccessSheet = ({
       >
         <SheetContent side="right" className="flex flex-col gap-0 p-0">
           <SheetHeader className="border-b border-border p-6">
-            <SheetTitle>Request weekend access</SheetTitle>
-            <SheetDescription>
+            <SheetTitle className="text-lg">Request weekend access</SheetTitle>
+            <SheetDescription className="text-base">
               {step === 'pending_hod'
                 ? 'Your HOD will be notified to approve this request.'
                 : 'Select a key, choose a date, and describe your reason.'}
@@ -285,55 +286,55 @@ export const WeekendAccessSheet = ({
 
             {/* Pending HOD approval */}
             {step === 'pending_hod' && (
-              <div className="flex flex-col items-center gap-4 text-center">
-                <div className="flex size-12 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950/40">
+              <Card>
+                <CardContent className="flex flex-col items-center gap-4 py-10 text-center">
                   <CalendarIcon
-                    className="size-6 text-amber-600"
+                    className="size-10 text-amber-500"
                     aria-hidden="true"
                   />
-                </div>
-                <div>
-                  <p className="font-medium text-foreground">
-                    Waiting for approval
-                  </p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Your HOD will review and approve or decline this request.
-                    {"You'll"} be notified by email when they decide.
-                  </p>
-                </div>
-
-                <div className="w-full rounded-lg border border-amber-200 bg-amber-50 p-4 text-left dark:border-amber-900 dark:bg-amber-950/30">
-                  <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
-                    Weekend request submitted
-                  </p>
-                  {selectedKey && (
-                    <>
-                      <p className="mt-1.5 font-mono text-sm font-medium text-foreground">
-                        {selectedKey.code}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {selectedKey.room_name}
-                      </p>
-                    </>
-                  )}
-                  {form.getValues('weekend_date') && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {new Date(
-                        `${form.getValues('weekend_date')}T00:00:00`
-                      ).toLocaleDateString('en-GB', {
-                        weekday: 'long',
-                        day: 'numeric',
-                        month: 'long',
-                        year: 'numeric',
-                      })}
+                  <div>
+                    <p className="font-medium text-foreground">
+                      Waiting for approval
                     </p>
-                  )}
-                </div>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Your HOD will review and approve or decline this request.
+                      {"You'll"} be notified by email when they decide.
+                    </p>
+                  </div>
 
-                <Button className="w-full" onClick={handleClose}>
-                  Done
-                </Button>
-              </div>
+                  <div className="w-full rounded-lg border border-amber-200 bg-amber-50 p-4 text-left dark:border-amber-900 dark:bg-amber-950/30">
+                    <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                      Weekend request submitted
+                    </p>
+                    {selectedKey && (
+                      <>
+                        <p className="mt-1.5 font-mono text-sm font-medium text-foreground">
+                          {selectedKey.code}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {selectedKey.room_name}
+                        </p>
+                      </>
+                    )}
+                    {form.getValues('weekend_date') && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {new Date(
+                          `${form.getValues('weekend_date')}T00:00:00`
+                        ).toLocaleDateString('en-GB', {
+                          weekday: 'long',
+                          day: 'numeric',
+                          month: 'long',
+                          year: 'numeric',
+                        })}
+                      </p>
+                    )}
+                  </div>
+
+                  <Button variant="outline" size="sm" onClick={handleClose}>
+                    Done
+                  </Button>
+                </CardContent>
+              </Card>
             )}
           </div>
 

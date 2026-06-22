@@ -97,9 +97,12 @@ export default function HelpPage() {
             >
               Frequently asked questions
             </h2>
-            <Accordion type="multiple" className="mt-4 border rounded-lg px-2">
+            <Accordion type="multiple" className="mt-4">
               {faqs.map(({ id, question, answer }) => (
-                <AccordionItem key={id} value={id}>
+                <AccordionItem
+                  key={id}
+                  value={id}
+                >
                   <AccordionTrigger>{question}</AccordionTrigger>
                   <AccordionContent>
                     <p className="text-muted-foreground">{answer}</p>
