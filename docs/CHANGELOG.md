@@ -8,6 +8,14 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-06-22 — Auto-release unclaimed keys; scheduled jobs run in-SQL
+
+- **Why (auto-release)**: a `CODE_ISSUED` request holds a 10-minute collection code, but expiry was only fired by the requester's open browser tab (`POST /api/requests/expire`). Closing the tab stranded the request in `CODE_ISSUED`, and `create_request`'s per-requester conflict check then blocked that requester from re-requesting the key — the key never freed up for them. (There is no global per-key lock; other authorised requesters were never blocked at the SQL level.)
+- New RPC `expire_lapsed_codes()` (`supabase/migrations/20260622140310_expire_lapsed_codes.sql`): expires any `CODE_ISSUED` request (weekday/weekend, registered/guest) whose `code_expires_at < now()` → `EXPIRED`, clears the code, writes a guest-aware `REQUEST_EXPIRED` audit entry. Cron-only; scheduled every 5 minutes. The UI-fired expiry remains the immediate path for the active user; this is the backstop for everyone else.
+- **Why (in-SQL jobs)**: the `overdue-key-check` and `daily-shift-summary` cron jobs were scheduled to `http_post` to edge functions via `current_setting('app.supabase_url')` / `('app.edge_function_key')`, but `ALTER DATABASE ... SET` of custom parameters is not permitted on managed Supabase, so those settings were null and the jobs silently never fired since launch.
+- `supabase/migrations/20260622140052_cron_jobs_direct_sql.sql`: both jobs now run their SQL directly in pg_cron (no HTTP, no secret). `overdue-key-check` → `mark_key_overdue()`; `daily-shift-summary` → new RPC `schedule_pending_shift_report()` (SQL equivalent of the edge function — inserts the `PENDING_GENERATION` placeholder for the latest unreported shift). The edge functions stay deployed but are no longer the cron entry point.
+- Note: the weekend-reminder flow already matches the intended UX — no code is emailed; the reminder links to the page (`/requester/dashboard` or `/weekend-access/[token]`) where a button mints the 10-minute code on the day.
+
 ### 2026-06-22 — Morning reminder for approved weekend requests
 
 - **Why**: no collection code is ever emailed for the weekend flow — the requester (or guest) mints a short-lived code on the requested day from their dashboard / status page. Without a nudge, an approved request is easy to forget until the day passes (after which it can no longer be actioned — see the dead-end fix above). Closes the "I didn't get anything" experience gap.
