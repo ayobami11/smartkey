@@ -47,7 +47,12 @@ export const POST = async (request: NextRequest) => {
   if (!req) return NextResponse.json(err('Not found', 404), { status: 404 });
   if (req.requester_id !== user.id)
     return NextResponse.json(err('Forbidden', 403), { status: 403 });
-  if (req.status !== 'CODE_ISSUED') {
+  // Cancellable in any pre-collection state the requester owns: a weekday code
+  // (CODE_ISSUED), or a weekend request awaiting/holding HOD approval
+  // (PENDING_HOD, APPROVED) — the latter would otherwise have no escape once its
+  // date passes without a code being minted.
+  const cancellableStatuses = ['CODE_ISSUED', 'PENDING_HOD', 'APPROVED'];
+  if (!cancellableStatuses.includes(req.status)) {
     return NextResponse.json(
       err('Request cannot be cancelled in its current state', 409),
       { status: 409 }

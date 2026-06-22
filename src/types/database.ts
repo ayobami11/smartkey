@@ -392,6 +392,7 @@ export type Database = {
           issued_by: string | null;
           key_id: string | null;
           letter_url: string | null;
+          reminder_sent_at: string | null;
           requested_department_id: string | null;
           requested_for: string;
           requested_room: string | null;
@@ -417,6 +418,7 @@ export type Database = {
           issued_by?: string | null;
           key_id?: string | null;
           letter_url?: string | null;
+          reminder_sent_at?: string | null;
           requested_department_id?: string | null;
           requested_for: string;
           requested_room?: string | null;
@@ -442,6 +444,7 @@ export type Database = {
           issued_by?: string | null;
           key_id?: string | null;
           letter_url?: string | null;
+          reminder_sent_at?: string | null;
           requested_department_id?: string | null;
           requested_for?: string;
           requested_room?: string | null;

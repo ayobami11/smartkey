@@ -8,6 +8,39 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-06-22 — Auto-release unclaimed keys; scheduled jobs run in-SQL
+
+- **Why (auto-release)**: a `CODE_ISSUED` request holds a 10-minute collection code, but expiry was only fired by the requester's open browser tab (`POST /api/requests/expire`). Closing the tab stranded the request in `CODE_ISSUED`, and `create_request`'s per-requester conflict check then blocked that requester from re-requesting the key — the key never freed up for them. (There is no global per-key lock; other authorised requesters were never blocked at the SQL level.)
+- New RPC `expire_lapsed_codes()` (`supabase/migrations/20260622140310_expire_lapsed_codes.sql`): expires any `CODE_ISSUED` request (weekday/weekend, registered/guest) whose `code_expires_at < now()` → `EXPIRED`, clears the code, writes a guest-aware `REQUEST_EXPIRED` audit entry. Cron-only; scheduled every 5 minutes. The UI-fired expiry remains the immediate path for the active user; this is the backstop for everyone else.
+- **Why (in-SQL jobs)**: the `overdue-key-check` and `daily-shift-summary` cron jobs were scheduled to `http_post` to edge functions via `current_setting('app.supabase_url')` / `('app.edge_function_key')`, but `ALTER DATABASE ... SET` of custom parameters is not permitted on managed Supabase, so those settings were null and the jobs silently never fired since launch.
+- `supabase/migrations/20260622140052_cron_jobs_direct_sql.sql`: both jobs now run their SQL directly in pg_cron (no HTTP, no secret). `overdue-key-check` → `mark_key_overdue()`; `daily-shift-summary` → new RPC `schedule_pending_shift_report()` (SQL equivalent of the edge function — inserts the `PENDING_GENERATION` placeholder for the latest unreported shift). The edge functions stay deployed but are no longer the cron entry point.
+- Note: the weekend-reminder flow already matches the intended UX — no code is emailed; the reminder links to the page (`/requester/dashboard` or `/weekend-access/[token]`) where a button mints the 10-minute code on the day.
+
+### 2026-06-22 — Morning reminder for approved weekend requests
+
+- **Why**: no collection code is ever emailed for the weekend flow — the requester (or guest) mints a short-lived code on the requested day from their dashboard / status page. Without a nudge, an approved request is easy to forget until the day passes (after which it can no longer be actioned — see the dead-end fix above). Closes the "I didn't get anything" experience gap.
+- New email sender `sendWeekendReminderEmail` in `src/lib/email/otp.ts` (nodemailer, same template language), linking registered requesters to `/requester/dashboard` and guests to `/weekend-access/[token]`.
+- New `reminder_sent_at` column on `requests` (`supabase/migrations/20260622134716_weekend_code_reminders.sql`) for send idempotency.
+- New route `POST /api/cron/weekend-reminders` — bearer-guarded by `CRON_SECRET`, service-role. Finds `APPROVED` weekend requests due today (registered + guest) not yet reminded, emails each, stamps `reminder_sent_at`. Returns `{ sent, failed }`.
+- `pg_cron` job `weekend-code-reminders` at 06:00 UTC on Sat/Sun, POSTing to the route with a bearer secret read from Supabase Vault (`weekend_cron_secret`). The secret must match the app's `CRON_SECRET` env var; `ALTER DATABASE ... SET` is not permitted for custom parameters on managed Supabase, so Vault is used (the pre-existing edge-function schedules in `20260612000002` rely on that unsupported mechanism and have therefore never fired). See the migration header and `.env.local.example`.
+
+### 2026-06-22 — Expire stale weekend requests (dead-end fix)
+
+- **Why**: a weekend request had no lifecycle terminus once its requested date passed. The happy path requires the requester (or guest) to mint a short-lived collection code ON the requested day via `generate_weekend_code` / `generate_guest_weekend_code`. If the day passed without a code being minted, the request was stranded in `APPROVED` (or `PENDING_HOD`): `generate_weekend_code` raises `TOO_EARLY` forever (`requested_for <> current_date`), the cancel route only accepted `CODE_ISSUED`, and `create_request` counts any non-terminal status as an active request — so the request and its key stayed blocked with no user-facing escape. (Observed in production: two `APPROVED` requests for 2026-06-20 permanently blocking keys OE-203 and OE-204.)
+- New RPC `expire_stale_weekend_requests()` (`supabase/migrations/20260622134126_expire_stale_weekend_requests.sql`): expires `WEEKEND` requests where `requested_for < current_date` and status is `PENDING_HOD` / `APPROVED` / `CODE_ISSUED`, clearing the code and writing a `REQUEST_EXPIRED` audit entry per row (guest-aware via `_write_audit_guest`). Idempotent; cron-only (execute revoked from `public`/`anon`/`authenticated`). Scheduled daily at 00:15 UTC via `pg_cron` calling the function directly (no edge function needed).
+- `POST /api/requests/cancel`: now also cancellable from `PENDING_HOD` and `APPROVED`, not just `CODE_ISSUED`, giving the requester a manual escape hatch for a weekend request before its code is minted.
+- Note: no code is ever emailed for the weekend flow — by design the code is minted on the requested day from the dashboard. This is unchanged; the fix only addresses the stranded-state dead-end.
+
+### 2026-06-22 — CI/CD pipeline and testing configuration (issue #25)
+
+- **Why**: no automated checks were running on PRs — typecheck, lint, unit tests, and build all required manual runs locally. E2E tests had packages installed but no Playwright config or test files.
+- `.github/workflows/ci.yml`: runs typecheck → lint → unit tests → build on every push/PR to `main`.
+- `.github/workflows/e2e.yml`: installs Playwright browsers, builds the app, runs E2E suite on every PR; uploads the Playwright report as an artifact on failure.
+- `playwright.config.ts`: Desktop Chrome + Pixel 5 projects, `retries: 2` in CI, `webServer` pointing at `npm run start`, `BASE_URL` from env.
+- `vitest.config.ts`: added `@vitejs/plugin-react` plugin, `environment: 'jsdom'`, `setupFiles`, and excludes `tests/e2e/**` so Playwright specs never run under Vitest.
+- `tests/setup.ts`: global Vitest setup file (placeholder for future RTL imports).
+- `tests/e2e/public/auth.spec.ts`, `tests/e2e/cso/dashboard.spec.ts`, `tests/e2e/hod/dashboard.spec.ts`, `tests/e2e/verifier/dashboard.spec.ts`, `tests/e2e/requester/dashboard.spec.ts`: placeholder E2E specs covering happy path, one error path, axe-core scan, and unauthenticated redirect per role.
+
 ### 2026-06-16 — Gemini shift report generation (issue #21)
 
 - **Why**: shift-report generation was half-built — a working Gemini-with-fallback implementation lived inline in `POST /api/reports/generate`, but it wasn't factored into the named library, used a raw `fetch` instead of the SDK, never wrote the summary counts the list card reads (always showed 0), and there was no detail page to actually read a report (the generate dialog linked to a 404).

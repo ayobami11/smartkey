@@ -320,7 +320,7 @@ The response carries an `is_guest` flag. For an external (guest) request it is `
 | ------------ | --------------- | -------- |
 | `request_id` | `string` (uuid) | yes      |
 
-Only cancellable when `status = 'CODE_ISSUED'` (before key collection). Writes audit entry.
+Cancellable from any pre-collection state the requester owns: `CODE_ISSUED` (weekday code), or `PENDING_HOD` / `APPROVED` (a weekend request before its on-the-day code is minted — the manual escape hatch for an approved weekend request whose date passes). Writes audit entry.
 
 **Response `data`**: `{ "request_id": "<uuid>", "status": "CANCELLED" }`
 
@@ -759,6 +759,25 @@ Read-only. No update or delete endpoint exists — the incident log is append-on
 If `severity = 'HIGH'`, the AI shift-report generation is triggered immediately and a CSO dashboard alert is raised via Realtime.
 
 **Response `data`**: `{ "incident_id": "<uuid>", "reference": "INC-2026-0042" }`
+
+---
+
+## 6a. Scheduled (cron)
+
+### POST /api/cron/weekend-reminders
+
+**File**: `src/app/api/cron/weekend-reminders/route.ts`
+**Roles**: SYSTEM (pg_cron; no user session)
+
+Not user-facing. Called by the `weekend-code-reminders` pg_cron job at 06:00 UTC on Sat/Sun. Authenticated by a shared bearer secret (`Authorization: Bearer ${CRON_SECRET}`), not a session; uses the service-role admin client. Finds `APPROVED` weekend requests due today (registered and guest) with `reminder_sent_at IS NULL`, emails each requester a reminder to mint their collection code (registered → `/requester/dashboard`, guest → `/weekend-access/[token]`), and stamps `reminder_sent_at` so a retry never double-sends. No collection code is included — the code is always minted on the day.
+
+No request body.
+
+**Response `data`**: `{ "sent": 2, "failed": 0 }`
+
+**Errors**: `401` missing/incorrect bearer secret · `500` `CRON_SECRET` not configured or query failure
+
+The pg_cron job reads its bearer secret from Supabase Vault (`weekend_cron_secret`), created once out of band with the same value as `CRON_SECRET` (see `supabase/migrations/20260622134716_weekend_code_reminders.sql`).
 
 ---
 

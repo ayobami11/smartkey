@@ -510,26 +510,26 @@ Backend development is organized into five Agile sprints, each producing a worki
 
 Track progress here after every merged PR. Update the status column; link the PR.
 
-| Component                                         | Status         | PR  |
-| ------------------------------------------------- | -------------- | --- |
-| Supabase project setup + packages                 | ✅ Done        | #26 |
-| Database schema (all 12 tables)                   | ✅ Done        | #27 |
-| RLS policies                                      | ✅ Done        | #30 |
-| Postgres RPCs (10 functions)                      | ✅ Done        | #31 |
-| Supabase client utilities + logger + audit writer | ✅ Done        | #29 |
-| Auth middleware (role gating)                     | ✅ Done        | #28 |
-| Auth API routes (login, OTP, register, activate)  | ✅ Done        | #32 |
-| Request management API routes                     | ✅ Done        | #33 |
-| Key transaction + admin API routes                | ✅ Done        | #36 |
-| Supabase Realtime subscriptions                   | ✅ Done        | #39 |
-| Rule-based risk scoring engine + unit tests       | ✅ Done        | #38 |
-| Risk tier UI (RiskTierBadge, RiskFactorPopover)   | ✅ Done        | #40 |
-| Gemini shift report generation                    | ✅ Done        | #21 |
-| Signature verification (Sharp + Pixelmatch)       | ✅ Done        | #22 |
-| Supabase Storage (photos, signatures, letters)    | ✅ Done        | #32 |
-| Shift handover + incident + report API routes     | ✅ Done        | #37 |
-| Edge Functions (overdue check + daily summary)    | ✅ Done        | #24 |
-| CI/CD pipeline (GitHub Actions)                   | ⬜ Not started | —   |
+| Component                                         | Status  | PR  |
+| ------------------------------------------------- | ------- | --- |
+| Supabase project setup + packages                 | ✅ Done | #26 |
+| Database schema (all 12 tables)                   | ✅ Done | #27 |
+| RLS policies                                      | ✅ Done | #30 |
+| Postgres RPCs (10 functions)                      | ✅ Done | #31 |
+| Supabase client utilities + logger + audit writer | ✅ Done | #29 |
+| Auth middleware (role gating)                     | ✅ Done | #28 |
+| Auth API routes (login, OTP, register, activate)  | ✅ Done | #32 |
+| Request management API routes                     | ✅ Done | #33 |
+| Key transaction + admin API routes                | ✅ Done | #36 |
+| Supabase Realtime subscriptions                   | ✅ Done | #39 |
+| Rule-based risk scoring engine + unit tests       | ✅ Done | #38 |
+| Risk tier UI (RiskTierBadge, RiskFactorPopover)   | ✅ Done | #40 |
+| Gemini shift report generation                    | ✅ Done | #21 |
+| Signature verification (Sharp + Pixelmatch)       | ✅ Done | #22 |
+| Supabase Storage (photos, signatures, letters)    | ✅ Done | #32 |
+| Shift handover + incident + report API routes     | ✅ Done | #37 |
+| Edge Functions (overdue check + daily summary)    | ✅ Done | #24 |
+| CI/CD pipeline (GitHub Actions)                   | ✅ Done | #25 |
 
 Statuses: `⬜ Not started` → `🔄 In progress` → `✅ Done`
 

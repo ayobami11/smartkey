@@ -1,0 +1,54 @@
+name: E2E
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  e2e:
+    name: Playwright + axe-core
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+
+      - name: Run E2E tests
+        run: npm run test:e2e
+        env:
+          BASE_URL: http://localhost:3000
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          TEST_CSO_EMAIL: ${{ secrets.TEST_CSO_EMAIL }}
+          TEST_CSO_PASSWORD: ${{ secrets.TEST_CSO_PASSWORD }}
+          TEST_HOD_EMAIL: ${{ secrets.TEST_HOD_EMAIL }}
+          TEST_HOD_PASSWORD: ${{ secrets.TEST_HOD_PASSWORD }}
+          TEST_VERIFIER_EMAIL: ${{ secrets.TEST_VERIFIER_EMAIL }}
+          TEST_VERIFIER_PASSWORD: ${{ secrets.TEST_VERIFIER_PASSWORD }}
+          TEST_REQUESTER_EMAIL: ${{ secrets.TEST_REQUESTER_EMAIL }}
+          TEST_REQUESTER_PASSWORD: ${{ secrets.TEST_REQUESTER_PASSWORD }}
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
