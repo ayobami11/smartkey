@@ -8,6 +8,16 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-06-22 — CI/CD pipeline and testing configuration (issue #25)
+
+- **Why**: no automated checks were running on PRs — typecheck, lint, unit tests, and build all required manual runs locally. E2E tests had packages installed but no Playwright config or test files.
+- `.github/workflows/ci.yml`: runs typecheck → lint → unit tests → build on every push/PR to `main`.
+- `.github/workflows/e2e.yml`: installs Playwright browsers, builds the app, runs E2E suite on every PR; uploads the Playwright report as an artifact on failure.
+- `playwright.config.ts`: Desktop Chrome + Pixel 5 projects, `retries: 2` in CI, `webServer` pointing at `npm run start`, `BASE_URL` from env.
+- `vitest.config.ts`: added `@vitejs/plugin-react` plugin, `environment: 'jsdom'`, `setupFiles`, and excludes `tests/e2e/**` so Playwright specs never run under Vitest.
+- `tests/setup.ts`: global Vitest setup file (placeholder for future RTL imports).
+- `tests/e2e/public/auth.spec.ts`, `tests/e2e/cso/dashboard.spec.ts`, `tests/e2e/hod/dashboard.spec.ts`, `tests/e2e/verifier/dashboard.spec.ts`, `tests/e2e/requester/dashboard.spec.ts`: placeholder E2E specs covering happy path, one error path, axe-core scan, and unauthenticated redirect per role.
+
 ### 2026-06-16 — Gemini shift report generation (issue #21)
 
 - **Why**: shift-report generation was half-built — a working Gemini-with-fallback implementation lived inline in `POST /api/reports/generate`, but it wasn't factored into the named library, used a raw `fetch` instead of the SDK, never wrote the summary counts the list card reads (always showed 0), and there was no detail page to actually read a report (the generate dialog linked to a 404).
