@@ -73,10 +73,11 @@ $$;
 revoke execute on function public.expire_lapsed_codes()
   from public, anon, authenticated;
 
--- Every 5 minutes: a tight backstop so an unclaimed key frees up promptly even
--- when the requester's tab is closed.
+-- Every 10 minutes: a backstop so an unclaimed key frees up even when the
+-- requester's tab is closed (the UI fires expiry immediately for the active
+-- user). Matches the 10-minute code lifetime.
 select cron.schedule(
   'expire-lapsed-codes',
-  '*/5 * * * *',
+  '*/10 * * * *',
   $$ select public.expire_lapsed_codes(); $$
 );
