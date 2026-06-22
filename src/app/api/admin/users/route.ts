@@ -63,6 +63,23 @@ export const POST = async (request: NextRequest) => {
     );
   }
 
+  // Prevent assigning a second ACTIVE HOD to a department that already has one.
+  if (role === 'HOD' && department_id) {
+    const { data: dept } = await supabase
+      .from('departments')
+      .select('hod_id, hod:profiles!hod_id(status)')
+      .eq('id', department_id)
+      .single();
+
+    const existingHod = dept?.hod as { status: string } | null;
+    if (dept?.hod_id && existingHod?.status === 'ACTIVE') {
+      return NextResponse.json(
+        err('This department already has an active HOD', 409),
+        { status: 409 }
+      );
+    }
+  }
+
   const siteUrl =
     process.env.NEXT_PUBLIC_SITE_URL ?? 'https://smartkey-ochre.vercel.app';
   const activationPath = role === 'HOD' ? '/hod/onboarding' : '/activate';
