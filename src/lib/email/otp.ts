@@ -80,6 +80,47 @@ export const sendActivationEmail = async ({
     `,
   });
 
+// Morning-of reminder for an approved weekend request. No code is emailed for
+// the weekend flow — the requester (or guest) mints a short-lived collection
+// code from the linked page on the requested day. This nudge closes the gap
+// where an approved request would otherwise be forgotten until the day passed.
+export const sendWeekendReminderEmail = async ({
+  to,
+  link,
+  fullName,
+}: {
+  to: string;
+  link: string;
+  fullName: string;
+}) =>
+  transporter.sendMail({
+    from: `"SmartKey" <${process.env.GMAIL_USER}>`,
+    to,
+    subject: 'Get your SmartKey collection code today',
+    html: `
+      <div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:400px;margin:0 auto;padding:32px 16px;">
+        ${emailHeader}
+        <div style="background:#fff;border:1px solid #E2E8F0;border-top:none;padding:32px 24px;border-radius:0 0 8px 8px;">
+          <p style="margin:0 0 8px;color:#0F172A;font-size:16px;font-weight:600;">
+            Your weekend access is for today, ${fullName}
+          </p>
+          <p style="margin:0 0 24px;color:#475569;font-size:14px;">
+            Your approved weekend key request is for today. Open the link below to
+            generate your 6-digit collection code, then present it at the security
+            desk. The code is valid for 10&nbsp;minutes once generated.
+          </p>
+          <a href="${link}"
+            style="display:inline-block;background:#7B1F2D;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">
+            Get your collection code
+          </a>
+          <p style="margin:24px 0 0;color:#94A3B8;font-size:12px;">
+            If you no longer need this key, you can ignore this email.
+          </p>
+        </div>
+      </div>
+    `,
+  });
+
 // Status-link email for an external (non-registered) weekend key request.
 // The link carries the unguessable access_token so the guest can track their
 // request, mint a collection code on the day, and present it at the desk.

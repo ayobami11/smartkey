@@ -8,6 +8,21 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-06-22 — Morning reminder for approved weekend requests
+
+- **Why**: no collection code is ever emailed for the weekend flow — the requester (or guest) mints a short-lived code on the requested day from their dashboard / status page. Without a nudge, an approved request is easy to forget until the day passes (after which it can no longer be actioned — see the dead-end fix above). Closes the "I didn't get anything" experience gap.
+- New email sender `sendWeekendReminderEmail` in `src/lib/email/otp.ts` (nodemailer, same template language), linking registered requesters to `/requester/dashboard` and guests to `/weekend-access/[token]`.
+- New `reminder_sent_at` column on `requests` (`supabase/migrations/20260622134716_weekend_code_reminders.sql`) for send idempotency.
+- New route `POST /api/cron/weekend-reminders` — bearer-guarded by `CRON_SECRET`, service-role. Finds `APPROVED` weekend requests due today (registered + guest) not yet reminded, emails each, stamps `reminder_sent_at`. Returns `{ sent, failed }`.
+- `pg_cron` job `weekend-code-reminders` at 06:00 UTC on Sat/Sun, POSTing to the route with a bearer secret read from Supabase Vault (`weekend_cron_secret`). The secret must match the app's `CRON_SECRET` env var; `ALTER DATABASE ... SET` is not permitted for custom parameters on managed Supabase, so Vault is used (the pre-existing edge-function schedules in `20260612000002` rely on that unsupported mechanism and have therefore never fired). See the migration header and `.env.local.example`.
+
+### 2026-06-22 — Expire stale weekend requests (dead-end fix)
+
+- **Why**: a weekend request had no lifecycle terminus once its requested date passed. The happy path requires the requester (or guest) to mint a short-lived collection code ON the requested day via `generate_weekend_code` / `generate_guest_weekend_code`. If the day passed without a code being minted, the request was stranded in `APPROVED` (or `PENDING_HOD`): `generate_weekend_code` raises `TOO_EARLY` forever (`requested_for <> current_date`), the cancel route only accepted `CODE_ISSUED`, and `create_request` counts any non-terminal status as an active request — so the request and its key stayed blocked with no user-facing escape. (Observed in production: two `APPROVED` requests for 2026-06-20 permanently blocking keys OE-203 and OE-204.)
+- New RPC `expire_stale_weekend_requests()` (`supabase/migrations/20260622134126_expire_stale_weekend_requests.sql`): expires `WEEKEND` requests where `requested_for < current_date` and status is `PENDING_HOD` / `APPROVED` / `CODE_ISSUED`, clearing the code and writing a `REQUEST_EXPIRED` audit entry per row (guest-aware via `_write_audit_guest`). Idempotent; cron-only (execute revoked from `public`/`anon`/`authenticated`). Scheduled daily at 00:15 UTC via `pg_cron` calling the function directly (no edge function needed).
+- `POST /api/requests/cancel`: now also cancellable from `PENDING_HOD` and `APPROVED`, not just `CODE_ISSUED`, giving the requester a manual escape hatch for a weekend request before its code is minted.
+- Note: no code is ever emailed for the weekend flow — by design the code is minted on the requested day from the dashboard. This is unchanged; the fix only addresses the stranded-state dead-end.
+
 ### 2026-06-22 — CI/CD pipeline and testing configuration (issue #25)
 
 - **Why**: no automated checks were running on PRs — typecheck, lint, unit tests, and build all required manual runs locally. E2E tests had packages installed but no Playwright config or test files.
