@@ -106,8 +106,8 @@ export default function LandingPage() {
             </h1>
             <p className="mt-6 max-w-xl text-base text-muted-foreground sm:text-lg">
               SmartKey replaces the paper logbook with a digital, AI-augmented
-              system — real-time tracking, immutable audit trails, and
-              role-based access for every key in the building.
+              system: real-time tracking, immutable audit trails, and role-based
+              access for every key in the building.
             </p>
             <div className="mt-10 flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg">
