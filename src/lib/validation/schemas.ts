@@ -323,6 +323,12 @@ export const addReportCommentSchema = z.object({
   text: z.string().min(1, 'Comment text is required'),
 });
 
+// Profile
+
+export const updateProfileSchema = z.object({
+  full_name: z.string().trim().min(1, 'Full name is required'),
+});
+
 // Inferred TypeScript types
 // Import these where you need the form value types.
 
@@ -359,3 +365,4 @@ export type ReturnKeyOverrideFormInput = z.infer<
   typeof returnKeyOverrideFormSchema
 >;
 export type IncidentFormInput = z.infer<typeof incidentFormSchema>;
+export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
