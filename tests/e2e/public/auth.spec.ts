@@ -26,7 +26,7 @@ test.describe('login page', () => {
   test('shows error on invalid credentials', async ({ page }) => {
     await page.goto('/login');
     await page.getByLabel(/email/i).fill('nobody@example.com');
-    await page.getByLabel(/password/i).fill('wrongpassword');
+    await page.locator('input[type="password"]').fill('wrongpassword');
     await page.getByRole('button', { name: /sign in/i }).click();
     await expect(page.getByRole('alert')).toBeVisible();
   });

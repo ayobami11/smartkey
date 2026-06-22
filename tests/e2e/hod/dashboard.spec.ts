@@ -6,7 +6,7 @@ test.describe('HOD dashboard', () => {
     await page.goto('/login');
     await page.getByLabel(/email/i).fill(process.env.TEST_HOD_EMAIL ?? '');
     await page
-      .getByLabel(/password/i)
+      .locator('input[type="password"]')
       .fill(process.env.TEST_HOD_PASSWORD ?? '');
     await page.getByRole('button', { name: /sign in/i }).click();
     await page.waitForURL('/hod');

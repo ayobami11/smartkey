@@ -8,7 +8,7 @@ test.describe('Requester dashboard', () => {
       .getByLabel(/email/i)
       .fill(process.env.TEST_REQUESTER_EMAIL ?? '');
     await page
-      .getByLabel(/password/i)
+      .locator('input[type="password"]')
       .fill(process.env.TEST_REQUESTER_PASSWORD ?? '');
     await page.getByRole('button', { name: /sign in/i }).click();
     await page.waitForURL('/me');
