@@ -45,7 +45,12 @@ const ROLES = ['HOD', 'VERIFIER', 'REQUESTER'] as const;
 
 type FormValues = ProvisionUserInput;
 
-type Department = { id: string; name: string; faculty: string };
+type Department = {
+  id: string;
+  name: string;
+  faculty: string;
+  has_hod: boolean;
+};
 
 type Props = { onSuccess?: () => void };
 
@@ -246,7 +251,11 @@ export const ProvisionUserDialog = ({ onSuccess }: Props) => {
                             <SelectGroup key={faculty}>
                               <SelectLabel>{faculty}</SelectLabel>
                               {depts.map((d) => (
-                                <SelectItem key={d.id} value={d.id}>
+                                <SelectItem
+                                  key={d.id}
+                                  value={d.id}
+                                  disabled={selectedRole === 'HOD' && d.has_hod}
+                                >
                                   {d.name}
                                 </SelectItem>
                               ))}
