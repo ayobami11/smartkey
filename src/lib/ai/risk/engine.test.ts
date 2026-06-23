@@ -10,6 +10,7 @@ const safeCtx: RiskContext = {
   requestedAt: new Date('2026-06-09T10:00:00'), // Monday 10:00 — in hours
   keyZone: 'NEW_SENATE',
   hasOutstandingKey: false,
+  outstandingKeysAuthorised: false,
   recentRequestCount: 0,
   isWhitelisted: true,
 };
@@ -72,6 +73,7 @@ describe('evaluateRisk — tier boundaries', () => {
       requestedAt: new Date('2026-06-13T06:00:00'), // Saturday before hours
       keyZone: 'NEW_SENATE',
       hasOutstandingKey: true,
+      outstandingKeysAuthorised: false,
       recentRequestCount: 6,
       isWhitelisted: false,
     };

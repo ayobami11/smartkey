@@ -11,7 +11,7 @@ Located in `src/lib/ai/risk/`. Pure TypeScript. Deterministic. No external API.
 **Rules** (defined in `rules.ts`):
 
 - `outside_operational_hours` — request submitted outside the zone's hours. Default weight: 3.
-- `outstanding_key_not_returned` — requester has an unreturned key. Default weight: 5.
+- `outstanding_key_not_returned` — requester is holding a key they are **not currently authorised for**. Suppressed when every key they hold is one they still have a slot on, so a legitimate bulk collector (e.g. a porter collecting several authorised keys) is not flagged. Default weight: 5.
 - `weekend_without_memo` — weekend request without an HOD-approved memo. Default weight: 4.
 - `excess_request_frequency` — more than N requests in a rolling 24h window. Default weight: 2.
 - `collector_not_whitelisted` — requester not in the key's authorisations. Default weight: 5.

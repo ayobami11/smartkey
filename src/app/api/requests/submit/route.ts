@@ -65,11 +65,11 @@ export const POST = async (request: NextRequest) => {
 
   // Fetch risk context data in parallel before calling the RPC.
   const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const [keyRes, outstandingRes, recentRes, whitelistRes] = await Promise.all([
+  const [keyRes, outstandingRes, recentRes, authRes] = await Promise.all([
     supabase.from('keys').select('zone').eq('id', key_id).single(),
     supabase
       .from('requests')
-      .select('id', { count: 'exact', head: true })
+      .select('key_id')
       .eq('requester_id', user.id)
       .in('status', ['CODE_ISSUED', 'KEY_ISSUED']),
     supabase
@@ -77,20 +77,28 @@ export const POST = async (request: NextRequest) => {
       .select('id', { count: 'exact', head: true })
       .eq('requester_id', user.id)
       .gte('created_at', since24h),
-    supabase
-      .from('authorisations')
-      .select('profile_id', { count: 'exact', head: true })
-      .eq('key_id', key_id)
-      .eq('profile_id', user.id),
+    supabase.from('authorisations').select('key_id').eq('profile_id', user.id),
   ]);
+
+  // Set of every key this requester is currently authorised for, used both to
+  // decide whitelisting for the requested key and whether the keys they already
+  // hold are all authorised (a whitelisted bulk collector is not a risk).
+  const authorisedKeyIds = new Set((authRes.data ?? []).map((a) => a.key_id));
+  const outstandingKeyIds = (outstandingRes.data ?? [])
+    .map((r) => r.key_id)
+    .filter((id): id is string => id !== null);
+  const hasOutstandingKey = outstandingKeyIds.length > 0;
 
   const riskCtx: RiskContext = {
     requestType: type,
     requestedAt: new Date(),
     keyZone: (keyRes.data?.zone as RiskContext['keyZone']) ?? 'NEW_SENATE',
-    hasOutstandingKey: (outstandingRes.count ?? 0) > 0,
+    hasOutstandingKey,
+    outstandingKeysAuthorised:
+      hasOutstandingKey &&
+      outstandingKeyIds.every((id) => authorisedKeyIds.has(id)),
     recentRequestCount: recentRes.count ?? 0,
-    isWhitelisted: (whitelistRes.count ?? 0) > 0,
+    isWhitelisted: authorisedKeyIds.has(key_id),
   };
   const { tier, factors } = evaluateRisk(riskCtx);
 

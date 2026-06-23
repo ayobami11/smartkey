@@ -41,9 +41,14 @@ export const outstandingKeyNotReturned = (
 ): RiskFactor | null => {
   const weight = opts?.weight ?? 5;
   if (!context.hasOutstandingKey) return null;
+  // Holding keys you are authorised for is expected behaviour for a bulk
+  // collector — only flag when the requester is holding a key outside their
+  // current authorisations, which is the genuinely suspicious case.
+  if (context.outstandingKeysAuthorised) return null;
   return {
     rule: 'outstanding_key_not_returned',
-    description: 'Requester has a key that has not yet been returned',
+    description:
+      'Requester is holding a key they are not currently authorised for',
     weight,
   };
 };

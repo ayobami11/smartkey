@@ -14,6 +14,7 @@ const base: RiskContext = {
   requestedAt: new Date('2026-06-09T10:00:00'), // Monday 10:00
   keyZone: 'NEW_SENATE',
   hasOutstandingKey: false,
+  outstandingKeysAuthorised: false,
   recentRequestCount: 0,
   isWhitelisted: true,
 };
@@ -75,6 +76,15 @@ describe('outstandingKeyNotReturned', () => {
   it('respects custom weight', () => {
     const ctx = { ...base, hasOutstandingKey: true };
     expect(outstandingKeyNotReturned(ctx, { weight: 10 })!.weight).toBe(10);
+  });
+
+  it('does not fire when all outstanding keys are authorised (bulk collector)', () => {
+    const ctx = {
+      ...base,
+      hasOutstandingKey: true,
+      outstandingKeysAuthorised: true,
+    };
+    expect(outstandingKeyNotReturned(ctx)).toBeNull();
   });
 });
 

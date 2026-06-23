@@ -8,7 +8,11 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
-### 2026-06-23 — Fix passport photo / signature display (ERR_BLOCKED_BY_ORB)
+### 2026-06-23 — Risk engine: authorisation-aware outstanding-key rule
+
+- **Why**: the `outstanding_key_not_returned` rule fired on every key a requester held, so a legitimate bulk collector (e.g. a porter collecting several authorised keys for HODs/deans) tripped MEDIUM/HIGH risk on every key after the first. That trains verifiers to ignore the badge ("just the porter again"), dulling the signal for genuinely suspicious requests. SmartKey deliberately allows multiple concurrent requests/issues across different keys (the only hard block is a duplicate active request for the _same_ key), so penalising bulk collection contradicted the design.
+- The rule now suppresses when every key the requester is currently holding is one they are still authorised for; it fires only when they hold a key outside their current authorisations — the actually-suspicious case. New `RiskContext.outstandingKeysAuthorised` field (`src/lib/ai/risk/types.ts`, `rules.ts`); `POST /api/requests/submit` computes it from the requester's held keys (`CODE_ISSUED`/`KEY_ISSUED`) intersected with their `authorisations`. Same query now also derives `isWhitelisted`, so no extra round-trip.
+- Tests: added the bulk-collector suppression case to `rules.test.ts`; updated `engine.test.ts` contexts. No DB migration — purely engine + route logic.
 
 - **Why**: uploading a passport photo from account settings succeeded, but loading it back failed with `net::ERR_BLOCKED_BY_ORB`. The storage migration (`20260605000001`) declared `passport-photos` and `hod-signatures` as public so `getPublicUrl` works for account settings, verifier identity display, and HOD signature/stamp previews — but it used `INSERT ... ON CONFLICT DO NOTHING`, so on the live project (where the buckets pre-existed as private) the public flag was never applied. `getPublicUrl` on a private bucket returns a JSON error body, not image bytes; the browser blocks that cross-origin non-image response (ORB). The upload (POST) always worked; only the read-back failed.
 - `supabase/migrations/20260623090000_make_photo_buckets_public.sql`: `UPDATE storage.buckets SET public = true` for `passport-photos` and `hod-signatures`, reconciling live to the declared intent. Applied to the live project. `weekend-letters` stays private by design (served via short-lived signed URLs).
