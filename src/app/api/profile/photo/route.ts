@@ -87,3 +87,56 @@ export const POST = async (request: NextRequest) => {
 
   return NextResponse.json(ok({ photo_url: photoUrl }), { status: 200 });
 };
+
+// Removes the authenticated user's profile photo from storage and clears photo_url.
+export const DELETE = async () => {
+  const supabase = await createServerClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user)
+    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
+
+  const userId = user.id;
+  const adminClient = createAdminClient();
+
+  // List files under the user's folder (extension varies — upsert on upload)
+  const { data: files } = await adminClient.storage
+    .from('passport-photos')
+    .list(userId);
+
+  if (files && files.length > 0) {
+    const paths = files.map((f) => `${userId}/${f.name}`);
+    const { error: removeError } = await adminClient.storage
+      .from('passport-photos')
+      .remove(paths);
+
+    if (removeError) {
+      logger.error('profile photo: delete failed', {
+        userId,
+        err: removeError.message,
+      });
+      return NextResponse.json(err('Failed to delete photo', 500), {
+        status: 500,
+      });
+    }
+  }
+
+  const { error: profileError } = await supabase
+    .from('profiles')
+    .update({ photo_url: null })
+    .eq('id', userId);
+
+  if (profileError) {
+    logger.error('profile photo: clear photo_url failed', {
+      userId,
+      err: profileError.message,
+    });
+    return NextResponse.json(err('Failed to clear photo', 500), {
+      status: 500,
+    });
+  }
+
+  return NextResponse.json(ok(null), { status: 200 });
+};
