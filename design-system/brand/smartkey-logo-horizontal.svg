@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 232 56" width="232" height="56" role="img" aria-label="SmartKey">
+  <title>SmartKey</title>
+  <desc>Horizontal SmartKey lockup: the K-key tile mark beside the SmartKey wordmark.</desc>
+  <g transform="translate(4 4)">
+    <rect x="2" y="2" width="44" height="44" rx="12" fill="#7B1F2D"/>
+    <g transform="translate(24 24) scale(0.8) translate(-24 -24)" stroke-linecap="round">
+      <circle cx="19.5" cy="10.5" r="7" fill="none" stroke="#D4A437" stroke-width="4.5"/>
+      <rect x="16" y="12" width="7" height="29" rx="3.5" fill="#F4EEE3"/>
+      <line x1="20" y1="27" x2="35" y2="15" stroke="#F4EEE3" stroke-width="7"/>
+      <line x1="20" y1="27" x2="35" y2="41" stroke="#F4EEE3" stroke-width="7"/>
+      <rect x="10" y="31" width="6.5" height="3.6" rx="1.2" fill="#F4EEE3"/>
+      <rect x="10" y="37" width="6.5" height="3.6" rx="1.2" fill="#F4EEE3"/>
+    </g>
+  </g>
+  <text x="66" y="35" font-family="Fraunces, Georgia, 'Times New Roman', serif" font-size="27" fill="#7B1F2D" letter-spacing="-0.6">
+    <tspan font-weight="500">Smart</tspan><tspan font-weight="700">Key</tspan>
+  </text>
+  <text x="67" y="47" font-family="'DM Sans', system-ui, sans-serif" font-size="8" font-weight="600" fill="#9A7B3A" letter-spacing="2.6">KEY CUSTODY, VERIFIED</text>
+</svg>
