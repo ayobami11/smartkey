@@ -18,6 +18,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { ProfilePhotoUploadSkeleton } from '@/components/smartkey/profile-photo-upload-skeleton';
 import { Button } from '@/components/ui/button';
 
 const photoSchema = z
@@ -25,7 +26,7 @@ const photoSchema = z
   .refine((f) => f.type.startsWith('image/'), 'File must be an image.')
   .refine((f) => f.size <= 2 * 1024 * 1024, 'Photo must be under 2 MB.');
 
-type ProfilePhotoUploaderProps = {
+type ProfilePhotoUploadProps = {
   name: string;
   loading?: boolean;
   initialUrl?: string;
@@ -33,11 +34,11 @@ type ProfilePhotoUploaderProps = {
 
 // Avatar + "Upload photo" control shared by every role's account settings.
 // Uploads to POST /api/profile/photo on explicit save, not on file selection.
-export const ProfilePhotoUploader = ({
+export const ProfilePhotoUpload = ({
   name,
   loading = false,
   initialUrl = '',
-}: ProfilePhotoUploaderProps) => {
+}: ProfilePhotoUploadProps) => {
   const [photoUrl, setPhotoUrl] = useState(initialUrl);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   // Managed manually so we control exactly when the blob URL is revoked.
@@ -147,6 +148,8 @@ export const ProfilePhotoUploader = ({
 
   const displayUrl = pendingPreview ?? photoUrl;
 
+  if (loading) return <ProfilePhotoUploadSkeleton />;
+
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-4">
@@ -154,7 +157,6 @@ export const ProfilePhotoUploader = ({
           name={name}
           photoUrl={displayUrl || undefined}
           avatarClassName="size-20 shrink-0 text-xl"
-          loading={loading}
         />
 
         {pendingFile ? (
@@ -185,7 +187,7 @@ export const ProfilePhotoUploader = ({
               variant="outline"
               size="sm"
               onClick={() => inputRef.current?.click()}
-              disabled={loading || removing}
+              disabled={removing}
             >
               <UploadIcon className="size-3.5" aria-hidden="true" />
               Upload photo
@@ -196,7 +198,7 @@ export const ProfilePhotoUploader = ({
                   <Button
                     variant="destructive"
                     size="sm"
-                    disabled={removing || loading}
+                    disabled={removing}
                     aria-busy={removing}
                   >
                     <Trash2Icon className="size-3.5" aria-hidden="true" />

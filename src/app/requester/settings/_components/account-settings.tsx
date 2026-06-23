@@ -12,7 +12,7 @@ import {
 } from '@/lib/validation/schemas';
 
 import { ChangePasswordForm } from '@/components/smartkey/change-password-form';
-import { ProfilePhotoUploader } from '@/components/smartkey/profile-photo-uploader';
+import { ProfilePhotoUpload } from '@/components/smartkey/profile-photo-upload';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -77,7 +77,7 @@ export const AccountSettings = () => {
 
       <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-5">
         <h3 className="text-sm font-semibold text-foreground">Profile</h3>
-        <ProfilePhotoUploader
+        <ProfilePhotoUpload
           name={form.watch('full_name')}
           loading={profileLoading}
           initialUrl={photoUrl}
