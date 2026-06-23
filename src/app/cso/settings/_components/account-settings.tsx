@@ -60,7 +60,7 @@ export const AccountSettings = () => {
       return;
     }
     form.reset(data);
-    toast.success('Profile updated.');
+    toast.success('Profile updated successfully.');
   });
 
   return (

@@ -74,10 +74,10 @@ export const ReportsDialog = ({ report }: Props) => {
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-lg">
+          <DialogTitle>
             Add comment — Shift {report.shift}
           </DialogTitle>
-          <DialogDescription className="text-base">
+          <DialogDescription>
             Comments are saved permanently to the report and cannot be edited or
             deleted.
           </DialogDescription>

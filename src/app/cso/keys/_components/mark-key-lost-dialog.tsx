@@ -74,10 +74,10 @@ export const MarkKeyLostDialog = ({ target, onClose, onMarked }: Props) => {
     <Dialog open={target !== null} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-lg">
+          <DialogTitle>
             Mark key {target?.code} as lost
           </DialogTitle>
-          <DialogDescription className="text-base">
+          <DialogDescription>
             This will retire the key and open a HIGH-severity incident. This
             action cannot be undone.
           </DialogDescription>

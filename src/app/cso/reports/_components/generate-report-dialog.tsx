@@ -113,8 +113,8 @@ export const GenerateReportDialog = ({ onGenerated }: Props) => {
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-lg">Generate shift report</DialogTitle>
-          <DialogDescription className="text-base">
+          <DialogTitle>Generate shift report</DialogTitle>
+          <DialogDescription>
             Select a completed shift to generate an AI-powered summary.
           </DialogDescription>
         </DialogHeader>

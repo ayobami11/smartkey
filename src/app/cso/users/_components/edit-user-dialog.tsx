@@ -121,8 +121,8 @@ export const EditUserDialog = ({ user, onClose, onSuccess }: Props) => {
     >
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-lg">Edit user</DialogTitle>
-          <DialogDescription className="text-base">
+          <DialogTitle>Edit user</DialogTitle>
+          <DialogDescription>
             Update the user&apos;s name{needsDept ? ' and department' : ''}.
             Email and role cannot be changed here.
           </DialogDescription>
