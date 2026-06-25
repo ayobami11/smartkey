@@ -51,8 +51,13 @@ export const POST = async (request: NextRequest) => {
     .single();
   if (!profile)
     return NextResponse.json(err('Unauthorized', 401), { status: 401 });
-  if (profile.role !== 'HOD')
+  // HODs decide for their faculty's keys; the CSO decides for Administration
+  // (authoriser = 'CSO') keys, which have no Dean. The RPC re-validates that the
+  // actor's role matches the target department's authoriser, so a cross-type
+  // attempt (HOD on an admin key, or CSO on a faculty key) is rejected there.
+  if (profile.role !== 'HOD' && profile.role !== 'CSO')
     return NextResponse.json(err('Forbidden', 403), { status: 403 });
+  const isCso = profile.role === 'CSO';
 
   const body = await request.json().catch(() => null);
   const parsed = bodySchema.safeParse(body);
@@ -113,6 +118,41 @@ export const POST = async (request: NextRequest) => {
   }
 
   if (decision === 'APPROVED') {
+    // CSO approves Administration keys directly. There is no reference signature
+    // for the CSO, so signature verification is skipped (the RPC gates the actor
+    // against the key's authoriser).
+    if (isCso) {
+      const { data, error } = await supabase.rpc('approve_weekend', {
+        p_request_id: request_id,
+        p_hod_id: user.id,
+        p_note: note ?? undefined,
+        p_signature_verified: true,
+        p_signature_mismatch_pct: undefined,
+      });
+
+      if (error) {
+        const mapped = mapRpcError(error.message);
+        if (mapped.status === 500) {
+          const ref = crypto.randomUUID();
+          logger.error('approve_weekend RPC failed', {
+            err: error.message,
+            ref,
+          });
+          return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
+            status: 500,
+          });
+        }
+        return NextResponse.json(err(mapped.message, mapped.status), {
+          status: mapped.status,
+        });
+      }
+
+      const result = Array.isArray(data) ? data[0] : data;
+      return NextResponse.json(
+        ok({ request_id: result.request_id, status: 'APPROVED' })
+      );
+    }
+
     if (!profile.signature_ref_url) {
       return NextResponse.json(
         err(

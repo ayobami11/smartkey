@@ -106,18 +106,21 @@ export type Database = {
       };
       departments: {
         Row: {
+          authoriser: Database['public']['Enums']['department_authoriser'];
           faculty: string;
           hod_id: string | null;
           id: string;
           name: string;
         };
         Insert: {
+          authoriser?: Database['public']['Enums']['department_authoriser'];
           faculty?: string;
           hod_id?: string | null;
           id?: string;
           name: string;
         };
         Update: {
+          authoriser?: Database['public']['Enums']['department_authoriser'];
           faculty?: string;
           hod_id?: string | null;
           id?: string;
@@ -293,6 +296,7 @@ export type Database = {
           code: string;
           department_id: string;
           id: string;
+          key_count: number;
           retired_at: string | null;
           room_name: string;
           status: Database['public']['Enums']['key_status'];
@@ -302,6 +306,7 @@ export type Database = {
           code: string;
           department_id: string;
           id?: string;
+          key_count?: number;
           retired_at?: string | null;
           room_name: string;
           status?: Database['public']['Enums']['key_status'];
@@ -311,6 +316,7 @@ export type Database = {
           code?: string;
           department_id?: string;
           id?: string;
+          key_count?: number;
           retired_at?: string | null;
           room_name?: string;
           status?: Database['public']['Enums']['key_status'];
@@ -876,6 +882,7 @@ export type Database = {
       user_role: { Args: never; Returns: string };
     };
     Enums: {
+      department_authoriser: 'DEAN' | 'CSO';
       hod_decision: 'APPROVED' | 'DECLINED';
       incident_severity: 'LOW' | 'MEDIUM' | 'HIGH';
       incident_status: 'OPEN' | 'RESOLVED' | 'ESCALATED';
@@ -1042,6 +1049,7 @@ export type Zone = Database['public']['Enums']['zone'];
 export const Constants = {
   public: {
     Enums: {
+      department_authoriser: ['DEAN', 'CSO'],
       hod_decision: ['APPROVED', 'DECLINED'],
       incident_severity: ['LOW', 'MEDIUM', 'HIGH'],
       incident_status: ['OPEN', 'RESOLVED', 'ESCALATED'],

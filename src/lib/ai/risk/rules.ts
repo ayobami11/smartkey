@@ -61,7 +61,7 @@ export const weekendWithoutMemo = (
   if (context.requestType !== 'WEEKEND') return null;
   return {
     rule: 'weekend_without_memo',
-    description: 'Weekend access requested — requires HOD memo approval',
+    description: 'Weekend access requested — requires authoriser memo approval',
     weight,
   };
 };
