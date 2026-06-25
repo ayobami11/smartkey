@@ -204,7 +204,7 @@ Returns requests for the HOD's department with `status = 'PENDING_HOD'`, includi
 ### POST /api/requests/hod-decision
 
 **File**: `src/app/api/requests/hod-decision/route.ts`
-**Roles**: HOD
+**Roles**: HOD, CSO
 **RPC**: `approve_weekend(request_id, hod_id, note?)`, `approve_guest_weekend(request_id, hod_id, key_id, note?)`, or `decline_weekend(request_id, hod_id, note?)`
 
 | Field        | Type                       | Required             |
@@ -217,6 +217,8 @@ Returns requests for the HOD's department with `status = 'PENDING_HOD'`, includi
 For approvals, the RPC runs signature verification. If the mismatch exceeds the threshold, the request is held and a CSO alert is raised — this is not a route-level error.
 
 For an external (guest) request (`guest_id` set), the route requires a `key_id` in the body and calls `approve_guest_weekend` instead — the HOD assigns the key at approval, and signature verification is skipped (guests have no HOD reference signature; the HOD reviews the uploaded letter manually). The decline path reuses `decline_weekend` unchanged.
+
+The **CSO** may call this route for **Administration** requests (keys whose department `authoriser = 'CSO'`). The CSO path skips signature verification (no reference signature exists for the CSO). The RPC re-validates that the actor's role matches the target department's `authoriser`, so an HOD acting on an Administration key — or the CSO acting on a faculty key — is rejected with `403`.
 
 **Response `data`**: `{ "request_id": "<uuid>", "status": "CODE_ISSUED" }`
 
@@ -619,9 +621,10 @@ Edits an existing user's `full_name` and — for departmental roles (HOD, REQUES
 ### POST /api/admin/authorisations
 
 **File**: `src/app/api/admin/authorisations/route.ts`
-**Roles**: HOD
+**Roles**: HOD (faculty keys), CSO (Administration keys)
+**RPC**: `nominate_collector(key_id, requester_id)`
 
-Submits a collector nomination. Enforces the max-3-per-key constraint at the DB level (`UNIQUE(key_id, slot_number)`).
+Submits a collector nomination. The route delegates entirely to the `nominate_collector` RPC, which is authoriser-aware: an HOD nominates for keys in their own department, the CSO nominates for `authoriser='CSO'` (Administration) keys. Enforces the max-3-per-key constraint at the DB level.
 
 | Field          | Type            | Required |
 | -------------- | --------------- | -------- |
@@ -630,20 +633,21 @@ Submits a collector nomination. Enforces the max-3-per-key constraint at the DB 
 
 **Response `data`**: `{ "authorisation_id": "<composite>", "slot_number": 2 }`
 
-**Errors**: `403` key not in HOD's department · `409` three slots already filled · `409` requester already authorised for this key
+**Errors**: `403` key not in your scope (HOD on another department's key, or CSO/HOD on the wrong authoriser type) · `409` three slots already filled · `409` requester already authorised for this key
 
 ---
 
 ### DELETE /api/admin/authorisations/[key_id]/[requester_id]
 
 **File**: `src/app/api/admin/authorisations/[key_id]/[requester_id]/route.ts`
-**Roles**: HOD
+**Roles**: HOD (faculty keys), CSO (Administration keys)
+**RPC**: `remove_collector(key_id, requester_id)`
 
-Removes a collector from a slot. Writes audit entry.
+Removes a collector from a slot. Authoriser-aware via the `remove_collector` RPC (HOD for their department's keys, CSO for Administration keys). Writes audit entry.
 
 **Response `data`**: `null` (204)
 
-**Errors**: `403` key not in HOD's department · `404` authorisation not found
+**Errors**: `403` key not in your scope · `404` authorisation not found
 
 ---
 
@@ -825,6 +829,8 @@ If `passed = false`, the caller raises a CSO alert and holds the approval.
 | `approve_weekend`              | POST /api/requests/hod-decision                 | yes                     |
 | `approve_guest_weekend`        | POST /api/requests/hod-decision                 | yes                     |
 | `decline_weekend`              | POST /api/requests/hod-decision                 | yes                     |
+| `nominate_collector`           | POST /api/admin/authorisations                  | yes                     |
+| `remove_collector`             | DELETE /api/admin/authorisations/[k]/[r]        | yes                     |
 | `create_guest_weekend_request` | POST /api/public/weekend-request                | yes                     |
 | `generate_guest_weekend_code`  | POST /api/public/weekend-request/[token]/code   | yes                     |
 | `expire_guest_request`         | POST /api/public/weekend-request/[token]/expire | yes                     |

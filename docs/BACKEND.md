@@ -102,6 +102,8 @@ Every person in the system - CSO, HODs, staff collectors, and security verifiers
 
 Stores university departments with their building zone and current HOD assignment.
 
+> **Update (faculty model)**: the `departments` table is the key-grouping unit. Each row is now a **faculty** (each owns a Dean's Office + Porter's Lodge key) or the single non-faculty **Administration** group. An `authoriser` column (`DEAN` | `CSO`) drives who may authorise collectors and approve weekend requests for that group's keys — the Dean for faculties, the CSO for Administration. See `docs/DATABASE.md` for the live schema.
+
 | **Column**      | **Type & Constraint**                      | **Purpose**                                          |
 | --------------- | ------------------------------------------ | ---------------------------------------------------- |
 | **id**          | UUID - Primary Key                         | Auto-generated identifier                            |
