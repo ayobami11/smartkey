@@ -8,6 +8,15 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-06-26 — Role rename: HOD → DEAN (structural)
+
+- **Why**: the system was built with an `HOD` (Head of Department) role, but the real authoriser at the Senate Building is the **Dean** of each faculty — not a generic HOD. The rename brings the role name in line with the faculty model introduced 2026-06-25.
+- **DB enum** (`20260626071734_rename_hod_to_dean.sql`): `ALTER TYPE public.user_role RENAME VALUE 'HOD' TO 'DEAN'`. This is oid-based, so check-constraints and plpgsql `CASE` nodes that reference the value survive automatically. The same migration recreates the 6 functions that embedded the literal `'HOD'` in function body text: `nominate_collector`, `remove_collector`, `approve_weekend`, `decline_weekend`, `approve_guest_weekend`, `provision_user` — all now use `'DEAN'`.
+- **RLS text-policy fix** (`20260626071857_rename_hod_to_dean_rls_text_policies.sql`): 6 RLS policies used the `user_role()` SQL helper (returns text), so their `= 'HOD'::text` comparisons were NOT oid-based and would silently lock Deans out post-rename. Policies recreated with `'DEAN'::text`: `authorisations_delete_hod_dept`, `authorisations_insert_hod_dept`, `hod_decisions_select`, `profiles_select`, `requests_select`, `requests_select_hod_guest`. Policy names are kept as-is (historical identifiers).
+- **Kept as-is (internal identifiers)**: the `hod_decisions` table, `hod_id` column, `HOD_APPROVED`/`HOD_DECLINED` audit event strings, `hod-decision` API endpoint, and the historical policy names remain unchanged — renaming internal identifiers at this stage would break in-flight data and add risk for no user-visible gain.
+- **App code**: the `src/app/dean/` route tree, DEAN role checks in API routes, and the `dean` cookie namespace were already renamed externally before this session. `src/types/database.ts` regenerated (`user_role: "CSO" | "DEAN" | "VERIFIER" | "REQUESTER"`).
+- **Verification**: `npm run typecheck` clean (stale `.next` generated files referencing removed `/hod` pages filtered out — regenerate on next build). `npm test` → 41 passing.
+
 ### 2026-06-25 — Keys remodelled around faculties + a CSO-authorised Administration group
 
 - **Why**: the per-department model was too granular (12 departments, ~60 keys) and had no home for non-faculty Senate-Building offices (VC, DVCs, Registrar, Bursary, University Librarian) — rooms with no Dean/HOD who could sensibly authorise access. The real key-owning unit is the **faculty** (each owns a Dean's Office and a Porter's Lodge), and central offices belong to a single **Administration** group authorised by the **CSO** (who sits in the Senate Building and is the right authority for now).
