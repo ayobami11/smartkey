@@ -6,13 +6,14 @@ import {
   CalendarCheckIcon,
   FileClockIcon,
   FileTextIcon,
-  GalleryVerticalEnd,
   KeyRoundIcon,
   LayoutDashboardIcon,
   LogOutIcon,
   SettingsIcon,
   UsersIcon,
 } from 'lucide-react';
+
+import { SmartKeyMark } from '@/components/smartkey/SmartKeyMark';
 import { useRouter } from 'next/navigation';
 
 import {
@@ -32,7 +33,7 @@ import { SidebarBrand } from '@/app/cso/_components/sidebar-brand';
 const data = {
   team: {
     name: 'SmartKey',
-    logo: GalleryVerticalEnd,
+    logo: SmartKeyMark,
     plan: 'University of Lagos',
   },
   navMain: [

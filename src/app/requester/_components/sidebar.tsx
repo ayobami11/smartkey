@@ -3,12 +3,13 @@
 import * as React from 'react';
 import { useState } from 'react';
 import {
-  GalleryVerticalEnd,
   HistoryIcon,
   LayoutDashboardIcon,
   LogOutIcon,
   SettingsIcon,
 } from 'lucide-react';
+
+import { SmartKeyMark } from '@/components/smartkey/SmartKeyMark';
 import { useRouter } from 'next/navigation';
 
 import {
@@ -28,7 +29,7 @@ import { SidebarBrand } from '@/app/requester/_components/sidebar-brand';
 const data = {
   team: {
     name: 'SmartKey',
-    logo: GalleryVerticalEnd,
+    logo: SmartKeyMark,
     plan: 'University of Lagos',
   },
   navMain: [
