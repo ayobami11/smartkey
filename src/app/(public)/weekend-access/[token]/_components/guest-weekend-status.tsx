@@ -268,8 +268,8 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
         <StatusCard
           tone="warning"
           icon={ClockIcon}
-          title="Awaiting Dean authorisation"
-          body={`Thanks, ${firstName}. The Dean will review your request and the letter you uploaded. You'll be notified by email when they decide.`}
+          title="Awaiting approval"
+          body={`Thanks, ${firstName}. Your request and letter are being reviewed. You'll be notified by email when a decision is made.`}
         />
         <RequestMeta
           requestedFor={data.requested_for}
@@ -288,7 +288,7 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
           tone="error"
           icon={XCircleIcon}
           title="Request declined"
-          body="The Dean did not approve this request. Contact the department directly if you believe this is an error."
+          body="Your request was not approved. Contact the department directly if you believe this is an error."
         />
       </Shell>
     );
@@ -599,11 +599,7 @@ const Shell = ({
 }) => (
   <div className="w-full max-w-sm space-y-5 text-center">
     {children}
-    <Button
-      size="sm"
-      onClick={onRefresh}
-      aria-label="Refresh request status"
-    >
+    <Button size="sm" onClick={onRefresh} aria-label="Refresh request status">
       <RefreshCwIcon className="size-3.5" aria-hidden="true" />
       Refresh status
     </Button>
