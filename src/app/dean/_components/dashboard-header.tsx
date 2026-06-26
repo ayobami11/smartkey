@@ -16,16 +16,16 @@ import { DashboardHeaderAvatar } from '@/components/smartkey/dashboard-header-av
 import { ModeToggle } from '@/components/smartkey/mode-toggle';
 
 const ROUTES: Record<string, string> = {
-  '/hod/keys': 'Key Inventory',
-  '/hod/weekend-requests': 'Weekend Requests',
-  '/hod/onboarding': 'Setup',
-  '/hod/settings': 'Settings',
+  '/dean/keys': 'Key Inventory',
+  '/dean/weekend-requests': 'Weekend Requests',
+  '/dean/onboarding': 'Setup',
+  '/dean/settings': 'Settings',
 };
 
 export const DashboardHeader = () => {
   const pathname = usePathname();
-  const isHome = pathname === '/hod/dashboard';
-  const isKeyDetail = /^\/hod\/keys\/[^/]+$/.test(pathname);
+  const isHome = pathname === '/dean/dashboard';
+  const isKeyDetail = /^\/dean\/keys\/[^/]+$/.test(pathname);
   const pageTitle = ROUTES[pathname] ?? 'Dashboard';
 
   return (
@@ -43,13 +43,13 @@ export const DashboardHeader = () => {
             {isKeyDetail ? (
               <>
                 <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href="/hod/dashboard">
+                  <BreadcrumbLink href="/dean/dashboard">
                     Dashboard
                   </BreadcrumbLink>
                 </BreadcrumbItem>
                 <BreadcrumbSeparator className="hidden md:block" />
                 <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href="/hod/keys">
+                  <BreadcrumbLink href="/dean/keys">
                     Key Inventory
                   </BreadcrumbLink>
                 </BreadcrumbItem>
@@ -65,7 +65,7 @@ export const DashboardHeader = () => {
             ) : (
               <>
                 <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href="/hod/dashboard">
+                  <BreadcrumbLink href="/dean/dashboard">
                     Dashboard
                   </BreadcrumbLink>
                 </BreadcrumbItem>
@@ -80,7 +80,7 @@ export const DashboardHeader = () => {
       </div>
       <div className="ml-auto flex items-center gap-4 px-4">
         <ModeToggle />
-        <DashboardHeaderAvatar settingsHref="/hod/settings" />
+        <DashboardHeaderAvatar settingsHref="/dean/settings" />
       </div>
     </header>
   );

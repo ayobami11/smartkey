@@ -111,7 +111,7 @@ export const SidebarUser = ({
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuItem asChild>
-                <a href="/hod/settings">
+                <a href="/dean/settings">
                   <UserCircle2 />
                   Profile
                 </a>

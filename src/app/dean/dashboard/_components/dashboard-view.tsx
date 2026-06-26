@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 
 import { createBrowserClient } from '@/lib/supabase/client';
 
-import { WeekendRequests } from '@/app/hod/dashboard/_components/weekend-requests';
+import { WeekendRequests } from '@/app/dean/dashboard/_components/weekend-requests';
 
 const getGreeting = () => {
   const hour = new Date().getHours();

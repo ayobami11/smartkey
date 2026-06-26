@@ -40,7 +40,7 @@ const ROLE_TO_NAMESPACE: Record<string, SessionNamespace> = {
 
 const ALL_NAMESPACES: ReadonlySet<string> = new Set([
   'cso',
-  'hod',
+  'dean',
   'verifier',
   'requester',
   'activate',

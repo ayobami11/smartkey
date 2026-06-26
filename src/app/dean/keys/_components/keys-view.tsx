@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 
 import { createBrowserClient } from '@/lib/supabase/client';
-import { DepartmentKeys } from '@/app/hod/dashboard/_components/department-keys';
+import { DepartmentKeys } from '@/app/dean/dashboard/_components/department-keys';
 
 export const KeysView = () => {
   const [deptId, setDeptId] = useState<string | null>(null);

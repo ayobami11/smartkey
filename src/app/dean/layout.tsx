@@ -4,8 +4,8 @@ import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 
 export const metadata = { robots: { index: false, follow: false } };
 
-import { DashboardHeader } from '@/app/hod/_components/dashboard-header';
-import { AppSidebar } from '@/app/hod/_components/sidebar';
+import { DashboardHeader } from '@/app/dean/_components/dashboard-header';
+import { AppSidebar } from '@/app/dean/_components/sidebar';
 
 export default function HodLayout({ children }: { children: React.ReactNode }) {
   return (

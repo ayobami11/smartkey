@@ -23,8 +23,8 @@ import {
   SidebarRail,
 } from '@/components/ui/sidebar';
 
-import { NavMain } from '@/app/hod/_components/sidebar-main';
-import { SidebarBrand } from '@/app/hod/_components/sidebar-brand';
+import { NavMain } from '@/app/dean/_components/sidebar-main';
+import { SidebarBrand } from '@/app/dean/_components/sidebar-brand';
 
 const data = {
   team: {
@@ -33,14 +33,14 @@ const data = {
     plan: 'University of Lagos',
   },
   navMain: [
-    { title: 'Dashboard', url: '/hod/dashboard', icon: LayoutDashboardIcon },
-    { title: 'Key Inventory', url: '/hod/keys', icon: KeyRoundIcon },
+    { title: 'Dashboard', url: '/dean/dashboard', icon: LayoutDashboardIcon },
+    { title: 'Key Inventory', url: '/dean/keys', icon: KeyRoundIcon },
     {
       title: 'Weekend Requests',
-      url: '/hod/weekend-requests',
+      url: '/dean/weekend-requests',
       icon: CalendarClockIcon,
     },
-    { title: 'Settings', url: '/hod/settings', icon: SettingsIcon },
+    { title: 'Settings', url: '/dean/settings', icon: SettingsIcon },
   ],
 };
 

@@ -31,7 +31,7 @@ const KeyGrid = ({ keys }: { keys: DeptKey[] }) => (
       return (
         <Link
           key={key.id}
-          href={`/hod/keys/${key.id}`}
+          href={`/dean/keys/${key.id}`}
           className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 shadow-[0_2px_4px_rgba(15,23,42,0.06)] transition-shadow hover:shadow-[0_4px_8px_rgba(15,23,42,0.08)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           <div className="flex items-start justify-between gap-2">

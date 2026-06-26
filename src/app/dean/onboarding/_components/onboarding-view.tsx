@@ -4,9 +4,9 @@ import { useState } from 'react';
 import { CheckIcon, CheckCircleIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { OnboardingForm } from '@/app/hod/onboarding/_components/onboarding-form';
-import { SignatureUploadStep } from '@/app/hod/onboarding/_components/signature-upload-step';
-import { StampUploadStep } from '@/app/hod/onboarding/_components/stamp-upload-step';
+import { OnboardingForm } from '@/app/dean/onboarding/_components/onboarding-form';
+import { SignatureUploadStep } from '@/app/dean/onboarding/_components/signature-upload-step';
+import { StampUploadStep } from '@/app/dean/onboarding/_components/stamp-upload-step';
 
 type Step = 0 | 1 | 2 | 3;
 
@@ -38,7 +38,7 @@ export const OnboardingView = () => {
             {"You're ready to use SmartKey."}
           </p>
           <Button asChild className="mt-6">
-            <a href="/hod">Continue to dashboard</a>
+            <a href="/dean">Continue to dashboard</a>
           </Button>
         </div>
       </div>

@@ -6,9 +6,9 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
-import { AccountSettings } from '@/app/hod/settings/_components/account-settings';
-import { NotificationSettings } from '@/app/hod/settings/_components/notification-settings';
-import { SignatureAndStampSettings } from '@/app/hod/settings/_components/signature-and-stamp-settings';
+import { AccountSettings } from '@/app/dean/settings/_components/account-settings';
+import { NotificationSettings } from '@/app/dean/settings/_components/notification-settings';
+import { SignatureAndStampSettings } from '@/app/dean/settings/_components/signature-and-stamp-settings';
 
 type Section = 'account' | 'signature' | 'notifications';
 

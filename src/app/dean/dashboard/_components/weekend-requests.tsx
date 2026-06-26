@@ -115,7 +115,7 @@ export const WeekendRequests = () => {
                 {formatDate(req.requested_for)}
               </div>
               <Link
-                href="/hod/weekend-requests"
+                href="/dean/weekend-requests"
                 className="flex items-center gap-1 text-xs font-medium text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               >
                 Review
@@ -127,7 +127,7 @@ export const WeekendRequests = () => {
       )}
 
       <Link
-        href="/hod/weekend-requests"
+        href="/dean/weekend-requests"
         className="text-center text-xs text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       >
         View all requests

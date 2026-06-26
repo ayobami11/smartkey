@@ -157,7 +157,7 @@ export const POST = async (request: NextRequest) => {
     data: { session },
   } = await supabase.auth.getSession();
   if (session) {
-    const roleClient = await createServerClient('hod');
+    const roleClient = await createServerClient('dean');
     await roleClient.auth.setSession({
       access_token: session.access_token,
       refresh_token: session.refresh_token,
