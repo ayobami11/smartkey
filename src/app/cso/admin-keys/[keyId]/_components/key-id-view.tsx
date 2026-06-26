@@ -144,13 +144,14 @@ export const KeyIdView = () => {
       ];
       setSlots(paddedSlots);
 
-      // Fetch candidates (requesters in the key's department, excluding already-authorised)
+      // Fetch candidates — all active REQUESTER profiles (not dept-restricted,
+      // since Administration keys can be issued to staff from any department)
       const authorisedIds = new Set(filledSlots.map((s) => s.profile_id));
       const { data: cands } = await supabase
         .from('profiles')
         .select('id, full_name, institutional_email')
         .eq('role', 'REQUESTER')
-        .eq('department_id', key.department_id);
+        .eq('status', 'ACTIVE');
 
       setCandidates(
         ((cands ?? []) as Candidate[]).filter((c) => !authorisedIds.has(c.id))

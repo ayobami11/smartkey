@@ -33,7 +33,7 @@ import {
 } from '@/components/ui/select';
 import { type UserRow } from '@/app/cso/users/_components/columns';
 
-type Department = { id: string; name: string; faculty: string };
+type Department = { id: string; name: string; has_hod: boolean };
 
 type Props = {
   user: UserRow | null;
@@ -43,7 +43,6 @@ type Props = {
 
 export const EditUserDialog = ({ user, onClose, onSuccess }: Props) => {
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [departmentId, setDepartmentId] = useState<string>('');
 
   const open = user !== null;
   const needsDept = user?.role === 'DEAN' || user?.role === 'REQUESTER';
@@ -62,7 +61,6 @@ export const EditUserDialog = ({ user, onClose, onSuccess }: Props) => {
     Promise.resolve().then(() => {
       if (id !== user?.id) return;
       form.reset({ full_name: user.full_name, department_id: '' });
-      setDepartmentId('');
     });
   }, [user, form]);
 
@@ -77,7 +75,6 @@ export const EditUserDialog = ({ user, onClose, onSuccess }: Props) => {
         setDepartments(depts);
         const current = depts.find((d) => d.name === user?.department);
         if (current) {
-          setDepartmentId(current.id);
           form.setValue('department_id', current.id);
         }
       });
@@ -124,8 +121,9 @@ export const EditUserDialog = ({ user, onClose, onSuccess }: Props) => {
         <DialogHeader>
           <DialogTitle>Edit user</DialogTitle>
           <DialogDescription>
-            Update the user&apos;s name{needsDept ? ' and department' : ''}.
-            Email and role cannot be changed here.
+            Update the user&apos;s name
+            {needsDept ? ' and department or faculty' : ''}. Email and role
+            cannot be changed here.
           </DialogDescription>
         </DialogHeader>
 
@@ -168,24 +166,29 @@ export const EditUserDialog = ({ user, onClose, onSuccess }: Props) => {
                 render={({ field, fieldState }) => (
                   <Field data-invalid={fieldState.invalid}>
                     <FieldLabel htmlFor="edit-dept-select">
-                      Faculty / Group
+                      Department or faculty
                     </FieldLabel>
                     <Select
-                      value={departmentId}
-                      onValueChange={(v) => {
-                        setDepartmentId(v);
-                        field.onChange(v);
-                      }}
+                      value={field.value ?? ''}
+                      onValueChange={field.onChange}
                     >
                       <SelectTrigger
                         id="edit-dept-select"
                         aria-invalid={fieldState.invalid}
                       >
-                        <SelectValue placeholder="Select a department" />
+                        <SelectValue placeholder="Select a department or faculty" />
                       </SelectTrigger>
                       <SelectContent>
                         {departments.map((d) => (
-                          <SelectItem key={d.id} value={d.id}>
+                          <SelectItem
+                            key={d.id}
+                            value={d.id}
+                            disabled={
+                              user?.role === 'DEAN' &&
+                              d.has_hod &&
+                              d.id !== field.value
+                            }
+                          >
                             {d.name}
                           </SelectItem>
                         ))}
@@ -205,7 +208,7 @@ export const EditUserDialog = ({ user, onClose, onSuccess }: Props) => {
               Cancel
             </Button>
             <Button type="submit" disabled={form.formState.isSubmitting}>
-              {form.formState.isSubmitting ? 'Saving…' : 'Save changes'}
+              {form.formState.isSubmitting ? 'Saving\u2026' : 'Save changes'}
             </Button>
           </DialogFooter>
         </form>

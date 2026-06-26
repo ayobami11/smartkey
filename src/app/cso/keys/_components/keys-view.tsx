@@ -47,7 +47,7 @@ type ActiveTab =
   | 'Outstanding'
   | 'Retired';
 
-type Department = { id: string; name: string; faculty: string };
+type Department = { id: string; name: string };
 
 // Constants
 
@@ -212,7 +212,6 @@ export const KeysView = () => {
   const deptSuggestions = isFiltering
     ? departments.filter((d) => d.name.toLowerCase().includes(lowerInput))
     : departments;
-  // flat list – groups removed in Phase 2
 
   // Render
 

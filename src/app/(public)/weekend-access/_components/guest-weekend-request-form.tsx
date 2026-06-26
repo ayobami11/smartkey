@@ -361,7 +361,9 @@ export const GuestWeekendRequestForm = ({
         control={form.control}
         render={({ field, fieldState }) => (
           <Field data-invalid={fieldState.invalid}>
-            <FieldLabel htmlFor="guest-department">Faculty / Group</FieldLabel>
+            <FieldLabel htmlFor="guest-department">
+              Department or office
+            </FieldLabel>
             <Select
               value={field.value}
               onValueChange={field.onChange}
@@ -374,8 +376,8 @@ export const GuestWeekendRequestForm = ({
                 <SelectValue
                   placeholder={
                     noDepartments
-                      ? 'No faculties or groups available'
-                      : 'Select Faculty / Group…'
+                      ? 'No departments available'
+                      : 'Select a department or office…'
                   }
                 />
               </SelectTrigger>
@@ -389,14 +391,13 @@ export const GuestWeekendRequestForm = ({
             </Select>
             {!fieldState.error && !noDepartments && (
               <p className="text-xs text-muted-foreground">
-                The Dean of this Faculty / Group assigns the specific key when they
-                approve.
+                The HOD or CSO of this department will review your request.
               </p>
             )}
             {noDepartments && (
               <p className="text-xs text-destructive" role="alert">
-                We could not load faculties and groups. Refresh the page, or contact the
-                CSO if this persists.
+                We could not load faculties and groups. Refresh the page, or
+                contact the CSO if this persists.
               </p>
             )}
             {fieldState.invalid && <FieldError errors={[fieldState.error]} />}

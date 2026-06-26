@@ -52,7 +52,6 @@ type FormValues = ProvisionUserInput;
 type Department = {
   id: string;
   name: string;
-  faculty: string;
   has_hod: boolean;
   authoriser: 'DEAN' | 'CSO';
 };

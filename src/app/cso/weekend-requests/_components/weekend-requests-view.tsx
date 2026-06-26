@@ -158,19 +158,71 @@ export const WeekendRequestsView = () => {
     error: fetchError,
     refetch,
   } = useQuery({
-    queryKey: ['requests', 'pending-weekend'],
+    queryKey: ['cso', 'requests', 'pending-weekend'],
     refetchInterval: connectionStatus !== 'connected' ? 10_000 : false,
     queryFn: async () => {
-      const res = await fetch('/api/requests/pending');
-      const json = await res.json();
-      if (!res.ok)
-        throw new Error(
-          (json as { error?: string }).error ?? 'Failed to load requests.'
-        );
-      return (
-        (json as { data?: { requests?: PendingRequest[] } }).data?.requests ??
-        []
+      const supabase = createBrowserClient();
+
+      // Fetch Administration dept IDs (authoriser='CSO') first
+      const { data: adminDepts } = await supabase
+        .from('departments')
+        .select('id')
+        .eq('authoriser', 'CSO');
+
+      const adminDeptIds = new Set(
+        ((adminDepts ?? []) as { id: string }[]).map((d) => d.id)
       );
+
+      // Fetch all PENDING_HOD WEEKEND requests with join data
+      const { data, error } = await supabase
+        .from('requests')
+        .select(
+          `id, requested_for, created_at, type, risk_tier, letter_url,
+           requested_room, requested_department_id, key_id,
+           requester:profiles!requester_id(id, full_name, institutional_email),
+           guest:guest_requesters!guest_id(id, full_name, email, phone, id_document_type, id_document_number),
+           key:keys!key_id(id, code, room_name, zone, department_id)`
+        )
+        .eq('type', 'WEEKEND')
+        .eq('status', 'PENDING_HOD')
+        .order('created_at', { ascending: false });
+
+      if (error) throw new Error('Failed to load requests.');
+
+      // Keep only requests that belong to Administration:
+      // - Registered request: key.department_id is an admin dept
+      // - Guest request (key_id null): requested_department_id is an admin dept
+      return ((data ?? []) as Record<string, unknown>[])
+        .filter((req) => {
+          const key = req.key as { department_id: string } | null;
+          if (key?.department_id) return adminDeptIds.has(key.department_id);
+          return req.requested_department_id
+            ? adminDeptIds.has(req.requested_department_id as string)
+            : false;
+        })
+        .map(
+          (req) =>
+            ({
+              id: req.id,
+              requester: req.requester ?? null,
+              guest: req.guest ?? null,
+              key: req.key
+                ? {
+                    id: (req.key as Record<string, unknown>).id,
+                    code: (req.key as Record<string, unknown>).code,
+                    room_name: (req.key as Record<string, unknown>).room_name,
+                    zone: (req.key as Record<string, unknown>).zone,
+                  }
+                : null,
+              requested_for: req.requested_for,
+              created_at: req.created_at,
+              type: req.type,
+              risk_tier: req.risk_tier,
+              letter_url: req.letter_url,
+              requested_room: req.requested_room,
+              requested_department_id: req.requested_department_id,
+            }) as PendingRequest
+        );
     },
   });
 
@@ -180,13 +232,26 @@ export const WeekendRequestsView = () => {
     const loadKeys = async () => {
       const { data, error } = await supabase
         .from('keys')
-        .select('id, code, room_name, status, department:departments!department_id(authoriser)')
+        .select(
+          'id, code, room_name, status, department:departments!department_id(authoriser)'
+        )
         .order('code', { ascending: true });
-      
+
       if (!error && data) {
         setDeptKeys(
-          (data as unknown as Array<{ id: string; code: string; room_name: string; status: string; department: { authoriser: string } | null }>)
-            .filter((k) => k.status !== 'RETIRED' && k.department?.authoriser === 'CSO')
+          (
+            data as unknown as Array<{
+              id: string;
+              code: string;
+              room_name: string;
+              status: string;
+              department: { authoriser: string } | null;
+            }>
+          )
+            .filter(
+              (k) =>
+                k.status !== 'RETIRED' && k.department?.authoriser === 'CSO'
+            )
             .map((k) => ({
               id: k.id,
               code: k.code,

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" aria-label="SmartKey">
+  <title>SmartKey</title>
+  <rect x="0" y="0" width="48" height="48" rx="10" fill="#7B1F2D"/>
+  <g transform="translate(24 24) scale(0.8) translate(-24 -24)" stroke-linecap="round">
+    <circle cx="19.5" cy="10.5" r="7" fill="none" stroke="#D4A437" stroke-width="4.5"/>
+    <rect x="16" y="12" width="7" height="29" rx="3.5" fill="#F4EEE3"/>
+    <line x1="20" y1="27" x2="35" y2="15" stroke="#F4EEE3" stroke-width="7"/>
+    <line x1="20" y1="27" x2="35" y2="41" stroke="#F4EEE3" stroke-width="7"/>
+    <rect x="10" y="31" width="6.5" height="3.6" rx="1.2" fill="#F4EEE3"/>
+    <rect x="10" y="37" width="6.5" height="3.6" rx="1.2" fill="#F4EEE3"/>
+  </g>
+</svg>
