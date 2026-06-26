@@ -92,6 +92,9 @@ export const ProfilePhotoUpload = ({
         return;
       }
       setPhotoUrl('');
+      window.dispatchEvent(
+        new CustomEvent('profile-photo-updated', { detail: { photoUrl: '' } })
+      );
       toast.success('Profile photo removed successfully.');
     } catch {
       setError('Something went wrong. Check your connection.');
@@ -126,6 +129,11 @@ export const ProfilePhotoUpload = ({
 
       setPhotoUrl(newUrl);
       setPendingFile(null);
+      window.dispatchEvent(
+        new CustomEvent('profile-photo-updated', {
+          detail: { photoUrl: newUrl },
+        })
+      );
 
       // Keep the blob URL alive until the new server image has loaded so the
       // avatar never flashes back to initials during the network round-trip.

@@ -1,9 +1,4 @@
-import {
-  ClockIcon,
-  EllipsisIcon,
-  KeyRoundIcon,
-  XCircleIcon,
-} from 'lucide-react';
+import { EllipsisIcon, KeyRoundIcon, XCircleIcon } from 'lucide-react';
 
 import {
   DropdownMenu,
@@ -23,8 +18,6 @@ export type Key = {
   zone: KeyZone;
   room: string;
   department: string;
-  hod: string;
-  hodPending: boolean;
   status: KeyStatus;
   key_count?: number;
 };
@@ -97,28 +90,12 @@ export const KeyCard = ({ keyItem, onMarkLost }: Props) => {
         </span>
         {(keyItem.key_count ?? 1) > 1 && (
           <span className="text-xs text-muted-foreground">
-            Keys on bunch:{" "}
-            <span className="font-medium text-foreground">{keyItem.key_count}</span>
+            Keys on bunch:{' '}
+            <span className="font-medium text-foreground">
+              {keyItem.key_count}
+            </span>
           </span>
         )}
-        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          {keyItem.hod !== '—' ? (
-            <>
-              <span className="font-medium text-foreground">Dean:</span> {keyItem.hod}
-            </>
-          ) : (
-            <span className="italic">No Dean assigned</span>
-          )}
-          {keyItem.hodPending && (
-            <span
-              className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
-              aria-label="Dean has not activated their account yet"
-            >
-              <ClockIcon className="size-3" aria-hidden="true" />
-              Pending activation
-            </span>
-          )}
-        </span>
       </div>
 
       <span

@@ -10,6 +10,7 @@ import {
   LayoutDashboardIcon,
   LogOutIcon,
   SettingsIcon,
+  UserRoundKeyIcon,
   UsersIcon,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -40,7 +41,11 @@ const data = {
     { title: 'Users', url: '/cso/users', icon: UsersIcon },
     { title: 'Audit Log', url: '/cso/audit', icon: FileClockIcon },
     { title: 'Key Inventory', url: '/cso/keys', icon: KeyRoundIcon },
-    { title: 'Administration Keys', url: '/cso/admin-keys', icon: KeyRoundIcon },
+    {
+      title: 'Admin Keys',
+      url: '/cso/admin-keys',
+      icon: UserRoundKeyIcon,
+    },
     { title: 'Settings', url: '/cso/settings', icon: SettingsIcon },
   ],
 };

@@ -53,14 +53,25 @@ type RequestStep = 'weekday_form' | 'submitting' | 'error';
 
 // Helpers
 
+const todayMin = () => {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}T00:00`;
+};
+
 const defaultReturnDeadline = () => {
   const d = new Date();
-  d.setHours(17, 0, 0, 0);
-  // If already past 17:00, default to tomorrow
+  d.setHours(23, 59, 0, 0);
+  // If already past 23:59, default to tomorrow
   if (d.getTime() <= Date.now()) {
     d.setDate(d.getDate() + 1);
   }
-  return d.toISOString().slice(0, 16); // "YYYY-MM-DDTHH:MM"
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}T23:59`;
 };
 
 const zoneLabel = (zone: string) =>
@@ -369,11 +380,12 @@ export const AuthorizedKeys = () => {
                       <Input
                         id="return-deadline"
                         type="datetime-local"
+                        min={todayMin()}
                         {...field}
                       />
                       {!fieldState.error && (
                         <p className="text-xs text-muted-foreground">
-                          Defaults to today at 4PM (end of business day).
+                          Defaults to the end of current day (11:59 PM).
                         </p>
                       )}
                       {fieldState.invalid && (

@@ -98,7 +98,7 @@ export const KeysView = () => {
       const { data, error } = await supabase
         .from('keys')
         .select(
-          'id, code, zone, room_name, status, key_count, department:departments!department_id(name, hod:profiles!hod_id(full_name, status))'
+          'id, code, zone, room_name, status, key_count, department:departments!department_id(name)'
         )
         .order('code', { ascending: true });
 
@@ -106,15 +106,12 @@ export const KeysView = () => {
 
       return (data ?? []).map((k: Record<string, unknown>) => {
         const dept = k.department as Record<string, unknown> | null;
-        const hod = dept?.hod as Record<string, unknown> | null;
         return {
           id: k.id as string,
           code: k.code as string,
           zone: k.zone as KeyZone,
           room: k.room_name as string,
           department: (dept?.name as string | undefined) ?? '—',
-          hod: (hod?.full_name as string | undefined) ?? '—',
-          hodPending: hod?.status === 'PENDING_ACTIVATION',
           status: k.status as KeyStatus,
           key_count: (k.key_count as number | undefined) ?? 1,
         };
@@ -182,8 +179,7 @@ export const KeysView = () => {
         (k) =>
           k.code.toLowerCase().includes(query) ||
           k.room.toLowerCase().includes(query) ||
-          k.department.toLowerCase().includes(query) ||
-          k.hod.toLowerCase().includes(query)
+          k.department.toLowerCase().includes(query)
       )
     : tabFiltered;
 

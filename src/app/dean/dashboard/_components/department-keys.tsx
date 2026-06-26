@@ -4,10 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AlertCircleIcon, KeyRoundIcon } from 'lucide-react';
 
-import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { createBrowserClient } from '@/lib/supabase/client';
 
 type DeptKey = {
@@ -17,9 +14,6 @@ type DeptKey = {
   zone: string;
   slots: boolean[];
 };
-
-const filterTabs = ['All keys', 'Has vacant slot', 'Recently used'] as const;
-type FilterTab = (typeof filterTabs)[number];
 
 type Props = { deptId: string | null };
 
@@ -93,8 +87,6 @@ const KeyGrid = ({ keys }: { keys: DeptKey[] }) => (
 export const DepartmentKeys = ({ deptId }: Props) => {
   const [deptKeys, setDeptKeys] = useState<DeptKey[]>([]);
   const [loadingKeys, setLoadingKeys] = useState(true);
-  const [activeFilter, setActiveFilter] = useState<FilterTab>('All keys');
-  const isDesktop = useMediaQuery('(min-width: 1024px)');
 
   useEffect(() => {
     if (!deptId) {
@@ -138,72 +130,25 @@ export const DepartmentKeys = ({ deptId }: Props) => {
     fetchKeys();
   }, [deptId]);
 
-  const getFiltered = (tab: FilterTab) =>
-    tab === 'Has vacant slot'
-      ? deptKeys.filter((k) => k.slots.some((s) => !s))
-      : deptKeys;
+  if (loadingKeys) {
+    return (
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {[0, 1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-32 rounded-lg" />
+        ))}
+      </div>
+    );
+  }
 
-  const LoadingSkeleton = () => (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-      {[0, 1, 2, 3].map((i) => (
-        <Skeleton key={i} className="h-32 rounded-lg" />
-      ))}
-    </div>
-  );
+  if (deptKeys.length === 0) {
+    return (
+      <div className="flex items-center justify-center rounded-lg border border-border bg-card p-12 text-center">
+        <p className="text-sm text-muted-foreground">
+          No keys assigned to your department yet. Contact the CSO.
+        </p>
+      </div>
+    );
+  }
 
-  const EmptyState = ({ tab }: { tab: FilterTab }) => (
-    <div className="flex items-center justify-center rounded-lg border border-border bg-card p-12 text-center">
-      <p className="text-sm text-muted-foreground">
-        {deptKeys.length === 0
-          ? 'No keys assigned to your department yet. Contact the CSO.'
-          : tab === 'Has vacant slot'
-            ? 'All keys have at least one authorised collector.'
-            : 'No keys match this filter.'}
-      </p>
-    </div>
-  );
-
-  return (
-    <div className="flex flex-col gap-4">
-      <Tabs
-        value={activeFilter}
-        onValueChange={(v) => setActiveFilter(v as FilterTab)}
-        orientation={isDesktop ? 'vertical' : 'horizontal'}
-        className="flex-1 gap-6 lg:gap-8"
-      >
-        <TabsList
-          variant="line"
-          aria-label="Filter keys"
-          className="lg:w-48 lg:shrink-0"
-        >
-          {filterTabs.map((tab) => (
-            <TabsTrigger
-              key={tab}
-              value={tab}
-              className="px-4 py-2 data-active:text-primary! lg:data-active:bg-primary/10! after:bg-primary lg:after:hidden"
-            >
-              {tab}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-        <Separator orientation="vertical" className="hidden lg:block" />
-        <div className="flex flex-1 flex-col gap-6">
-          {filterTabs.map((tab) => {
-            const filtered = getFiltered(tab);
-            return (
-              <TabsContent key={tab} value={tab}>
-                {loadingKeys ? (
-                  <LoadingSkeleton />
-                ) : filtered.length === 0 ? (
-                  <EmptyState tab={tab} />
-                ) : (
-                  <KeyGrid keys={filtered} />
-                )}
-              </TabsContent>
-            );
-          })}
-        </div>
-      </Tabs>
-    </div>
-  );
+  return <KeyGrid keys={deptKeys} />;
 };

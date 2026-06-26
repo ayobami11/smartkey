@@ -9,8 +9,8 @@ const nextConfig: NextConfig = {
         permanent: true,
       },
       {
-        source: '/hod',
-        destination: '/hod/dashboard',
+        source: '/dean',
+        destination: '/dean/dashboard',
         permanent: true,
       },
       {

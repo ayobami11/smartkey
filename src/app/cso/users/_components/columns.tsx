@@ -189,9 +189,7 @@ export const createColumns = (
     accessorKey: 'department',
     enableGlobalFilter: false,
     enableSorting: true,
-    header: ({ column }) => (
-      <SortableHeader column={column} label="Department" />
-    ),
+    header: ({ column }) => <SortableHeader column={column} label="Unit" />,
     cell: ({ row }) => (
       <span className="text-muted-foreground">
         {row.getValue<string | undefined>('department') ?? '—'}

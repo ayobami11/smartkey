@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 
 import {
@@ -14,6 +15,7 @@ import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { DashboardHeaderAvatar } from '@/components/smartkey/dashboard-header-avatar';
 import { ModeToggle } from '@/components/smartkey/mode-toggle';
+import { createBrowserClient } from '@/lib/supabase/client';
 
 const ROUTES: Record<string, string> = {
   '/cso/dashboard': 'Dashboard',
@@ -21,6 +23,8 @@ const ROUTES: Record<string, string> = {
   '/cso/users': 'Users',
   '/cso/audit': 'Audit Log',
   '/cso/keys': 'Key Inventory',
+  '/cso/admin-keys': 'Admin Keys',
+  '/cso/weekend-requests': 'Weekend Requests',
   '/cso/settings': 'Settings',
 };
 
@@ -28,7 +32,20 @@ export const DashboardHeader = () => {
   const pathname = usePathname();
   const isHome = pathname === '/cso/dashboard';
   const isReportDetail = /^\/cso\/reports\/[^/]+$/.test(pathname);
+  const isAdminKeyDetail = /^\/cso\/admin-keys\/[^/]+$/.test(pathname);
+  const adminKeyId = isAdminKeyDetail ? pathname.split('/').pop() : null;
+  const [adminKeyName, setAdminKeyName] = useState<string | null>(null);
   const pageTitle = ROUTES[pathname] ?? 'Dashboard';
+
+  useEffect(() => {
+    if (!adminKeyId) return;
+    createBrowserClient()
+      .from('keys')
+      .select('code')
+      .eq('id', adminKeyId)
+      .single()
+      .then(({ data }) => setAdminKeyName(data?.code ?? null));
+  }, [adminKeyId]);
 
   return (
     <header className="flex h-18 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-13 border-b border-border mb-6">
@@ -58,6 +75,26 @@ export const DashboardHeader = () => {
                 <BreadcrumbSeparator className="hidden md:block" />
                 <BreadcrumbItem>
                   <BreadcrumbPage>Report Details</BreadcrumbPage>
+                </BreadcrumbItem>
+              </>
+            ) : isAdminKeyDetail ? (
+              <>
+                <BreadcrumbItem className="hidden md:block">
+                  <BreadcrumbLink href="/cso/dashboard">
+                    Dashboard
+                  </BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator className="hidden md:block" />
+                <BreadcrumbItem className="hidden md:block">
+                  <BreadcrumbLink href="/cso/admin-keys">
+                    Admin Keys
+                  </BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator className="hidden md:block" />
+                <BreadcrumbItem>
+                  <BreadcrumbPage>
+                    {adminKeyName ?? 'Key Details'}
+                  </BreadcrumbPage>
                 </BreadcrumbItem>
               </>
             ) : isHome ? (

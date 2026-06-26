@@ -41,7 +41,12 @@ export const AdminKeysView = () => {
       if (error) throw new Error('Failed to load administration keys');
 
       return (data ?? [])
-        .filter((k) => k.department && (k.department as unknown as { authoriser: string }).authoriser === 'CSO')
+        .filter(
+          (k) =>
+            k.department &&
+            (k.department as unknown as { authoriser: string }).authoriser ===
+              'CSO'
+        )
         .map((k) => ({
           ...k,
           authorisations: k.authorisations || [],
@@ -84,9 +89,7 @@ export const AdminKeysView = () => {
           </p>
         </div>
         <Button asChild>
-          <Link href="/cso/weekend-requests">
-            Weekend Requests
-          </Link>
+          <Link href="/cso/weekend-requests">Weekend Requests</Link>
         </Button>
       </div>
 

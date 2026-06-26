@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { UserPlusIcon } from 'lucide-react';
+import { CheckCircleIcon, UserPlusIcon } from 'lucide-react';
 import { Controller, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
@@ -41,6 +41,12 @@ import {
 
 const ROLES = ['DEAN', 'VERIFIER', 'REQUESTER'] as const;
 
+const ROLE_LABEL: Record<string, string> = {
+  DEAN: 'Dean',
+  VERIFIER: 'Verifier',
+  REQUESTER: 'Requester',
+};
+
 type FormValues = ProvisionUserInput;
 
 type Department = {
@@ -51,13 +57,15 @@ type Department = {
   authoriser: 'DEAN' | 'CSO';
 };
 
+type SuccessData = { name: string; email: string; role: string };
+
 type Props = { onSuccess?: () => void };
 
 export const ProvisionUserDialog = ({ onSuccess }: Props) => {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [success, setSuccess] = useState('');
+  const [successData, setSuccessData] = useState<SuccessData | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(provisionUserSchema),
@@ -80,7 +88,7 @@ export const ProvisionUserDialog = ({ onSuccess }: Props) => {
   }, [open]);
 
   async function onSubmit(data: FormValues) {
-    setSuccess('');
+    setSuccessData(null);
 
     const res = await fetch('/api/admin/users', {
       method: 'POST',
@@ -100,23 +108,20 @@ export const ProvisionUserDialog = ({ onSuccess }: Props) => {
       return;
     }
 
-    setSuccess(
-      `Account created. ${data.institutional_email} will receive an activation email.`
-    );
+    setSuccessData({
+      name: data.full_name,
+      email: data.institutional_email,
+      role: ROLE_LABEL[data.role] ?? data.role,
+    });
     form.reset();
     router.refresh();
     onSuccess?.();
-
-    setTimeout(() => {
-      setOpen(false);
-      setSuccess('');
-    }, 2500);
   }
 
   function handleOpenChange(next: boolean) {
     if (!next) {
       form.reset();
-      setSuccess('');
+      setSuccessData(null);
     }
     setOpen(next);
   }
@@ -131,18 +136,41 @@ export const ProvisionUserDialog = ({ onSuccess }: Props) => {
       </DialogTrigger>
 
       <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Provision new user</DialogTitle>
-          <DialogDescription>
-            Create an account and send an activation link to the user&apos;s
-            email.
-          </DialogDescription>
-        </DialogHeader>
+        {!successData && (
+          <DialogHeader>
+            <DialogTitle>Provision new user</DialogTitle>
+            <DialogDescription>
+              Create an account and send an activation link to the user&apos;s
+              email.
+            </DialogDescription>
+          </DialogHeader>
+        )}
 
-        {success ? (
-          <p role="status" className="py-4 text-sm text-emerald-600">
-            {success}
-          </p>
+        {successData ? (
+          <>
+            <div
+              role="status"
+              className="flex flex-col items-center gap-3 py-4 text-center"
+            >
+              <div className="flex size-12 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950/40">
+                <CheckCircleIcon
+                  className="size-6 text-emerald-600"
+                  aria-hidden="true"
+                />
+              </div>
+              <div>
+                <p className="font-medium text-foreground">Account created</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {successData.name} has been provisioned as a{' '}
+                  {successData.role}. An activation email has been sent to{' '}
+                  {successData.email}.
+                </p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button onClick={() => handleOpenChange(false)}>Done</Button>
+            </DialogFooter>
+          </>
         ) : (
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <FieldGroup className="py-2">
@@ -203,11 +231,7 @@ export const ProvisionUserDialog = ({ onSuccess }: Props) => {
                       <SelectContent>
                         {ROLES.map((r) => (
                           <SelectItem key={r} value={r}>
-                            {r === 'DEAN'
-                              ? 'Dean'
-                              : r === 'VERIFIER'
-                                ? 'Verifier'
-                                : 'Requester'}
+                            {ROLE_LABEL[r]}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -225,7 +249,9 @@ export const ProvisionUserDialog = ({ onSuccess }: Props) => {
                   control={form.control}
                   render={({ field, fieldState }) => (
                     <Field data-invalid={fieldState.invalid}>
-                      <FieldLabel htmlFor="dept-select">Faculty / Group</FieldLabel>
+                      <FieldLabel htmlFor="dept-select">
+                        Faculty / Group
+                      </FieldLabel>
                       <Select
                         onValueChange={field.onChange}
                         value={field.value}

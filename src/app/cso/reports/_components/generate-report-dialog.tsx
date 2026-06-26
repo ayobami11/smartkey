@@ -148,9 +148,9 @@ export const GenerateReportDialog = ({ onGenerated }: Props) => {
                         id="shift-select"
                         aria-invalid={fieldState.invalid}
                       >
-                        <SelectValue placeholder="Select a shift…" />
+                        <SelectValue placeholder="Select a shift" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent position="popper">
                         {shifts.length === 0 ? (
                           <SelectItem value="__none" disabled>
                             No shifts available

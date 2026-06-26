@@ -52,6 +52,16 @@ export const DashboardHeaderAvatar = ({
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    const handlePhotoUpdate = (e: Event) => {
+      const { photoUrl: url } = (e as CustomEvent<{ photoUrl: string }>).detail;
+      setPhotoUrl(url);
+    };
+    window.addEventListener('profile-photo-updated', handlePhotoUpdate);
+    return () =>
+      window.removeEventListener('profile-photo-updated', handlePhotoUpdate);
+  }, []);
+
   const handleLogout = async () => {
     setIsLoggingOut(true);
     await fetch('/api/auth/logout', { method: 'POST' });

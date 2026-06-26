@@ -4,6 +4,15 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { KeyRoundIcon, PlusIcon, Trash2Icon, UserIcon } from 'lucide-react';
 
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import {
@@ -86,7 +95,10 @@ export const KeyIdView = () => {
       }
 
       // Verify that this is a CSO authorised key
-      const keyDept = key.department as { name: string; authoriser: string } | null;
+      const keyDept = key.department as {
+        name: string;
+        authoriser: string;
+      } | null;
       if (keyDept?.authoriser !== 'CSO') {
         setFetchError('Forbidden: Key is not an administrative key.');
         setLoading(false);
@@ -338,55 +350,19 @@ export const KeyIdView = () => {
                   </p>
                 </div>
 
-                {removeTarget?.profile_id === slot.profile_id ? (
-                  <div className="flex flex-col gap-2">
-                    <p className="text-xs text-muted-foreground">
-                      Remove {slot.name}? This cannot be undone.
-                    </p>
-                    {removeError && (
-                      <p className="text-xs text-destructive" role="alert">
-                        {removeError}
-                      </p>
-                    )}
-                    <div className="flex gap-1.5">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1 text-xs"
-                        onClick={() => {
-                          setRemoveTarget(null);
-                          setRemoveError(null);
-                        }}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        className="flex-1 text-xs"
-                        disabled={removing}
-                        aria-busy={removing}
-                        onClick={() => handleRemove(slot)}
-                      >
-                        {removing ? 'Removing…' : 'Confirm'}
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    className="w-full text-xs"
-                    aria-label={`Remove ${slot.name}`}
-                    onClick={() => {
-                      setRemoveTarget(slot);
-                      setRemoveError(null);
-                    }}
-                  >
-                    <Trash2Icon className="size-3.5" aria-hidden="true" />
-                    Remove
-                  </Button>
-                )}
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="w-full text-xs bg-destructive text-white hover:bg-destructive/90 dark:bg-red-600 dark:hover:bg-red-700"
+                  aria-label={`Remove ${slot.name}`}
+                  onClick={() => {
+                    setRemoveTarget(slot);
+                    setRemoveError(null);
+                  }}
+                >
+                  <Trash2Icon className="size-3.5" aria-hidden="true" />
+                  Remove
+                </Button>
               </div>
             ) : (
               <div
@@ -420,9 +396,9 @@ export const KeyIdView = () => {
                       onValueChange={setSelectedCandidateId}
                     >
                       <SelectTrigger id={`picker-${idx}`} className="text-xs">
-                        <SelectValue placeholder="Select a collector…" />
+                        <SelectValue placeholder="Select a collector" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent position="popper">
                         {candidates.length === 0 ? (
                           <SelectItem value="__none" disabled>
                             No eligible staff
@@ -486,6 +462,43 @@ export const KeyIdView = () => {
           )}
         </div>
       </div>
+
+      <AlertDialog
+        open={!!removeTarget}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRemoveTarget(null);
+            setRemoveError(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove collector</AlertDialogTitle>
+            <AlertDialogDescription>
+              Remove {removeTarget?.name} from the authorised collectors for
+              this key? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {removeError && (
+            <p className="text-sm text-destructive" role="alert">
+              {removeError}
+            </p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={removing}>Cancel</AlertDialogCancel>
+            <Button
+              variant="destructive"
+              className="bg-destructive text-white hover:bg-destructive/90 dark:bg-red-600 dark:hover:bg-red-700"
+              disabled={removing}
+              aria-busy={removing}
+              onClick={() => removeTarget && handleRemove(removeTarget)}
+            >
+              {removing ? 'Removing…' : 'Remove'}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Recent activity — static placeholder */}
       <div>
