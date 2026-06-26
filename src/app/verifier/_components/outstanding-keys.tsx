@@ -35,7 +35,7 @@ import { ReturnKeyOverrideForm } from '@/app/verifier/_components/return-key-ove
 
 type OutstandingKey = {
   id: string;
-  key: { code: string; room_name: string; zone: string } | null;
+  key: { code: string; room_name: string; zone: string; key_count?: number | null } | null;
   requester: { id: string; full_name: string; photo_url: string | null } | null;
   issued_at: string;
   return_deadline: string;
@@ -374,6 +374,11 @@ export const OutstandingKeys = () => {
                     </span>{' '}
                     at {formatTime(selectedKey.issued_at)}
                   </p>
+                  {(selectedKey.key?.key_count ?? 1) > 1 && (
+                    <p className="mt-1 text-xs font-medium text-foreground">
+                      Keys on bunch: {selectedKey.key?.key_count}
+                    </p>
+                  )}
                   {selectedKey.status === 'KEY_OVERDUE' && (
                     <p className="mt-1 text-xs font-medium text-destructive">
                       This key is overdue (deadline:{' '}

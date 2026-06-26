@@ -73,7 +73,7 @@ type IssueResult = {
     id_document_type?: string | null;
     id_document_number?: string | null;
   };
-  key: { code: string | null; room_name: string | null };
+  key: { code: string | null; room_name: string | null; key_count?: number | null };
   issued_at: string;
 };
 
@@ -539,6 +539,11 @@ export const LiveRequestQueue = () => {
                     {issueResult.key.code && issueResult.key.room_name && (
                       <p className="mt-1 text-sm text-muted-foreground">
                         {issueResult.key.code} · {issueResult.key.room_name}
+                      </p>
+                    )}
+                    {(issueResult.key.key_count ?? 1) > 1 && (
+                      <p className="mt-1 text-sm font-medium text-foreground">
+                        Keys on bunch: {issueResult.key.key_count}
                       </p>
                     )}
                     {!issueResult.is_guest &&

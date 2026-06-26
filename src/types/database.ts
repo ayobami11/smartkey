@@ -756,6 +756,7 @@ export type Database = {
           p_id_type: string;
           p_letter_url: string;
           p_phone: string;
+          p_requested_room: string;
           p_return_deadline: string;
           p_weekend_date: string;
         };
@@ -792,11 +793,23 @@ export type Database = {
           status: string;
         }[];
       };
+      expire_lapsed_codes: {
+        Args: never;
+        Returns: {
+          expired_count: number;
+        }[];
+      };
       expire_request: {
         Args: { p_request_id: string; p_requester_id: string };
         Returns: {
           request_id: string;
           status: string;
+        }[];
+      };
+      expire_stale_weekend_requests: {
+        Args: never;
+        Returns: {
+          expired_count: number;
         }[];
       };
       generate_guest_weekend_code: {
@@ -876,6 +889,13 @@ export type Database = {
           request_id: string;
           returned_at: string;
           verified: boolean;
+        }[];
+      };
+      schedule_pending_shift_report: {
+        Args: never;
+        Returns: {
+          report_id: string;
+          shift_id: string;
         }[];
       };
       user_department_id: { Args: never; Returns: string };
@@ -1034,18 +1054,6 @@ export type CompositeTypes<
     ? DefaultSchema['CompositeTypes'][PublicCompositeTypeNameOrOptions]
     : never;
 
-// Convenience type aliases derived from the Database type.
-// Import these instead of the raw enum strings where a named type is needed.
-export type UserRole = Database['public']['Enums']['user_role'];
-export type ProfileStatus = Database['public']['Enums']['user_status'];
-export type IncidentType = Database['public']['Enums']['incident_type'];
-export type IncidentSeverity = Database['public']['Enums']['incident_severity'];
-export type IncidentStatus = Database['public']['Enums']['incident_status'];
-export type KeyStatus = Database['public']['Enums']['key_status'];
-export type RequestStatus = Database['public']['Enums']['request_status'];
-export type RiskTier = Database['public']['Enums']['risk_tier'];
-export type Zone = Database['public']['Enums']['zone'];
-
 export const Constants = {
   public: {
     Enums: {
@@ -1079,3 +1087,9 @@ export const Constants = {
     },
   },
 } as const;
+
+// Convenience type aliases derived from the generated schema.
+export type UserRole = Database['public']['Enums']['user_role'];
+export type IncidentSeverity = Database['public']['Enums']['incident_severity'];
+export type IncidentStatus = Database['public']['Enums']['incident_status'];
+export type IncidentType = Database['public']['Enums']['incident_type'];

@@ -27,9 +27,7 @@ import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -59,10 +57,13 @@ export const EditUserDialog = ({ user, onClose, onSuccess }: Props) => {
   // department is matched by name (the row carries the name, not the id) once
   // departments are fetched, see the effect below.
   useEffect(() => {
-    if (user) {
+    if (!user) return;
+    const id = user.id;
+    Promise.resolve().then(() => {
+      if (id !== user?.id) return;
       form.reset({ full_name: user.full_name, department_id: '' });
       setDepartmentId('');
-    }
+    });
   }, [user, form]);
 
   // Fetch departments while editing a departmental role, then preselect the
@@ -167,7 +168,7 @@ export const EditUserDialog = ({ user, onClose, onSuccess }: Props) => {
                 render={({ field, fieldState }) => (
                   <Field data-invalid={fieldState.invalid}>
                     <FieldLabel htmlFor="edit-dept-select">
-                      Department
+                      Faculty / Group
                     </FieldLabel>
                     <Select
                       value={departmentId}
@@ -183,24 +184,10 @@ export const EditUserDialog = ({ user, onClose, onSuccess }: Props) => {
                         <SelectValue placeholder="Select a department" />
                       </SelectTrigger>
                       <SelectContent>
-                        {Object.entries(
-                          departments.reduce<Record<string, Department[]>>(
-                            (acc, d) => {
-                              const faculty = d.faculty || 'Other';
-                              (acc[faculty] ??= []).push(d);
-                              return acc;
-                            },
-                            {}
-                          )
-                        ).map(([faculty, depts]) => (
-                          <SelectGroup key={faculty}>
-                            <SelectLabel>{faculty}</SelectLabel>
-                            {depts.map((d) => (
-                              <SelectItem key={d.id} value={d.id}>
-                                {d.name}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
+                        {departments.map((d) => (
+                          <SelectItem key={d.id} value={d.id}>
+                            {d.name}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>

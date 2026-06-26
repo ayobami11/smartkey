@@ -10,10 +10,8 @@ import { Button } from '@/components/ui/button';
 import {
   Combobox,
   ComboboxContent,
-  ComboboxGroup,
   ComboboxInput,
   ComboboxItem,
-  ComboboxLabel,
   ComboboxList,
   ComboboxSeparator,
 } from '@/components/ui/combobox';
@@ -100,7 +98,7 @@ export const KeysView = () => {
       const { data, error } = await supabase
         .from('keys')
         .select(
-          'id, code, zone, room_name, status, department:departments!department_id(name, hod:profiles!hod_id(full_name, status))'
+          'id, code, zone, room_name, status, key_count, department:departments!department_id(name, hod:profiles!hod_id(full_name, status))'
         )
         .order('code', { ascending: true });
 
@@ -118,6 +116,7 @@ export const KeysView = () => {
           hod: (hod?.full_name as string | undefined) ?? '—',
           hodPending: hod?.status === 'PENDING_ACTIVATION',
           status: k.status as KeyStatus,
+          key_count: (k.key_count as number | undefined) ?? 1,
         };
       });
     },
@@ -217,12 +216,7 @@ export const KeysView = () => {
   const deptSuggestions = isFiltering
     ? departments.filter((d) => d.name.toLowerCase().includes(lowerInput))
     : departments;
-  const suggestionsByFaculty = deptSuggestions.reduce<
-    Record<string, Department[]>
-  >((acc, d) => {
-    (acc[d.faculty || 'Other'] ??= []).push(d);
-    return acc;
-  }, {});
+  // flat list – groups removed in Phase 2
 
   // Render
 
@@ -321,21 +315,11 @@ export const KeysView = () => {
                       No departments found.
                     </p>
                   ) : (
-                    Object.entries(suggestionsByFaculty).map(
-                      ([faculty, depts], idx, arr) => (
-                        <React.Fragment key={faculty}>
-                          <ComboboxGroup>
-                            <ComboboxLabel>{faculty}</ComboboxLabel>
-                            {depts.map((d) => (
-                              <ComboboxItem key={d.id} value={d.name}>
-                                {d.name}
-                              </ComboboxItem>
-                            ))}
-                          </ComboboxGroup>
-                          {idx < arr.length - 1 && <ComboboxSeparator />}
-                        </React.Fragment>
-                      )
-                    )
+                    deptSuggestions.map((d) => (
+                      <ComboboxItem key={d.id} value={d.name}>
+                        {d.name}
+                      </ComboboxItem>
+                    ))
                   )}
                 </ComboboxList>
               </ComboboxContent>

@@ -34,9 +34,7 @@ import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -50,6 +48,7 @@ type Department = {
   name: string;
   faculty: string;
   has_hod: boolean;
+  authoriser: 'DEAN' | 'CSO';
 };
 
 type Props = { onSuccess?: () => void };
@@ -226,7 +225,7 @@ export const ProvisionUserDialog = ({ onSuccess }: Props) => {
                   control={form.control}
                   render={({ field, fieldState }) => (
                     <Field data-invalid={fieldState.invalid}>
-                      <FieldLabel htmlFor="dept-select">Department</FieldLabel>
+                      <FieldLabel htmlFor="dept-select">Faculty / Group</FieldLabel>
                       <Select
                         onValueChange={field.onChange}
                         value={field.value}
@@ -238,29 +237,21 @@ export const ProvisionUserDialog = ({ onSuccess }: Props) => {
                           <SelectValue placeholder="Select a department" />
                         </SelectTrigger>
                         <SelectContent>
-                          {Object.entries(
-                            departments.reduce<Record<string, Department[]>>(
-                              (acc, d) => {
-                                const faculty = d.faculty || 'Other';
-                                (acc[faculty] ??= []).push(d);
-                                return acc;
-                              },
-                              {}
+                          {departments
+                            .filter((d) =>
+                              selectedRole === 'DEAN'
+                                ? d.authoriser !== 'CSO'
+                                : true
                             )
-                          ).map(([faculty, depts]) => (
-                            <SelectGroup key={faculty}>
-                              <SelectLabel>{faculty}</SelectLabel>
-                              {depts.map((d) => (
-                                <SelectItem
-                                  key={d.id}
-                                  value={d.id}
-                                  disabled={selectedRole === 'DEAN' && d.has_hod}
-                                >
-                                  {d.name}
-                                </SelectItem>
-                              ))}
-                            </SelectGroup>
-                          ))}
+                            .map((d) => (
+                              <SelectItem
+                                key={d.id}
+                                value={d.id}
+                                disabled={selectedRole === 'DEAN' && d.has_hod}
+                              >
+                                {d.name}
+                              </SelectItem>
+                            ))}
                         </SelectContent>
                       </Select>
                       {fieldState.invalid && (

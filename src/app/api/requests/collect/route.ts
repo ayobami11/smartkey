@@ -103,7 +103,7 @@ export const POST = async (request: NextRequest) => {
   const { data: keyData } = req.key_id
     ? await supabase
         .from('keys')
-        .select('code, room_name')
+        .select('code, room_name, key_count')
         .eq('id', req.key_id)
         .single()
     : { data: null };
@@ -131,6 +131,7 @@ export const POST = async (request: NextRequest) => {
         key: {
           code: keyData?.code ?? null,
           room_name: keyData?.room_name ?? null,
+          key_count: (keyData as {key_count?: number} | null)?.key_count ?? 1,
         },
         issued_at: result.issued_at,
       }),
@@ -157,6 +158,7 @@ export const POST = async (request: NextRequest) => {
       key: {
         code: keyData?.code ?? null,
         room_name: keyData?.room_name ?? null,
+        key_count: (keyData as {key_count?: number} | null)?.key_count ?? 1,
       },
       issued_at: result.issued_at,
     }),

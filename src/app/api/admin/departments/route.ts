@@ -25,7 +25,7 @@ export const GET = async () => {
   const { data, error } = await supabase
     .from('departments')
     .select(
-      'id, name, faculty, hod_id, hod:profiles!hod_id(status), keys(status, retired_at)'
+      'id, name, faculty, hod_id, authoriser, hod:profiles!hod_id(status), keys(status, retired_at)'
     )
     .order('faculty', { ascending: true })
     .order('name', { ascending: true });

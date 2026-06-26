@@ -33,7 +33,7 @@ export const GET = async (request: NextRequest) => {
     .select(
       `id, status, issued_at, return_deadline, created_at,
        requester:profiles!requester_id(id, full_name, photo_url),
-       key:keys!key_id(id, code, room_name, zone, status)`,
+       key:keys!key_id(id, code, room_name, zone, status, key_count)`,
     )
     .in('status', ['KEY_ISSUED']);
 
