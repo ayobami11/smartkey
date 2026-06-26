@@ -62,7 +62,7 @@ export default async function WeekendAccessPage() {
             Request weekend key access
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            No SmartKey account needed. Upload your HOD&apos;s authorisation
+            No SmartKey account needed. Upload your Dean&apos;s authorisation
             letter — once approved, you&apos;ll get a 6-digit code to collect
             the key on the day.
           </p>

@@ -104,7 +104,7 @@ export const GuestWeekendRequestForm = ({
   const handleSubmit = async (values: GuestWeekendRequestFormInput) => {
     setSubmitError(null);
     if (!letter) {
-      setLetterError('The HOD authorisation letter is required.');
+      setLetterError('The Dean authorisation letter is required.');
       return;
     }
 
@@ -361,7 +361,7 @@ export const GuestWeekendRequestForm = ({
         control={form.control}
         render={({ field, fieldState }) => (
           <Field data-invalid={fieldState.invalid}>
-            <FieldLabel htmlFor="guest-department">Department</FieldLabel>
+            <FieldLabel htmlFor="guest-department">Faculty / Group</FieldLabel>
             <Select
               value={field.value}
               onValueChange={field.onChange}
@@ -374,8 +374,8 @@ export const GuestWeekendRequestForm = ({
                 <SelectValue
                   placeholder={
                     noDepartments
-                      ? 'No departments available'
-                      : 'Select a department…'
+                      ? 'No faculties or groups available'
+                      : 'Select Faculty / Group…'
                   }
                 />
               </SelectTrigger>
@@ -389,13 +389,13 @@ export const GuestWeekendRequestForm = ({
             </Select>
             {!fieldState.error && !noDepartments && (
               <p className="text-xs text-muted-foreground">
-                The Head of this department assigns the specific key when they
+                The Dean of this Faculty / Group assigns the specific key when they
                 approve.
               </p>
             )}
             {noDepartments && (
               <p className="text-xs text-destructive" role="alert">
-                We could not load departments. Refresh the page, or contact the
+                We could not load faculties and groups. Refresh the page, or contact the
                 CSO if this persists.
               </p>
             )}
@@ -430,14 +430,14 @@ export const GuestWeekendRequestForm = ({
       {/* Letter upload */}
       <Field data-invalid={!!letterError}>
         <FieldLabel htmlFor="guest-letter-trigger">
-          HOD authorisation letter
+          Dean authorisation letter
         </FieldLabel>
         <input
           ref={fileInputRef}
           type="file"
           accept="image/jpeg,image/png,application/pdf"
           className="sr-only"
-          aria-label="HOD authorisation letter file"
+          aria-label="Dean authorisation letter file"
           onChange={(e) => handleLetterChange(e.target.files?.[0])}
         />
         {!letter ? (

@@ -19,11 +19,13 @@ export const GET = async () => {
     .eq('id', user.id)
     .single();
 
-  if (!profile || profile.role !== 'DEAN') {
+  if (!profile || (profile.role !== 'DEAN' && profile.role !== 'CSO')) {
     return NextResponse.json(err('Forbidden', 403), { status: 403 });
   }
 
-  // RLS scopes to HOD's department keys automatically
+  // RLS scopes to HOD's department keys automatically for DEAN.
+  // For CSO, they can read all. We fetch and filter in the endpoint so that both
+  // roles only receive the pending requests they are authorised to decide on.
   const { data: requests, error } = await supabase
     .from('requests')
     .select(
@@ -41,7 +43,8 @@ export const GET = async () => {
       requested_department_id,
       requester:profiles!requester_id(id, full_name, photo_url, institutional_email),
       guest:guest_requesters!guest_id(id, full_name, email, phone, id_document_type, id_document_number),
-      key:keys!key_id(id, code, room_name, zone)
+      key:keys!key_id(id, code, room_name, zone, department:departments!department_id(id, name, authoriser)),
+      requested_department:departments!requested_department_id(id, name, authoriser)
     `
     )
     .eq('status', 'PENDING_HOD')
@@ -55,5 +58,24 @@ export const GET = async () => {
     });
   }
 
-  return NextResponse.json(ok({ requests }));
+  // Filter based on role
+  let filteredRequests = requests ?? [];
+  if (profile.role === 'DEAN') {
+    filteredRequests = filteredRequests.filter((r) => {
+      const keyDeptId = r.key?.department?.id;
+      const requestedDeptId = r.requested_department?.id;
+      return (
+        (keyDeptId && keyDeptId === profile.department_id) ||
+        (requestedDeptId && requestedDeptId === profile.department_id)
+      );
+    });
+  } else if (profile.role === 'CSO') {
+    filteredRequests = filteredRequests.filter((r) => {
+      const keyAuthoriser = r.key?.department?.authoriser;
+      const requestedAuthoriser = r.requested_department?.authoriser;
+      return keyAuthoriser === 'CSO' || requestedAuthoriser === 'CSO';
+    });
+  }
+
+  return NextResponse.json(ok({ requests: filteredRequests }));
 };

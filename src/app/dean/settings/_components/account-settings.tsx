@@ -91,12 +91,12 @@ export const AccountSettings = () => {
               control={form.control}
               render={({ field, fieldState }) => (
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="hod-name">Full name</Label>
+                  <Label htmlFor="dean-name">Full name</Label>
                   {profileLoading ? (
                     <Skeleton className="h-9 w-full rounded-md" />
                   ) : (
                     <Input
-                      id="hod-name"
+                      id="dean-name"
                       aria-invalid={fieldState.invalid}
                       {...field}
                     />
@@ -110,12 +110,12 @@ export const AccountSettings = () => {
               )}
             />
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="hod-email">Institutional email</Label>
+              <Label htmlFor="dean-email">Institutional email</Label>
               {profileLoading ? (
                 <Skeleton className="h-9 w-full rounded-md" />
               ) : (
                 <Input
-                  id="hod-email"
+                  id="dean-email"
                   type="email"
                   value={email}
                   readOnly
@@ -127,12 +127,12 @@ export const AccountSettings = () => {
               </p>
             </div>
             <div className="flex flex-col gap-1.5 sm:col-span-2">
-              <Label htmlFor="hod-dept">Department</Label>
+              <Label htmlFor="dean-dept">Faculty / Group</Label>
               {profileLoading ? (
                 <Skeleton className="h-9 w-full rounded-md" />
               ) : (
                 <Input
-                  id="hod-dept"
+                  id="dean-dept"
                   value={department}
                   readOnly
                   className="cursor-not-allowed bg-muted/50 text-muted-foreground"

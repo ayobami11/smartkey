@@ -40,6 +40,7 @@ const data = {
     { title: 'Users', url: '/cso/users', icon: UsersIcon },
     { title: 'Audit Log', url: '/cso/audit', icon: FileClockIcon },
     { title: 'Key Inventory', url: '/cso/keys', icon: KeyRoundIcon },
+    { title: 'Administration Keys', url: '/cso/admin-keys', icon: KeyRoundIcon },
     { title: 'Settings', url: '/cso/settings', icon: SettingsIcon },
   ],
 };

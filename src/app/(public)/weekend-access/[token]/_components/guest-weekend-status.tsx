@@ -19,7 +19,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 // Types
 
 type GuestRequestStatus =
-  | 'PENDING_HOD'
+  | 'PENDING_Dean'
   | 'APPROVED'
   | 'CODE_ISSUED'
   | 'KEY_ISSUED'
@@ -129,7 +129,7 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
     void fetchStatus();
   }, [fetchStatus]);
 
-  // Refetch when the tab regains focus, so guests see HOD decisions promptly
+  // Refetch when the tab regains focus, so guests see Dean decisions promptly
   // without a realtime subscription.
 
   useEffect(() => {
@@ -260,16 +260,16 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
 
   const firstName = data.full_name.split(' ')[0];
 
-  // PENDING_HOD
+  // PENDING_Dean
 
-  if (data.status === 'PENDING_HOD') {
+  if (data.status === 'PENDING_Dean') {
     return (
       <Shell onRefresh={() => void fetchStatus()}>
         <StatusCard
           tone="warning"
           icon={ClockIcon}
-          title="Awaiting HOD authorisation"
-          body={`Thanks, ${firstName}. The Head of Department will review your request and the letter you uploaded. You'll be notified by email when they decide.`}
+          title="Awaiting Dean authorisation"
+          body={`Thanks, ${firstName}. The Dean will review your request and the letter you uploaded. You'll be notified by email when they decide.`}
         />
         <RequestMeta
           requestedFor={data.requested_for}
@@ -288,7 +288,7 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
           tone="error"
           icon={XCircleIcon}
           title="Request declined"
-          body="The Head of Department did not approve this request. Contact the department directly if you believe this is an error."
+          body="The Dean did not approve this request. Contact the department directly if you believe this is an error."
         />
       </Shell>
     );

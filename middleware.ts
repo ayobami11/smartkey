@@ -8,11 +8,11 @@ import {
 } from '@/lib/supabase/cookies';
 import { updateSession } from '@/lib/supabase/middleware';
 
-type UserRole = 'CSO' | 'HOD' | 'VERIFIER' | 'REQUESTER';
+type UserRole = 'CSO' | 'DEAN' | 'VERIFIER' | 'REQUESTER';
 
 const PROTECTED_ROUTES: Array<{ prefix: string; role: UserRole }> = [
   { prefix: '/cso', role: 'CSO' },
-  { prefix: '/hod', role: 'HOD' },
+  { prefix: '/dean', role: 'DEAN' },
   { prefix: '/verifier', role: 'VERIFIER' },
   { prefix: '/requester', role: 'REQUESTER' },
 ];
@@ -20,7 +20,7 @@ const PROTECTED_ROUTES: Array<{ prefix: string; role: UserRole }> = [
 // These paths live inside a protected prefix but are part of the invite/activation
 // flow. The session is in the 'activate' namespace (not the role namespace) at
 // this point, so the role gate must not apply. Each page handles its own auth.
-const ACTIVATION_PATHS = ['/hod/onboarding'];
+const ACTIVATION_PATHS = ['/dean/onboarding'];
 
 // Fully public, session-less surfaces. The external (non-registered) weekend
 // request flow and its supporting API live here. They must never be redirected
