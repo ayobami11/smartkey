@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { useState } from 'react';
 import {
+  CalendarCheckIcon,
   FileClockIcon,
   FileTextIcon,
   GalleryVerticalEnd,
@@ -40,7 +41,16 @@ const data = {
     { title: 'Users', url: '/cso/users', icon: UsersIcon },
     { title: 'Audit Log', url: '/cso/audit', icon: FileClockIcon },
     { title: 'Key Inventory', url: '/cso/keys', icon: KeyRoundIcon },
-    { title: 'Administration Keys', url: '/cso/admin-keys', icon: KeyRoundIcon },
+    {
+      title: 'Administration Keys',
+      url: '/cso/admin-keys',
+      icon: KeyRoundIcon,
+    },
+    {
+      title: 'Weekend Requests',
+      url: '/cso/weekend-requests',
+      icon: CalendarCheckIcon,
+    },
     { title: 'Settings', url: '/cso/settings', icon: SettingsIcon },
   ],
 };

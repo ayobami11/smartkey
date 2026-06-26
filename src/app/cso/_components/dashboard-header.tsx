@@ -22,12 +22,15 @@ const ROUTES: Record<string, string> = {
   '/cso/audit': 'Audit Log',
   '/cso/keys': 'Key Inventory',
   '/cso/settings': 'Settings',
+  '/cso/admin-keys': 'Administration Keys',
+  '/cso/weekend-requests': 'Weekend Requests',
 };
 
 export const DashboardHeader = () => {
   const pathname = usePathname();
   const isHome = pathname === '/cso/dashboard';
   const isReportDetail = /^\/cso\/reports\/[^/]+$/.test(pathname);
+  const isAdminKeyDetail = /^\/cso\/admin-keys\/[^/]+$/.test(pathname);
   const pageTitle = ROUTES[pathname] ?? 'Dashboard';
 
   return (
@@ -58,6 +61,24 @@ export const DashboardHeader = () => {
                 <BreadcrumbSeparator className="hidden md:block" />
                 <BreadcrumbItem>
                   <BreadcrumbPage>Report Details</BreadcrumbPage>
+                </BreadcrumbItem>
+              </>
+            ) : isAdminKeyDetail ? (
+              <>
+                <BreadcrumbItem className="hidden md:block">
+                  <BreadcrumbLink href="/cso/dashboard">
+                    Dashboard
+                  </BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator className="hidden md:block" />
+                <BreadcrumbItem className="hidden md:block">
+                  <BreadcrumbLink href="/cso/admin-keys">
+                    Administration Keys
+                  </BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator className="hidden md:block" />
+                <BreadcrumbItem>
+                  <BreadcrumbPage>Key Details</BreadcrumbPage>
                 </BreadcrumbItem>
               </>
             ) : isHome ? (
