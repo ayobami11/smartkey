@@ -97,7 +97,13 @@ export const DepartmentKeys = ({ deptId }: Props) => {
   const isDesktop = useMediaQuery('(min-width: 1024px)');
 
   useEffect(() => {
-    if (!deptId) return;
+    if (!deptId) {
+      const timer = setTimeout(() => {
+        setLoadingKeys(false);
+        setDeptKeys([]);
+      }, 0);
+      return () => clearTimeout(timer);
+    }
 
     const fetchKeys = async () => {
       setLoadingKeys(true);
