@@ -16,6 +16,7 @@ const getGreeting = () => {
 export const DashboardView = () => {
   const [fullName, setFullName] = useState('');
   const [deptName, setDeptName] = useState('');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const init = async () => {
@@ -23,7 +24,10 @@ export const DashboardView = () => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        setLoading(false);
+        return;
+      }
 
       const { data: profile } = await supabase
         .from('profiles')
@@ -38,6 +42,7 @@ export const DashboardView = () => {
         const dept = profile.department as { name: string } | null;
         setDeptName(dept?.name ?? '');
       }
+      setLoading(false);
     };
 
     init();
@@ -51,7 +56,7 @@ export const DashboardView = () => {
           {fullName ? `, ${fullName}` : ''}.
         </h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          {deptName || 'Loading…'}
+          {loading ? 'Loading…' : deptName || 'No Faculty/Group assigned'}
         </p>
       </div>
 
