@@ -30,7 +30,7 @@ export const GET = async (
     .select('role, department_id')
     .eq('id', user.id)
     .single();
-  if (!profile || profile.role !== 'HOD') {
+  if (!profile || profile.role !== 'DEAN') {
     return NextResponse.json(err('Forbidden', 403), { status: 403 });
   }
 

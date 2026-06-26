@@ -8,7 +8,7 @@ type UserRole = Database['public']['Enums']['user_role'];
 // flows, which run before any role-specific URL prefix exists.
 export type SessionNamespace =
   | 'cso'
-  | 'hod'
+  | 'dean'
   | 'verifier'
   | 'requester'
   | 'activate';
@@ -24,7 +24,8 @@ const PATH_PREFIX_TO_NAMESPACE: ReadonlyArray<
   readonly [string, SessionNamespace]
 > = [
   ['/cso', 'cso'],
-  ['/hod', 'hod'],
+  ['/hod', 'dean'],
+  ['/dean', 'dean'],
   ['/verifier', 'verifier'],
   ['/requester', 'requester'],
   ['/me', 'requester'], // legacy alias for the requester area
@@ -32,7 +33,7 @@ const PATH_PREFIX_TO_NAMESPACE: ReadonlyArray<
 
 const ROLE_TO_NAMESPACE: Record<string, SessionNamespace> = {
   CSO: 'cso',
-  HOD: 'hod',
+  DEAN: 'dean',
   VERIFIER: 'verifier',
   REQUESTER: 'requester',
 };

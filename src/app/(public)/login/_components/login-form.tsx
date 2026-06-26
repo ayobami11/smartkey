@@ -40,7 +40,7 @@ type CredentialsValues = z.infer<typeof credentialsSchema>;
 
 const ROLE_REDIRECTS: Record<string, string> = {
   CSO: '/cso/dashboard',
-  HOD: '/hod/dashboard',
+  DEAN: '/dean/dashboard',
   VERIFIER: '/verifier/dashboard',
   REQUESTER: '/requester/dashboard',
 };

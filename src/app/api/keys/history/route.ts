@@ -17,7 +17,7 @@ export const GET = async (request: NextRequest) => {
     .eq('id', user.id)
     .single();
   if (!profile) return NextResponse.json(err('Unauthorized', 401), { status: 401 });
-  if (profile.role !== 'CSO' && profile.role !== 'HOD') {
+  if (profile.role !== 'CSO' && profile.role !== 'DEAN') {
     return NextResponse.json(err('Forbidden', 403), { status: 403 });
   }
 
@@ -48,7 +48,7 @@ export const GET = async (request: NextRequest) => {
 
   // HOD sees only their department's keys (RLS handles row-level, but we also
   // filter by department to avoid leaking keys from other departments).
-  if (profile.role === 'HOD' && profile.department_id) {
+  if (profile.role === 'DEAN' && profile.department_id) {
     query = query.eq('key:keys!key_id.department_id', profile.department_id);
   }
 

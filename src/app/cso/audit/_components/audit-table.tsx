@@ -143,7 +143,7 @@ const ACTOR_ROLE_CLASS: Record<string, string> = {
 
 const ROLE_LABEL: Record<string, string> = {
   CSO: 'CSO',
-  HOD: 'HOD',
+  HOD: 'Dean',
   VERIFIER: 'Verifier',
   REQUESTER: 'Requester',
 };
@@ -208,12 +208,12 @@ const TYPE_CHIPS: { label: string; type?: AuditEventType }[] = [
   { label: 'Signature', type: 'SIGNATURE' },
 ];
 
-type DbRole = 'CSO' | 'HOD' | 'VERIFIER' | 'REQUESTER';
+type DbRole = 'CSO' | 'DEAN' | 'VERIFIER' | 'REQUESTER';
 type RoleFilterValue = DbRole | 'GUEST';
 
 const ROLE_OPTIONS: { value: RoleFilterValue; label: string }[] = [
   { value: 'CSO', label: 'CSO' },
-  { value: 'HOD', label: 'HOD' },
+  { value: 'DEAN', label: 'Dean' },
   { value: 'VERIFIER', label: 'Verifier' },
   { value: 'REQUESTER', label: 'Requester' },
   { value: 'GUEST', label: 'Guest' },

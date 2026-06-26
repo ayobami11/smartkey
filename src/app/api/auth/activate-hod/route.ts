@@ -67,7 +67,7 @@ export const POST = async (request: NextRequest) => {
 
   const profile = profileData as { role: string } | null;
 
-  if (!profile || profile.role !== 'HOD') {
+  if (!profile || profile.role !== 'DEAN') {
     return NextResponse.json(err('Forbidden', 403), { status: 403 });
   }
 
@@ -164,7 +164,7 @@ export const POST = async (request: NextRequest) => {
     });
   }
 
-  return NextResponse.json(ok({ profile_id: userId, redirect: '/hod' }), {
+  return NextResponse.json(ok({ profile_id: userId, redirect: '/dean' }), {
     status: 201,
   });
 };

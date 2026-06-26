@@ -58,7 +58,7 @@ import {
 
 const ROLE_OPTIONS: { label: string; value: UserRole }[] = [
   { label: ROLE_LABEL.CSO, value: 'CSO' },
-  { label: ROLE_LABEL.HOD, value: 'HOD' },
+  { label: ROLE_LABEL.HOD, value: 'DEAN' },
   { label: ROLE_LABEL.VERIFIER, value: 'VERIFIER' },
   { label: ROLE_LABEL.REQUESTER, value: 'REQUESTER' },
 ];

@@ -13,7 +13,7 @@ import type { Database } from '@/lib/supabase/types';
 import type { UserRole } from '@/types/database';
 import { err, ok } from '@/types/api';
 
-const MFA_ROLES = new Set(['CSO', 'HOD', 'VERIFIER']);
+const MFA_ROLES = new Set(['CSO', 'DEAN', 'VERIFIER']);
 
 const bodySchema = z.object({
   email: z.email(),

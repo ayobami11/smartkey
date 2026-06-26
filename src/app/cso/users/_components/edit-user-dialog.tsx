@@ -48,7 +48,7 @@ export const EditUserDialog = ({ user, onClose, onSuccess }: Props) => {
   const [departmentId, setDepartmentId] = useState<string>('');
 
   const open = user !== null;
-  const needsDept = user?.role === 'HOD' || user?.role === 'REQUESTER';
+  const needsDept = user?.role === 'DEAN' || user?.role === 'REQUESTER';
 
   const form = useForm<EditUserInput>({
     resolver: zodResolver(editUserSchema),

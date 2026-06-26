@@ -55,7 +55,7 @@ export const POST = async (request: NextRequest) => {
   // (authoriser = 'CSO') keys, which have no Dean. The RPC re-validates that the
   // actor's role matches the target department's authoriser, so a cross-type
   // attempt (HOD on an admin key, or CSO on a faculty key) is rejected there.
-  if (profile.role !== 'HOD' && profile.role !== 'CSO')
+  if (profile.role !== 'DEAN' && profile.role !== 'CSO')
     return NextResponse.json(err('Forbidden', 403), { status: 403 });
   const isCso = profile.role === 'CSO';
 
@@ -203,7 +203,7 @@ export const POST = async (request: NextRequest) => {
           await writeAuditEntry({
             event: 'SIGNATURE_MISMATCH',
             actorId: user.id,
-            actorRole: 'HOD',
+            actorRole: 'DEAN',
             targetType: 'request',
             targetId: request_id,
             payload: {

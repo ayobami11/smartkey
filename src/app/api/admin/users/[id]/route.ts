@@ -13,7 +13,7 @@ const bodySchema = z.object({
 });
 
 // Roles that belong to a department; only these may have department_id set.
-const DEPARTMENTAL_ROLES = ['HOD', 'REQUESTER'] as const;
+const DEPARTMENTAL_ROLES = ['DEAN', 'REQUESTER'] as const;
 
 // CSO-only: edit an existing user's name and (for departmental roles) department.
 // Email is immutable here — it is the auth identity and chain-of-trust anchor —
@@ -97,11 +97,11 @@ export const PATCH = async (
       });
     }
 
-    if (target.role === 'HOD') {
+    if (target.role === 'DEAN') {
       const { data: existingHod } = await adminClient
         .from('profiles')
         .select('id')
-        .eq('role', 'HOD')
+        .eq('role', 'DEAN')
         .eq('department_id', nextDepartmentId!)
         .neq('id', id)
         .neq('status', 'DEACTIVATED')
@@ -136,7 +136,7 @@ export const PATCH = async (
   }
 
   // Keep the departments.hod_id reverse link consistent when an HOD moves.
-  if (departmentChanged && target.role === 'HOD') {
+  if (departmentChanged && target.role === 'DEAN') {
     const { error: clearError } = await adminClient
       .from('departments')
       .update({ hod_id: null })

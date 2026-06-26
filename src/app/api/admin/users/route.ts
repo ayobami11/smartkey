@@ -10,7 +10,7 @@ import { err, ok } from '@/types/api';
 const postBodySchema = z.object({
   full_name: z.string().min(1),
   institutional_email: z.email(),
-  role: z.enum(['HOD', 'VERIFIER', 'REQUESTER']),
+  role: z.enum(['DEAN', 'VERIFIER', 'REQUESTER']),
   department_id: z.uuid().optional(),
 });
 
@@ -56,7 +56,7 @@ export const POST = async (request: NextRequest) => {
 
   const { full_name, institutional_email, role, department_id } = parsed.data;
 
-  if ((role === 'HOD' || role === 'REQUESTER') && !department_id) {
+  if ((role === 'DEAN' || role === 'REQUESTER') && !department_id) {
     return NextResponse.json(
       err('department_id is required for HOD and REQUESTER roles', 422),
       { status: 422 }
@@ -64,7 +64,7 @@ export const POST = async (request: NextRequest) => {
   }
 
   // Prevent assigning a second ACTIVE HOD to a department that already has one.
-  if (role === 'HOD' && department_id) {
+  if (role === 'DEAN' && department_id) {
     const { data: dept } = await supabase
       .from('departments')
       .select('hod_id, hod:profiles!hod_id(status)')
@@ -82,7 +82,7 @@ export const POST = async (request: NextRequest) => {
 
   const siteUrl =
     process.env.NEXT_PUBLIC_SITE_URL ?? 'https://smartkey-ochre.vercel.app';
-  const activationPath = role === 'HOD' ? '/hod/onboarding' : '/activate';
+  const activationPath = role === 'DEAN' ? '/dean/onboarding' : '/activate';
   const adminClient = createAdminClient();
 
   // Check whether a profile already exists for this email.

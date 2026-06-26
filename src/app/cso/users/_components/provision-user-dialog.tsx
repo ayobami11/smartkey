@@ -41,7 +41,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-const ROLES = ['HOD', 'VERIFIER', 'REQUESTER'] as const;
+const ROLES = ['DEAN', 'VERIFIER', 'REQUESTER'] as const;
 
 type FormValues = ProvisionUserInput;
 
@@ -71,7 +71,7 @@ export const ProvisionUserDialog = ({ onSuccess }: Props) => {
   });
 
   const selectedRole = form.watch('role');
-  const needsDept = selectedRole === 'HOD' || selectedRole === 'REQUESTER';
+  const needsDept = selectedRole === 'DEAN' || selectedRole === 'REQUESTER';
 
   useEffect(() => {
     if (!open) return;
@@ -204,8 +204,8 @@ export const ProvisionUserDialog = ({ onSuccess }: Props) => {
                       <SelectContent>
                         {ROLES.map((r) => (
                           <SelectItem key={r} value={r}>
-                            {r === 'HOD'
-                              ? 'Head of Department'
+                            {r === 'DEAN'
+                              ? 'Dean'
                               : r === 'VERIFIER'
                                 ? 'Verifier'
                                 : 'Requester'}
@@ -254,7 +254,7 @@ export const ProvisionUserDialog = ({ onSuccess }: Props) => {
                                 <SelectItem
                                   key={d.id}
                                   value={d.id}
-                                  disabled={selectedRole === 'HOD' && d.has_hod}
+                                  disabled={selectedRole === 'DEAN' && d.has_hod}
                                 >
                                   {d.name}
                                 </SelectItem>

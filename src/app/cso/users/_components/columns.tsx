@@ -18,7 +18,7 @@ import {
 
 // Types
 
-export type UserRole = 'CSO' | 'HOD' | 'VERIFIER' | 'REQUESTER';
+export type UserRole = 'CSO' | 'DEAN' | 'VERIFIER' | 'REQUESTER';
 export type UserStatus = 'ACTIVE' | 'PENDING_ACTIVATION' | 'DEACTIVATED';
 
 export type UserRow = {
@@ -42,7 +42,7 @@ export type ColumnCallbacks = {
 
 export const ROLE_LABEL: Record<UserRole, string> = {
   CSO: 'CSO',
-  HOD: 'HOD',
+  HOD: 'Dean',
   VERIFIER: 'Verifier',
   REQUESTER: 'Requester',
 };

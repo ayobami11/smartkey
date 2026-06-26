@@ -58,7 +58,7 @@ export const POST = async (
   const siteUrl =
     process.env.NEXT_PUBLIC_SITE_URL ?? 'https://smartkey-ochre.vercel.app';
   const activationPath =
-    target.role === 'HOD' ? '/hod/onboarding' : '/activate';
+    target.role === 'DEAN' ? '/dean/onboarding' : '/activate';
 
   // generateLink mints a fresh one-time token. We build our own /auth/confirm
   // link from the token hash (verified server-side via verifyOtp) and send it

@@ -904,7 +904,7 @@ export type Database = {
         | 'APPROVED';
       request_type: 'WEEKDAY' | 'WEEKEND';
       risk_tier: 'LOW' | 'MEDIUM' | 'HIGH';
-      user_role: 'CSO' | 'HOD' | 'VERIFIER' | 'REQUESTER';
+      user_role: 'CSO' | 'DEAN' | 'VERIFIER' | 'REQUESTER';
       user_status: 'PENDING_ACTIVATION' | 'ACTIVE' | 'DEACTIVATED';
       zone: 'NEW_SENATE' | 'OLD_SENATE';
     };
@@ -1073,7 +1073,7 @@ export const Constants = {
       ],
       request_type: ['WEEKDAY', 'WEEKEND'],
       risk_tier: ['LOW', 'MEDIUM', 'HIGH'],
-      user_role: ['CSO', 'HOD', 'VERIFIER', 'REQUESTER'],
+      user_role: ['CSO', 'DEAN', 'VERIFIER', 'REQUESTER'],
       user_status: ['PENDING_ACTIVATION', 'ACTIVE', 'DEACTIVATED'],
       zone: ['NEW_SENATE', 'OLD_SENATE'],
     },
