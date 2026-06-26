@@ -63,38 +63,42 @@ export const POST = async (request: NextRequest) => {
     });
   }
 
-  // Clear the OTP so it cannot be reused
-  await adminClient.auth.admin.updateUserById(profile.id, {
-    app_metadata: { mfa_code_hash: null, mfa_code_expires_at: null },
-  });
-
   // The session was written to the role-specific cookie by the login route;
   // read it back from that same namespace.
   const namespace = namespaceForRole(profile.role) ?? DEFAULT_NAMESPACE;
   const supabase = await createServerClient(namespace);
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+
+  const getSessionPromise = supabase.auth.getSession();
+
+  // Clear the OTP so it cannot be reused
+  const clearOtpPromise = adminClient.auth.admin.updateUserById(profile.id, {
+    app_metadata: { mfa_code_hash: null, mfa_code_expires_at: null },
+  });
 
   // Record the completed login — the user has passed MFA and now has a usable
   // session. We log it here, not at the password step, because an OTP prompt is
   // not a login: the user may never finish it. Best-effort: a logging failure
   // must not block a legitimate sign-in.
-  try {
-    await writeAuditEntry({
-      event: 'LOGIN_SUCCEEDED',
-      actorId: profile.id,
-      actorRole: profile.role,
-      targetType: 'profile',
-      targetId: profile.id,
-      payload: { email, method: 'OTP' },
-    });
-  } catch (auditErr) {
+  const auditPromise = writeAuditEntry({
+    event: 'LOGIN_SUCCEEDED',
+    actorId: profile.id,
+    actorRole: profile.role,
+    targetType: 'profile',
+    targetId: profile.id,
+    payload: { email, method: 'OTP' },
+  }).catch((auditErr) => {
     logger.error('Failed to write LOGIN_SUCCEEDED audit entry', {
       userId: profile.id,
       err: String(auditErr),
     });
-  }
+  });
+
+  // Run all independent Supabase calls in parallel to maximize response speed
+  const [{ data: { session } }] = await Promise.all([
+    getSessionPromise,
+    clearOtpPromise,
+    auditPromise,
+  ]);
 
   return NextResponse.json(ok({ session }));
 };
