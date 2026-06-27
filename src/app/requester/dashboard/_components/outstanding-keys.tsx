@@ -34,6 +34,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { apiFetch } from '@/lib/api';
 import { createBrowserClient } from '@/lib/supabase/client';
 
 // Types
@@ -300,42 +301,27 @@ export const OutstandingKeys = () => {
   const handleGenerateCode = async () => {
     if (!selectedKey) return;
     setSheetPhase({ phase: 'generating' });
-    try {
-      const res = await fetch('/api/requests/request-return', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ request_id: selectedKey.id }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setSheetPhase({
-          phase: 'error',
-          message:
-            (json as { error?: string }).error ??
-            'Could not generate a return code. Please try again.',
-        });
-        return;
-      }
-      const result = (
-        json as {
-          data?: {
-            return_code: string;
-            return_code_expires_at: string;
-          };
-        }
-      ).data!;
-      setSheetPhase({
-        phase: 'code_active',
-        code: result.return_code,
-        expires_at: result.return_code_expires_at,
-      });
-      queryClient.invalidateQueries({ queryKey: ['outstanding-keys', userId] });
-    } catch {
+    const result = await apiFetch<{
+      return_code: string;
+      return_code_expires_at: string;
+    }>('/api/requests/request-return', {
+      method: 'POST',
+      body: { request_id: selectedKey.id },
+    });
+    if (result.error || !result.data) {
       setSheetPhase({
         phase: 'error',
-        message: 'Network error. Check your connection and try again.',
+        message:
+          result.error ?? 'Could not generate a return code. Please try again.',
       });
+      return;
     }
+    setSheetPhase({
+      phase: 'code_active',
+      code: result.data.return_code,
+      expires_at: result.data.return_code_expires_at,
+    });
+    queryClient.invalidateQueries({ queryKey: ['outstanding-keys', userId] });
   };
 
   // Render

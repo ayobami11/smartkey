@@ -28,6 +28,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { apiFetch } from '@/lib/api';
 import { useConnectionStatus } from '@/hooks/use-connection-status';
 
 // Types
@@ -87,47 +88,42 @@ export const HandoverView = () => {
 
   // Fetch
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
   const fetchData = async () => {
     setStep('loading');
     setFetchError(null);
-    try {
-      const [shiftRes, keysRes] = await Promise.all([
-        fetch('/api/shifts/current'),
-        fetch('/api/keys/out'),
-      ]);
+    const [shiftResult, keysResult] = await Promise.all([
+      apiFetch<{ shift: Shift }>('/api/shifts/current'),
+      apiFetch<{ outstanding: OutstandingKey[] }>('/api/keys/out'),
+    ]);
+    if (shiftResult.error) {
+      setFetchError(shiftResult.error);
+      setStep('error');
+      return;
+    }
+    setShift(shiftResult.data?.shift ?? null);
+    if (!keysResult.error && keysResult.data) {
+      setOutstandingKeys(keysResult.data.outstanding ?? []);
+    }
+    setStep('ready');
+  };
 
-      if (!shiftRes.ok) {
-        const json = await shiftRes.json().catch(() => ({}));
-        setFetchError(
-          (json as { error?: string }).error ??
-            'Failed to load shift information.'
-        );
+  useEffect(() => {
+    void Promise.all([
+      apiFetch<{ shift: Shift }>('/api/shifts/current'),
+      apiFetch<{ outstanding: OutstandingKey[] }>('/api/keys/out'),
+    ]).then(([shiftResult, keysResult]) => {
+      if (shiftResult.error) {
+        setFetchError(shiftResult.error);
         setStep('error');
         return;
       }
-
-      const shiftJson = await shiftRes.json();
-      setShift((shiftJson as { data?: { shift?: Shift } }).data?.shift ?? null);
-
-      // Keys are best-effort — not critical if this fails
-      if (keysRes.ok) {
-        const keysJson = await keysRes.json();
-        setOutstandingKeys(
-          (keysJson as { data?: { outstanding?: OutstandingKey[] } }).data
-            ?.outstanding ?? []
-        );
+      setShift(shiftResult.data?.shift ?? null);
+      if (!keysResult.error && keysResult.data) {
+        setOutstandingKeys(keysResult.data.outstanding ?? []);
       }
-
       setStep('ready');
-    } catch {
-      setFetchError('Network error. Check your connection and try again.');
-      setStep('error');
-    }
-  };
+    });
+  }, []);
 
   // Handlers
 
@@ -150,33 +146,21 @@ export const HandoverView = () => {
     const keyIds = bulk
       ? outstandingKeys.map((k) => k.id)
       : Array.from(acknowledged);
-    try {
-      const res = await fetch('/api/shifts/handover', {
+    const result = await apiFetch<{ acknowledged_count: number }>(
+      '/api/shifts/handover',
+      {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          outgoing_shift_id: shift.id,
-          key_ids: keyIds,
-          bulk,
-        }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setSubmitError(
-          (json as { error?: string }).error ??
-            'Failed to complete handover. Please try again.'
-        );
-        return;
+        body: { outgoing_shift_id: shift.id, key_ids: keyIds, bulk },
       }
-      const count = (json as { data?: { acknowledged_count?: number } }).data
-        ?.acknowledged_count;
-      setHandoverRef(count !== undefined ? String(count) : null);
-      setStep('success');
-    } catch {
-      setSubmitError('Network error. Check your connection and try again.');
-    } finally {
-      setSubmitting(false);
+    );
+    setSubmitting(false);
+    if (result.error) {
+      setSubmitError(result.error);
+      return;
     }
+    const count = result.data?.acknowledged_count;
+    setHandoverRef(count !== undefined ? String(count) : null);
+    setStep('success');
   };
 
   // Render
@@ -222,7 +206,7 @@ export const HandoverView = () => {
             variant="outline"
             size="sm"
             className="mt-3 border-destructive/30 text-destructive hover:bg-destructive/10"
-            onClick={fetchData}
+            onClick={() => void fetchData()}
           >
             Retry
           </Button>

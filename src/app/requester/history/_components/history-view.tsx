@@ -1,7 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+
 import { Button } from '@/components/ui/button';
+import { apiFetch } from '@/lib/api';
 
 import { type RequestRow } from '@/app/requester/history/_components/request-card';
 import { HistoryEmpty } from '@/app/requester/history/_components/history-empty';
@@ -27,14 +29,13 @@ export const HistoryView = () => {
   const fetchHistory = useCallback(async (cursor?: string) => {
     const params = new URLSearchParams({ limit: '20' });
     if (cursor) params.set('cursor', cursor);
-
-    const res = await fetch(`/api/requests/my?${params.toString()}`);
-    if (!res.ok) {
-      const json = await res.json().catch(() => null);
-      throw new Error(json?.error ?? `Error ${res.status}`);
+    const result = await apiFetch<ApiResponse>(
+      `/api/requests/my?${params.toString()}`
+    );
+    if (result.error || !result.data) {
+      throw new Error(result.error ?? `Error ${result.status}`);
     }
-    const json: { data: ApiResponse; error: null } = await res.json();
-    return json.data;
+    return result.data;
   }, []);
 
   useEffect(() => {

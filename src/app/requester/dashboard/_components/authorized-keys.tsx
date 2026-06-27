@@ -31,6 +31,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { apiFetch } from '@/lib/api';
 import { createBrowserClient } from '@/lib/supabase/client';
 import {
   weekdayRequestFormSchema,
@@ -153,42 +154,37 @@ export const AuthorizedKeys = () => {
     setStep('submitting');
     setSubmitError(null);
 
-    try {
-      const res = await fetch('/api/requests/submit', {
+    const result = await apiFetch<{ request_id: string }>(
+      '/api/requests/submit',
+      {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           key_id: selectedKeyId,
           type: 'WEEKDAY',
           return_deadline: new Date(values.return_deadline).toISOString(),
-        }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        const msg =
-          (json as { error?: string }).error ?? 'Failed to submit request.';
-        if (res.status === 409) {
-          // Close the dialog so the existing active request is visible in the banner
-          setWeekdayOpen(false);
-          setSubmitError(msg);
-        } else {
-          setSubmitError(msg);
-          setStep('weekday_form');
-        }
-        return;
+        },
       }
-      const data = (json as { data?: { request_id: string } }).data;
-      if (!data) {
-        setSubmitError('Unexpected server response. Please try again.');
+    );
+
+    if (result.error) {
+      if (result.status === 409) {
+        setWeekdayOpen(false);
+        setSubmitError(result.error);
+      } else {
+        setSubmitError(result.error);
         setStep('weekday_form');
-        return;
       }
-      setWeekdayOpen(false);
-      router.push(`/requester/request/${data.request_id}/code`);
-    } catch {
-      setSubmitError('Network error. Check your connection and try again.');
-      setStep('weekday_form');
+      return;
     }
+
+    if (!result.data) {
+      setSubmitError('Unexpected server response. Please try again.');
+      setStep('weekday_form');
+      return;
+    }
+
+    setWeekdayOpen(false);
+    router.push(`/requester/request/${result.data.request_id}/code`);
   };
 
   // Derived values

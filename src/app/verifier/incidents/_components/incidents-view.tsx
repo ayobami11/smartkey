@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Controller, useForm } from 'react-hook-form';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { CheckCircleIcon, SirenIcon } from 'lucide-react';
 
@@ -15,24 +15,17 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { apiFetch } from '@/lib/api';
 import {
   incidentFormSchema,
   type IncidentFormInput,
 } from '@/lib/validation/schemas';
 
+import { INCIDENT_TYPES } from '@/lib/constants';
+
 // Types
 
 type FormStep = 'form' | 'submitting' | 'success';
-
-// Constants
-
-const INCIDENT_TYPES: { value: IncidentFormInput['type']; label: string }[] = [
-  { value: 'MISSING_KEY', label: 'Missing key' },
-  { value: 'SUSPICIOUS_ACTIVITY', label: 'Suspicious activity' },
-  { value: 'EQUIPMENT_FAULT', label: 'Equipment fault' },
-  { value: 'PROCEDURAL', label: 'Procedural issue' },
-  { value: 'OTHER', label: 'Other' },
-];
 
 const SEVERITIES: {
   value: IncidentFormInput['severity'];
@@ -64,36 +57,22 @@ export const IncidentsView = () => {
     defaultValues: { type: undefined, severity: undefined, description: '' },
   });
 
-  const watchedSeverity = form.watch('severity');
+  const watchedSeverity = useWatch({ control: form.control, name: 'severity' });
 
   const onSubmit = form.handleSubmit(async (values) => {
     setStep('submitting');
     setSubmitError(null);
-    try {
-      const res = await fetch('/api/incidents', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...values,
-          occurred_at: new Date().toISOString(),
-        }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setSubmitError(
-          (json as { error?: string }).error ??
-            'Failed to log incident. Please try again.'
-        );
-        setStep('form');
-        return;
-      }
-      const ref = (json as { data?: { reference?: string } }).data?.reference;
-      setIncidentRef(ref ?? null);
-      setStep('success');
-    } catch {
-      setSubmitError('Network error. Check your connection and try again.');
+    const result = await apiFetch<{ reference: string }>('/api/incidents', {
+      method: 'POST',
+      body: { ...values, occurred_at: new Date().toISOString() },
+    });
+    if (result.error) {
+      setSubmitError(result.error);
       setStep('form');
+      return;
     }
+    setIncidentRef(result.data?.reference ?? null);
+    setStep('success');
   });
 
   const handleReset = () => {

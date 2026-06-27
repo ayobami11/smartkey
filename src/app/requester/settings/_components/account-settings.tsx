@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Controller, useForm } from 'react-hook-form';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 
+import { apiFetch } from '@/lib/api';
 import {
   updateProfileSchema,
   type UpdateProfileInput,
@@ -30,15 +31,18 @@ export const AccountSettings = () => {
     defaultValues: { full_name: '' },
   });
 
+  const fullName = useWatch({ control: form.control, name: 'full_name' });
+
   useEffect(() => {
-    const fetchProfile = async () => {
-      const res = await fetch('/api/profile/me');
-      if (!res.ok) {
-        setProfileLoading(false);
-        return;
-      }
-      const json = await res.json();
-      const profile = json.data?.profile;
+    apiFetch<{
+      profile: {
+        full_name: string;
+        institutional_email: string;
+        photo_url: string;
+        department: { name: string } | null;
+      };
+    }>('/api/profile/me').then((result) => {
+      const profile = result.data?.profile;
       if (profile) {
         form.reset({ full_name: profile.full_name ?? '' });
         setEmail(profile.institutional_email ?? '');
@@ -46,19 +50,16 @@ export const AccountSettings = () => {
         setDepartment(profile.department?.name ?? '');
       }
       setProfileLoading(false);
-    };
-    fetchProfile();
+    });
   }, [form]);
 
   const handleProfileSubmit = form.handleSubmit(async (data) => {
-    const res = await fetch('/api/profile/me', {
+    const result = await apiFetch('/api/profile/me', {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+      body: data,
     });
-    const json = await res.json();
-    if (!res.ok) {
-      toast.error(json.error ?? 'Failed to update profile.');
+    if (result.error) {
+      toast.error(result.error);
       return;
     }
     form.reset(data);
@@ -78,7 +79,7 @@ export const AccountSettings = () => {
       <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-5">
         <h3 className="text-sm font-semibold text-foreground">Profile</h3>
         <ProfilePhotoUpload
-          name={form.watch('full_name')}
+          name={fullName}
           loading={profileLoading}
           initialUrl={photoUrl}
         />

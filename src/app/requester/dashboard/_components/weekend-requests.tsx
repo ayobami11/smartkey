@@ -23,6 +23,7 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty';
 import { Skeleton } from '@/components/ui/skeleton';
+import { apiFetch } from '@/lib/api';
 import { createBrowserClient } from '@/lib/supabase/client';
 
 import { WeekendAccessSheet } from '@/app/requester/dashboard/_components/weekend-access-sheet';
@@ -143,33 +144,18 @@ export const WeekendRequests = () => {
   const handleGenerate = async (requestId: string) => {
     setGeneratingId(requestId);
     setErrorId(null);
-    try {
-      const res = await fetch('/api/requests/weekend-code', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ request_id: requestId }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setErrorId({
-          id: requestId,
-          message:
-            (json as { error?: string }).error ??
-            'Could not generate a code. Please try again.',
-        });
-        return;
-      }
-      queryClient.invalidateQueries({ queryKey: ['weekend-requests', userId] });
-      queryClient.invalidateQueries({ queryKey: ['active-request', userId] });
-      router.push(`/requester/request/${requestId}/code`);
-    } catch {
-      setErrorId({
-        id: requestId,
-        message: 'Network error. Check your connection and try again.',
-      });
-    } finally {
-      setGeneratingId(null);
+    const result = await apiFetch('/api/requests/weekend-code', {
+      method: 'POST',
+      body: { request_id: requestId },
+    });
+    setGeneratingId(null);
+    if (result.error) {
+      setErrorId({ id: requestId, message: result.error });
+      return;
     }
+    queryClient.invalidateQueries({ queryKey: ['weekend-requests', userId] });
+    queryClient.invalidateQueries({ queryKey: ['active-request', userId] });
+    router.push(`/requester/request/${requestId}/code`);
   };
 
   return (

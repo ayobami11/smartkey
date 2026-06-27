@@ -29,6 +29,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { apiFetch } from '@/lib/api';
 import { createBrowserClient } from '@/lib/supabase/client';
 import {
   weekendRequestFormSchema,
@@ -108,39 +109,27 @@ export const WeekendAccessSheet = ({
   const handleSubmit = async (values: WeekendRequestFormInput) => {
     setStep('submitting');
     setSubmitError(null);
-    try {
-      const res = await fetch('/api/requests/submit', {
+    const result = await apiFetch<{ request_id: string }>(
+      '/api/requests/submit',
+      {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           key_id: values.key_id,
           type: 'WEEKEND',
           return_deadline: new Date(
             `${values.weekend_date}T23:59:00`
           ).toISOString(),
           weekend_date: values.weekend_date,
-        }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setSubmitError(
-          (json as { error?: string }).error ?? 'Failed to submit request.'
-        );
-        setStep('weekend_form');
-        return;
+        },
       }
-      const data = (json as { data?: { request_id: string } }).data;
-      if (!data) {
-        setSubmitError('Unexpected server response. Please try again.');
-        setStep('weekend_form');
-        return;
-      }
-      onSubmitted();
-      setStep('pending_hod');
-    } catch {
-      setSubmitError('Network error. Check your connection and try again.');
+    );
+    if (result.error || !result.data) {
+      setSubmitError(result.error ?? 'Failed to submit request.');
       setStep('weekend_form');
+      return;
     }
+    onSubmitted();
+    setStep('pending_hod');
   };
 
   return (

@@ -34,6 +34,7 @@ import {
   RiskTierBadge,
 } from '@/components/smartkey/risk-tier-badge';
 import { useRealtime } from '@/hooks/use-realtime';
+import { apiFetch } from '@/lib/api';
 import { useConnectionStatus } from '@/hooks/use-connection-status';
 import {
   Tooltip,
@@ -126,8 +127,41 @@ export const LiveRequestQueue = () => {
 
   // Init
 
+  const fetchQueue = async () => {
+    const result = await apiFetch<{ requests: QueueRequest[] }>(
+      '/api/requests/live-queue'
+    );
+    setLoading(false);
+    if (result.error) {
+      setFetchError(result.error);
+      return;
+    }
+    setRequests(result.data?.requests ?? []);
+  };
+
+  const fetchSingleRequest = async (id: string, mode: 'prepend' | 'upsert') => {
+    const result = await apiFetch<{ request: QueueRequest }>(
+      `/api/requests/live-queue?id=${id}`
+    );
+    const item = result.data?.request;
+    if (!item) return;
+    setRequests((prev) => {
+      const without = prev.filter((r) => r.id !== item.id);
+      return mode === 'prepend' ? [item, ...without] : [...without, item];
+    });
+  };
+
   useEffect(() => {
-    fetchQueue();
+    void apiFetch<{ requests: QueueRequest[] }>(
+      '/api/requests/live-queue'
+    ).then((result) => {
+      setLoading(false);
+      if (result.error) {
+        setFetchError(result.error);
+        return;
+      }
+      setRequests(result.data?.requests ?? []);
+    });
   }, []);
 
   useRealtime<{ id: string; status: string }>({
@@ -145,47 +179,6 @@ export const LiveRequestQueue = () => {
       }
     },
   });
-
-  const fetchQueue = async () => {
-    setLoading(true);
-    setFetchError(null);
-    try {
-      const res = await fetch('/api/requests/live-queue');
-      if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        setFetchError(
-          (json as { error?: string }).error ?? 'Failed to load the queue.'
-        );
-        return;
-      }
-      const json = await res.json();
-      setRequests(
-        (json as { data?: { requests?: QueueRequest[] } }).data?.requests ?? []
-      );
-    } catch {
-      setFetchError('Network error. Check your connection and try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchSingleRequest = async (id: string, mode: 'prepend' | 'upsert') => {
-    try {
-      const res = await fetch(`/api/requests/live-queue?id=${id}`);
-      if (!res.ok) return;
-      const json = await res.json();
-      const item = (json as { data?: { request?: QueueRequest } }).data
-        ?.request;
-      if (!item) return;
-      setRequests((prev) => {
-        const without = prev.filter((r) => r.id !== item.id);
-        return mode === 'prepend' ? [item, ...without] : [...without, item];
-      });
-    } catch {
-      // Silent — the full queue already loaded; a missed live item is recovered
-      // on next manual refresh or when the user re-opens the dashboard.
-    }
-  };
 
   // Sheet helpers
 
@@ -214,39 +207,27 @@ export const LiveRequestQueue = () => {
   const handleIssue = issueForm.handleSubmit(async (values) => {
     setIssuing(true);
     setIssueError(null);
-    try {
-      const res = await fetch('/api/requests/collect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          code: values.verification_code,
-        }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        const msg =
-          res.status === 404
-            ? 'Code not recognised or expired. Ask the requester to verify, or request a new code.'
-            : ((json as { error?: string }).error ??
-              'Something went wrong. Please try again.');
-        setIssueError(msg);
-        return;
-      }
-      const result = (json as { data?: IssueResult }).data;
-      if (!result) {
-        setIssueError('Unexpected response from server. Please try again.');
-        return;
-      }
-      setIssueResult(result);
-      issueForm.reset();
-      // Remove the issued request from local list
-      setRequests((prev) => prev.filter((r) => r.id !== result.request_id));
-      setSheetStep('success');
-    } catch {
-      setIssueError('Network error. Check your connection and try again.');
-    } finally {
-      setIssuing(false);
+    const result = await apiFetch<IssueResult>('/api/requests/collect', {
+      method: 'POST',
+      body: { code: values.verification_code },
+    });
+    setIssuing(false);
+    if (result.error) {
+      const msg =
+        result.status === 404
+          ? 'Code not recognised or expired. Ask the requester to verify, or request a new code.'
+          : result.error;
+      setIssueError(msg);
+      return;
     }
+    if (!result.data) {
+      setIssueError('Unexpected response from server. Please try again.');
+      return;
+    }
+    setIssueResult(result.data);
+    issueForm.reset();
+    setRequests((prev) => prev.filter((r) => r.id !== result.data!.request_id));
+    setSheetStep('success');
   });
 
   // Render
@@ -282,7 +263,11 @@ export const LiveRequestQueue = () => {
             variant="outline"
             size="sm"
             className="mt-3 border-destructive/30 text-destructive hover:bg-destructive/10"
-            onClick={fetchQueue}
+            onClick={() => {
+              setLoading(true);
+              setFetchError(null);
+              void fetchQueue();
+            }}
           >
             Retry
           </Button>

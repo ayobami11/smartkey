@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { InboxIcon, KeyRoundIcon } from 'lucide-react';
 
 import { useRealtime } from '@/hooks/use-realtime';
+import { apiFetch } from '@/lib/api';
 import { useConnectionStatus } from '@/hooks/use-connection-status';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -35,7 +36,12 @@ import { ReturnKeyOverrideForm } from '@/app/verifier/_components/return-key-ove
 
 type OutstandingKey = {
   id: string;
-  key: { code: string; room_name: string; zone: string; key_count?: number | null } | null;
+  key: {
+    code: string;
+    room_name: string;
+    zone: string;
+    key_count?: number | null;
+  } | null;
   requester: { id: string; full_name: string; photo_url: string | null } | null;
   issued_at: string;
   return_deadline: string;
@@ -103,17 +109,12 @@ export const OutstandingKeys = () => {
     queryKey: ['keys', 'outstanding'],
     refetchInterval: status !== 'connected' ? 10_000 : false,
     queryFn: async () => {
-      const res = await fetch('/api/keys/out');
-      const json = await res.json();
-      if (!res.ok)
-        throw new Error(
-          (json as { error?: string }).error ??
-            'Failed to load outstanding keys.'
-        );
-      return (
-        (json as { data?: { outstanding?: OutstandingKey[] } }).data
-          ?.outstanding ?? []
+      const result = await apiFetch<{ outstanding: OutstandingKey[] }>(
+        '/api/keys/out'
       );
+      if (result.error || !result.data)
+        throw new Error(result.error ?? 'Failed to load outstanding keys.');
+      return result.data.outstanding ?? [];
     },
   });
 
@@ -175,30 +176,18 @@ export const OutstandingKeys = () => {
     if (!selectedKey) return;
     setReturnStep('returning');
     setReturnError(null);
-    try {
-      const res = await fetch('/api/keys/return', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ request_id: selectedKey.id, ...payload }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setReturnError(
-          (json as { error?: string }).error ??
-            'Failed to mark key as returned. Please try again.'
-        );
-        setReturnStep('confirm');
-        return;
-      }
-      setVerified(
-        Boolean((json as { data?: { verified?: boolean } }).data?.verified)
-      );
-      queryClient.invalidateQueries({ queryKey: ['keys', 'outstanding'] });
-      setReturnStep('success');
-    } catch {
-      setReturnError('Network error. Check your connection and try again.');
+    const result = await apiFetch<{ verified: boolean }>('/api/keys/return', {
+      method: 'POST',
+      body: { request_id: selectedKey.id, ...payload },
+    });
+    if (result.error) {
+      setReturnError(result.error);
       setReturnStep('confirm');
+      return;
     }
+    setVerified(Boolean(result.data?.verified));
+    queryClient.invalidateQueries({ queryKey: ['keys', 'outstanding'] });
+    setReturnStep('success');
   };
 
   // Render

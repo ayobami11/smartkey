@@ -13,6 +13,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { apiFetch } from '@/lib/api';
 import { createBrowserClient } from '@/lib/supabase/client';
 
 // Types
@@ -55,7 +56,7 @@ export const ActiveRequestBanner = () => {
   const connectionStatus = useConnectionStatus();
   const isOffline = connectionStatus === 'offline';
   const [userId, setUserId] = useState<string | null>(null);
-  const [countdown, setCountdown] = useState(0);
+  const [tick, setTick] = useState(0);
   const [cancelling, setCancelling] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Guards the auto-expire call so it fires once per request, not every tick.
@@ -115,25 +116,20 @@ export const ActiveRequestBanner = () => {
     },
   });
 
-  // Countdown timer
+  // Countdown timer — tick drives re-renders; countdown is derived each render
 
   useEffect(() => {
     if (!activeExpiry) return;
-    setCountdown(secondsRemaining(activeExpiry));
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(timerRef.current!);
-          return 0;
-        }
-        return prev - 1;
-      });
+      setTick((t) => t + 1);
     }, 1000);
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [activeExpiry]);
+
+  const countdown = activeExpiry ? secondsRemaining(activeExpiry) : 0;
 
   // Auto-expire: once a collection code lapses, close the request server-side
   // so the requester never has to manually cancel a dead code. The countdown
@@ -149,26 +145,24 @@ export const ActiveRequestBanner = () => {
       expiredFiredRef.current !== request.id
     ) {
       expiredFiredRef.current = request.id;
-      void fetch('/api/requests/expire', {
+      void apiFetch('/api/requests/expire', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ request_id: request.id }),
-      })
-        .then(() => {
+        body: { request_id: request.id },
+      }).then((result) => {
+        if (!result.error) {
           queryClient.invalidateQueries({
             queryKey: ['active-request', userId],
           });
-        })
-        .catch(() => {
-          // best-effort; reset so a later mount can retry
+        } else {
           expiredFiredRef.current = null;
-        });
+        }
+      });
     }
   }, [
     request?.id,
     request?.status,
     request?.code_expires_at,
-    countdown,
+    tick,
     queryClient,
     userId,
   ]);
@@ -178,18 +172,12 @@ export const ActiveRequestBanner = () => {
   const handleCancel = async () => {
     if (!request) return;
     setCancelling(true);
-    try {
-      await fetch('/api/requests/cancel', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ request_id: request.id }),
-      });
-      queryClient.invalidateQueries({ queryKey: ['active-request', userId] });
-    } catch {
-      // fail silently — user can retry
-    } finally {
-      setCancelling(false);
-    }
+    await apiFetch('/api/requests/cancel', {
+      method: 'POST',
+      body: { request_id: request.id },
+    });
+    queryClient.invalidateQueries({ queryKey: ['active-request', userId] });
+    setCancelling(false);
   };
 
   // Render
