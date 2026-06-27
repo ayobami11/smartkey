@@ -27,18 +27,20 @@ export const GET = async (
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, department_id')
+    .select('role, unit_id')
     .eq('id', user.id)
     .single();
-  if (!profile || profile.role !== 'DEAN') {
+  if (!profile || (profile.role !== 'DEAN' && profile.role !== 'CSO')) {
     return NextResponse.json(err('Forbidden', 403), { status: 403 });
   }
 
-  // The HOD can only read requests their RLS policy exposes (own department,
-  // including unassigned guest requests for their department).
-  const { data: req } = await supabase
+  // RLS exposes the request to the actor; use RLS for the DEAN and the admin
+  // client for the CSO (whose RLS policy doesn't cover all request types).
+  const { data: req } = await (
+    profile.role === 'CSO' ? createAdminClient() : supabase
+  )
     .from('requests')
-    .select('letter_url, requested_department_id')
+    .select('letter_url, requested_unit_id')
     .eq('id', id)
     .maybeSingle();
 
@@ -46,9 +48,11 @@ export const GET = async (
     return NextResponse.json(err('Letter not found', 404), { status: 404 });
   }
 
+  // DEAN: only their department's requests.
   if (
-    req.requested_department_id &&
-    req.requested_department_id !== profile.department_id
+    profile.role === 'DEAN' &&
+    req.requested_unit_id &&
+    req.requested_unit_id !== profile.unit_id
   ) {
     return NextResponse.json(err('Forbidden', 403), { status: 403 });
   }

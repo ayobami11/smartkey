@@ -22,7 +22,7 @@ export const PATCH = async (
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, department_id')
+    .select('role, unit_id')
     .eq('id', user.id)
     .single();
   if (!profile)
@@ -69,13 +69,13 @@ export const PATCH = async (
   // If this user is the current HOD of any department, clear the reverse link so
   // the department (and its key inventory) no longer resolves a deactivated HOD.
   const { error: deptError } = await adminClient
-    .from('departments')
+    .from('units')
     .update({ hod_id: null })
     .eq('hod_id', id);
   if (deptError) {
     // Non-fatal: the profile is already DEACTIVATED and login is blocked. Log so
-    // a stale departments.hod_id can be corrected if this ever fails.
-    logger.error('revoke: clearing departments.hod_id failed', {
+    // a stale units.hod_id can be corrected if this ever fails.
+    logger.error('revoke: clearing units.hod_id failed', {
       id,
       err: deptError.message,
     });

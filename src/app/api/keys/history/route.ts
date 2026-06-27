@@ -13,7 +13,7 @@ export const GET = async (request: NextRequest) => {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, department_id')
+    .select('role, unit_id')
     .eq('id', user.id)
     .single();
   if (!profile) return NextResponse.json(err('Unauthorized', 401), { status: 401 });
@@ -34,7 +34,7 @@ export const GET = async (request: NextRequest) => {
     .select(
       `id, type, status, requested_for, issued_at, returned_at, return_deadline, risk_tier, created_at,
        requester:profiles!requester_id(id, full_name),
-       key:keys!key_id(id, code, room_name, zone, department_id)`,
+       key:keys!key_id(id, code, room_name, zone, unit_id)`,
     )
     .in('status', ['KEY_ISSUED', 'KEY_RETURNED', 'EXPIRED', 'CANCELLED', 'DECLINED'])
     .order('created_at', { ascending: false })
@@ -48,8 +48,8 @@ export const GET = async (request: NextRequest) => {
 
   // HOD sees only their department's keys (RLS handles row-level, but we also
   // filter by department to avoid leaking keys from other departments).
-  if (profile.role === 'DEAN' && profile.department_id) {
-    query = query.eq('key:keys!key_id.department_id', profile.department_id);
+  if (profile.role === 'DEAN' && profile.unit_id) {
+    query = query.eq('key:keys!key_id.unit_id', profile.unit_id);
   }
 
   const { data, error } = await query;

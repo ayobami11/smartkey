@@ -9,10 +9,10 @@ import { err, ok } from '@/types/api';
 
 const bodySchema = z.object({
   full_name: z.string().trim().min(1),
-  department_id: z.uuid().optional(),
+  unit_id: z.uuid().optional(),
 });
 
-// Roles that belong to a department; only these may have department_id set.
+// Roles that belong to a unit; only these may have unit_id set.
 const DEPARTMENTAL_ROLES = ['DEAN', 'REQUESTER'] as const;
 
 // CSO-only: edit an existing user's name and (for departmental roles) department.
@@ -53,7 +53,7 @@ export const PATCH = async (
   // before/after in the audit entry.
   const { data: target, error: fetchError } = await supabase
     .from('profiles')
-    .select('id, role, full_name, department_id')
+    .select('id, role, full_name, unit_id')
     .eq('id', id)
     .single();
 
@@ -67,29 +67,28 @@ export const PATCH = async (
 
   // Department only applies to HOD and REQUESTER. For those roles it is
   // required; for VERIFIER/CSO any supplied value is ignored.
-  let nextDepartmentId = target.department_id;
+  let nextUnitId = target.unit_id;
   if (isDepartmental) {
-    if (!parsed.data.department_id) {
-      return NextResponse.json(
-        err('Department is required for this role', 422),
-        { status: 422 }
-      );
+    if (!parsed.data.unit_id) {
+      return NextResponse.json(err('Unit is required for this role', 422), {
+        status: 422,
+      });
     }
-    nextDepartmentId = parsed.data.department_id;
+    nextUnitId = parsed.data.unit_id;
   }
 
   const adminClient = createAdminClient();
 
   const departmentChanged =
-    isDepartmental && nextDepartmentId !== target.department_id;
+    isDepartmental && nextUnitId !== target.unit_id;
 
   // Validate the destination department exists, and — for an HOD moving
   // departments — that the destination does not already have a different HOD.
   if (departmentChanged) {
     const { data: dept } = await adminClient
-      .from('departments')
+      .from('units')
       .select('id')
-      .eq('id', nextDepartmentId!)
+      .eq('id', nextUnitId!)
       .maybeSingle();
     if (!dept) {
       return NextResponse.json(err('Department not found', 422), {
@@ -102,7 +101,7 @@ export const PATCH = async (
         .from('profiles')
         .select('id')
         .eq('role', 'DEAN')
-        .eq('department_id', nextDepartmentId!)
+        .eq('unit_id', nextUnitId!)
         .neq('id', id)
         .neq('status', 'DEACTIVATED')
         .maybeSingle();
@@ -115,8 +114,8 @@ export const PATCH = async (
     }
   }
 
-  const updates: { full_name: string; department_id?: string } = { full_name };
-  if (isDepartmental) updates.department_id = nextDepartmentId!;
+  const updates: { full_name: string; unit_id?: string } = { full_name };
+  if (isDepartmental) updates.unit_id = nextUnitId!;
 
   const { error: updateError } = await supabase
     .from('profiles')
@@ -138,17 +137,17 @@ export const PATCH = async (
   // Keep the departments.hod_id reverse link consistent when an HOD moves.
   if (departmentChanged && target.role === 'DEAN') {
     const { error: clearError } = await adminClient
-      .from('departments')
+      .from('units')
       .update({ hod_id: null })
       .eq('hod_id', id);
     const { error: setError } = await adminClient
-      .from('departments')
+      .from('units')
       .update({ hod_id: id })
-      .eq('id', nextDepartmentId!);
+      .eq('id', nextUnitId!);
     if (clearError || setError) {
       // Non-fatal: the profile is already updated. Log so a stale hod_id can be
       // corrected if this ever fails.
-      logger.error('edit user: syncing departments.hod_id failed', {
+      logger.error('edit user: syncing units.hod_id failed', {
         id,
         err: (clearError ?? setError)?.message,
       });
@@ -162,9 +161,9 @@ export const PATCH = async (
     changes.full_name = { from: target.full_name, to: full_name };
   }
   if (departmentChanged) {
-    changes.department_id = {
-      from: target.department_id,
-      to: nextDepartmentId,
+    changes.unit_id = {
+      from: target.unit_id,
+      to: nextUnitId,
     };
   }
 
@@ -185,7 +184,7 @@ export const PATCH = async (
   }
 
   return NextResponse.json(
-    ok({ profile_id: id, full_name, department_id: nextDepartmentId }),
+    ok({ profile_id: id, full_name, unit_id: nextUnitId }),
     { status: 200 }
   );
 };

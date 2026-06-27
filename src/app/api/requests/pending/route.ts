@@ -15,7 +15,7 @@ export const GET = async () => {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, department_id')
+    .select('role, unit_id')
     .eq('id', user.id)
     .single();
 
@@ -40,11 +40,11 @@ export const GET = async () => {
       created_at,
       letter_url,
       requested_room,
-      requested_department_id,
+      requested_unit_id,
       requester:profiles!requester_id(id, full_name, photo_url, institutional_email),
       guest:guest_requesters!guest_id(id, full_name, email, phone, id_document_type, id_document_number),
-      key:keys!key_id(id, code, room_name, zone, department:departments!department_id(id, name, authoriser)),
-      requested_department:departments!requested_department_id(id, name, authoriser)
+      key:keys!key_id(id, code, room_name, zone, department:units!unit_id(id, name, authoriser)),
+      requested_department:units!requested_unit_id(id, name, authoriser)
     `
     )
     .eq('status', 'PENDING_HOD')
@@ -65,8 +65,8 @@ export const GET = async () => {
       const keyDeptId = r.key?.department?.id;
       const requestedDeptId = r.requested_department?.id;
       return (
-        (keyDeptId && keyDeptId === profile.department_id) ||
-        (requestedDeptId && requestedDeptId === profile.department_id)
+        (keyDeptId && keyDeptId === profile.unit_id) ||
+        (requestedDeptId && requestedDeptId === profile.unit_id)
       );
     });
   } else if (profile.role === 'CSO') {

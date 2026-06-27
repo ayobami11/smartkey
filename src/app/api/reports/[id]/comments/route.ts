@@ -31,7 +31,7 @@ export const POST = async (
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, department_id')
+    .select('role, unit_id')
     .eq('id', user.id)
     .single();
   if (!profile) return NextResponse.json(err('Unauthorized', 401), { status: 401 });

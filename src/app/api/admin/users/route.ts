@@ -11,7 +11,7 @@ const postBodySchema = z.object({
   full_name: z.string().min(1),
   institutional_email: z.email(),
   role: z.enum(['DEAN', 'VERIFIER', 'REQUESTER']),
-  department_id: z.uuid().optional(),
+  unit_id: z.uuid().optional(),
 });
 
 const mapRpcError = (msg: string): { status: number; message: string } => {
@@ -40,7 +40,7 @@ export const POST = async (request: NextRequest) => {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, department_id')
+    .select('role, unit_id')
     .eq('id', user.id)
     .single();
   if (!profile)
@@ -54,21 +54,21 @@ export const POST = async (request: NextRequest) => {
     return NextResponse.json(err('Invalid request body', 422), { status: 422 });
   }
 
-  const { full_name, institutional_email, role, department_id } = parsed.data;
+  const { full_name, institutional_email, role, unit_id } = parsed.data;
 
-  if ((role === 'DEAN' || role === 'REQUESTER') && !department_id) {
+  if ((role === 'DEAN' || role === 'REQUESTER') && !unit_id) {
     return NextResponse.json(
-      err('department_id is required for HOD and REQUESTER roles', 422),
+      err('unit_id is required for Dean and Requester roles', 422),
       { status: 422 }
     );
   }
 
-  // Prevent assigning a second ACTIVE HOD to a department that already has one.
-  if (role === 'DEAN' && department_id) {
+  // Prevent assigning a second ACTIVE Dean to a unit that already has one.
+  if (role === 'DEAN' && unit_id) {
     const { data: dept } = await supabase
-      .from('departments')
+      .from('units')
       .select('hod_id, hod:profiles!hod_id(status)')
-      .eq('id', department_id)
+      .eq('id', unit_id)
       .single();
 
     const existingHod = dept?.hod as { status: string } | null;
@@ -111,7 +111,7 @@ export const POST = async (request: NextRequest) => {
     // Reset profile status and update name/department in case they changed.
     const { error: resetError } = await supabase
       .from('profiles')
-      .update({ status: 'PENDING_ACTIVATION', full_name, department_id })
+      .update({ status: 'PENDING_ACTIVATION', full_name, unit_id })
       .eq('id', existingProfile.id);
 
     if (resetError) {
@@ -200,7 +200,7 @@ export const POST = async (request: NextRequest) => {
       p_full_name: full_name,
       p_email: institutional_email,
       p_role: role,
-      p_department_id: department_id ?? undefined,
+      p_department_id: unit_id ?? undefined,
     }
   );
 
@@ -244,7 +244,7 @@ export const GET = async () => {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, department_id')
+    .select('role, unit_id')
     .eq('id', user.id)
     .single();
   if (!profile)
@@ -258,7 +258,7 @@ export const GET = async () => {
     supabase
       .from('profiles')
       .select(
-        'id, full_name, institutional_email, role, status, photo_url, created_at, department:departments!department_id(name)'
+        'id, full_name, institutional_email, role, status, photo_url, created_at, department:units!unit_id(name)'
       )
       .order('created_at', { ascending: false }),
     createAdminClient().auth.admin.listUsers({ perPage: 1000 }),

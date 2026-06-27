@@ -31,23 +31,23 @@ export const GET = async () => {
     .order('name', { ascending: true });
 
   if (error) {
-    return NextResponse.json(err('Failed to fetch departments', 500), {
+    return NextResponse.json(err('Failed to fetch units', 500), {
       status: 500,
     });
   }
 
-  const departments = (data ?? []).map(({ hod, hod_id, keys, ...dept }) => ({
+  const units = (data ?? []).map(({ hod, hod_id, keys, ...dept }) => ({
     ...dept,
     hod_id,
-    // true when an ACTIVE HOD is already assigned — frontend should disable this dept in the HOD role picker
+    // true when an ACTIVE HOD is already assigned — frontend should disable this unit in the HOD role picker
     has_hod:
       hod_id !== null &&
       (hod as { status: string } | null)?.status === 'ACTIVE',
-    // true when at least one non-retired key in this department is currently available to borrow
+    // true when at least one non-retired key in this unit is currently available to borrow
     has_slot_today: (
       keys as { status: string; retired_at: string | null }[]
     ).some((k) => k.status === 'AVAILABLE' && k.retired_at === null),
   }));
 
-  return NextResponse.json(ok({ departments }), { status: 200 });
+  return NextResponse.json(ok({ units }), { status: 200 });
 };

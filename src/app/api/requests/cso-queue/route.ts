@@ -14,7 +14,7 @@ export const GET = async () => {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, department_id')
+    .select('role, unit_id')
     .eq('id', user.id)
     .single();
   if (!profile) return NextResponse.json(err('Unauthorized', 401), { status: 401 });
@@ -35,7 +35,7 @@ export const GET = async () => {
       risk_factors,
       created_at,
       requester:profiles!requester_id(id, full_name, photo_url, institutional_email),
-      key:keys!key_id(id, code, room_name, zone, department_id)
+      key:keys!key_id(id, code, room_name, zone, unit_id)
     `,
     )
     .eq('risk_tier', 'HIGH')

@@ -25,6 +25,11 @@ const mapRpcError = (msg: string): { status: number; message: string } => {
       status: 409,
       message: 'Requester is already authorised for this key',
     };
+  if (msg.includes('REQUESTER_INACTIVE'))
+    return {
+      status: 422,
+      message: 'This user account is deactivated and cannot be authorised',
+    };
   return { status: 500, message: msg };
 };
 
