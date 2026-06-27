@@ -30,7 +30,8 @@ type RequestDetail = {
     | 'EXPIRED'
     | 'CANCELLED'
     | 'DECLINED'
-    | 'PENDING_HOD';
+    | 'PENDING_HOD'
+    | 'APPROVED';
   code: string | null;
   code_expires_at: string | null;
   return_deadline: string | null;
@@ -74,6 +75,8 @@ export const CodeView = () => {
 
   const [userId, setUserId] = useState<string | null>(null);
   const [, forceUpdate] = useState(0);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
 
   // Resolve user ID once on mount
 
@@ -169,6 +172,32 @@ export const CodeView = () => {
     userId,
   ]);
 
+  // Generate a fresh weekend code (only reachable when status = APPROVED,
+  // i.e. after a weekend code rolled back from expired).
+  const handleGenerate = async () => {
+    setIsGenerating(true);
+    setGenerateError(null);
+    try {
+      const res = await fetch('/api/requests/weekend-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ request_id: requestId }),
+      });
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        setGenerateError(json.error ?? 'Could not generate a new code.');
+        return;
+      }
+      queryClient.invalidateQueries({
+        queryKey: ['request', requestId, userId],
+      });
+    } catch {
+      setGenerateError('Could not generate a new code. Try again.');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   // Render
 
   if (loading) {
@@ -234,6 +263,47 @@ export const CodeView = () => {
               )}
             </div>
             <Button asChild variant="outline" size="sm">
+              <a href="/requester/dashboard">Back to dashboard</a>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // APPROVED — weekend code rolled back after expiry; let the requester generate again.
+
+  if (request.status === 'APPROVED') {
+    return (
+      <div className="flex flex-1 overflow-y-auto flex-col items-center justify-center gap-4 p-6">
+        <Card className="w-full max-w-sm">
+          <CardContent className="flex flex-col items-center gap-4 py-10 text-center">
+            {request.key && (
+              <p className="text-sm text-muted-foreground">
+                {request.key.code} · {request.key.room_name}
+              </p>
+            )}
+            <div>
+              <p className="font-medium text-foreground">Code expired</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Your 10-minute code has expired. Generate a new one when you are
+                ready to collect.
+              </p>
+            </div>
+            {generateError && (
+              <p className="text-xs text-destructive" role="alert">
+                {generateError}
+              </p>
+            )}
+            <Button
+              onClick={() => void handleGenerate()}
+              disabled={isGenerating}
+              aria-busy={isGenerating}
+              className="w-full"
+            >
+              {isGenerating ? 'Generating...' : 'Generate new code'}
+            </Button>
+            <Button asChild variant="ghost" size="sm" className="w-full">
               <a href="/requester/dashboard">Back to dashboard</a>
             </Button>
           </CardContent>

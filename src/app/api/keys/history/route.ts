@@ -9,14 +9,16 @@ export const GET = async (request: NextRequest) => {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json(err('Unauthorized', 401), { status: 401 });
+  if (!user)
+    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
 
   const { data: profile } = await supabase
     .from('profiles')
     .select('role, unit_id')
     .eq('id', user.id)
     .single();
-  if (!profile) return NextResponse.json(err('Unauthorized', 401), { status: 401 });
+  if (!profile)
+    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
   if (profile.role !== 'CSO' && profile.role !== 'DEAN') {
     return NextResponse.json(err('Forbidden', 403), { status: 403 });
   }
@@ -29,33 +31,57 @@ export const GET = async (request: NextRequest) => {
   const limit = Math.min(parseInt(searchParams.get('limit') ?? '50', 10), 100);
   const cursor = searchParams.get('cursor');
 
+  // Dean: resolve the unit's key IDs upfront so we can filter with .in().
+  // PostgREST does not support filtering by embedded resource columns directly.
+  let unitKeyIds: string[] | null = null;
+  if (profile.role === 'DEAN' && profile.unit_id) {
+    const { data: deptKeys, error: deptErr } = await supabase
+      .from('keys')
+      .select('id')
+      .eq('unit_id', profile.unit_id);
+    if (deptErr) {
+      return NextResponse.json(err('Failed to fetch key history', 500), {
+        status: 500,
+      });
+    }
+    unitKeyIds = (deptKeys ?? []).map((k) => k.id);
+    if (unitKeyIds.length === 0) {
+      return NextResponse.json(ok({ transactions: [], next_cursor: null }), {
+        status: 200,
+      });
+    }
+  }
+
   let query = supabase
     .from('requests')
     .select(
       `id, type, status, requested_for, issued_at, returned_at, return_deadline, risk_tier, created_at,
        requester:profiles!requester_id(id, full_name),
-       key:keys!key_id(id, code, room_name, zone, unit_id)`,
+       key:keys!key_id(id, code, room_name, zone, unit_id)`
     )
-    .in('status', ['KEY_ISSUED', 'KEY_RETURNED', 'EXPIRED', 'CANCELLED', 'DECLINED'])
+    .in('status', [
+      'KEY_ISSUED',
+      'KEY_RETURNED',
+      'EXPIRED',
+      'CANCELLED',
+      'DECLINED',
+    ])
     .order('created_at', { ascending: false })
     .limit(limit + 1);
 
+  if (unitKeyIds) query = query.in('key_id', unitKeyIds);
   if (keyId) query = query.eq('key_id', keyId);
   if (requesterId) query = query.eq('requester_id', requesterId);
   if (from) query = query.gte('created_at', from);
   if (to) query = query.lte('created_at', to);
   if (cursor) query = query.lt('created_at', cursor);
 
-  // HOD sees only their department's keys (RLS handles row-level, but we also
-  // filter by department to avoid leaking keys from other departments).
-  if (profile.role === 'DEAN' && profile.unit_id) {
-    query = query.eq('key:keys!key_id.unit_id', profile.unit_id);
-  }
-
   const { data, error } = await query;
 
   if (error) {
-    return NextResponse.json(err('Failed to fetch key history', 500), { status: 500 });
+    return NextResponse.json(err('Failed to fetch key history', 500), {
+      status: 500,
+    });
   }
 
   const rows = data ?? [];
@@ -66,5 +92,7 @@ export const GET = async (request: NextRequest) => {
       ? transactions[transactions.length - 1].created_at
       : null;
 
-  return NextResponse.json(ok({ transactions, next_cursor: nextCursor }), { status: 200 });
+  return NextResponse.json(ok({ transactions, next_cursor: nextCursor }), {
+    status: 200,
+  });
 };

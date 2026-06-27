@@ -157,7 +157,9 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
     ? secondsRemaining(data.code_expires_at)
     : 0;
 
-  // Auto-expire once the code lapses (mirrors the registered flow)
+  // Auto-expire once the code lapses (mirrors the registered flow).
+  // After the RPC, fetchStatus returns APPROVED and the APPROVED branch
+  // renders the generate button — no separate "isExpiring" guard needed.
 
   useEffect(() => {
     if (
@@ -443,21 +445,8 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
           <>
             <p className="font-medium text-foreground">Code expired</p>
             <p className="mt-2 text-sm text-muted-foreground">
-              This code has expired. Generate a new one to continue.
+              Updating your session&hellip;
             </p>
-            {generateError && (
-              <p className="mt-2 text-xs text-destructive" role="alert">
-                {generateError}
-              </p>
-            )}
-            <Button
-              className="mt-4"
-              onClick={handleGenerate}
-              disabled={generating}
-              aria-busy={generating}
-            >
-              {generating ? 'Generating...' : 'Generate a new code'}
-            </Button>
           </>
         ) : (
           <>
