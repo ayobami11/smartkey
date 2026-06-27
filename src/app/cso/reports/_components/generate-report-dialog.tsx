@@ -28,6 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { apiFetch } from '@/lib/api';
 import { createBrowserClient } from '@/lib/supabase/client';
 import {
   generateReportSchema,
@@ -83,24 +84,17 @@ export const GenerateReportDialog = ({ onGenerated }: Props) => {
   const handleGenerate = async (values: GenerateReportInput) => {
     setGenerating(true);
     setGenerateError(null);
-    try {
-      const res = await fetch('/api/reports/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shift_id: values.shift_id }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        setGenerateError(json.error ?? 'Failed to generate report.');
-        return;
-      }
-      setGeneratedReportId(json.data?.report_id ?? null);
-      onGenerated?.();
-    } catch {
-      setGenerateError('Something went wrong. Check your connection.');
-    } finally {
-      setGenerating(false);
+    const result = await apiFetch<{ report_id: string }>(
+      '/api/reports/generate',
+      { method: 'POST', body: { shift_id: values.shift_id } }
+    );
+    setGenerating(false);
+    if (result.error) {
+      setGenerateError(result.error);
+      return;
     }
+    setGeneratedReportId(result.data?.report_id ?? null);
+    onGenerated?.();
   };
 
   return (

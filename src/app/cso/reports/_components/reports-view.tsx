@@ -4,6 +4,7 @@ import { useState } from 'react';
 
 import { useInfiniteQuery } from '@tanstack/react-query';
 
+import { apiFetch } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -93,15 +94,16 @@ export const ReportsView = () => {
         );
       if (pageParam) params.set('cursor', pageParam);
 
-      const res = await fetch(`/api/reports?${params.toString()}`);
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? 'Failed to load reports.');
+      const result = await apiFetch<{
+        reports: Record<string, unknown>[];
+        next_cursor: string | null;
+      }>(`/api/reports?${params.toString()}`);
+      if (result.error || !result.data)
+        throw new Error(result.error ?? 'Failed to load reports.');
 
       return {
-        reports: ((json.data?.reports ?? []) as Record<string, unknown>[]).map(
-          mapReport
-        ),
-        nextCursor: (json.data?.next_cursor as string | null) ?? null,
+        reports: result.data.reports.map(mapReport),
+        nextCursor: result.data.next_cursor ?? null,
       };
     },
     initialPageParam: null as string | null,

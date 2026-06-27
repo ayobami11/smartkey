@@ -23,6 +23,7 @@ import {
   guestWeekendRequestFormSchema,
   type GuestWeekendRequestFormInput,
 } from '@/lib/validation/schemas';
+import { apiFetch } from '@/lib/api';
 import { AuthorizationLetterUpload } from '@/app/(public)/weekend-access/_components/authorization-letter-upload';
 
 // Types
@@ -87,28 +88,17 @@ export const GuestWeekendRequestForm = ({
     );
     formData.append('letter', (values.letter as FileList)[0]);
 
-    try {
-      const res = await fetch('/api/public/weekend-request', {
-        method: 'POST',
-        body: formData,
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setSubmitError(
-          (json as { error?: string }).error ??
-            'Could not submit your request. Please try again.'
-        );
-        return;
-      }
-      const data = (json as { data?: { access_token: string } }).data;
-      if (!data?.access_token) {
-        setSubmitError('Unexpected server response. Please try again.');
-        return;
-      }
-      setAccessToken(data.access_token);
-    } catch {
-      setSubmitError('Network error. Check your connection and try again.');
+    const result = await apiFetch<{ access_token: string }>(
+      '/api/public/weekend-request',
+      { method: 'POST', body: formData }
+    );
+    if (result.error || !result.data) {
+      setSubmitError(
+        result.error ?? 'Could not submit your request. Please try again.'
+      );
+      return;
     }
+    setAccessToken(result.data.access_token);
   };
 
   // Success confirmation

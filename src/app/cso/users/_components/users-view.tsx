@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
 
+import { apiFetch } from '@/lib/api';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -52,28 +53,28 @@ export const UsersView = () => {
   } = useQuery<UserRow[]>({
     queryKey: ['cso', 'users'],
     queryFn: async () => {
-      const res = await fetch('/api/admin/users');
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? 'Failed to load users.');
-      return ((json.data?.users ?? []) as Record<string, unknown>[]).map(
-        (u) => {
-          const role = u.role as UserRole;
-          const deptName = (u.department as Record<string, unknown> | null)
-            ?.name as string | undefined;
-          return {
-            id: u.id as string,
-            full_name: u.full_name as string,
-            institutional_email: u.institutional_email as string,
-            role,
-            department:
-              role === 'CSO' || role === 'VERIFIER'
-                ? (deptName ?? 'Security')
-                : deptName,
-            status: u.status as UserStatus,
-            last_sign_in_at: (u.last_sign_in_at as string | null) ?? null,
-          };
-        }
+      const result = await apiFetch<{ users: Record<string, unknown>[] }>(
+        '/api/admin/users'
       );
+      if (result.error || !result.data)
+        throw new Error(result.error ?? 'Failed to load users.');
+      return (result.data.users ?? []).map((u) => {
+        const role = u.role as UserRole;
+        const deptName = (u.department as Record<string, unknown> | null)
+          ?.name as string | undefined;
+        return {
+          id: u.id as string,
+          full_name: u.full_name as string,
+          institutional_email: u.institutional_email as string,
+          role,
+          department:
+            role === 'CSO' || role === 'VERIFIER'
+              ? (deptName ?? 'Security')
+              : deptName,
+          status: u.status as UserStatus,
+          last_sign_in_at: (u.last_sign_in_at as string | null) ?? null,
+        };
+      });
     },
     staleTime: 60_000,
   });
@@ -83,42 +84,32 @@ export const UsersView = () => {
     if (!revokeTarget) return;
     setRevoking(true);
     setRevokeError(null);
-    try {
-      const res = await fetch(`/api/admin/users/${revokeTarget.id}/revoke`, {
-        method: 'PATCH',
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        setRevokeError(json.error ?? 'Failed to revoke access.');
-        return;
-      }
-      setRevokeTarget(null);
-      refetch();
-    } catch {
-      setRevokeError('Something went wrong. Check your connection.');
-    } finally {
+    const result = await apiFetch(
+      `/api/admin/users/${revokeTarget.id}/revoke`,
+      { method: 'PATCH' }
+    );
+    if (result.error) {
+      setRevokeError(result.error);
       setRevoking(false);
+      return;
     }
+    setRevoking(false);
+    setRevokeTarget(null);
+    refetch();
   };
 
   // Resend invite
   const handleResend = async (user: UserRow) => {
     setResendingId(user.id);
-    try {
-      const res = await fetch(`/api/admin/users/${user.id}/resend-invite`, {
-        method: 'POST',
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        toast.error(json.error ?? 'Failed to resend invite.');
-        return;
-      }
+    const result = await apiFetch(`/api/admin/users/${user.id}/resend-invite`, {
+      method: 'POST',
+    });
+    if (result.error) {
+      toast.error(result.error);
+    } else {
       toast.success(`Invite resent to ${user.institutional_email}.`);
-    } catch {
-      toast.error('Something went wrong. Check your connection.');
-    } finally {
-      setResendingId(null);
     }
+    setResendingId(null);
   };
 
   // Render

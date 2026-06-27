@@ -53,6 +53,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { apiFetch } from '@/lib/api';
 import { createBrowserClient } from '@/lib/supabase/client';
 import {
   hodWeekendDecisionFormSchema,
@@ -293,25 +294,16 @@ export const WeekendRequestsView = () => {
 
   const handleViewLetter = async (requestId: string) => {
     setLetterLoading(true);
-    try {
-      const res = await fetch(`/api/requests/${requestId}/letter`);
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setSubmitError(
-          (json as { error?: string }).error ?? 'Could not open the letter.'
-        );
-        return;
-      }
-      const url = (json as { data?: { url: string } }).data?.url;
-      if (url) {
-        setLetterUrl(url);
-        window.open(url, '_blank', 'noopener,noreferrer');
-      }
-    } catch {
-      setSubmitError('Network error. Could not open the letter.');
-    } finally {
-      setLetterLoading(false);
+    const result = await apiFetch<{ url: string }>(
+      `/api/requests/${requestId}/letter`
+    );
+    setLetterLoading(false);
+    if (result.error || !result.data) {
+      setSubmitError(result.error ?? 'Could not open the letter.');
+      return;
     }
+    setLetterUrl(result.data.url);
+    window.open(result.data.url, '_blank', 'noopener,noreferrer');
   };
 
   const handleDecision = async (
@@ -323,33 +315,22 @@ export const WeekendRequestsView = () => {
 
     setSubmitting(true);
     setSubmitError(null);
-    try {
-      const res = await fetch('/api/requests/hod-decision', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          request_id: selected.id,
-          decision: choice,
-          note: values.note?.trim() || undefined,
-          ...(choice === 'APPROVED' && isGuest
-            ? { key_id: values.key_id }
-            : {}),
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        setSubmitError(
-          (json as { error?: string }).error ?? 'Something went wrong.'
-        );
-        return;
-      }
-      setDecision(choice === 'APPROVED' ? 'approved' : 'declined');
-      setDecidedIds((prev) => new Set(prev).add(selected.id));
-    } catch {
-      setSubmitError('Network error. Check your connection and try again.');
-    } finally {
-      setSubmitting(false);
+    const result = await apiFetch('/api/requests/hod-decision', {
+      method: 'POST',
+      body: {
+        request_id: selected.id,
+        decision: choice,
+        note: values.note?.trim() || undefined,
+        ...(choice === 'APPROVED' && isGuest ? { key_id: values.key_id } : {}),
+      },
+    });
+    setSubmitting(false);
+    if (result.error) {
+      setSubmitError(result.error);
+      return;
     }
+    setDecision(choice === 'APPROVED' ? 'approved' : 'declined');
+    setDecidedIds((prev) => new Set(prev).add(selected.id));
   };
 
   const visibleRequests = pendingRequests.filter((r) => !decidedIds.has(r.id));

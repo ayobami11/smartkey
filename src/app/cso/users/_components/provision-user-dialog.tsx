@@ -9,6 +9,7 @@ import { CheckCircleIcon, UserPlusIcon } from 'lucide-react';
 import { Controller, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
+import { apiFetch } from '@/lib/api';
 import {
   provisionUserSchema,
   type ProvisionUserInput,
@@ -39,13 +40,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-const ROLES = ['DEAN', 'VERIFIER', 'REQUESTER'] as const;
+import { ROLE_LABELS } from '@/lib/constants';
 
-const ROLE_LABEL: Record<string, string> = {
-  DEAN: 'Dean',
-  VERIFIER: 'Verifier',
-  REQUESTER: 'Requester',
-};
+const ROLES = ['DEAN', 'VERIFIER', 'REQUESTER'] as const;
 
 type FormValues = ProvisionUserInput;
 
@@ -81,36 +78,33 @@ export const ProvisionUserDialog = ({ onSuccess }: Props) => {
 
   useEffect(() => {
     if (!open) return;
-    fetch('/api/admin/units')
-      .then((r) => r.json())
-      .then((json) => setDepartments(json.data?.units ?? []));
+    apiFetch<{ units: Department[] }>('/api/admin/units').then((result) => {
+      setDepartments(result.data?.units ?? []);
+    });
   }, [open]);
 
   async function onSubmit(data: FormValues) {
     setSuccessData(null);
 
-    const res = await fetch('/api/admin/users', {
+    const result = await apiFetch('/api/admin/users', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      body: {
         full_name: data.full_name,
         institutional_email: data.institutional_email,
         role: data.role,
         unit_id: data.unit_id || undefined,
-      }),
+      },
     });
 
-    const json = await res.json();
-
-    if (!res.ok) {
-      toast.error(json.error ?? 'Something went wrong. Try again.');
+    if (result.error) {
+      toast.error(result.error);
       return;
     }
 
     setSuccessData({
       name: data.full_name,
       email: data.institutional_email,
-      role: ROLE_LABEL[data.role] ?? data.role,
+      role: ROLE_LABELS[data.role] ?? data.role,
     });
     form.reset();
     router.refresh();
@@ -230,7 +224,7 @@ export const ProvisionUserDialog = ({ onSuccess }: Props) => {
                       <SelectContent>
                         {ROLES.map((r) => (
                           <SelectItem key={r} value={r}>
-                            {ROLE_LABEL[r]}
+                            {ROLE_LABELS[r]}
                           </SelectItem>
                         ))}
                       </SelectContent>

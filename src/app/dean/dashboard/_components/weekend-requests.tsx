@@ -5,6 +5,7 @@ import { CalendarIcon, ChevronRightIcon } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useConnectionStatus } from '@/hooks/use-connection-status';
+import { apiFetch } from '@/lib/api';
 import { useRealtime } from '@/hooks/use-realtime';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -33,13 +34,10 @@ export const WeekendRequests = () => {
     queryKey: ['requests', 'pending-weekend'],
     refetchInterval: connectionStatus !== 'connected' ? 10_000 : false,
     queryFn: async () => {
-      const res = await fetch('/api/requests/pending');
-      if (!res.ok) return [];
-      const json = await res.json();
-      return (
-        (json as { data?: { requests?: PendingRequest[] } }).data?.requests ??
-        []
+      const result = await apiFetch<{ requests: PendingRequest[] }>(
+        '/api/requests/pending'
       );
+      return result.data?.requests ?? [];
     },
   });
 

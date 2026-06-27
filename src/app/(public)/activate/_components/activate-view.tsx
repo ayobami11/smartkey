@@ -30,6 +30,7 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from '@/components/ui/input-group';
+import { apiFetch } from '@/lib/api';
 import { createBrowserClient } from '@/lib/supabase/client';
 import { password } from '@/lib/validation/primitives';
 
@@ -127,15 +128,13 @@ export const ActivateView = () => {
     if (data.passport_photo)
       formData.append('passport_photo', data.passport_photo);
 
-    const res = await fetch('/api/auth/register', {
+    const result = await apiFetch('/api/auth/register', {
       method: 'POST',
       body: formData,
     });
 
-    const json = (await res.json()) as { error?: string };
-
-    if (!res.ok) {
-      toast.error(json.error ?? 'Something went wrong. Please try again.');
+    if (result.error) {
+      toast.error(result.error);
       return;
     }
 

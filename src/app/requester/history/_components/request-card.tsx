@@ -2,19 +2,10 @@ import { CalendarIcon } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 
-// Types
+import { type RequestStatus, type RequestType } from '@/lib/constants';
 
-export type RequestStatus =
-  | 'PENDING_HOD'
-  | 'APPROVED'
-  | 'CODE_ISSUED'
-  | 'KEY_ISSUED'
-  | 'KEY_RETURNED'
-  | 'EXPIRED'
-  | 'CANCELLED'
-  | 'DECLINED';
-
-export type RequestType = 'WEEKDAY' | 'WEEKEND';
+// Re-export so callers don't need to update their imports.
+export type { RequestStatus, RequestType };
 
 export type RequestRow = {
   id: string;

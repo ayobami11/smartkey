@@ -3,6 +3,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangleIcon, CheckCircleIcon } from 'lucide-react';
 
+import { apiFetch } from '@/lib/api';
 import { useRealtime } from '@/hooks/use-realtime';
 import { useConnectionStatus } from '@/hooks/use-connection-status';
 
@@ -61,13 +62,12 @@ export const RiskAlerts = () => {
     queryKey: ['cso', 'risk-alerts'],
     refetchInterval: connectionStatus !== 'connected' ? 10_000 : false,
     queryFn: async () => {
-      const res = await fetch('/api/ai/risk-alerts');
-      const json = await res.json();
-      if (!res.ok)
-        throw new Error(
-          (json as { error?: string }).error ?? 'Failed to load risk alerts.'
-        );
-      return (json as { data?: { alerts?: RiskAlert[] } }).data?.alerts ?? [];
+      const result = await apiFetch<{ alerts: RiskAlert[] }>(
+        '/api/ai/risk-alerts'
+      );
+      if (result.error || !result.data)
+        throw new Error(result.error ?? 'Failed to load risk alerts.');
+      return result.data.alerts ?? [];
     },
   });
 

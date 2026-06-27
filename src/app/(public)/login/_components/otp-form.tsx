@@ -8,7 +8,6 @@ import { ShieldIcon } from 'lucide-react';
 import { REGEXP_ONLY_DIGITS } from 'input-otp';
 import { Controller, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
-import * as z from 'zod';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -22,17 +21,8 @@ import {
   InputOTPGroup,
   InputOTPSlot,
 } from '@/components/ui/input-otp';
-
-// Schema
-
-const otpSchema = z.object({
-  otp: z
-    .string()
-    .length(6, 'Enter the 6-digit code sent to your email.')
-    .regex(/^\d{6}$/, 'Code must be 6 digits'),
-});
-
-type OtpValues = z.infer<typeof otpSchema>;
+import { apiFetch } from '@/lib/api';
+import { otpSchema, type OtpInput } from '@/lib/validation/schemas';
 
 // Constants
 
@@ -69,13 +59,13 @@ export const OtpForm = ({
   const router = useRouter();
 
   const [isVerifying, setIsVerifying] = useState(false);
-  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resendCooldown, setResendCooldown] = useState(60);
   const [isResending, setIsResending] = useState(false);
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isPasteRef = useRef(false);
   const submitBtnRef = useRef<HTMLButtonElement>(null);
 
-  const otpForm = useForm<OtpValues>({
+  const otpForm = useForm<OtpInput>({
     resolver: zodResolver(otpSchema),
     defaultValues: { otp: '' },
   });
@@ -94,49 +84,46 @@ export const OtpForm = ({
   };
 
   useEffect(() => {
-    startCooldown(60);
+    cooldownRef.current = setInterval(() => {
+      setResendCooldown((prev) => {
+        if (prev <= 1) {
+          clearInterval(cooldownRef.current!);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
     return () => clearInterval(cooldownRef.current!);
   }, []);
 
-  const handleOtpSubmit = async (data: OtpValues) => {
+  const handleOtpSubmit = async (data: OtpInput) => {
     setIsVerifying(true);
-    try {
-      const res = await fetch('/api/auth/verify-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: pendingEmail, otp: data.otp }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        toast.error(
-          json.error ?? 'Invalid code. Check your email and try again.'
-        );
-        return;
-      }
-      router.push(ROLE_REDIRECTS[pendingRole] ?? '/');
-    } catch {
-      toast.error('Unable to reach the server. Check your connection.');
-    } finally {
-      setIsVerifying(false);
+    const result = await apiFetch('/api/auth/verify-otp', {
+      method: 'POST',
+      body: { email: pendingEmail, otp: data.otp },
+    });
+    setIsVerifying(false);
+    if (result.error) {
+      toast.error(result.error);
+      return;
     }
+    router.push(ROLE_REDIRECTS[pendingRole] ?? '/');
   };
 
   const handleResendOtp = async () => {
     if (resendCooldown > 0 || isResending) return;
     setIsResending(true);
-    try {
-      await fetch('/api/auth/resend-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: pendingEmail }),
-      });
-      toast.success('New code sent — check your inbox.');
-      startCooldown(60);
-    } catch {
-      toast.error('Could not resend. Try again in a moment.');
-    } finally {
-      setIsResending(false);
+    const result = await apiFetch('/api/auth/resend-otp', {
+      method: 'POST',
+      body: { email: pendingEmail },
+    });
+    setIsResending(false);
+    if (result.error) {
+      toast.error(result.error);
+      return;
     }
+    toast.success('New code sent — check your inbox.');
+    startCooldown(60);
   };
 
   return (

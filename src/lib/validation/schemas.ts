@@ -18,6 +18,13 @@ import { password } from '@/lib/validation/primitives';
 
 // Auth
 
+export const otpSchema = z.object({
+  otp: z
+    .string()
+    .length(6, 'Enter the 6-digit code sent to your email.')
+    .regex(/^\d{6}$/, 'Code must be 6 digits.'),
+});
+
 export const changePasswordSchema = z
   .object({
     currentPassword: z.string().min(1, 'Current password is required.'),
@@ -299,7 +306,10 @@ export const incidentFormSchema = z.object({
   severity: z.enum(['LOW', 'MEDIUM', 'HIGH'], {
     error: 'Select a severity level.',
   }),
-  description: z.string().min(1, 'Description is required.'),
+  description: z
+    .string()
+    .min(1, 'Description is required.')
+    .min(10, 'Description must be at least 10 characters.'),
 });
 
 export const logIncidentSchema = z.object({
@@ -342,6 +352,36 @@ export const addReportCommentSchema = z.object({
   text: z.string().min(1, 'Comment text is required'),
 });
 
+// Image upload (HOD onboarding — signature and stamp steps share this logic)
+
+/**
+ * Creates a Zod schema for a single-image upload field.
+ * Pass a `requiredMessage` that names the specific asset being uploaded
+ * so the error copy makes sense in context.
+ */
+export const createImageUploadSchema = (requiredMessage: string) =>
+  z.object({
+    file: z.custom<File | undefined>().superRefine((val, ctx) => {
+      if (!(val instanceof File)) {
+        ctx.addIssue({ code: 'custom', message: requiredMessage });
+        return z.NEVER;
+      }
+      if (!['image/jpeg', 'image/png'].includes(val.type)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Only PNG or JPG files are accepted.',
+        });
+        return z.NEVER;
+      }
+      if (val.size > 5 * 1024 * 1024) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'File must be 5 MB or smaller.',
+        });
+      }
+    }),
+  });
+
 // Profile
 
 export const updateProfileSchema = z.object({
@@ -351,6 +391,7 @@ export const updateProfileSchema = z.object({
 // Inferred TypeScript types
 // Import these where you need the form value types.
 
+export type OtpInput = z.infer<typeof otpSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
@@ -385,3 +426,4 @@ export type ReturnKeyOverrideFormInput = z.infer<
 >;
 export type IncidentFormInput = z.infer<typeof incidentFormSchema>;
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
+export type ImageUploadInput = { file: File | undefined };

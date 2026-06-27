@@ -21,6 +21,7 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from '@/components/ui/input-group';
+import { apiFetch } from '@/lib/api';
 import { password } from '@/lib/validation/primitives';
 
 const onboardingSchema = z
@@ -65,15 +66,13 @@ export const OnboardingForm = ({
     formData.append('signature', sigFile);
     formData.append('stamp', stampFile);
 
-    const res = await fetch('/api/auth/activate-hod', {
+    const result = await apiFetch('/api/auth/activate-hod', {
       method: 'POST',
       body: formData,
     });
 
-    const json = (await res.json()) as { error?: string };
-
-    if (!res.ok) {
-      toast.error(json.error ?? 'Something went wrong. Please try again.');
+    if (result.error) {
+      toast.error(result.error);
       return;
     }
 

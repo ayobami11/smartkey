@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircleIcon, ShieldAlertIcon } from 'lucide-react';
 
+import { apiFetch } from '@/lib/api';
 import { useRealtime } from '@/hooks/use-realtime';
 import { useConnectionStatus } from '@/hooks/use-connection-status';
 import { Button } from '@/components/ui/button';
@@ -51,16 +52,12 @@ export const PendingReview = () => {
     queryKey: ['cso', 'pending-review'],
     refetchInterval: connectionStatus !== 'connected' ? 10_000 : false,
     queryFn: async () => {
-      const res = await fetch('/api/requests/cso-queue');
-      const json = await res.json();
-      if (!res.ok)
-        throw new Error(
-          (json as { error?: string }).error ??
-            'Failed to load pending requests.'
-        );
-      return (
-        (json as { data?: { requests?: CsoRequest[] } }).data?.requests ?? []
+      const result = await apiFetch<{ requests: CsoRequest[] }>(
+        '/api/requests/cso-queue'
       );
+      if (result.error || !result.data)
+        throw new Error(result.error ?? 'Failed to load pending requests.');
+      return result.data.requests ?? [];
     },
   });
 
@@ -84,23 +81,16 @@ export const PendingReview = () => {
   ) => {
     setDecidingId(requestId);
     setDecisionError(null);
-    try {
-      const res = await fetch('/api/requests/cso-decision', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ request_id: requestId, decision }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        setDecisionError(json.error ?? 'Failed to process decision.');
-        return;
-      }
-      queryClient.invalidateQueries({ queryKey: ['cso', 'pending-review'] });
-    } catch {
-      setDecisionError('Something went wrong. Check your connection.');
-    } finally {
-      setDecidingId(null);
+    const result = await apiFetch('/api/requests/cso-decision', {
+      method: 'POST',
+      body: { request_id: requestId, decision },
+    });
+    setDecidingId(null);
+    if (result.error) {
+      setDecisionError(result.error);
+      return;
     }
+    queryClient.invalidateQueries({ queryKey: ['cso', 'pending-review'] });
   };
 
   return (

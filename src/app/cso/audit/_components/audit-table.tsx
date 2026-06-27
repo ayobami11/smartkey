@@ -26,6 +26,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { toCsv, downloadCsv } from '@/lib/csv';
 import { createBrowserClient } from '@/lib/supabase/client';
+import { ROLE_LABELS, ROLE_CLASSES } from '@/lib/constants';
 import { AuditTableSkeleton } from '@/app/cso/audit/_components/audit-table-skeleton';
 import { Button } from '@/components/ui/button';
 import {
@@ -130,22 +131,15 @@ const eventConfig: Record<
   },
 };
 
+// Spread ROLE_CLASSES for the canonical enum keys; add label-cased and
+// non-role keys that appear in legacy / system-generated audit entries.
 const ACTOR_ROLE_CLASS: Record<string, string> = {
-  CSO: 'bg-primary/10 text-primary',
+  ...ROLE_CLASSES,
   Dean: 'bg-amber-100 text-amber-700',
   Verifier: 'bg-blue-100 text-blue-700',
-  VERIFIER: 'bg-blue-100 text-blue-700',
   Requester: 'bg-teal-100 text-teal-700',
-  REQUESTER: 'bg-teal-100 text-teal-700',
   System: 'bg-muted text-muted-foreground',
   Guest: 'bg-muted text-muted-foreground',
-};
-
-const ROLE_LABEL: Record<string, string> = {
-  CSO: 'CSO',
-  DEAN: 'Dean',
-  VERIFIER: 'Verifier',
-  REQUESTER: 'Requester',
 };
 
 const EVENT_TYPE_MAP: Record<string, AuditEventType> = {
@@ -250,7 +244,8 @@ function mapRow(e: Record<string, unknown>): AuditEntry {
     ).replace(/\s*\(external\)\s*$/, ''),
     actorRole: isGuest
       ? 'Guest'
-      : (ROLE_LABEL[e.actor_role as string] ?? (e.actor_role as string)),
+      : (ROLE_LABELS[e.actor_role as keyof typeof ROLE_LABELS] ??
+        (e.actor_role as string)),
     department: isGuest
       ? 'N/A'
       : ((e.actor_department as string | undefined) ??
@@ -344,7 +339,7 @@ const columns: ColumnDef<AuditEntry>[] = [
   },
   {
     id: 'department',
-    header: 'Department',
+    header: 'Unit',
     cell: ({ row }) => (
       <span className="text-sm text-muted-foreground">
         {row.original.department ?? '—'}
@@ -384,14 +379,7 @@ const columns: ColumnDef<AuditEntry>[] = [
 // CSV is meant for a working slice, not a full archive dump.
 const EXPORT_MAX_ROWS = 5000;
 
-const EXPORT_HEADERS = [
-  'Time',
-  'Name',
-  'Role',
-  'Department',
-  'Event',
-  'Key code',
-];
+const EXPORT_HEADERS = ['Time', 'Name', 'Role', 'Unit', 'Event', 'Key code'];
 
 export const AuditTable = ({
   exportRef,
@@ -433,7 +421,7 @@ export const AuditTable = ({
       if (mappedEvents.length > 0) q = q.in('event', mappedEvents);
       if (debouncedSearch.trim()) {
         const term = `%${debouncedSearch.trim()}%`;
-        q = q.or(`event.ilike.${term},actor_name.ilike.${term}`);
+        q = q.ilike('actor_name', term);
       }
       if (roleFilter.length > 0) {
         const realRoles = roleFilter.filter((r): r is DbRole => r !== 'GUEST');
@@ -472,7 +460,7 @@ export const AuditTable = ({
       if (mappedEvents.length > 0) q = q.in('event', mappedEvents);
       if (debouncedSearch.trim()) {
         const term = `%${debouncedSearch.trim()}%`;
-        q = q.or(`event.ilike.${term},actor_name.ilike.${term}`);
+        q = q.ilike('actor_name', term);
       }
       if (roleFilter.length > 0) {
         const realRoles = roleFilter.filter((r): r is DbRole => r !== 'GUEST');
@@ -611,8 +599,8 @@ export const AuditTable = ({
             <InputGroup className="min-w-56 flex-1">
               <InputGroupInput
                 type="search"
-                placeholder="Search by event or actor name"
-                aria-label="Search audit log by event or actor name"
+                placeholder="Search by name"
+                aria-label="Search audit log by actor name"
                 value={search}
                 onChange={(e) => handleSearch(e.target.value)}
               />

@@ -6,8 +6,6 @@ import { useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { CheckCircle2Icon, MailIcon } from 'lucide-react';
 import { Controller, useForm } from 'react-hook-form';
-import * as z from 'zod';
-
 import { Button } from '@/components/ui/button';
 import {
   Field,
@@ -20,23 +18,24 @@ import {
   InputGroupAddon,
   InputGroupInput,
 } from '@/components/ui/input-group';
-import { email } from '@/lib/validation/primitives';
-
-const schema = z.object({ email });
+import { apiFetch } from '@/lib/api';
+import {
+  resetPasswordSchema,
+  type ResetPasswordInput,
+} from '@/lib/validation/schemas';
 
 export const ForgotPasswordForm = () => {
   const [done, setDone] = useState(false);
 
-  const form = useForm<z.infer<typeof schema>>({
-    resolver: zodResolver(schema),
+  const form = useForm<ResetPasswordInput>({
+    resolver: zodResolver(resetPasswordSchema),
     defaultValues: { email: '' },
   });
 
-  async function handleSubmit(data: z.infer<typeof schema>) {
-    await fetch('/api/auth/reset-password', {
+  async function handleSubmit(data: ResetPasswordInput) {
+    await apiFetch('/api/auth/reset-password', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: data.email }),
+      body: { email: data.email },
     });
     setDone(true);
   }

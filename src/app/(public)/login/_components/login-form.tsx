@@ -8,8 +8,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { EyeIcon, EyeOffIcon, LockIcon, MailIcon } from 'lucide-react';
 import { Controller, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
-import * as z from 'zod';
-
 import { Button } from '@/components/ui/button';
 import {
   Field,
@@ -24,17 +22,9 @@ import {
   InputGroupInput,
 } from '@/components/ui/input-group';
 
-import { email, password } from '@/lib/validation/primitives';
+import { apiFetch } from '@/lib/api';
+import { loginSchema, type LoginInput } from '@/lib/validation/schemas';
 import { OtpForm } from '@/app/(public)/login/_components/otp-form';
-
-// Schema
-
-const credentialsSchema = z.object({
-  email: email,
-  password: password,
-});
-
-type CredentialsValues = z.infer<typeof credentialsSchema>;
 
 // Constants
 
@@ -55,39 +45,30 @@ export const LoginForm = () => {
   const [pendingRole, setPendingRole] = useState('');
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
 
-  const credentialsForm = useForm<CredentialsValues>({
-    resolver: zodResolver(credentialsSchema),
+  const credentialsForm = useForm<LoginInput>({
+    resolver: zodResolver(loginSchema),
     defaultValues: { email: '', password: '' },
   });
 
   const handleTogglePassword = () => setIsPasswordVisible((prev) => !prev);
 
-  const handleCredentialsSubmit = async (data: CredentialsValues) => {
-    try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: data.email, password: data.password }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        toast.error(json.error ?? 'Sign in failed. Please try again.');
-        return;
-      }
-      const { role, mfa_required } = json.data as {
-        role: string;
-        mfa_required: boolean;
-      };
-      if (mfa_required) {
-        setPendingEmail(data.email);
-        setPendingRole(role);
-        setStep('otp');
-        return;
-      }
-      router.push(ROLE_REDIRECTS[role] ?? '/');
-    } catch {
-      toast.error('Unable to reach the server. Check your connection.');
+  const handleCredentialsSubmit = async (data: LoginInput) => {
+    const result = await apiFetch<{ role: string; mfa_required: boolean }>(
+      '/api/auth/login',
+      { method: 'POST', body: { email: data.email, password: data.password } }
+    );
+    if (result.error || !result.data) {
+      toast.error(result.error ?? 'Sign in failed. Please try again.');
+      return;
     }
+    const { role, mfa_required } = result.data;
+    if (mfa_required) {
+      setPendingEmail(data.email);
+      setPendingRole(role);
+      setStep('otp');
+      return;
+    }
+    router.push(ROLE_REDIRECTS[role] ?? '/');
   };
 
   if (step === 'otp') {

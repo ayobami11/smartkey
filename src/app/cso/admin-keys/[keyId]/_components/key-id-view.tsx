@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { apiFetch } from '@/lib/api';
 import { createBrowserClient } from '@/lib/supabase/client';
 
 // Types
@@ -169,92 +170,70 @@ export const KeyIdView = () => {
   const handleRemove = async (slot: FilledSlot) => {
     setRemoving(true);
     setRemoveError(null);
-    try {
-      const res = await fetch(
-        `/api/admin/authorisations/${keyId}/${slot.profile_id}`,
-        { method: 'DELETE' }
-      );
-      if (!res.ok && res.status !== 204) {
-        const json = await res.json().catch(() => ({}));
-        setRemoveError(
-          (json as { error?: string }).error ?? 'Failed to remove collector.'
-        );
-        return;
-      }
-      // Remove from slots, add back to candidates
-      setSlots((prev) =>
-        prev
-          .filter((s) => !(s.filled && s.profile_id === slot.profile_id))
-          .concat([{ filled: false }])
-          .slice(0, 3)
-      );
-      setCandidates((prev) => [
-        ...prev,
-        {
-          id: slot.profile_id,
-          full_name: slot.name,
-          institutional_email: slot.email,
-        },
-      ]);
-      setRemoveTarget(null);
-    } catch {
-      setRemoveError('Network error. Check your connection.');
-    } finally {
-      setRemoving(false);
+    const result = await apiFetch(
+      `/api/admin/authorisations/${keyId}/${slot.profile_id}`,
+      { method: 'DELETE' }
+    );
+    setRemoving(false);
+    if (result.error) {
+      setRemoveError(result.error);
+      return;
     }
+    // Remove from slots, add back to candidates
+    setSlots((prev) =>
+      prev
+        .filter((s) => !(s.filled && s.profile_id === slot.profile_id))
+        .concat([{ filled: false }])
+        .slice(0, 3)
+    );
+    setCandidates((prev) => [
+      ...prev,
+      {
+        id: slot.profile_id,
+        full_name: slot.name,
+        institutional_email: slot.email,
+      },
+    ]);
+    setRemoveTarget(null);
   };
 
   const handleAdd = async () => {
     if (!selectedCandidateId) return;
     setAdding(true);
     setAddError(null);
-    try {
-      const res = await fetch('/api/admin/authorisations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          key_id: keyId,
-          requester_id: selectedCandidateId,
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        setAddError(
-          (json as { error?: string }).error ?? 'Failed to add collector.'
-        );
-        return;
-      }
-      const candidate = candidates.find((c) => c.id === selectedCandidateId);
-      if (candidate) {
-        const newSlot: FilledSlot = {
-          filled: true,
-          profile_id: candidate.id,
-          name: candidate.full_name,
-          email: candidate.institutional_email,
-          authorisedAt: new Date().toLocaleDateString('en-GB', {
-            day: 'numeric',
-            month: 'short',
-            year: 'numeric',
-          }),
-        };
-        setSlots((prev) => {
-          const vacantIdx = prev.findIndex((s) => !s.filled);
-          if (vacantIdx === -1) return prev;
-          const next = [...prev];
-          next[vacantIdx] = newSlot;
-          return next;
-        });
-        setCandidates((prev) =>
-          prev.filter((c) => c.id !== selectedCandidateId)
-        );
-      }
-      setAddPickerOpen(false);
-      setSelectedCandidateId('');
-    } catch {
-      setAddError('Network error. Check your connection.');
-    } finally {
-      setAdding(false);
+    const result = await apiFetch('/api/admin/authorisations', {
+      method: 'POST',
+      body: { key_id: keyId, requester_id: selectedCandidateId },
+    });
+    setAdding(false);
+    if (result.error) {
+      setAddError(result.error);
+      return;
     }
+    const candidate = candidates.find((c) => c.id === selectedCandidateId);
+    if (candidate) {
+      const newSlot: FilledSlot = {
+        filled: true,
+        profile_id: candidate.id,
+        name: candidate.full_name,
+        email: candidate.institutional_email,
+        authorisedAt: new Date().toLocaleDateString('en-GB', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+        }),
+      };
+      setSlots((prev) => {
+        const vacantIdx = prev.findIndex((s) => !s.filled);
+        if (vacantIdx === -1) return prev;
+        const next = [...prev];
+        next[vacantIdx] = newSlot;
+        return next;
+      });
+      setCandidates((prev) => prev.filter((c) => c.id !== selectedCandidateId));
+    }
+    setAddPickerOpen(false);
+    setSelectedCandidateId('');
   };
 
   const filledCount = slots.filter((s) => s.filled).length;

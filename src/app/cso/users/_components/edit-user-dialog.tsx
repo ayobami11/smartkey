@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Controller, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
+import { apiFetch } from '@/lib/api';
 import { editUserSchema, type EditUserInput } from '@/lib/validation/schemas';
 
 import { Button } from '@/components/ui/button';
@@ -68,16 +69,12 @@ export const EditUserDialog = ({ user, onClose, onSuccess }: Props) => {
   // user's current department by matching its name.
   useEffect(() => {
     if (!open || !needsDept) return;
-    fetch('/api/admin/units')
-      .then((r) => r.json())
-      .then((json) => {
-        const depts: Department[] = json.data?.units ?? [];
-        setDepartments(depts);
-        const current = depts.find((d) => d.name === user?.department);
-        if (current) {
-          form.setValue('unit_id', current.id);
-        }
-      });
+    apiFetch<{ units: Department[] }>('/api/admin/units').then((result) => {
+      const depts: Department[] = result.data?.units ?? [];
+      setDepartments(depts);
+      const current = depts.find((d) => d.name === user?.department);
+      if (current) form.setValue('unit_id', current.id);
+    });
   }, [open, needsDept, user?.department, form]);
 
   const onSubmit = async (data: EditUserInput) => {
@@ -91,17 +88,15 @@ export const EditUserDialog = ({ user, onClose, onSuccess }: Props) => {
       return;
     }
 
-    const res = await fetch(`/api/admin/users/${user.id}`, {
+    const result = await apiFetch(`/api/admin/users/${user.id}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      body: {
         full_name: data.full_name,
         unit_id: needsDept ? data.unit_id : undefined,
-      }),
+      },
     });
-    const json = await res.json();
-    if (!res.ok) {
-      toast.error(json.error ?? 'Failed to update user.');
+    if (result.error) {
+      toast.error(result.error);
       return;
     }
 

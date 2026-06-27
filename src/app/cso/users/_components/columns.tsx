@@ -16,10 +16,19 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-// Types
+import {
+  type UserRole,
+  type UserStatus,
+  ROLE_LABELS,
+  ROLE_CLASSES,
+  USER_STATUS_LABELS,
+  USER_STATUS_CLASSES,
+} from '@/lib/constants';
 
-export type UserRole = 'CSO' | 'DEAN' | 'VERIFIER' | 'REQUESTER';
-export type UserStatus = 'ACTIVE' | 'PENDING_ACTIVATION' | 'DEACTIVATED';
+// Re-export so callers that already import from here don't need to change.
+export type { UserRole, UserStatus };
+
+// Types
 
 export type UserRow = {
   id: string;
@@ -38,33 +47,8 @@ export type ColumnCallbacks = {
   resendingId: string | null;
 };
 
-// Constants
-
-export const ROLE_LABEL: Record<UserRole, string> = {
-  CSO: 'CSO',
-  DEAN: 'Dean',
-  VERIFIER: 'Verifier',
-  REQUESTER: 'Requester',
-};
-
-const ROLE_CLASS: Record<UserRole, string> = {
-  CSO: 'bg-primary/10 text-primary',
-  DEAN: 'bg-amber-100 text-amber-700',
-  VERIFIER: 'bg-blue-100 text-blue-700',
-  REQUESTER: 'bg-teal-100 text-teal-700',
-};
-
-export const STATUS_LABEL: Record<UserStatus, string> = {
-  ACTIVE: 'Active',
-  PENDING_ACTIVATION: 'Pending activation',
-  DEACTIVATED: 'Deactivated',
-};
-
-const STATUS_CLASS: Record<UserStatus, string> = {
-  ACTIVE: 'bg-emerald-100 text-emerald-700',
-  PENDING_ACTIVATION: 'bg-amber-100 text-amber-700',
-  DEACTIVATED: 'bg-muted text-muted-foreground',
-};
+// Re-export maps so callers that already import from here don't need to change.
+export { ROLE_LABELS as ROLE_LABEL, USER_STATUS_LABELS as STATUS_LABEL };
 
 // Helpers
 
@@ -152,7 +136,7 @@ export const createColumns = (
     enableSorting: true,
     header: ({ column }) => <SortableHeader column={column} label="Name" />,
     cell: ({ row }) => (
-      <span className="font-medium text-foreground">
+      <span className="block max-w-40 truncate font-medium text-foreground">
         {row.getValue<string>('full_name')}
       </span>
     ),
@@ -163,7 +147,7 @@ export const createColumns = (
     enableSorting: true,
     header: ({ column }) => <SortableHeader column={column} label="Email" />,
     cell: ({ row }) => (
-      <span className="text-muted-foreground">
+      <span className="block max-w-52 truncate text-muted-foreground">
         {row.getValue<string>('institutional_email')}
       </span>
     ),
@@ -178,9 +162,9 @@ export const createColumns = (
       const role = row.getValue<UserRole>('role');
       return (
         <span
-          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${ROLE_CLASS[role]}`}
+          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${ROLE_CLASSES[role]}`}
         >
-          {ROLE_LABEL[role]}
+          {ROLE_LABELS[role]}
         </span>
       );
     },
@@ -191,7 +175,7 @@ export const createColumns = (
     enableSorting: true,
     header: ({ column }) => <SortableHeader column={column} label="Unit" />,
     cell: ({ row }) => (
-      <span className="text-muted-foreground">
+      <span className="block max-w-36 truncate text-muted-foreground">
         {row.getValue<string | undefined>('department') ?? '—'}
       </span>
     ),
@@ -206,10 +190,10 @@ export const createColumns = (
       const status = row.getValue<UserStatus>('status');
       return (
         <span
-          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_CLASS[status]}`}
-          aria-label={`Status: ${STATUS_LABEL[status]}`}
+          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${USER_STATUS_CLASSES[status]}`}
+          aria-label={`Status: ${USER_STATUS_LABELS[status]}`}
         >
-          {STATUS_LABEL[status]}
+          {USER_STATUS_LABELS[status]}
         </span>
       );
     },

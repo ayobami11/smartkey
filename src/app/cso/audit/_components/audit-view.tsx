@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import {
   CirclePlusIcon,
   DownloadIcon,
@@ -8,8 +10,17 @@ import {
   SirenIcon,
 } from 'lucide-react';
 
+import { apiFetch } from '@/lib/api';
 import { toCsv, downloadCsv } from '@/lib/csv';
 import { logger } from '@/lib/logger';
+import {
+  type IncidentType,
+  type IncidentSeverity,
+  INCIDENT_TYPES,
+  INCIDENT_SEVERITIES,
+  INCIDENT_TYPE_LABELS,
+  INCIDENT_SEVERITY_CLASSES,
+} from '@/lib/constants';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -47,18 +58,13 @@ import {
 } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  incidentFormSchema,
+  type IncidentFormInput,
+} from '@/lib/validation/schemas';
 import { AuditTable } from '@/app/cso/audit/_components/audit-table';
 
 // Types
-
-type IncidentType =
-  | 'MISSING_KEY'
-  | 'SUSPICIOUS_ACTIVITY'
-  | 'EQUIPMENT_FAULT'
-  | 'PROCEDURAL'
-  | 'OTHER';
-
-type IncidentSeverity = 'LOW' | 'MEDIUM' | 'HIGH';
 
 type Incident = {
   id: string;
@@ -69,36 +75,6 @@ type Incident = {
   occurred_at: string;
   logged_by_name?: string;
 };
-
-// Constants
-
-const SEVERITY_CLASS: Record<IncidentSeverity, string> = {
-  LOW: 'bg-muted text-muted-foreground',
-  MEDIUM: 'bg-amber-100 text-amber-700',
-  HIGH: 'bg-destructive/10 text-destructive',
-};
-
-const INCIDENT_TYPE_LABELS: Record<IncidentType, string> = {
-  MISSING_KEY: 'Missing key',
-  SUSPICIOUS_ACTIVITY: 'Suspicious activity',
-  EQUIPMENT_FAULT: 'Equipment fault',
-  PROCEDURAL: 'Procedural',
-  OTHER: 'Other',
-};
-
-const TYPE_OPTIONS: { value: IncidentType; label: string }[] = [
-  { value: 'MISSING_KEY', label: 'Missing key' },
-  { value: 'SUSPICIOUS_ACTIVITY', label: 'Suspicious activity' },
-  { value: 'EQUIPMENT_FAULT', label: 'Equipment fault' },
-  { value: 'PROCEDURAL', label: 'Procedural' },
-  { value: 'OTHER', label: 'Other' },
-];
-
-const SEVERITY_OPTIONS: { value: IncidentSeverity; label: string }[] = [
-  { value: 'LOW', label: 'Low' },
-  { value: 'MEDIUM', label: 'Medium' },
-  { value: 'HIGH', label: 'High' },
-];
 
 // Component
 
@@ -125,12 +101,21 @@ export const AuditView = () => {
 
   // Log incident sheet
   const [logOpen, setLogOpen] = useState(false);
-  const [logType, setLogType] = useState<IncidentType | ''>('');
-  const [logSeverity, setLogSeverity] = useState<IncidentSeverity | ''>('');
-  const [logDesc, setLogDesc] = useState('');
-  const [logging, setLogging] = useState(false);
-  const [logError, setLogError] = useState<string | null>(null);
   const [logRef, setLogRef] = useState<string | null>(null);
+  const [logServerError, setLogServerError] = useState<string | null>(null);
+
+  const {
+    control,
+    register,
+    handleSubmit,
+    watch,
+    reset: resetForm,
+    formState: { errors, isSubmitting },
+  } = useForm<IncidentFormInput>({
+    resolver: zodResolver(incidentFormSchema),
+  });
+
+  const watchedSeverity = watch('severity');
 
   // Fetch incidents
 
@@ -141,29 +126,25 @@ export const AuditView = () => {
     const params = new URLSearchParams({ limit: '50' });
     if (cursor) params.set('cursor', cursor);
 
-    try {
-      const res = await fetch(`/api/incidents?${params.toString()}`);
-      const json = await res.json();
-      if (!res.ok) {
-        setIncidentState('error');
-        return;
-      }
-      const incoming: Incident[] = (
-        (json.data?.incidents ?? []) as Record<string, unknown>[]
-      ).map((i) => ({
-        id: i.id as string,
-        reference: i.reference as string,
-        type: i.type as IncidentType,
-        severity: i.severity as IncidentSeverity,
-        description: i.description as string,
-        occurred_at: i.occurred_at as string,
-      }));
-      setIncidentCursor(json.data?.next_cursor ?? null);
-      setIncidents(reset ? incoming : (prev) => [...prev, ...incoming]);
-      setIncidentState('ready');
-    } catch {
+    const result = await apiFetch<{
+      incidents: Record<string, unknown>[];
+      next_cursor: string | null;
+    }>(`/api/incidents?${params.toString()}`);
+    if (result.error || !result.data) {
       setIncidentState('error');
+      return;
     }
+    const incoming: Incident[] = (result.data.incidents ?? []).map((i) => ({
+      id: i.id as string,
+      reference: i.reference as string,
+      type: i.type as IncidentType,
+      severity: i.severity as IncidentSeverity,
+      description: i.description as string,
+      occurred_at: i.occurred_at as string,
+    }));
+    setIncidentCursor(result.data.next_cursor ?? null);
+    setIncidents(reset ? incoming : (prev) => [...prev, ...incoming]);
+    setIncidentState('ready');
   };
 
   useEffect(() => {
@@ -199,40 +180,28 @@ export const AuditView = () => {
 
   // Log incident
 
-  const handleLogIncident = async () => {
-    if (!logType || !logSeverity || !logDesc.trim()) return;
-    setLogging(true);
-    setLogError(null);
-    try {
-      const res = await fetch('/api/incidents', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: logType,
-          severity: logSeverity,
-          description: logDesc,
-          occurred_at: new Date().toISOString(),
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        setLogError(json.error ?? 'Failed to log incident.');
-        return;
-      }
-      setLogRef(json.data?.reference ?? null);
-      if (activeTab === 'incidents') fetchIncidents(true);
-    } catch {
-      setLogError('Something went wrong. Check your connection.');
-    } finally {
-      setLogging(false);
+  const handleLogIncident = async (data: IncidentFormInput) => {
+    setLogServerError(null);
+    const result = await apiFetch<{ reference: string }>('/api/incidents', {
+      method: 'POST',
+      body: {
+        type: data.type,
+        severity: data.severity,
+        description: data.description,
+        occurred_at: new Date().toISOString(),
+      },
+    });
+    if (result.error) {
+      setLogServerError(result.error);
+      return;
     }
+    setLogRef(result.data?.reference ?? null);
+    if (activeTab === 'incidents') fetchIncidents(true);
   };
 
   const resetLogSheet = () => {
-    setLogType('');
-    setLogSeverity('');
-    setLogDesc('');
-    setLogError(null);
+    resetForm();
+    setLogServerError(null);
     setLogRef(null);
   };
 
@@ -281,12 +250,7 @@ export const AuditView = () => {
         </div>
         <div className="flex items-center gap-2">
           {activeTab === 'incidents' && (
-            <Button
-              onClick={() => {
-                resetLogSheet();
-                setLogOpen(true);
-              }}
-            >
+            <Button onClick={() => setLogOpen(true)}>
               <PlusIcon className="size-4" aria-hidden="true" />
               Log incident
             </Button>
@@ -361,7 +325,7 @@ export const AuditView = () => {
               <DropdownMenuContent align="start" className="w-52">
                 <DropdownMenuLabel>Filter by type</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {TYPE_OPTIONS.map((opt) => (
+                {INCIDENT_TYPES.map((opt) => (
                   <DropdownMenuCheckboxItem
                     key={opt.value}
                     checked={incidentTypeFilter.includes(opt.value)}
@@ -404,7 +368,7 @@ export const AuditView = () => {
               <DropdownMenuContent align="start" className="w-40">
                 <DropdownMenuLabel>Filter by severity</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {SEVERITY_OPTIONS.map((opt) => (
+                {INCIDENT_SEVERITIES.map((opt) => (
                   <DropdownMenuCheckboxItem
                     key={opt.value}
                     checked={incidentSeverityFilter.includes(opt.value)}
@@ -488,7 +452,7 @@ export const AuditView = () => {
                             {incident.reference}
                           </code>
                           <span
-                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${SEVERITY_CLASS[incident.severity]}`}
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${INCIDENT_SEVERITY_CLASSES[incident.severity]}`}
                             aria-label={`Severity: ${incident.severity}`}
                           >
                             {incident.severity}
@@ -557,9 +521,10 @@ export const AuditView = () => {
               notify the CSO immediately.
             </SheetDescription>
           </SheetHeader>
-          <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-6">
-            {logRef ? (
-              <div className="flex flex-col items-center gap-3 py-6 text-center">
+
+          {logRef ? (
+            <>
+              <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
                 <p className="font-medium text-foreground">Incident logged</p>
                 <code className="rounded-md bg-muted px-3 py-1.5 font-mono text-sm font-semibold">
                   {logRef}
@@ -572,93 +537,153 @@ export const AuditView = () => {
                   Log another
                 </button>
               </div>
-            ) : (
-              <>
+              <SheetFooter className="border-t border-border p-6">
+                <SheetClose asChild>
+                  <Button className="w-full">Close</Button>
+                </SheetClose>
+              </SheetFooter>
+            </>
+          ) : (
+            <form
+              className="flex flex-1 flex-col overflow-hidden"
+              onSubmit={handleSubmit(handleLogIncident)}
+              noValidate
+            >
+              <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-6">
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="log-type">Type</Label>
-                  <Select
-                    value={logType}
-                    onValueChange={(v) => setLogType(v as IncidentType)}
-                  >
-                    <SelectTrigger id="log-type">
-                      <SelectValue placeholder="Select a type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="MISSING_KEY">Missing key</SelectItem>
-                      <SelectItem value="SUSPICIOUS_ACTIVITY">
-                        Suspicious activity
-                      </SelectItem>
-                      <SelectItem value="EQUIPMENT_FAULT">
-                        Equipment fault
-                      </SelectItem>
-                      <SelectItem value="PROCEDURAL">Procedural</SelectItem>
-                      <SelectItem value="OTHER">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="log-severity">Severity</Label>
-                  <Select
-                    value={logSeverity}
-                    onValueChange={(v) => setLogSeverity(v as IncidentSeverity)}
-                  >
-                    <SelectTrigger id="log-severity">
-                      <SelectValue placeholder="Select severity level" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="LOW">Low</SelectItem>
-                      <SelectItem value="MEDIUM">Medium</SelectItem>
-                      <SelectItem value="HIGH">High</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {logSeverity === 'HIGH' && (
-                    <p className="text-xs text-amber-600">
-                      HIGH severity — CSO will be notified immediately.
+                  <Controller
+                    control={control}
+                    name="type"
+                    render={({ field }) => (
+                      <Select
+                        value={field.value ?? ''}
+                        onValueChange={field.onChange}
+                      >
+                        <SelectTrigger
+                          id="log-type"
+                          aria-invalid={!!errors.type}
+                          aria-describedby={
+                            errors.type ? 'log-type-error' : undefined
+                          }
+                        >
+                          <SelectValue placeholder="Select a type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="MISSING_KEY">
+                            Missing key
+                          </SelectItem>
+                          <SelectItem value="SUSPICIOUS_ACTIVITY">
+                            Suspicious activity
+                          </SelectItem>
+                          <SelectItem value="EQUIPMENT_FAULT">
+                            Equipment fault
+                          </SelectItem>
+                          <SelectItem value="PROCEDURAL">Procedural</SelectItem>
+                          <SelectItem value="OTHER">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                  {errors.type && (
+                    <p
+                      id="log-type-error"
+                      className="text-sm text-destructive"
+                      role="alert"
+                    >
+                      {errors.type.message}
                     </p>
                   )}
                 </div>
+
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="log-severity">Severity</Label>
+                  <Controller
+                    control={control}
+                    name="severity"
+                    render={({ field }) => (
+                      <Select
+                        value={field.value ?? ''}
+                        onValueChange={field.onChange}
+                      >
+                        <SelectTrigger
+                          id="log-severity"
+                          aria-invalid={!!errors.severity}
+                          aria-describedby={
+                            errors.severity ? 'log-severity-error' : undefined
+                          }
+                        >
+                          <SelectValue placeholder="Select severity level" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="LOW">Low</SelectItem>
+                          <SelectItem value="MEDIUM">Medium</SelectItem>
+                          <SelectItem value="HIGH">High</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                  {errors.severity ? (
+                    <p
+                      id="log-severity-error"
+                      className="text-sm text-destructive"
+                      role="alert"
+                    >
+                      {errors.severity.message}
+                    </p>
+                  ) : (
+                    watchedSeverity === 'HIGH' && (
+                      <p className="text-xs text-amber-600">
+                        HIGH severity — CSO will be notified immediately.
+                      </p>
+                    )
+                  )}
+                </div>
+
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="log-desc">Description</Label>
                   <Textarea
                     id="log-desc"
-                    value={logDesc}
-                    onChange={(e) => setLogDesc(e.target.value)}
+                    {...register('description')}
                     placeholder="Describe what occurred, when, and who was involved..."
                     rows={5}
                     aria-required="true"
+                    aria-invalid={!!errors.description}
+                    aria-describedby={
+                      errors.description ? 'log-desc-error' : undefined
+                    }
                     className="resize-none"
                   />
+                  {errors.description && (
+                    <p
+                      id="log-desc-error"
+                      className="text-sm text-destructive"
+                      role="alert"
+                    >
+                      {errors.description.message}
+                    </p>
+                  )}
                 </div>
-                {logError && (
+
+                {logServerError && (
                   <p className="text-sm text-destructive" role="alert">
-                    {logError}
+                    {logServerError}
                   </p>
                 )}
-              </>
-            )}
-          </div>
-          <SheetFooter className="border-t border-border p-6">
-            {logRef ? (
-              <SheetClose asChild>
-                <Button className="w-full">Close</Button>
-              </SheetClose>
-            ) : (
-              <>
+              </div>
+
+              <SheetFooter className="border-t border-border p-6">
                 <SheetClose asChild>
-                  <Button variant="outline">Cancel</Button>
+                  <Button type="button" variant="outline">
+                    Cancel
+                  </Button>
                 </SheetClose>
-                <Button
-                  disabled={
-                    !logType || !logSeverity || !logDesc.trim() || logging
-                  }
-                  aria-busy={logging}
-                  onClick={handleLogIncident}
-                >
-                  {logging ? 'Logging...' : 'Log incident'}
+                <Button type="submit" aria-busy={isSubmitting}>
+                  {isSubmitting ? 'Logging...' : 'Log incident'}
                 </Button>
-              </>
-            )}
-          </SheetFooter>
+              </SheetFooter>
+            </form>
+          )}
         </SheetContent>
       </Sheet>
     </div>

@@ -5,38 +5,17 @@ import { useRef } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { CloudUploadIcon, RefreshCwIcon } from 'lucide-react';
 import { Controller, useForm } from 'react-hook-form';
-import * as z from 'zod';
 
 import { Button } from '@/components/ui/button';
 import { FieldError } from '@/components/ui/field';
+import {
+  createImageUploadSchema,
+  type ImageUploadInput,
+} from '@/lib/validation/schemas';
 
-const fileSchema = z.object({
-  file: z.custom<File | undefined>().superRefine((val, ctx) => {
-    if (!(val instanceof File)) {
-      ctx.addIssue({
-        code: 'custom',
-        message:
-          'Please upload an image containing your departmental stamp to continue.',
-      });
-      return z.NEVER;
-    }
-    if (!['image/jpeg', 'image/png'].includes(val.type)) {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'Only PNG or JPG files are accepted.',
-      });
-      return z.NEVER;
-    }
-    if (val.size > 5 * 1024 * 1024) {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'File must be 5 MB or smaller.',
-      });
-    }
-  }),
-});
-
-type FileValues = z.infer<typeof fileSchema>;
+const stampSchema = createImageUploadSchema(
+  'Please upload an image containing your departmental stamp to continue.'
+);
 
 type StampUploadStepProps = {
   onNext: (file: File) => void;
@@ -51,12 +30,12 @@ export const StampUploadStep = ({
 }: StampUploadStepProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const form = useForm<FileValues>({
-    resolver: zodResolver(fileSchema),
+  const form = useForm<ImageUploadInput>({
+    resolver: zodResolver(stampSchema),
     defaultValues: { file: initialFile },
   });
 
-  const handleSubmit = (data: FileValues) => {
+  const handleSubmit = (data: ImageUploadInput) => {
     onNext(data.file as File);
   };
 

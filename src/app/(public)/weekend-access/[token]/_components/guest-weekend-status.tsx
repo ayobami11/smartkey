@@ -14,6 +14,7 @@ import {
   XCircleIcon,
 } from 'lucide-react';
 
+import { apiFetch } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -99,42 +100,46 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
   // Fetch status
 
   const fetchStatus = useCallback(async () => {
-    setFetchError(null);
-    try {
-      const res = await fetch(`/api/public/weekend-request/${token}`);
-      if (res.status === 404) {
-        setNotFound(true);
-        return;
-      }
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setFetchError(
-          (json as { error?: string }).error ?? 'Could not load your request.'
-        );
-        return;
-      }
-      const payload = (json as { data?: GuestStatusData }).data;
-      if (!payload) {
-        setFetchError('Unexpected server response. Please try again.');
-        return;
-      }
-      setData(payload);
-    } catch {
-      setFetchError('Network error. Check your connection and try again.');
-    } finally {
-      setLoading(false);
+    const result = await apiFetch<GuestStatusData>(
+      `/api/public/weekend-request/${token}`
+    );
+    setLoading(false);
+    if (result.status === 404) {
+      setNotFound(true);
+      return;
     }
+    if (result.error || !result.data) {
+      setFetchError(result.error ?? 'Could not load your request.');
+      return;
+    }
+    setData(result.data);
   }, [token]);
 
   useEffect(() => {
-    void fetchStatus();
-  }, [fetchStatus]);
+    void apiFetch<GuestStatusData>(`/api/public/weekend-request/${token}`).then(
+      (result) => {
+        setLoading(false);
+        if (result.status === 404) {
+          setNotFound(true);
+          return;
+        }
+        if (result.error || !result.data) {
+          setFetchError(result.error ?? 'Could not load your request.');
+          return;
+        }
+        setData(result.data);
+      }
+    );
+  }, [token]);
 
   // Refetch when the tab regains focus, so guests see Dean decisions promptly
   // without a realtime subscription.
 
   useEffect(() => {
-    const handleFocus = () => void fetchStatus();
+    const handleFocus = () => {
+      setFetchError(null);
+      void fetchStatus();
+    };
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
   }, [fetchStatus]);
@@ -162,7 +167,7 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
       !expiredFiredRef.current
     ) {
       expiredFiredRef.current = true;
-      void fetch(`/api/public/weekend-request/${token}/expire`, {
+      void apiFetch(`/api/public/weekend-request/${token}/expire`, {
         method: 'POST',
       })
         .then(() => fetchStatus())
@@ -177,24 +182,15 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
   const handleGenerate = async () => {
     setGenerating(true);
     setGenerateError(null);
-    try {
-      const res = await fetch(`/api/public/weekend-request/${token}/code`, {
-        method: 'POST',
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setGenerateError(
-          (json as { error?: string }).error ??
-            'Could not generate a code. Please try again.'
-        );
-        return;
-      }
-      await fetchStatus();
-    } catch {
-      setGenerateError('Network error. Check your connection and try again.');
-    } finally {
-      setGenerating(false);
+    const result = await apiFetch(`/api/public/weekend-request/${token}/code`, {
+      method: 'POST',
+    });
+    setGenerating(false);
+    if (result.error) {
+      setGenerateError(result.error);
+      return;
     }
+    await fetchStatus();
   };
 
   const handleCopy = async () => {

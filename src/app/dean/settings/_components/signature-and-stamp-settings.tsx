@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 
 import { ImageIcon, RefreshCwIcon } from 'lucide-react';
 
+import { apiFetch } from '@/lib/api';
+
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -14,21 +16,19 @@ export const SignatureAndStampSettings = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchProfile = async () => {
-      const res = await fetch('/api/profile/me');
-      if (!res.ok) {
-        setLoading(false);
-        return;
-      }
-      const json = await res.json();
-      const profile = json.data?.profile;
+    apiFetch<{
+      profile: {
+        signature_ref_url: string | null;
+        stamp_ref_url: string | null;
+      };
+    }>('/api/profile/me').then((result) => {
+      const profile = result.data?.profile;
       if (profile) {
         setSignatureUrl(profile.signature_ref_url ?? null);
         setStampUrl(profile.stamp_ref_url ?? null);
       }
       setLoading(false);
-    };
-    fetchProfile();
+    });
   }, []);
 
   return (

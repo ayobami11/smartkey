@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/dialog';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Textarea } from '@/components/ui/textarea';
+import { apiFetch } from '@/lib/api';
 import {
   markKeyLostFormSchema,
   type MarkKeyLostFormInput,
@@ -49,25 +50,18 @@ export const MarkKeyLostDialog = ({ target, onClose, onMarked }: Props) => {
     if (!target) return;
     setMarking(true);
     setError(null);
-    try {
-      const res = await fetch('/api/keys/mark-lost', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key_id: target.id, note: values.note }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        setError(json.error ?? 'Failed to mark key as lost.');
-        return;
-      }
-      reset();
-      onClose();
-      onMarked();
-    } catch {
-      setError('Something went wrong. Check your connection.');
-    } finally {
-      setMarking(false);
+    const result = await apiFetch('/api/keys/mark-lost', {
+      method: 'POST',
+      body: { key_id: target.id, note: values.note },
+    });
+    setMarking(false);
+    if (result.error) {
+      setError(result.error);
+      return;
     }
+    reset();
+    onClose();
+    onMarked();
   });
 
   return (

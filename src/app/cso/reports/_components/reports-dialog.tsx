@@ -15,6 +15,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { apiFetch } from '@/lib/api';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -40,25 +41,16 @@ export const ReportsDialog = ({ report }: Props) => {
     if (!commentText.trim()) return;
     setCommenting(true);
     setCommentError(null);
-    try {
-      const res = await fetch(`/api/reports/${report.id}/comments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: commentText.trim() }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        setCommentError(
-          (json as { error?: string }).error ?? 'Failed to save comment.'
-        );
-        return;
-      }
-      setCommentSuccess(true);
-    } catch {
-      setCommentError('Network error. Check your connection and try again.');
-    } finally {
-      setCommenting(false);
+    const result = await apiFetch(`/api/reports/${report.id}/comments`, {
+      method: 'POST',
+      body: { text: commentText.trim() },
+    });
+    setCommenting(false);
+    if (result.error) {
+      setCommentError(result.error);
+      return;
     }
+    setCommentSuccess(true);
   };
 
   return (

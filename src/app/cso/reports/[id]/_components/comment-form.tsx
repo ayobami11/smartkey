@@ -7,17 +7,15 @@ import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { CheckCircleIcon } from 'lucide-react';
 import { useForm } from 'react-hook-form';
-import { z } from 'zod';
 
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-
-const commentSchema = z.object({
-  text: z.string().min(1, 'Comment is required.'),
-});
-
-type CommentFormValues = z.infer<typeof commentSchema>;
+import { apiFetch } from '@/lib/api';
+import {
+  addReportCommentSchema,
+  type AddReportCommentInput,
+} from '@/lib/validation/schemas';
 
 type Props = { reportId: string };
 
@@ -25,36 +23,25 @@ export const CommentForm = ({ reportId }: Props) => {
   const router = useRouter();
   const [success, setSuccess] = useState(false);
 
-  const form = useForm<CommentFormValues>({
-    resolver: zodResolver(commentSchema),
+  const form = useForm<AddReportCommentInput>({
+    resolver: zodResolver(addReportCommentSchema),
     defaultValues: { text: '' },
   });
 
   const { isSubmitting, errors } = form.formState;
 
   const handleSubmit = form.handleSubmit(async ({ text }) => {
-    try {
-      const res = await fetch(`/api/reports/${reportId}/comments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        form.setError('root', {
-          message:
-            (json as { error?: string }).error ?? 'Failed to save comment.',
-        });
-        return;
-      }
-      setSuccess(true);
-      form.reset();
-      router.refresh();
-    } catch {
-      form.setError('root', {
-        message: 'Network error. Check your connection and try again.',
-      });
+    const result = await apiFetch(`/api/reports/${reportId}/comments`, {
+      method: 'POST',
+      body: { text },
+    });
+    if (result.error) {
+      form.setError('root', { message: result.error });
+      return;
     }
+    setSuccess(true);
+    form.reset();
+    router.refresh();
   });
 
   if (success) {

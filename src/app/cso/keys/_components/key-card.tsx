@@ -7,15 +7,18 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-// Types
+import { type KeyStatus, type Zone } from '@/lib/constants';
 
-export type KeyStatus = 'AVAILABLE' | 'ISSUED' | 'OVERDUE' | 'RETIRED';
-export type KeyZone = 'NEW_SENATE' | 'OLD_SENATE';
+// Re-export so existing callers don't need to update their imports.
+export type { KeyStatus };
+export type KeyZone = Zone;
+
+// Types
 
 export type Key = {
   id: string;
   code: string;
-  zone: KeyZone;
+  zone: Zone;
   room: string;
   department: string;
   status: KeyStatus;

@@ -23,6 +23,7 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { apiFetch } from '@/lib/api';
 import { createBrowserClient } from '@/lib/supabase/client';
 
 import {
@@ -78,9 +79,9 @@ export const KeysView = () => {
 
   // Fetch departments for filter
   useEffect(() => {
-    fetch('/api/admin/units')
-      .then((r) => r.json())
-      .then((json) => setDepartments(json.data?.units ?? []));
+    apiFetch<{ units: Department[] }>('/api/admin/units').then((result) => {
+      if (result.data) setDepartments(result.data.units ?? []);
+    });
   }, []);
 
   // Keys inventory query
@@ -131,14 +132,12 @@ export const KeysView = () => {
   } = useQuery<OutstandingKey[]>({
     queryKey: ['cso', 'keys', 'outstanding'],
     queryFn: async () => {
-      const res = await fetch('/api/keys/out');
-      const json = await res.json();
-      if (!res.ok)
-        throw new Error(json.error ?? 'Failed to load outstanding keys.');
-      const raw =
-        (json as { data?: { outstanding?: Record<string, unknown>[] } }).data
-          ?.outstanding ?? [];
-      return raw.map((item) => {
+      const result = await apiFetch<{
+        outstanding: Record<string, unknown>[];
+      }>('/api/keys/out');
+      if (result.error || !result.data)
+        throw new Error(result.error ?? 'Failed to load outstanding keys.');
+      return result.data.outstanding.map((item) => {
         const key = item.key as {
           id: string;
           code: string;
