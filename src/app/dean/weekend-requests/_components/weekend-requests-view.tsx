@@ -578,47 +578,70 @@ export const WeekendRequestsView = () => {
                     <Controller
                       name="key_id"
                       control={form.control}
-                      render={({ field, fieldState }) => (
-                        <div className="flex flex-col gap-2">
-                          <Label htmlFor="assign-key" className="text-xs">
-                            Assign a key
-                          </Label>
-                          <Select
-                            value={field.value}
-                            onValueChange={field.onChange}
-                          >
-                            <SelectTrigger
-                              id="assign-key"
-                              aria-invalid={fieldState.invalid}
+                      render={({ field, fieldState }) => {
+                        const selectedKey = deptKeys.find(
+                          (k) => k.id === field.value
+                        );
+                        return (
+                          <div className="flex flex-col gap-2">
+                            <Label htmlFor="assign-key" className="text-xs">
+                              Assign a key
+                            </Label>
+                            <Select
+                              value={field.value}
+                              onValueChange={field.onChange}
                             >
-                              <SelectValue placeholder="Select a key from your department" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {deptKeys.map((k) => (
-                                <SelectItem key={k.id} value={k.id}>
-                                  <span className="font-mono">{k.code}</span>
-                                  <span className="ml-2 text-muted-foreground">
-                                    — {k.room_name}
+                              <SelectTrigger
+                                id="assign-key"
+                                aria-invalid={fieldState.invalid}
+                              >
+                                {selectedKey ? (
+                                  <span className="flex items-center gap-1.5 overflow-hidden">
+                                    <span className="shrink-0 font-mono font-medium">
+                                      {selectedKey.code}
+                                    </span>
+                                    <span className="shrink-0 text-muted-foreground">
+                                      ·
+                                    </span>
+                                    <span className="truncate text-muted-foreground">
+                                      {selectedKey.room_name}
+                                    </span>
                                   </span>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          {deptKeys.length === 0 && (
-                            <p className="text-xs text-muted-foreground">
-                              No keys available in your department.
-                            </p>
-                          )}
-                          {fieldState.invalid && (
-                            <p
-                              className="text-xs text-destructive"
-                              role="alert"
-                            >
-                              {fieldState.error?.message}
-                            </p>
-                          )}
-                        </div>
-                      )}
+                                ) : (
+                                  <SelectValue placeholder="Select a key from your department" />
+                                )}
+                              </SelectTrigger>
+                              <SelectContent position="popper">
+                                {deptKeys.map((k) => (
+                                  <SelectItem key={k.id} value={k.id}>
+                                    <div className="flex flex-col gap-0.5">
+                                      <span className="font-mono text-sm font-medium">
+                                        {k.code}
+                                      </span>
+                                      <span className="text-xs text-muted-foreground">
+                                        {k.room_name}
+                                      </span>
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            {deptKeys.length === 0 && (
+                              <p className="text-xs text-muted-foreground">
+                                No keys available in your department.
+                              </p>
+                            )}
+                            {fieldState.invalid && (
+                              <p
+                                className="text-xs text-destructive"
+                                role="alert"
+                              >
+                                {fieldState.error?.message}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      }}
                     />
                   )}
 
