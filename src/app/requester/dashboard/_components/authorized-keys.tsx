@@ -336,8 +336,8 @@ export const AuthorizedKeys = () => {
       >
         <SheetContent side="right" className="flex flex-col gap-0 p-0">
           <SheetHeader className="border-b border-border p-6">
-            <SheetTitle className="text-lg">Request a key</SheetTitle>
-            <SheetDescription className="text-base">
+            <SheetTitle>Request a key</SheetTitle>
+            <SheetDescription>
               Confirm the return deadline and submit your request.
             </SheetDescription>
           </SheetHeader>

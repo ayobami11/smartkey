@@ -374,8 +374,8 @@ export const LiveRequestQueue = () => {
           className="flex flex-col gap-0 p-0 sm:max-w-md"
         >
           <SheetHeader className="border-b border-border p-6">
-            <SheetTitle className="text-lg">Issue a key</SheetTitle>
-            <SheetDescription className="text-base">
+            <SheetTitle>Issue a key</SheetTitle>
+            <SheetDescription>
               {sheetStep === 'code'
                 ? 'Ask the requester for the 6-digit code from their email.'
                 : 'Key issued successfully.'}

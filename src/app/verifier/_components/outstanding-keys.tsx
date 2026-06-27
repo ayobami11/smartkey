@@ -332,8 +332,8 @@ export const OutstandingKeys = () => {
           className="flex flex-col gap-0 p-0 sm:max-w-md"
         >
           <SheetHeader className="border-b border-border p-6">
-            <SheetTitle className="text-lg">Mark key as returned</SheetTitle>
-            <SheetDescription className="text-base">
+            <SheetTitle>Mark key as returned</SheetTitle>
+            <SheetDescription>
               Confirm the return with the code the requester generated.
             </SheetDescription>
           </SheetHeader>

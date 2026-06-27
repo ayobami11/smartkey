@@ -473,7 +473,7 @@ export const WeekendRequestsView = () => {
           className="flex w-full flex-col gap-0 overflow-y-auto sm:max-w-lg"
         >
           <SheetHeader className="border-b border-border p-6">
-            <SheetTitle className="flex items-center gap-2 text-lg">
+            <SheetTitle className="flex items-center gap-2">
               Weekend access request
               {selected?.guest && <ExternalBadge />}
             </SheetTitle>

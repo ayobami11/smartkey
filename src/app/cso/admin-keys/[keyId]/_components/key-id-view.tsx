@@ -25,6 +25,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { apiFetch } from '@/lib/api';
 import { createBrowserClient } from '@/lib/supabase/client';
+import { KeyHistory } from '@/app/cso/admin-keys/[keyId]/_components/key-history';
 
 // Types
 
@@ -480,17 +481,7 @@ export const KeyIdView = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Recent activity — static placeholder */}
-      <div>
-        <h2 className="mb-3 text-sm font-semibold text-foreground">
-          Recent activity for {keyData?.code}
-        </h2>
-        <div className="flex items-center justify-center rounded-lg border border-border bg-card p-8 text-center">
-          <p className="text-sm text-muted-foreground">
-            Activity history coming soon.
-          </p>
-        </div>
-      </div>
+      <KeyHistory keyId={keyId} />
     </div>
   );
 };

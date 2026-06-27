@@ -468,8 +468,8 @@ export const OutstandingKeys = () => {
           className="flex flex-col gap-0 p-0 sm:max-w-md"
         >
           <SheetHeader className="border-b border-border p-6">
-            <SheetTitle className="text-lg">Return key</SheetTitle>
-            <SheetDescription className="text-base">
+            <SheetTitle>Return key</SheetTitle>
+            <SheetDescription>
               Generate a code to confirm the handover with the security officer.
             </SheetDescription>
           </SheetHeader>

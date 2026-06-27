@@ -163,8 +163,8 @@ export const WeekendAccessSheet = ({
       >
         <SheetContent side="right" className="flex flex-col gap-0 p-0">
           <SheetHeader className="border-b border-border p-6">
-            <SheetTitle className="text-lg">Request weekend access</SheetTitle>
-            <SheetDescription className="text-base">
+            <SheetTitle>Request weekend access</SheetTitle>
+            <SheetDescription>
               {step === 'pending_hod'
                 ? 'Your request has been submitted and is awaiting approval.'
                 : 'Select a key, choose a date, and describe your reason.'}

@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { LiveZoneCounts } from '@/app/cso/dashboard/_components/live-zone-counts';
 import { PendingReview } from '@/app/cso/dashboard/_components/pending-review';
 import { RiskAlerts } from '@/app/cso/dashboard/_components/risk-alerts';
+import { WeekendRequests } from '@/app/cso/dashboard/_components/weekend-requests';
 
 export default function CsoDashboardPage() {
   return (
@@ -51,6 +52,9 @@ export default function CsoDashboardPage() {
         <PendingReview />
         <RiskAlerts />
       </div>
+
+      {/* Weekend requests */}
+      <WeekendRequests />
     </div>
   );
 }
