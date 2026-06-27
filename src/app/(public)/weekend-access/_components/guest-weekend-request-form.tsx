@@ -59,7 +59,7 @@ export const GuestWeekendRequestForm = ({
       id_document_type: undefined,
       id_document_number: '',
       requested_room: '',
-      department_id: '',
+      unit_id: '',
       weekend_date: '',
     },
   });
@@ -79,7 +79,7 @@ export const GuestWeekendRequestForm = ({
     formData.append('id_document_type', values.id_document_type);
     formData.append('id_document_number', values.id_document_number);
     formData.append('requested_room', values.requested_room);
-    formData.append('department_id', values.department_id);
+    formData.append('department_id', values.unit_id);
     formData.append('weekend_date', values.weekend_date);
     formData.append(
       'return_deadline',
@@ -330,7 +330,7 @@ export const GuestWeekendRequestForm = ({
       />
 
       <Controller
-        name="department_id"
+        name="unit_id"
         control={form.control}
         render={({ field, fieldState }) => (
           <Field data-invalid={fieldState.invalid}>
@@ -365,8 +365,8 @@ export const GuestWeekendRequestForm = ({
             )}
             {noDepartments && (
               <p className="text-xs text-destructive" role="alert">
-                We could not load faculties and groups. Refresh the page, or
-                contact the CSO if this persists.
+                We could not load units. Refresh the page, or contact the CSO if
+                this persists.
               </p>
             )}
             {fieldState.invalid && <FieldError errors={[fieldState.error]} />}

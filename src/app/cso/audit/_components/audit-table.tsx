@@ -132,7 +132,7 @@ const eventConfig: Record<
 
 const ACTOR_ROLE_CLASS: Record<string, string> = {
   CSO: 'bg-primary/10 text-primary',
-  HOD: 'bg-amber-100 text-amber-700',
+  Dean: 'bg-amber-100 text-amber-700',
   Verifier: 'bg-blue-100 text-blue-700',
   VERIFIER: 'bg-blue-100 text-blue-700',
   Requester: 'bg-teal-100 text-teal-700',
@@ -143,7 +143,7 @@ const ACTOR_ROLE_CLASS: Record<string, string> = {
 
 const ROLE_LABEL: Record<string, string> = {
   CSO: 'CSO',
-  HOD: 'Dean',
+  DEAN: 'Dean',
   VERIFIER: 'Verifier',
   REQUESTER: 'Requester',
 };
@@ -257,8 +257,8 @@ function mapRow(e: Record<string, unknown>): AuditEntry {
         // Same legacy fallback as the actor name: resolve the department live
         // from the actor's profile for rows written before the denormalisation
         // was fixed.
-        ((e.actor_profile as { departments?: { name?: string } | null } | null)
-          ?.departments?.name as string | undefined) ??
+        ((e.actor_profile as { units?: { name?: string } | null } | null)?.units
+          ?.name as string | undefined) ??
         (['CSO', 'VERIFIER'].includes(e.actor_role as string)
           ? 'Security'
           : undefined)),
@@ -465,7 +465,7 @@ export const AuditTable = ({
       let q = supabase
         .from('audit_log')
         .select(
-          'id, event, actor_id, actor_role, actor_name, actor_department, payload, occurred_at, actor_profile:profiles!audit_log_actor_id_fkey(full_name, departments!profiles_department_id_fkey(name))'
+          'id, event, actor_id, actor_role, actor_name, actor_department, payload, occurred_at, actor_profile:profiles!audit_log_actor_id_fkey(full_name, units!profiles_unit_id_fkey(name))'
         )
         .order('occurred_at', { ascending: false })
         .range(from, to);
@@ -507,7 +507,7 @@ export const AuditTable = ({
     let q = supabase
       .from('audit_log')
       .select(
-        'id, event, actor_id, actor_role, actor_name, actor_department, payload, occurred_at, actor_profile:profiles!audit_log_actor_id_fkey(full_name, departments!profiles_department_id_fkey(name))'
+        'id, event, actor_id, actor_role, actor_name, actor_department, payload, occurred_at, actor_profile:profiles!audit_log_actor_id_fkey(full_name, units!profiles_unit_id_fkey(name))'
       )
       .order('occurred_at', { ascending: false })
       .range(0, EXPORT_MAX_ROWS - 1);

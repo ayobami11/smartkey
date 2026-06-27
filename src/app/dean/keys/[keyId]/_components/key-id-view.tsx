@@ -86,17 +86,17 @@ export const KeyIdView = () => {
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('department_id')
+        .select('unit_id')
         .eq('id', user.id)
         .single();
 
-      const hodDeptId = (profile?.department_id as string | null) ?? null;
+      const hodDeptId = (profile?.unit_id as string | null) ?? null;
 
       // Fetch key details
       const { data: key, error: keyErr } = await supabase
         .from('keys')
         .select(
-          'id, code, zone, room_name, department:departments!department_id(name)'
+          'id, code, zone, room_name, department:units!unit_id(name)'
         )
         .eq('id', keyId)
         .single();
@@ -146,14 +146,15 @@ export const KeyIdView = () => {
       ];
       setSlots(paddedSlots);
 
-      // Fetch candidates (requesters in HOD's department, excluding already-authorised)
+      // Fetch candidates (active requesters in Dean's department, excluding already-authorised)
       if (hodDeptId) {
         const authorisedIds = new Set(filledSlots.map((s) => s.profile_id));
         const { data: cands } = await supabase
           .from('profiles')
           .select('id, full_name, institutional_email')
           .eq('role', 'REQUESTER')
-          .eq('department_id', hodDeptId);
+          .eq('status', 'ACTIVE')
+          .eq('unit_id', hodDeptId);
 
         setCandidates(
           ((cands ?? []) as Candidate[]).filter((c) => !authorisedIds.has(c.id))

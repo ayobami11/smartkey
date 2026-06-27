@@ -177,7 +177,7 @@ export const WeekendAccessSheet = ({
             <SheetTitle className="text-lg">Request weekend access</SheetTitle>
             <SheetDescription className="text-base">
               {step === 'pending_hod'
-                ? 'Your HOD will be notified to approve this request.'
+                ? 'Your request has been submitted and is awaiting approval.'
                 : 'Select a key, choose a date, and describe your reason.'}
             </SheetDescription>
           </SheetHeader>
@@ -297,8 +297,8 @@ export const WeekendAccessSheet = ({
                       Waiting for approval
                     </p>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      Your HOD will review and approve or decline this request.
-                      {"You'll"} be notified by email when they decide.
+                      Your request will be reviewed and you&apos;ll be notified
+                      by email once a decision is made.
                     </p>
                   </div>
 

@@ -31,15 +31,13 @@ export const DashboardView = () => {
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select(
-          'full_name, department_id, department:departments!department_id(name)'
-        )
+        .select('full_name, unit:units!unit_id(name)')
         .eq('id', user.id)
         .single();
 
       if (profile) {
         setFullName((profile.full_name as string | null) ?? '');
-        const dept = profile.department as { name: string } | null;
+        const dept = profile.unit as { name: string } | null;
         setDeptName(dept?.name ?? '');
       }
       setLoading(false);
@@ -56,7 +54,7 @@ export const DashboardView = () => {
           {fullName ? `, ${fullName}` : ''}.
         </h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          {loading ? 'Loading...' : deptName || 'No Faculty/Group assigned'}
+          {loading ? 'Loading...' : deptName || 'No unit assigned'}
         </p>
       </div>
 

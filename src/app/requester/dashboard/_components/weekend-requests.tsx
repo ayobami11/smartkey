@@ -46,7 +46,7 @@ const STATUS_CONFIG: Record<
 > = {
   PENDING_HOD: {
     icon: ClockIcon,
-    label: 'Awaiting HOD approval',
+    label: 'Awaiting approval',
     className: 'bg-amber-100 text-amber-700',
     stripe: 'bg-amber-400',
   },

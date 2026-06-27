@@ -92,7 +92,7 @@ type PendingRequest = {
   risk_tier: string;
   letter_url: string | null;
   requested_room: string | null;
-  requested_department_id: string | null;
+  requested_unit_id: string | null;
 };
 
 type DeptKey = { id: string; code: string; room_name: string };
@@ -165,7 +165,7 @@ export const WeekendRequestsView = () => {
 
       // Fetch Administration dept IDs (authoriser='CSO') first
       const { data: adminDepts } = await supabase
-        .from('departments')
+        .from('units')
         .select('id')
         .eq('authoriser', 'CSO');
 
@@ -178,10 +178,10 @@ export const WeekendRequestsView = () => {
         .from('requests')
         .select(
           `id, requested_for, created_at, type, risk_tier, letter_url,
-           requested_room, requested_department_id, key_id,
+           requested_room, requested_unit_id, key_id,
            requester:profiles!requester_id(id, full_name, institutional_email),
            guest:guest_requesters!guest_id(id, full_name, email, phone, id_document_type, id_document_number),
-           key:keys!key_id(id, code, room_name, zone, department_id)`
+           key:keys!key_id(id, code, room_name, zone, unit_id)`
         )
         .eq('type', 'WEEKEND')
         .eq('status', 'PENDING_HOD')
@@ -191,13 +191,13 @@ export const WeekendRequestsView = () => {
 
       // Keep only requests that belong to Administration:
       // - Registered request: key.department_id is an admin dept
-      // - Guest request (key_id null): requested_department_id is an admin dept
+      // - Guest request (key_id null): requested_unit_id is an admin dept
       return ((data ?? []) as Record<string, unknown>[])
         .filter((req) => {
-          const key = req.key as { department_id: string } | null;
-          if (key?.department_id) return adminDeptIds.has(key.department_id);
-          return req.requested_department_id
-            ? adminDeptIds.has(req.requested_department_id as string)
+          const key = req.key as { unit_id: string } | null;
+          if (key?.unit_id) return adminDeptIds.has(key.unit_id);
+          return req.requested_unit_id
+            ? adminDeptIds.has(req.requested_unit_id as string)
             : false;
         })
         .map(
@@ -220,7 +220,7 @@ export const WeekendRequestsView = () => {
               risk_tier: req.risk_tier,
               letter_url: req.letter_url,
               requested_room: req.requested_room,
-              requested_department_id: req.requested_department_id,
+              requested_unit_id: req.requested_unit_id,
             }) as PendingRequest
         );
     },
@@ -233,7 +233,7 @@ export const WeekendRequestsView = () => {
       const { data, error } = await supabase
         .from('keys')
         .select(
-          'id, code, room_name, status, department:departments!department_id(authoriser)'
+          'id, code, room_name, status, department:units!unit_id(authoriser)'
         )
         .order('code', { ascending: true });
 

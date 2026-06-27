@@ -20,7 +20,7 @@ const loadDepartments = async (): Promise<DepartmentOption[]> => {
   try {
     const supabase = createAdminClient();
     const { data, error } = await supabase
-      .from('departments')
+      .from('units')
       .select('id, name')
       .order('name', { ascending: true });
     if (error) {

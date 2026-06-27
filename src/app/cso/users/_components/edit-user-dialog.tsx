@@ -49,7 +49,7 @@ export const EditUserDialog = ({ user, onClose, onSuccess }: Props) => {
 
   const form = useForm<EditUserInput>({
     resolver: zodResolver(editUserSchema),
-    defaultValues: { full_name: '', department_id: '' },
+    defaultValues: { full_name: '', unit_id: '' },
   });
 
   // Load the editable values whenever a different user is opened. The current
@@ -60,7 +60,7 @@ export const EditUserDialog = ({ user, onClose, onSuccess }: Props) => {
     const id = user.id;
     Promise.resolve().then(() => {
       if (id !== user?.id) return;
-      form.reset({ full_name: user.full_name, department_id: '' });
+      form.reset({ full_name: user.full_name, unit_id: '' });
     });
   }, [user, form]);
 
@@ -68,14 +68,14 @@ export const EditUserDialog = ({ user, onClose, onSuccess }: Props) => {
   // user's current department by matching its name.
   useEffect(() => {
     if (!open || !needsDept) return;
-    fetch('/api/admin/departments')
+    fetch('/api/admin/units')
       .then((r) => r.json())
       .then((json) => {
-        const depts: Department[] = json.data?.departments ?? [];
+        const depts: Department[] = json.data?.units ?? [];
         setDepartments(depts);
         const current = depts.find((d) => d.name === user?.department);
         if (current) {
-          form.setValue('department_id', current.id);
+          form.setValue('unit_id', current.id);
         }
       });
   }, [open, needsDept, user?.department, form]);
@@ -83,10 +83,10 @@ export const EditUserDialog = ({ user, onClose, onSuccess }: Props) => {
   const onSubmit = async (data: EditUserInput) => {
     if (!user) return;
 
-    if (needsDept && !data.department_id) {
-      form.setError('department_id', {
+    if (needsDept && !data.unit_id) {
+      form.setError('unit_id', {
         type: 'manual',
-        message: 'Department is required for this role',
+        message: 'Unit is required for this role',
       });
       return;
     }
@@ -96,7 +96,7 @@ export const EditUserDialog = ({ user, onClose, onSuccess }: Props) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         full_name: data.full_name,
-        department_id: needsDept ? data.department_id : undefined,
+        unit_id: needsDept ? data.unit_id : undefined,
       }),
     });
     const json = await res.json();
@@ -122,8 +122,8 @@ export const EditUserDialog = ({ user, onClose, onSuccess }: Props) => {
           <DialogTitle>Edit user</DialogTitle>
           <DialogDescription>
             Update the user&apos;s name
-            {needsDept ? ' and department or faculty' : ''}. Email and role
-            cannot be changed here.
+            {needsDept ? ' and unit' : ''}. Email and role cannot be changed
+            here.
           </DialogDescription>
         </DialogHeader>
 
@@ -161,13 +161,11 @@ export const EditUserDialog = ({ user, onClose, onSuccess }: Props) => {
 
             {needsDept && (
               <Controller
-                name="department_id"
+                name="unit_id"
                 control={form.control}
                 render={({ field, fieldState }) => (
                   <Field data-invalid={fieldState.invalid}>
-                    <FieldLabel htmlFor="edit-dept-select">
-                      Department or faculty
-                    </FieldLabel>
+                    <FieldLabel htmlFor="edit-dept-select">Unit</FieldLabel>
                     <Select
                       value={field.value ?? ''}
                       onValueChange={field.onChange}
@@ -176,7 +174,7 @@ export const EditUserDialog = ({ user, onClose, onSuccess }: Props) => {
                         id="edit-dept-select"
                         aria-invalid={fieldState.invalid}
                       >
-                        <SelectValue placeholder="Select a department or faculty" />
+                        <SelectValue placeholder="Select a unit" />
                       </SelectTrigger>
                       <SelectContent>
                         {departments.map((d) => (

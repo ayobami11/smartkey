@@ -51,7 +51,7 @@ type Department = { id: string; name: string };
 
 // Constants
 
-const ALL_DEPTS_VALUE = 'All departments';
+const ALL_DEPTS_VALUE = 'All units';
 
 const tabs: { label: string; value: ActiveTab }[] = [
   { label: 'All', value: 'All' },
@@ -78,9 +78,9 @@ export const KeysView = () => {
 
   // Fetch departments for filter
   useEffect(() => {
-    fetch('/api/admin/departments')
+    fetch('/api/admin/units')
       .then((r) => r.json())
-      .then((json) => setDepartments(json.data?.departments ?? []));
+      .then((json) => setDepartments(json.data?.units ?? []));
   }, []);
 
   // Keys inventory query
@@ -98,7 +98,7 @@ export const KeysView = () => {
       const { data, error } = await supabase
         .from('keys')
         .select(
-          'id, code, zone, room_name, status, key_count, department:departments!department_id(name)'
+          'id, code, zone, room_name, status, key_count, department:units!unit_id(name)'
         )
         .order('code', { ascending: true });
 
@@ -264,7 +264,7 @@ export const KeysView = () => {
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setSearch(e.target.value)
                 }
-                placeholder="Search by key code, room, department, or HOD..."
+                placeholder="Search by key code, room, unit, or HOD..."
                 aria-label="Search keys"
               />
               <InputGroupAddon align="inline-start">
@@ -287,8 +287,8 @@ export const KeysView = () => {
               }}
             >
               <ComboboxInput
-                placeholder="All departments"
-                aria-label="Filter by department"
+                placeholder="All units"
+                aria-label="Filter by unit"
                 showClear={!!selectedDeptName}
                 className="w-64"
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
@@ -300,14 +300,14 @@ export const KeysView = () => {
                   {!isFiltering && (
                     <>
                       <ComboboxItem value={ALL_DEPTS_VALUE}>
-                        All departments
+                        All units
                       </ComboboxItem>
                       {departments.length > 0 && <ComboboxSeparator />}
                     </>
                   )}
                   {deptSuggestions.length === 0 ? (
                     <p className="py-2 text-center text-sm text-muted-foreground">
-                      No departments found.
+                      No units found.
                     </p>
                   ) : (
                     deptSuggestions.map((d) => (

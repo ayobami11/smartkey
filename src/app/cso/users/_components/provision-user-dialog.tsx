@@ -72,7 +72,7 @@ export const ProvisionUserDialog = ({ onSuccess }: Props) => {
       full_name: '',
       institutional_email: '',
       role: undefined,
-      department_id: '',
+      unit_id: '',
     },
   });
 
@@ -81,9 +81,9 @@ export const ProvisionUserDialog = ({ onSuccess }: Props) => {
 
   useEffect(() => {
     if (!open) return;
-    fetch('/api/admin/departments')
+    fetch('/api/admin/units')
       .then((r) => r.json())
-      .then((json) => setDepartments(json.data?.departments ?? []));
+      .then((json) => setDepartments(json.data?.units ?? []));
   }, [open]);
 
   async function onSubmit(data: FormValues) {
@@ -96,7 +96,7 @@ export const ProvisionUserDialog = ({ onSuccess }: Props) => {
         full_name: data.full_name,
         institutional_email: data.institutional_email,
         role: data.role,
-        department_id: data.department_id || undefined,
+        unit_id: data.unit_id || undefined,
       }),
     });
 
@@ -244,13 +244,11 @@ export const ProvisionUserDialog = ({ onSuccess }: Props) => {
 
               {needsDept && (
                 <Controller
-                  name="department_id"
+                  name="unit_id"
                   control={form.control}
                   render={({ field, fieldState }) => (
                     <Field data-invalid={fieldState.invalid}>
-                      <FieldLabel htmlFor="dept-select">
-                        Faculty / Group
-                      </FieldLabel>
+                      <FieldLabel htmlFor="dept-select">Unit</FieldLabel>
                       <Select
                         onValueChange={field.onChange}
                         value={field.value}
@@ -259,7 +257,7 @@ export const ProvisionUserDialog = ({ onSuccess }: Props) => {
                           id="dept-select"
                           aria-invalid={fieldState.invalid}
                         >
-                          <SelectValue placeholder="Select a department" />
+                          <SelectValue placeholder="Select a unit" />
                         </SelectTrigger>
                         <SelectContent>
                           {departments

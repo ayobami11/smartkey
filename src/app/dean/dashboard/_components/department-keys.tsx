@@ -103,7 +103,7 @@ export const DepartmentKeys = ({ deptId }: Props) => {
       const { data } = await supabase
         .from('keys')
         .select('id, code, zone, room_name, authorisations(profile_id)')
-        .eq('department_id', deptId)
+        .eq('unit_id', deptId)
         .order('code', { ascending: true });
 
       setDeptKeys(

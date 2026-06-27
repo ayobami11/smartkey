@@ -32,10 +32,10 @@ export const AdminKeysView = () => {
         .from('keys')
         .select(
           `id, code, room_name, zone,
-           department:departments!department_id(authoriser),
+           department:units!unit_id(authoriser),
            authorisations(profile_id, profile:profiles!profile_id(full_name, institutional_email))`
         )
-        .eq('department.authoriser', 'CSO')
+        .eq('unit.authoriser', 'CSO')
         .order('code');
 
       if (error) throw new Error('Failed to load administration keys');

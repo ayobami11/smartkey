@@ -48,8 +48,8 @@ type KeyData = {
   code: string;
   zone: string;
   room_name: string;
-  department_id: string;
-  department: { name: string; authoriser: string } | null;
+  unit_id: string;
+  unit: { name: string; authoriser: string } | null;
 };
 
 // Component
@@ -83,7 +83,7 @@ export const KeyIdView = () => {
       const { data: key, error: keyErr } = await supabase
         .from('keys')
         .select(
-          'id, code, zone, room_name, department_id, department:departments!department_id(name, authoriser)'
+          'id, code, zone, room_name, unit_id, unit:units!unit_id(name, authoriser)'
         )
         .eq('id', keyId)
         .single();
@@ -95,7 +95,7 @@ export const KeyIdView = () => {
       }
 
       // Verify that this is a CSO authorised key
-      const keyDept = key.department as {
+      const keyDept = key.unit as {
         name: string;
         authoriser: string;
       } | null;
@@ -260,7 +260,7 @@ export const KeyIdView = () => {
   const filledCount = slots.filter((s) => s.filled).length;
   const zoneLabel =
     keyData?.zone === 'NEW_SENATE' ? 'New Senate' : 'Old Senate';
-  const dept = keyData?.department as { name: string } | null;
+  const dept = keyData?.unit as { name: string } | null;
 
   if (loading) {
     return (

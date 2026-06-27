@@ -92,7 +92,7 @@ type PendingRequest = {
   risk_tier: string;
   letter_url: string | null;
   requested_room: string | null;
-  requested_department_id: string | null;
+  requested_unit_id: string | null;
 };
 
 type DeptKey = { id: string; code: string; room_name: string };
@@ -181,16 +181,15 @@ export const WeekendRequestsView = () => {
       if (!user) return;
       const { data: profile } = await supabase
         .from('profiles')
-        .select('department_id')
+        .select('unit_id')
         .eq('id', user.id)
         .single();
-      const deptId = (profile as { department_id: string | null } | null)
-        ?.department_id;
+      const deptId = (profile as { unit_id: string | null } | null)?.unit_id;
       if (!deptId) return;
       const { data } = await supabase
         .from('keys')
         .select('id, code, room_name, status')
-        .eq('department_id', deptId)
+        .eq('unit_id', deptId)
         .order('code', { ascending: true });
       setDeptKeys(
         ((data ?? []) as DeptKey[] & { status?: string }[]).filter(
