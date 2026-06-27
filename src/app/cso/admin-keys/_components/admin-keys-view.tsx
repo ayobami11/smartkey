@@ -35,7 +35,6 @@ export const AdminKeysView = () => {
            department:units!unit_id(authoriser),
            authorisations(profile_id, profile:profiles!profile_id(full_name, institutional_email))`
         )
-        .eq('unit.authoriser', 'CSO')
         .order('code');
 
       if (error) throw new Error('Failed to load administration keys');
