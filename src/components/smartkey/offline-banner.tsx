@@ -2,7 +2,7 @@
 
 import { WifiOff } from 'lucide-react';
 
-import { useConnectionStatus } from '@/hooks/useConnectionStatus';
+import { useConnectionStatus } from '@/hooks/use-connection-status';
 
 export const OfflineBanner = () => {
   const status = useConnectionStatus();

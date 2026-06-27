@@ -2,7 +2,7 @@
 
 import { type MutableRefObject, useEffect, useState } from 'react';
 
-import { useDebounce } from '@/hooks/useDebounce';
+import { useDebounce } from '@/hooks/use-debounce';
 import {
   ArrowLeftRightIcon,
   CheckCircleIcon,

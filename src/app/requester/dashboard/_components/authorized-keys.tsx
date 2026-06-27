@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useConnectionStatus } from '@/hooks/useConnectionStatus';
+import { useConnectionStatus } from '@/hooks/use-connection-status';
 import { useRouter } from 'next/navigation';
 import { InboxIcon, KeyRoundIcon } from 'lucide-react';
 import { Controller, useForm } from 'react-hook-form';

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useMediaQuery } from '@/hooks/use-media-query';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 import { AccountSettings } from '@/app/cso/settings/_components/account-settings';

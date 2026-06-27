@@ -6,7 +6,7 @@ import { ArrowDownIcon, ArrowUpIcon } from 'lucide-react';
 
 import { Skeleton } from '@/components/ui/skeleton';
 import { createBrowserClient } from '@/lib/supabase/client';
-import { useRealtime } from '@/hooks/useRealtime';
+import { useRealtime } from '@/hooks/use-realtime';
 
 // Types
 

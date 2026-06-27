@@ -9,7 +9,7 @@ import {
   SettingsIcon,
 } from 'lucide-react';
 
-import { SmartKeyMark } from '@/components/smartkey/SmartKeyMark';
+import { SmartKeyMark } from '@/components/smartkey/smart-key-mark';
 import { useRouter } from 'next/navigation';
 
 import {

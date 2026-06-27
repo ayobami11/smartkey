@@ -33,8 +33,8 @@ import {
   RiskAcknowledgement,
   RiskTierBadge,
 } from '@/components/smartkey/risk-tier-badge';
-import { useRealtime } from '@/hooks/useRealtime';
-import { useConnectionStatus } from '@/hooks/useConnectionStatus';
+import { useRealtime } from '@/hooks/use-realtime';
+import { useConnectionStatus } from '@/hooks/use-connection-status';
 import {
   Tooltip,
   TooltipContent,

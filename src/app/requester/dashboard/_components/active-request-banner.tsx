@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { XCircleIcon } from 'lucide-react';
 
-import { useRealtime } from '@/hooks/useRealtime';
-import { useConnectionStatus } from '@/hooks/useConnectionStatus';
+import { useRealtime } from '@/hooks/use-realtime';
+import { useConnectionStatus } from '@/hooks/use-connection-status';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {

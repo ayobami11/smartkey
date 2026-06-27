@@ -28,7 +28,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { useConnectionStatus } from '@/hooks/useConnectionStatus';
+import { useConnectionStatus } from '@/hooks/use-connection-status';
 
 // Types
 

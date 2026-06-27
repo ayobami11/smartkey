@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { PlusIcon, SearchIcon } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
-import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useMediaQuery } from '@/hooks/use-media-query';
 import { Button } from '@/components/ui/button';
 import {
   Combobox,

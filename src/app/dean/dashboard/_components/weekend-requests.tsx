@@ -4,8 +4,8 @@ import Link from 'next/link';
 import { CalendarIcon, ChevronRightIcon } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { useConnectionStatus } from '@/hooks/useConnectionStatus';
-import { useRealtime } from '@/hooks/useRealtime';
+import { useConnectionStatus } from '@/hooks/use-connection-status';
+import { useRealtime } from '@/hooks/use-realtime';
 import { Skeleton } from '@/components/ui/skeleton';
 
 type PendingRequest = {

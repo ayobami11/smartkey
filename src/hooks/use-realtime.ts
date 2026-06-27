@@ -5,7 +5,7 @@ import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
 import { createBrowserClient } from '@/lib/supabase/client';
 import { logger } from '@/lib/logger';
-import { setConnectionStatus } from '@/hooks/useConnectionStatus';
+import { setConnectionStatus } from '@/hooks/use-connection-status';
 
 // Backoff delays in milliseconds: 1s, 2s, 4s, 8s, 16s, 30s (capped).
 const BACKOFF_DELAYS = [1_000, 2_000, 4_000, 8_000, 16_000, 30_000];

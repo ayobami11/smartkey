@@ -12,8 +12,8 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
-import { useRealtime } from '@/hooks/useRealtime';
-import { useConnectionStatus } from '@/hooks/useConnectionStatus';
+import { useRealtime } from '@/hooks/use-realtime';
+import { useConnectionStatus } from '@/hooks/use-connection-status';
 import { Button } from '@/components/ui/button';
 import {
   Empty,

@@ -18,8 +18,8 @@ import {
   XCircleIcon,
 } from 'lucide-react';
 
-import { useRealtime } from '@/hooks/useRealtime';
-import { useConnectionStatus } from '@/hooks/useConnectionStatus';
+import { useRealtime } from '@/hooks/use-realtime';
+import { useConnectionStatus } from '@/hooks/use-connection-status';
 import { RiskTierBadge } from '@/components/smartkey/risk-tier-badge';
 import type { RiskTier } from '@/lib/ai/risk/types';
 
