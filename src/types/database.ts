@@ -104,38 +104,6 @@ export type Database = {
           },
         ];
       };
-      departments: {
-        Row: {
-          authoriser: Database['public']['Enums']['department_authoriser'];
-          faculty: string;
-          hod_id: string | null;
-          id: string;
-          name: string;
-        };
-        Insert: {
-          authoriser?: Database['public']['Enums']['department_authoriser'];
-          faculty?: string;
-          hod_id?: string | null;
-          id?: string;
-          name: string;
-        };
-        Update: {
-          authoriser?: Database['public']['Enums']['department_authoriser'];
-          faculty?: string;
-          hod_id?: string | null;
-          id?: string;
-          name?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: 'departments_hod_id_fkey';
-            columns: ['hod_id'];
-            isOneToOne: false;
-            referencedRelation: 'profiles';
-            referencedColumns: ['id'];
-          },
-        ];
-      };
       guest_requesters: {
         Row: {
           created_at: string;
@@ -294,40 +262,40 @@ export type Database = {
       keys: {
         Row: {
           code: string;
-          department_id: string;
           id: string;
           key_count: number;
           retired_at: string | null;
           room_name: string;
           status: Database['public']['Enums']['key_status'];
+          unit_id: string;
           zone: Database['public']['Enums']['zone'];
         };
         Insert: {
           code: string;
-          department_id: string;
           id?: string;
           key_count?: number;
           retired_at?: string | null;
           room_name: string;
           status?: Database['public']['Enums']['key_status'];
+          unit_id: string;
           zone: Database['public']['Enums']['zone'];
         };
         Update: {
           code?: string;
-          department_id?: string;
           id?: string;
           key_count?: number;
           retired_at?: string | null;
           room_name?: string;
           status?: Database['public']['Enums']['key_status'];
+          unit_id?: string;
           zone?: Database['public']['Enums']['zone'];
         };
         Relationships: [
           {
-            foreignKeyName: 'keys_department_id_fkey';
-            columns: ['department_id'];
+            foreignKeyName: 'keys_unit_id_fkey';
+            columns: ['unit_id'];
             isOneToOne: false;
-            referencedRelation: 'departments';
+            referencedRelation: 'units';
             referencedColumns: ['id'];
           },
         ];
@@ -336,7 +304,6 @@ export type Database = {
         Row: {
           activation_token: string | null;
           created_at: string;
-          department_id: string | null;
           full_name: string;
           id: string;
           institutional_email: string;
@@ -345,12 +312,12 @@ export type Database = {
           signature_ref_url: string | null;
           stamp_ref_url: string | null;
           status: Database['public']['Enums']['user_status'];
+          unit_id: string | null;
           updated_at: string;
         };
         Insert: {
           activation_token?: string | null;
           created_at?: string;
-          department_id?: string | null;
           full_name: string;
           id: string;
           institutional_email: string;
@@ -359,12 +326,12 @@ export type Database = {
           signature_ref_url?: string | null;
           stamp_ref_url?: string | null;
           status?: Database['public']['Enums']['user_status'];
+          unit_id?: string | null;
           updated_at?: string;
         };
         Update: {
           activation_token?: string | null;
           created_at?: string;
-          department_id?: string | null;
           full_name?: string;
           id?: string;
           institutional_email?: string;
@@ -373,14 +340,15 @@ export type Database = {
           signature_ref_url?: string | null;
           stamp_ref_url?: string | null;
           status?: Database['public']['Enums']['user_status'];
+          unit_id?: string | null;
           updated_at?: string;
         };
         Relationships: [
           {
-            foreignKeyName: 'profiles_department_id_fkey';
-            columns: ['department_id'];
+            foreignKeyName: 'profiles_unit_id_fkey';
+            columns: ['unit_id'];
             isOneToOne: false;
-            referencedRelation: 'departments';
+            referencedRelation: 'units';
             referencedColumns: ['id'];
           },
         ];
@@ -399,9 +367,9 @@ export type Database = {
           key_id: string | null;
           letter_url: string | null;
           reminder_sent_at: string | null;
-          requested_department_id: string | null;
           requested_for: string;
           requested_room: string | null;
+          requested_unit_id: string | null;
           requester_id: string | null;
           return_code: string | null;
           return_code_expires_at: string | null;
@@ -425,9 +393,9 @@ export type Database = {
           key_id?: string | null;
           letter_url?: string | null;
           reminder_sent_at?: string | null;
-          requested_department_id?: string | null;
           requested_for: string;
           requested_room?: string | null;
+          requested_unit_id?: string | null;
           requester_id?: string | null;
           return_code?: string | null;
           return_code_expires_at?: string | null;
@@ -451,9 +419,9 @@ export type Database = {
           key_id?: string | null;
           letter_url?: string | null;
           reminder_sent_at?: string | null;
-          requested_department_id?: string | null;
           requested_for?: string;
           requested_room?: string | null;
+          requested_unit_id?: string | null;
           requester_id?: string | null;
           return_code?: string | null;
           return_code_expires_at?: string | null;
@@ -494,10 +462,10 @@ export type Database = {
             referencedColumns: ['id'];
           },
           {
-            foreignKeyName: 'requests_requested_department_id_fkey';
-            columns: ['requested_department_id'];
+            foreignKeyName: 'requests_requested_unit_id_fkey';
+            columns: ['requested_unit_id'];
             isOneToOne: false;
-            referencedRelation: 'departments';
+            referencedRelation: 'units';
             referencedColumns: ['id'];
           },
           {
@@ -671,6 +639,38 @@ export type Database = {
           {
             foreignKeyName: 'shifts_secondary_officer_id_fkey';
             columns: ['secondary_officer_id'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      units: {
+        Row: {
+          authoriser: Database['public']['Enums']['department_authoriser'];
+          faculty: string;
+          hod_id: string | null;
+          id: string;
+          name: string;
+        };
+        Insert: {
+          authoriser?: Database['public']['Enums']['department_authoriser'];
+          faculty?: string;
+          hod_id?: string | null;
+          id?: string;
+          name: string;
+        };
+        Update: {
+          authoriser?: Database['public']['Enums']['department_authoriser'];
+          faculty?: string;
+          hod_id?: string | null;
+          id?: string;
+          name?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'units_hod_id_fkey';
+            columns: ['hod_id'];
             isOneToOne: false;
             referencedRelation: 'profiles';
             referencedColumns: ['id'];
@@ -900,6 +900,7 @@ export type Database = {
       };
       user_department_id: { Args: never; Returns: string };
       user_role: { Args: never; Returns: string };
+      user_unit_id: { Args: never; Returns: string };
     };
     Enums: {
       department_authoriser: 'DEAN' | 'CSO';
@@ -1088,7 +1089,7 @@ export const Constants = {
   },
 } as const;
 
-// Convenience type aliases derived from the generated schema.
+// Named type aliases for convenience across the codebase.
 export type UserRole = Database['public']['Enums']['user_role'];
 export type IncidentSeverity = Database['public']['Enums']['incident_severity'];
 export type IncidentStatus = Database['public']['Enums']['incident_status'];
