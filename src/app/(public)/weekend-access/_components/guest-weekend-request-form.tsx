@@ -293,7 +293,7 @@ export const GuestWeekendRequestForm = ({
                 id="guest-id-type"
                 aria-invalid={fieldState.invalid}
               >
-                <SelectValue placeholder="Select an ID type…" />
+                <SelectValue placeholder="Select an ID type..." />
               </SelectTrigger>
               <SelectContent>
                 {ID_DOCUMENT_TYPES.map((type) => (
@@ -361,9 +361,7 @@ export const GuestWeekendRequestForm = ({
         control={form.control}
         render={({ field, fieldState }) => (
           <Field data-invalid={fieldState.invalid}>
-            <FieldLabel htmlFor="guest-department">
-              Department or office
-            </FieldLabel>
+            <FieldLabel htmlFor="guest-department">Unit</FieldLabel>
             <Select
               value={field.value}
               onValueChange={field.onChange}
@@ -375,9 +373,7 @@ export const GuestWeekendRequestForm = ({
               >
                 <SelectValue
                   placeholder={
-                    noDepartments
-                      ? 'No departments available'
-                      : 'Select a department or office…'
+                    noDepartments ? 'No units available' : 'Select a unit'
                   }
                 />
               </SelectTrigger>
@@ -505,7 +501,7 @@ export const GuestWeekendRequestForm = ({
         className="w-full"
       >
         <CalendarCheckIcon className="size-4" aria-hidden="true" />
-        {isSubmitting ? 'Submitting…' : 'Request weekend access'}
+        {isSubmitting ? 'Submitting...' : 'Request weekend access'}
       </Button>
     </form>
   );
