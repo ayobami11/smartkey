@@ -127,7 +127,7 @@ export const AccountSettings = () => {
               </p>
             </div>
             <div className="flex flex-col gap-1.5 sm:col-span-2">
-              <Label htmlFor="dean-dept">Faculty / Group</Label>
+              <Label htmlFor="dean-dept">Unit</Label>
               {profileLoading ? (
                 <Skeleton className="h-9 w-full rounded-md" />
               ) : (
