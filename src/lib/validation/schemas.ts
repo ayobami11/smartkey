@@ -126,13 +126,17 @@ export const ID_DOCUMENT_TYPES = [
   "Driver's licence",
 ] as const;
 
-/**
- * Public (non-registered) weekend access request form.
- *
- * Mirrors the multipart body accepted by POST /api/public/weekend-request.
- * The `letter` file is validated separately at submit time (a real File is not
- * available during SSR), so it is kept out of this object schema.
- */
+/** Accepted MIME types for the HOD authorisation letter upload. */
+export const LETTER_ACCEPTED_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'application/pdf',
+] as const;
+
+/** Maximum authorisation letter file size in bytes (5 MB). */
+export const LETTER_MAX_BYTES = 5 * 1024 * 1024;
+
+/** Public (non-registered) weekend access request form. */
 export const guestWeekendRequestFormSchema = z.object({
   full_name: z.string().trim().min(1, 'Your full name is required.'),
   email: z.email('Enter a valid email address.'),
@@ -158,6 +162,24 @@ export const guestWeekendRequestFormSchema = z.object({
       const day = new Date(y, m - 1, d).getDay();
       return day === 0 || day === 6;
     }, 'Must be a Saturday or Sunday.'),
+  letter: z
+    .custom<FileList>()
+    .refine(
+      (files) => files?.length > 0,
+      'The authorization letter is required.'
+    )
+    .refine(
+      (files) =>
+        !files?.length ||
+        (LETTER_ACCEPTED_MIME_TYPES as readonly string[]).includes(
+          files[0]?.type
+        ),
+      'Upload a PDF, JPG, or PNG file.'
+    )
+    .refine(
+      (files) => !files?.length || files[0]?.size <= LETTER_MAX_BYTES,
+      'File must be 5 MB or smaller.'
+    ),
 });
 
 export const cancelRequestSchema = z.object({

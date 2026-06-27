@@ -1,17 +1,11 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import {
-  CalendarCheckIcon,
-  CheckCircleIcon,
-  ClipboardCopyIcon,
-  CloudUploadIcon,
-  FileTextIcon,
-  RefreshCwIcon,
-} from 'lucide-react';
+import { CheckCircleIcon, CheckIcon, CopyIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
@@ -25,9 +19,11 @@ import {
 } from '@/components/ui/select';
 import {
   ID_DOCUMENT_TYPES,
+  LETTER_ACCEPTED_MIME_TYPES,
   guestWeekendRequestFormSchema,
   type GuestWeekendRequestFormInput,
 } from '@/lib/validation/schemas';
+import { AuthorizationLetterUpload } from '@/app/(public)/weekend-access/_components/authorization-letter-upload';
 
 // Types
 
@@ -36,9 +32,6 @@ type DepartmentOption = { id: string; name: string };
 type GuestWeekendRequestFormProps = {
   departments: DepartmentOption[];
 };
-
-const MAX_LETTER_BYTES = 5 * 1024 * 1024;
-const ACCEPTED_LETTER_TYPES = ['image/jpeg', 'image/png', 'application/pdf'];
 
 // Helpers
 
@@ -50,13 +43,12 @@ export const GuestWeekendRequestForm = ({
   departments,
 }: GuestWeekendRequestFormProps) => {
   const router = useRouter();
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [letter, setLetter] = useState<File | null>(null);
-  const [letterError, setLetterError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  const letterInputRef = useRef<HTMLInputElement>(null);
 
   const form = useForm<GuestWeekendRequestFormInput>({
     resolver: zodResolver(guestWeekendRequestFormSchema),
@@ -73,40 +65,12 @@ export const GuestWeekendRequestForm = ({
   });
   const { isSubmitting } = form.formState;
 
-  const validateLetter = (file: File): string | null => {
-    if (!ACCEPTED_LETTER_TYPES.includes(file.type)) {
-      return 'Upload a PDF, JPG, or PNG file.';
-    }
-    if (file.size > MAX_LETTER_BYTES) {
-      return 'File must be 5 MB or smaller.';
-    }
-    return null;
-  };
-
-  const handleLetterChange = (file: File | undefined) => {
-    if (!file) return;
-    const error = validateLetter(file);
-    if (error) {
-      setLetter(null);
-      setLetterError(error);
-      return;
-    }
-    setLetter(file);
-    setLetterError(null);
-  };
-
-  const handleRemoveLetter = () => {
-    setLetter(null);
-    setLetterError(null);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
+  const { ref: letterRegRef, ...letterRegProps } = form.register('letter');
+  const letterFiles = form.watch('letter') as FileList | undefined;
+  const letterFile = letterFiles?.[0] ?? null;
 
   const handleSubmit = async (values: GuestWeekendRequestFormInput) => {
     setSubmitError(null);
-    if (!letter) {
-      setLetterError('The Dean authorisation letter is required.');
-      return;
-    }
 
     const formData = new FormData();
     formData.append('full_name', values.full_name);
@@ -121,7 +85,7 @@ export const GuestWeekendRequestForm = ({
       'return_deadline',
       new Date(`${values.weekend_date}T23:59:00`).toISOString()
     );
-    formData.append('letter', letter);
+    formData.append('letter', (values.letter as FileList)[0]);
 
     try {
       const res = await fetch('/api/public/weekend-request', {
@@ -184,14 +148,20 @@ export const GuestWeekendRequestForm = ({
             <p className="min-w-0 flex-1 truncate font-mono text-xs text-foreground">
               {statusUrl}
             </p>
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
               onClick={handleCopyLink}
               aria-label="Copy status link to clipboard"
-              className="shrink-0 rounded p-1 text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              className="shrink-0 size-7 text-muted-foreground hover:text-foreground"
             >
-              <ClipboardCopyIcon className="size-4" aria-hidden="true" />
-            </button>
+              {copied ? (
+                <CheckIcon className="size-4" aria-hidden="true" />
+              ) : (
+                <CopyIcon className="size-4" aria-hidden="true" />
+              )}
+            </Button>
           </div>
           {copied && (
             <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">
@@ -200,11 +170,14 @@ export const GuestWeekendRequestForm = ({
           )}
         </div>
 
-        <Button
-          className="mt-4 w-full"
-          onClick={() => router.push(`/weekend-access/${accessToken}`)}
-        >
-          View request status
+        <Button className="mt-4 w-full" asChild>
+          <Link
+            href={`/weekend-access/${accessToken}`}
+            className="w-full"
+            target="_blank"
+          >
+            View request status
+          </Link>
         </Button>
       </div>
     );
@@ -293,7 +266,7 @@ export const GuestWeekendRequestForm = ({
                 id="guest-id-type"
                 aria-invalid={fieldState.invalid}
               >
-                <SelectValue placeholder="Select an ID type..." />
+                <SelectValue placeholder="Select an ID type" />
               </SelectTrigger>
               <SelectContent>
                 {ID_DOCUMENT_TYPES.map((type) => (
@@ -387,7 +360,7 @@ export const GuestWeekendRequestForm = ({
             </Select>
             {!fieldState.error && !noDepartments && (
               <p className="text-xs text-muted-foreground">
-                The HOD or CSO of this department will review your request.
+                The head of this unit will review your request.
               </p>
             )}
             {noDepartments && (
@@ -424,65 +397,37 @@ export const GuestWeekendRequestForm = ({
         )}
       />
 
-      {/* Letter upload */}
-      <Field data-invalid={!!letterError}>
+      {/* Letter upload — native file input registered with RHF; UI is presentational */}
+      <input
+        type="file"
+        className="sr-only"
+        accept={LETTER_ACCEPTED_MIME_TYPES.join(',')}
+        aria-label="Authorization letter file"
+        {...letterRegProps}
+        ref={(el) => {
+          letterRegRef(el);
+          letterInputRef.current = el;
+        }}
+      />
+      <Field data-invalid={!!form.formState.errors.letter}>
         <FieldLabel htmlFor="guest-letter-trigger">
-          Dean authorisation letter
+          Authorization letter
         </FieldLabel>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/jpeg,image/png,application/pdf"
-          className="sr-only"
-          aria-label="Dean authorisation letter file"
-          onChange={(e) => handleLetterChange(e.target.files?.[0])}
+        <AuthorizationLetterUpload
+          id="guest-letter-trigger"
+          file={letterFile}
+          onPickClick={() => letterInputRef.current?.click()}
+          onRemove={() => {
+            form.setValue('letter', undefined as unknown as FileList, {
+              shouldValidate: true,
+            });
+            if (letterInputRef.current) letterInputRef.current.value = '';
+          }}
+          error={
+            form.formState.errors.letter as { message?: string } | undefined
+          }
+          invalid={!!form.formState.errors.letter}
         />
-        {!letter ? (
-          <button
-            id="guest-letter-trigger"
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="flex w-full flex-col items-center gap-2 rounded-lg border-2 border-dashed border-border bg-muted/30 p-8 text-center transition-colors hover:border-primary/50 hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-          >
-            <CloudUploadIcon
-              className="size-7 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <div>
-              <p className="text-sm font-medium text-foreground">
-                Click to upload the signed letter
-              </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                PDF, PNG, or JPG · max 5 MB
-              </p>
-            </div>
-          </button>
-        ) : (
-          <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 p-3">
-            <div className="flex min-w-0 items-center gap-2">
-              <FileTextIcon
-                className="size-5 shrink-0 text-muted-foreground"
-                aria-hidden="true"
-              />
-              <span className="truncate text-sm text-foreground">
-                {letter.name}
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={handleRemoveLetter}
-              className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-            >
-              <RefreshCwIcon className="size-3.5" aria-hidden="true" />
-              Replace
-            </button>
-          </div>
-        )}
-        {letterError && (
-          <p className="text-xs text-destructive" role="alert">
-            {letterError}
-          </p>
-        )}
       </Field>
 
       {submitError && (
@@ -500,7 +445,6 @@ export const GuestWeekendRequestForm = ({
         aria-busy={isSubmitting}
         className="w-full"
       >
-        <CalendarCheckIcon className="size-4" aria-hidden="true" />
         {isSubmitting ? 'Submitting...' : 'Request weekend access'}
       </Button>
     </form>

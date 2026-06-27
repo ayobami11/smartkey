@@ -5,8 +5,9 @@ import {
   AlertCircleIcon,
   CalendarClockIcon,
   CheckCircleIcon,
-  ClipboardCopyIcon,
+  CheckIcon,
   ClockIcon,
+  CopyIcon,
   KeyRoundIcon,
   MapPinIcon,
   RefreshCwIcon,
@@ -19,7 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 // Types
 
 type GuestRequestStatus =
-  | 'PENDING_Dean'
+  | 'PENDING_HOD'
   | 'APPROVED'
   | 'CODE_ISSUED'
   | 'KEY_ISSUED'
@@ -223,7 +224,7 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
         tone="neutral"
         icon={XCircleIcon}
         title="Request not found"
-        body="This link is invalid or has been removed. Check the link in your email, or submit a new request."
+        body="This link is invalid or has expired. Check the link in your email, or submit a new request."
         action={{ href: '/weekend-access', label: 'New request' }}
       />
     );
@@ -262,7 +263,7 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
 
   // PENDING_Dean
 
-  if (data.status === 'PENDING_Dean') {
+  if (data.status === 'PENDING_HOD') {
     return (
       <Shell onRefresh={() => void fetchStatus()}>
         <StatusCard
@@ -488,13 +489,17 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
               Show this to the security officer at the desk.
             </p>
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
               className="mt-4 gap-1.5"
               onClick={handleCopy}
               aria-label="Copy code to clipboard"
             >
-              <ClipboardCopyIcon className="size-3.5" aria-hidden="true" />
+              {copied ? (
+                <CheckIcon className="size-3.5" aria-hidden="true" />
+              ) : (
+                <CopyIcon className="size-3.5" aria-hidden="true" />
+              )}
               {copied ? 'Copied!' : 'Copy code'}
             </Button>
           </>
