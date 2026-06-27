@@ -170,7 +170,7 @@ export const IncidentsView = () => {
                       id="incident-type"
                       aria-invalid={fieldState.invalid}
                     >
-                      <SelectValue placeholder="Select type..." />
+                      <SelectValue placeholder="Select a type" />
                     </SelectTrigger>
                     <SelectContent>
                       {INCIDENT_TYPES.map((t) => (
@@ -203,7 +203,7 @@ export const IncidentsView = () => {
                       id="incident-severity"
                       aria-invalid={fieldState.invalid}
                     >
-                      <SelectValue placeholder="Select severity..." />
+                      <SelectValue placeholder="Select a severity level" />
                     </SelectTrigger>
                     <SelectContent>
                       {SEVERITIES.map((s) => (

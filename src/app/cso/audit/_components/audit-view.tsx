@@ -581,7 +581,7 @@ export const AuditView = () => {
                     onValueChange={(v) => setLogType(v as IncidentType)}
                   >
                     <SelectTrigger id="log-type">
-                      <SelectValue placeholder="Select a type..." />
+                      <SelectValue placeholder="Select a type" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="MISSING_KEY">Missing key</SelectItem>
@@ -603,7 +603,7 @@ export const AuditView = () => {
                     onValueChange={(v) => setLogSeverity(v as IncidentSeverity)}
                   >
                     <SelectTrigger id="log-severity">
-                      <SelectValue placeholder="Select severity..." />
+                      <SelectValue placeholder="Select severity level" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="LOW">Low</SelectItem>

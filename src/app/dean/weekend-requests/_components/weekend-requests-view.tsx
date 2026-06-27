@@ -615,7 +615,7 @@ export const WeekendRequestsView = () => {
                               id="assign-key"
                               aria-invalid={fieldState.invalid}
                             >
-                              <SelectValue placeholder="Select a key from your department..." />
+                              <SelectValue placeholder="Select a key from your department" />
                             </SelectTrigger>
                             <SelectContent>
                               {deptKeys.map((k) => (

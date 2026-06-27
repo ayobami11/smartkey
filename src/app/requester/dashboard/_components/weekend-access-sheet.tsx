@@ -204,7 +204,7 @@ export const WeekendAccessSheet = ({
                         }}
                       >
                         <SelectTrigger id="weekend-key">
-                          <SelectValue placeholder="Select a key..." />
+                          <SelectValue placeholder="Select a key" />
                         </SelectTrigger>
                         <SelectContent>
                           {availableKeys.map((a) => (
