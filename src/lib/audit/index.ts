@@ -49,7 +49,7 @@ export const writeAuditEntry = async (
   // the whole query — which previously left actor_name/department null.
   const { data: actor, error: profileError } = await supabase
     .from('profiles')
-    .select('full_name, departments!profiles_department_id_fkey(name)')
+    .select('full_name, units!profiles_unit_id_fkey(name)')
     .eq('id', actorId)
     .maybeSingle();
 
@@ -68,7 +68,7 @@ export const writeAuditEntry = async (
     actor_id: actorId,
     actor_role: actorRole,
     actor_name: actor?.full_name ?? null,
-    actor_department: actor?.departments?.name ?? null,
+    actor_department: actor?.units?.name ?? null,
     target_type: targetType,
     target_id: targetId,
     payload,

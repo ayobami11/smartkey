@@ -145,9 +145,9 @@ export const sendGuestWeekendEmail = async ({
             Request received, ${fullName}
           </p>
           <p style="margin:0 0 24px;color:#475569;font-size:14px;">
-            Your weekend access request has been submitted and is awaiting Head of
-            Department approval. Use the link below to track its status and, once
-            approved, to get your collection code on the day.
+            Your weekend access request has been submitted and is awaiting approval.
+            Use the link below to track its status and, once approved, to get your
+            collection code on the day.
           </p>
           <a href="${link}"
             style="display:inline-block;background:#7B1F2D;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">

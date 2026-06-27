@@ -47,18 +47,15 @@ export const provisionUserSchema = z
     role: z.enum(['DEAN', 'VERIFIER', 'REQUESTER'], {
       error: 'Select a role',
     }),
-    /** Required when role is DEAN or REQUESTER. UUID from GET /api/admin/departments. */
-    department_id: z.string().optional(),
+    /** Required when role is DEAN or REQUESTER. UUID from GET /api/admin/units. */
+    unit_id: z.string().optional(),
   })
   .superRefine((data, ctx) => {
-    if (
-      (data.role === 'DEAN' || data.role === 'REQUESTER') &&
-      !data.department_id
-    ) {
+    if ((data.role === 'DEAN' || data.role === 'REQUESTER') && !data.unit_id) {
       ctx.addIssue({
         code: 'custom',
-        message: 'Department is required for this role',
-        path: ['department_id'],
+        message: 'Unit is required for this role',
+        path: ['unit_id'],
       });
     }
   });
@@ -68,8 +65,8 @@ export const provisionUserSchema = z
 // the full name and — for departmental roles — the department can change.
 export const editUserSchema = z.object({
   full_name: z.string().trim().min(1, 'Full name is required'),
-  /** Required when the target is an HOD or REQUESTER. UUID from GET /api/admin/departments. */
-  department_id: z.string().optional(),
+  /** Required when the target is an HOD or REQUESTER. UUID from GET /api/admin/units. */
+  unit_id: z.string().optional(),
 });
 
 export const authoriseCollectorSchema = z.object({
@@ -152,7 +149,7 @@ export const guestWeekendRequestFormSchema = z.object({
     .string()
     .trim()
     .min(1, 'Enter the name or number of the room you need access to.'),
-  department_id: z.string().min(1, 'Select the department you are visiting.'),
+  unit_id: z.string().min(1, 'Select the unit you are visiting.'),
   weekend_date: z
     .string()
     .min(1, 'Date is required.')
