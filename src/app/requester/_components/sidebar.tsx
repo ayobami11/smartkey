@@ -23,14 +23,15 @@ import {
   SidebarRail,
 } from '@/components/ui/sidebar';
 
-import { NavMain } from '@/app/requester/_components/sidebar-main';
-import { SidebarBrand } from '@/app/requester/_components/sidebar-brand';
+import { NavMain } from '@/components/smartkey/sidebar-nav';
+import { SidebarBrand } from '@/components/smartkey/sidebar-brand';
+import { apiFetch } from '@/lib/api';
 
 const data = {
   team: {
     name: 'SmartKey',
     logo: SmartKeyMark,
-    plan: 'University of Lagos',
+    plan: 'Requester Dashboard',
   },
   navMain: [
     {
@@ -51,7 +52,7 @@ export const AppSidebar = ({
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
-    await fetch('/api/auth/logout', { method: 'POST' });
+    await apiFetch('/api/auth/logout', { method: 'POST' });
     router.push('/login');
   };
 
