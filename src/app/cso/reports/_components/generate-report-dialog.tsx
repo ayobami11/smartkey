@@ -195,7 +195,7 @@ export const GenerateReportDialog = ({ onGenerated }: Props) => {
                 aria-busy={generating}
                 onClick={form.handleSubmit(handleGenerate)}
               >
-                {generating ? 'Generating…' : 'Generate'}
+                {generating ? 'Generating...' : 'Generate'}
               </Button>
             </>
           )}

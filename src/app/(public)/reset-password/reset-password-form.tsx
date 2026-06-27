@@ -219,7 +219,7 @@ export const ResetPasswordForm = () => {
             className="w-full"
             disabled={isSubmitting}
           >
-            {isSubmitting ? 'Updating…' : 'Update password'}
+            {isSubmitting ? 'Updating...' : 'Update password'}
           </Button>
         </FieldGroup>
       </form>

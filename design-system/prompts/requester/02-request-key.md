@@ -64,7 +64,7 @@ Inline error below the picker using standard error microcopy: "Return time must 
 Primary button is disabled.
 
 **State 3 — Submitting**:
-Button shows skeleton "Submitting…" and is disabled. Other inputs disabled.
+Button shows skeleton "Submitting..." and is disabled. Other inputs disabled.
 
 **State 4 — Submitted**:
 Sheet animates to a confirmation state (do not collapse). Maroon-tinted check icon, heading "Request submitted", body "Check your email for the 6-digit code." Primary "View code" button → `/me/request/:requestId/code`. Secondary "Done" link → back to `/me`.

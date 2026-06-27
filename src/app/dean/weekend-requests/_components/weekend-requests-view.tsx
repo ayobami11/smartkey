@@ -542,7 +542,7 @@ export const WeekendRequestsView = () => {
                             aria-hidden="true"
                           />
                           {letterLoading
-                            ? 'Opening…'
+                            ? 'Opening...'
                             : letterUrl
                               ? 'Letter opened'
                               : 'View authorisation letter'}
@@ -615,7 +615,7 @@ export const WeekendRequestsView = () => {
                               id="assign-key"
                               aria-invalid={fieldState.invalid}
                             >
-                              <SelectValue placeholder="Select a key from your department…" />
+                              <SelectValue placeholder="Select a key from your department..." />
                             </SelectTrigger>
                             <SelectContent>
                               {deptKeys.map((k) => (
@@ -680,7 +680,7 @@ export const WeekendRequestsView = () => {
                         </Label>
                         <Textarea
                           id="hod-note"
-                          placeholder="Included in the notification email…"
+                          placeholder="Included in the notification email..."
                           rows={3}
                           className="resize-none text-sm"
                           {...field}
@@ -699,7 +699,7 @@ export const WeekendRequestsView = () => {
                         handleDecision('APPROVED', values)
                       )}
                     >
-                      {submitting ? 'Submitting…' : 'Approve'}
+                      {submitting ? 'Submitting...' : 'Approve'}
                     </Button>
                     <Button
                       variant="outline"

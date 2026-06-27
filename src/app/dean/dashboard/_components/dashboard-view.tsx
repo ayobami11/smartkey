@@ -56,7 +56,7 @@ export const DashboardView = () => {
           {fullName ? `, ${fullName}` : ''}.
         </h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          {loading ? 'Loading…' : deptName || 'No Faculty/Group assigned'}
+          {loading ? 'Loading...' : deptName || 'No Faculty/Group assigned'}
         </p>
       </div>
 

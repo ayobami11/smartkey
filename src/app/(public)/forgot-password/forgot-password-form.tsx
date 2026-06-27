@@ -50,7 +50,8 @@ export const ForgotPasswordForm = () => {
             Check your email
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            If that email address is registered, we will send you an email to reset your password.
+            If that email address is registered, we will send you an email to
+            reset your password.
           </p>
         </div>
         <Button asChild variant="outline" size="lg" className="mt-2 w-full">
@@ -105,7 +106,7 @@ export const ForgotPasswordForm = () => {
             className="w-full"
             disabled={form.formState.isSubmitting}
           >
-            {form.formState.isSubmitting ? 'Sending…' : 'Send reset link'}
+            {form.formState.isSubmitting ? 'Sending...' : 'Send reset link'}
           </Button>
         </FieldGroup>
       </form>

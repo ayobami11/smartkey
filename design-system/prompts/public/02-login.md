@@ -49,7 +49,7 @@ Generate the SmartKey `/login` screen.
 **Behaviour**:
 - On submit, route to an MFA email-OTP prompt screen before landing on the dashboard.
 - Inline error below the field on invalid credentials, using the standard error microcopy: "Email or password not recognised. Try again or use the link below to reset."
-- Loading state on the button during submission (skeleton text "Signing in…", button disabled).
+- Loading state on the button during submission (skeleton text "Signing in...", button disabled).
 - Theme toggle in the top-right (System / Light / Dark dropdown).
 
 Generate three states: default, error (invalid credentials), loading. Both 1440px (desktop) and 390px (mobile).

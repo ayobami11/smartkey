@@ -542,7 +542,7 @@ export const OutstandingKeys = () => {
                 {/* Phase: generating */}
                 {sheetPhase.phase === 'generating' && (
                   <Button className="w-full" disabled aria-busy="true">
-                    Generating…
+                    Generating...
                   </Button>
                 )}
 

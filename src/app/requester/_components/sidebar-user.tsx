@@ -124,7 +124,7 @@ export const SidebarUser = ({
               className="text-destructive focus:text-destructive"
             >
               <LogOut />
-              {isLoggingOut ? 'Signing out…' : 'Sign out'}
+              {isLoggingOut ? 'Signing out...' : 'Sign out'}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

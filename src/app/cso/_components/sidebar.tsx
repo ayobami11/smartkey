@@ -83,7 +83,7 @@ export const AppSidebar = ({
               className="text-destructive hover:bg-destructive/10 hover:text-destructive"
             >
               <LogOutIcon aria-hidden="true" />
-              <span>{isLoggingOut ? 'Signing out…' : 'Sign out'}</span>
+              <span>{isLoggingOut ? 'Signing out...' : 'Sign out'}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

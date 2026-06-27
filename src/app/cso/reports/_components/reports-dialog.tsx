@@ -74,9 +74,7 @@ export const ReportsDialog = ({ report }: Props) => {
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>
-            Add comment — Shift {report.shift}
-          </DialogTitle>
+          <DialogTitle>Add comment — Shift {report.shift}</DialogTitle>
           <DialogDescription>
             Comments are saved permanently to the report and cannot be edited or
             deleted.
@@ -104,7 +102,7 @@ export const ReportsDialog = ({ report }: Props) => {
                   id="comment-text"
                   value={commentText}
                   onChange={(e) => setCommentText(e.target.value)}
-                  placeholder="Add a note or observation to this report…"
+                  placeholder="Add a note or observation to this report..."
                   rows={5}
                   aria-required="true"
                 />
@@ -132,7 +130,7 @@ export const ReportsDialog = ({ report }: Props) => {
                 aria-busy={commenting}
                 onClick={handleComment}
               >
-                {commenting ? 'Saving…' : 'Save comment'}
+                {commenting ? 'Saving...' : 'Save comment'}
               </Button>
             </>
           )}

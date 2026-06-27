@@ -204,7 +204,7 @@ export const WeekendAccessSheet = ({
                         }}
                       >
                         <SelectTrigger id="weekend-key">
-                          <SelectValue placeholder="Select a key…" />
+                          <SelectValue placeholder="Select a key..." />
                         </SelectTrigger>
                         <SelectContent>
                           {availableKeys.map((a) => (
@@ -260,7 +260,7 @@ export const WeekendAccessSheet = ({
                       </FieldLabel>
                       <Textarea
                         id="weekend-desc"
-                        placeholder="Describe the work you need to carry out…"
+                        placeholder="Describe the work you need to carry out..."
                         rows={4}
                         aria-required="true"
                         className="resize-none"
@@ -279,7 +279,7 @@ export const WeekendAccessSheet = ({
             {step === 'submitting' && (
               <div className="flex flex-1 items-center justify-center">
                 <p className="text-sm text-muted-foreground">
-                  Submitting request…
+                  Submitting request...
                 </p>
               </div>
             )}

@@ -214,7 +214,7 @@ export const UsersView = () => {
               aria-busy={revoking}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {revoking ? 'Revoking…' : 'Revoke access'}
+              {revoking ? 'Revoking...' : 'Revoke access'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

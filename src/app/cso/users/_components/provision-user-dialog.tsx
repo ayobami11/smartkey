@@ -297,7 +297,7 @@ export const ProvisionUserDialog = ({ onSuccess }: Props) => {
                 Cancel
               </Button>
               <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? 'Creating…' : 'Create account'}
+                {form.formState.isSubmitting ? 'Creating...' : 'Create account'}
               </Button>
             </DialogFooter>
           </form>

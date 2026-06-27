@@ -406,7 +406,7 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
               aria-busy={generating}
               className="w-full"
             >
-              {generating ? 'Generating…' : 'Generate collection code'}
+              {generating ? 'Generating...' : 'Generate collection code'}
             </Button>
           </div>
         ) : (
@@ -459,7 +459,7 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
               disabled={generating}
               aria-busy={generating}
             >
-              {generating ? 'Generating…' : 'Generate a new code'}
+              {generating ? 'Generating...' : 'Generate a new code'}
             </Button>
           </>
         ) : (

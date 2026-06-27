@@ -301,7 +301,7 @@ export const AuditView = () => {
             aria-busy={exporting}
           >
             <DownloadIcon className="size-4" aria-hidden="true" />
-            {exporting ? 'Exporting…' : 'Export CSV'}
+            {exporting ? 'Exporting...' : 'Export CSV'}
           </Button>
         </div>
       </div>
@@ -527,7 +527,9 @@ export const AuditView = () => {
                     disabled={incidentState === 'loadingMore'}
                     aria-busy={incidentState === 'loadingMore'}
                   >
-                    {incidentState === 'loadingMore' ? 'Loading…' : 'Load more'}
+                    {incidentState === 'loadingMore'
+                      ? 'Loading...'
+                      : 'Load more'}
                   </Button>
                 </div>
               )}
@@ -579,7 +581,7 @@ export const AuditView = () => {
                     onValueChange={(v) => setLogType(v as IncidentType)}
                   >
                     <SelectTrigger id="log-type">
-                      <SelectValue placeholder="Select a type…" />
+                      <SelectValue placeholder="Select a type..." />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="MISSING_KEY">Missing key</SelectItem>
@@ -601,7 +603,7 @@ export const AuditView = () => {
                     onValueChange={(v) => setLogSeverity(v as IncidentSeverity)}
                   >
                     <SelectTrigger id="log-severity">
-                      <SelectValue placeholder="Select severity…" />
+                      <SelectValue placeholder="Select severity..." />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="LOW">Low</SelectItem>
@@ -621,7 +623,7 @@ export const AuditView = () => {
                     id="log-desc"
                     value={logDesc}
                     onChange={(e) => setLogDesc(e.target.value)}
-                    placeholder="Describe what occurred, when, and who was involved…"
+                    placeholder="Describe what occurred, when, and who was involved..."
                     rows={5}
                     aria-required="true"
                     className="resize-none"
@@ -652,7 +654,7 @@ export const AuditView = () => {
                   aria-busy={logging}
                   onClick={handleLogIncident}
                 >
-                  {logging ? 'Logging…' : 'Log incident'}
+                  {logging ? 'Logging...' : 'Log incident'}
                 </Button>
               </>
             )}

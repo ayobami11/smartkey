@@ -268,7 +268,7 @@ export const createColumns = (
                 disabled={resendingId === user.id}
                 onClick={() => onResend(user)}
               >
-                {resendingId === user.id ? 'Resending…' : 'Resend invite'}
+                {resendingId === user.id ? 'Resending...' : 'Resend invite'}
               </DropdownMenuItem>
             )}
             {user.status !== 'DEACTIVATED' && (

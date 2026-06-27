@@ -94,7 +94,7 @@ export const ReturnKeyOverrideForm = ({
               aria-busy={isSubmitting}
               style={isOffline ? { pointerEvents: 'none' } : undefined}
             >
-              {isSubmitting ? 'Marking returned…' : 'Return without code'}
+              {isSubmitting ? 'Marking returned...' : 'Return without code'}
             </Button>
           </span>
         </TooltipTrigger>

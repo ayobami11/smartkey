@@ -204,7 +204,7 @@ export const ChangePasswordForm = () => {
           disabled={isSubmitting}
           aria-busy={isSubmitting}
         >
-          {isSubmitting ? 'Updating…' : 'Update password'}
+          {isSubmitting ? 'Updating...' : 'Update password'}
         </Button>
       </FieldGroup>
     </form>

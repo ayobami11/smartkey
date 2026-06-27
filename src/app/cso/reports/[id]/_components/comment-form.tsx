@@ -86,7 +86,7 @@ export const CommentForm = ({ reportId }: Props) => {
       <Label htmlFor="report-comment">Add a comment</Label>
       <Textarea
         id="report-comment"
-        placeholder="Add a note or observation to this report…"
+        placeholder="Add a note or observation to this report..."
         className="min-h-32 resize-none"
         aria-required="true"
         aria-invalid={!!errors.text}
@@ -112,7 +112,7 @@ export const CommentForm = ({ reportId }: Props) => {
       )}
       <div className="flex justify-end">
         <Button type="submit" disabled={isSubmitting} aria-busy={isSubmitting}>
-          {isSubmitting ? 'Saving…' : 'Save comment'}
+          {isSubmitting ? 'Saving...' : 'Save comment'}
         </Button>
       </div>
     </form>

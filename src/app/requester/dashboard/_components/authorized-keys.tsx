@@ -401,7 +401,7 @@ export const AuthorizedKeys = () => {
             {step === 'submitting' && (
               <div className="flex flex-1 items-center justify-center">
                 <p className="text-sm text-muted-foreground">
-                  Submitting request…
+                  Submitting request...
                 </p>
               </div>
             )}

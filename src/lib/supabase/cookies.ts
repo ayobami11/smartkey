@@ -84,6 +84,6 @@ const projectRef = (): string => {
 };
 
 // The cookie base name @supabase/ssr will use as its storage key for this
-// namespace. The library appends chunk suffixes (.0, .1, …) as needed.
+// namespace. The library appends chunk suffixes (.0, .1, ...) as needed.
 export const cookieNameForNamespace = (ns: SessionNamespace): string =>
   `sb-${projectRef()}-${ns}`;

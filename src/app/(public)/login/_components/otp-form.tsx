@@ -230,7 +230,7 @@ export const OtpForm = ({
           aria-disabled={isVerifying || otpForm.formState.isSubmitting}
         >
           {isVerifying || otpForm.formState.isSubmitting
-            ? 'Verifying…'
+            ? 'Verifying...'
             : 'Verify code'}
         </Button>
 
@@ -242,7 +242,7 @@ export const OtpForm = ({
             disabled={resendCooldown > 0 || isResending}
           >
             {isResending
-              ? 'Sending…'
+              ? 'Sending...'
               : resendCooldown > 0
                 ? `Resend code in ${resendCooldown}s`
                 : "Didn't receive a code? Resend"}

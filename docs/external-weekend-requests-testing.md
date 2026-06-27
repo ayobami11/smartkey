@@ -18,7 +18,7 @@ the code passes `npm run typecheck` and `npm run lint`.
   | Role | Email | Notes |
   | --- | --- | --- |
   | CSO | `mohammedfirdous682@gmail.com` | audit log, oversight |
-  | HOD | `tunwaseayobami11@gmail.com` | department `…0002` — approves guest requests |
+  | HOD | `tunwaseayobami11@gmail.com` | department `...0002` — approves guest requests |
   | VERIFIER | `rojes87653@lidugw.com` | issues the key at the desk |
 - Seed IDs handy for SQL: HOD dept `10000000-0000-4000-8000-000000000002`, a key in that
   dept `20000000-0000-4000-8000-000000000007`.

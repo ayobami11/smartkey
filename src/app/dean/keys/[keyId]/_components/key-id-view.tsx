@@ -441,7 +441,7 @@ export const KeyIdView = () => {
                         aria-busy={adding}
                         onClick={handleAdd}
                       >
-                        {adding ? 'Adding…' : 'Add'}
+                        {adding ? 'Adding...' : 'Add'}
                       </Button>
                     </div>
                   </div>
@@ -498,7 +498,7 @@ export const KeyIdView = () => {
               aria-busy={removing}
               onClick={() => removeTarget && handleRemove(removeTarget)}
             >
-              {removing ? 'Removing…' : 'Remove'}
+              {removing ? 'Removing...' : 'Remove'}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -59,7 +59,7 @@ export const DownloadReport = ({ fileName, ...data }: Props) => {
         ) : (
           <DownloadIcon className="size-4" aria-hidden="true" />
         )}
-        {busy ? 'Preparing…' : 'Download PDF'}
+        {busy ? 'Preparing...' : 'Download PDF'}
       </Button>
       {error && (
         <p className="text-xs text-destructive" role="alert">

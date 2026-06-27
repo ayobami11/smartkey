@@ -73,7 +73,11 @@ type IssueResult = {
     id_document_type?: string | null;
     id_document_number?: string | null;
   };
-  key: { code: string | null; room_name: string | null; key_count?: number | null };
+  key: {
+    code: string | null;
+    room_name: string | null;
+    key_count?: number | null;
+  };
   issued_at: string;
 };
 
@@ -513,7 +517,7 @@ export const LiveRequestQueue = () => {
                           isOffline ? { pointerEvents: 'none' } : undefined
                         }
                       >
-                        {issuing ? 'Issuing…' : 'Issue key'}
+                        {issuing ? 'Issuing...' : 'Issue key'}
                       </Button>
                     </span>
                   </TooltipTrigger>

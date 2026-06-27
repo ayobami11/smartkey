@@ -65,7 +65,7 @@ Below the form: a small note in body-sm muted-foreground "Your HOD (Prof. Okonkw
 
 1. **Empty form** (default).
 2. **Validation error** — description too short, inline error "Description must be at least 50 characters. (currently 12)" below the textarea.
-3. **Submitting** — button skeleton "Submitting…", disabled.
+3. **Submitting** — button skeleton "Submitting...", disabled.
 4. **Submitted (pending HOD)** — form replaced by a confirmation card: amber-soft tint, heading "Request submitted", body "Pending review by Prof. Okonkwo. You'll receive an email when a decision is made." Below: a summary of what was submitted (key, date, activity). Primary "Done" link to `/me`, secondary "Submit another" link to a fresh form.
 5. **Approved** (read-only view of an approved historical request, accessed via `/me/history`) — green-soft tint card, heading "Approved by Prof. Okonkwo", subhead "A code will be issued on Saturday 10 May." Note from HOD if any.
 6. **Declined** — red-soft tint card, heading "Declined by Prof. Okonkwo", subhead "Reason: 'Building closed for maintenance.'" Primary "Submit a new request" button.

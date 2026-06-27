@@ -180,7 +180,7 @@ export const LoginForm = () => {
           disabled={credentialsForm.formState.isSubmitting}
           aria-disabled={credentialsForm.formState.isSubmitting}
         >
-          {credentialsForm.formState.isSubmitting ? 'Signing in…' : 'Sign in'}
+          {credentialsForm.formState.isSubmitting ? 'Signing in...' : 'Sign in'}
         </Button>
       </FieldGroup>
     </form>

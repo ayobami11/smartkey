@@ -121,7 +121,7 @@ export const DashboardHeaderAvatar = ({
           className="text-destructive focus:text-destructive"
         >
           <LogOutIcon className="size-4" aria-hidden="true" />
-          {isLoggingOut ? 'Signing out…' : 'Sign out'}
+          {isLoggingOut ? 'Signing out...' : 'Sign out'}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

@@ -51,7 +51,7 @@ export const ProfilePhotoPreview = ({
           <AvatarImage src={photoUrl} alt={name} />
           <AvatarFallback className="bg-primary/10 font-semibold text-primary text-3xl">
             {loading ? (
-              '…'
+              '...'
             ) : initials ? (
               initials
             ) : (

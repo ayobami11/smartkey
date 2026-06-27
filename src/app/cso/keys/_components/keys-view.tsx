@@ -264,7 +264,7 @@ export const KeysView = () => {
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setSearch(e.target.value)
                 }
-                placeholder="Search by key code, room, department, or HOD…"
+                placeholder="Search by key code, room, department, or HOD..."
                 aria-label="Search keys"
               />
               <InputGroupAddon align="inline-start">

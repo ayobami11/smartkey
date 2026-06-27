@@ -60,13 +60,13 @@ Tailwind defaults `p-1` through `p-24` map directly to the SmartKey spacing scal
 
 ```tsx
 // NEVER hardcode colours
-<div className="bg-[#7B1F2D]">…</div>            // ❌
-<div style={{ color: '#dc2626' }}>…</div>        // ❌
+<div className="bg-[#7B1F2D]">...</div>            // ❌
+<div style={{ color: '#dc2626' }}>...</div>        // ❌
 
 // NEVER use arbitrary values for design-system properties
-<div className="text-[18px]">…</div>             // ❌ — use text-lg
-<div className="p-[15px]">…</div>                // ❌ — use p-4
-<div className="rounded-[6px]">…</div>           // ❌ — use rounded-md
+<div className="text-[18px]">...</div>             // ❌ — use text-lg
+<div className="p-[15px]">...</div>                // ❌ — use p-4
+<div className="rounded-[6px]">...</div>           // ❌ — use rounded-md
 
 // NEVER convey state through colour alone
 <Badge className="bg-error-soft">High</Badge>    // ❌ — needs an icon and visible "High" label
@@ -79,10 +79,10 @@ Tailwind defaults `p-1` through `p-24` map directly to the SmartKey spacing scal
 
 ```tsx
 // Use tokens
-<div className="bg-primary text-primary-foreground">…</div>     // ✅
+<div className="bg-primary text-primary-foreground">...</div>     // ✅
 
 // Use the type scale
-<h2 className="text-2xl font-semibold text-foreground">…</h2>   // ✅
+<h2 className="text-2xl font-semibold text-foreground">...</h2>   // ✅
 
 // Status with colour + icon + label
 <Badge className="bg-risk-high-soft text-risk-high-strong">

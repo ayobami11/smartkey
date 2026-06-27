@@ -275,7 +275,7 @@ export const WeekendRequests = () => {
                       aria-busy={generatingId === req.id}
                       className="shrink-0"
                     >
-                      {generatingId === req.id ? 'Generating…' : 'Get code'}
+                      {generatingId === req.id ? 'Generating...' : 'Get code'}
                     </Button>
                   )}
                   {approvedFuture && (

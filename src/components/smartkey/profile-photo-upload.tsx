@@ -176,7 +176,7 @@ export const ProfilePhotoUpload = ({
               aria-busy={uploading}
             >
               <UploadIcon className="size-3.5" aria-hidden="true" />
-              {uploading ? 'Saving…' : 'Save photo'}
+              {uploading ? 'Saving...' : 'Save photo'}
             </Button>
             <Button
               variant="ghost"
@@ -210,7 +210,7 @@ export const ProfilePhotoUpload = ({
                     aria-busy={removing}
                   >
                     <Trash2Icon className="size-3.5" aria-hidden="true" />
-                    {removing ? 'Removing…' : 'Remove photo'}
+                    {removing ? 'Removing...' : 'Remove photo'}
                   </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>

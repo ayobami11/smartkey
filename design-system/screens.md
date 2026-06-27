@@ -287,7 +287,7 @@ Every async surface needs four states: empty, loading, error, content. Plus offl
 
 - Skeleton elements with same dimensions as content they replace (prevents CLS).
 - Subtle shimmer animation that respects reduce-motion.
-- After 5s without data: keep skeleton but show "Still loading…" caption.
+- After 5s without data: keep skeleton but show "Still loading..." caption.
 - After 15s: show retry CTA and contact-CSO secondary action.
 
 ### 6.3 Error

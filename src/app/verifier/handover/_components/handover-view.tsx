@@ -375,7 +375,7 @@ export const HandoverView = () => {
                       style={isOffline ? { pointerEvents: 'none' } : undefined}
                     >
                       {submitting
-                        ? 'Completing handover…'
+                        ? 'Completing handover...'
                         : `Acknowledge ${outstandingKeys.length} key${outstandingKeys.length !== 1 ? 's' : ''}`}
                     </Button>
                   </span>
@@ -435,7 +435,7 @@ export const HandoverView = () => {
                       style={isOffline ? { pointerEvents: 'none' } : undefined}
                     >
                       {submitting
-                        ? 'Completing handover…'
+                        ? 'Completing handover...'
                         : 'Complete handover'}
                     </Button>
                   </span>

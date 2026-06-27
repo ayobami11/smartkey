@@ -130,7 +130,7 @@ export const ReportsList = ({
             disabled={isFetchingNextPage}
             aria-busy={isFetchingNextPage}
           >
-            {isFetchingNextPage ? 'Loading…' : 'Load more'}
+            {isFetchingNextPage ? 'Loading...' : 'Load more'}
           </Button>
         </div>
       )}

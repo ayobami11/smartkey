@@ -268,7 +268,7 @@ export const ActiveRequestBanner = () => {
                   className={`shrink-0 gap-1.5${isOffline ? ' pointer-events-none' : ''}`}
                 >
                   <XCircleIcon className="size-3.5" aria-hidden="true" />
-                  {cancelling ? 'Cancelling…' : 'Cancel request'}
+                  {cancelling ? 'Cancelling...' : 'Cancel request'}
                 </Button>
               </span>
             </TooltipTrigger>

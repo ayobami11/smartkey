@@ -33,7 +33,7 @@ Each entry: date, brief title, what changed, why.
 
 - **Why**: uploading a passport photo from account settings succeeded, but loading it back failed with `net::ERR_BLOCKED_BY_ORB`. The storage migration (`20260605000001`) declared `passport-photos` and `hod-signatures` as public so `getPublicUrl` works for account settings, verifier identity display, and HOD signature/stamp previews — but it used `INSERT ... ON CONFLICT DO NOTHING`, so on the live project (where the buckets pre-existed as private) the public flag was never applied. `getPublicUrl` on a private bucket returns a JSON error body, not image bytes; the browser blocks that cross-origin non-image response (ORB). The upload (POST) always worked; only the read-back failed.
 - `supabase/migrations/20260623090000_make_photo_buckets_public.sql`: `UPDATE storage.buckets SET public = true` for `passport-photos` and `hod-signatures`, reconciling live to the declared intent. Applied to the live project. `weekend-letters` stays private by design (served via short-lived signed URLs).
-- No code or data change needed: stored `photo_url` / `signature_ref_url` values were already in the `…/object/public/…` form `getPublicUrl` produces, so they resolve as soon as the bucket is public.
+- No code or data change needed: stored `photo_url` / `signature_ref_url` values were already in the `.../object/public/...` form `getPublicUrl` produces, so they resolve as soon as the bucket is public.
 
 ### 2026-06-22 — Shift report PDF download
 
@@ -168,7 +168,7 @@ Each entry: date, brief title, what changed, why.
 
 ### 2026-06-09 — Supabase Realtime subscriptions and offline guard (PR #39, branch: backend/feat/18-realtime-offline)
 
-- `src/hooks/useRealtime.ts` — generic subscription hook. Accepts `table`, optional `filter`, and `onInsert`/`onUpdate`/`onDelete` callbacks. Reconnects automatically with exponential backoff (1 s → 2 s → 4 s → … → 30 s cap). After 30 s without a successful connection, emits `'offline'` status.
+- `src/hooks/useRealtime.ts` — generic subscription hook. Accepts `table`, optional `filter`, and `onInsert`/`onUpdate`/`onDelete` callbacks. Reconnects automatically with exponential backoff (1 s → 2 s → 4 s → ... → 30 s cap). After 30 s without a successful connection, emits `'offline'` status.
 - `src/hooks/useConnectionStatus.ts` — module-level event emitter that returns `'connected' | 'reconnecting' | 'offline'`. Shared across all `useRealtime` instances so the app bar dot reflects the aggregate connection state.
 - `src/components/smartkey/OfflineBanner.tsx` — full-bleed, sharp-edged banner with `aria-live="assertive"`. Renders only when status is `'offline'`; hidden otherwise. Carries the standard copy: "You are offline. Live updates are paused. New requests will appear when you reconnect."
 

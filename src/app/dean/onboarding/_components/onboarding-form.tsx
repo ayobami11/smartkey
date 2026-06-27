@@ -238,7 +238,7 @@ export const OnboardingForm = ({
           disabled={form.formState.isSubmitting}
           aria-busy={form.formState.isSubmitting}
         >
-          {form.formState.isSubmitting ? 'Setting up…' : 'Finish setup'}
+          {form.formState.isSubmitting ? 'Setting up...' : 'Finish setup'}
         </Button>
       </div>
     </form>

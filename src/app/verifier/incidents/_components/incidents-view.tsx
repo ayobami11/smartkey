@@ -170,7 +170,7 @@ export const IncidentsView = () => {
                       id="incident-type"
                       aria-invalid={fieldState.invalid}
                     >
-                      <SelectValue placeholder="Select type…" />
+                      <SelectValue placeholder="Select type..." />
                     </SelectTrigger>
                     <SelectContent>
                       {INCIDENT_TYPES.map((t) => (
@@ -203,7 +203,7 @@ export const IncidentsView = () => {
                       id="incident-severity"
                       aria-invalid={fieldState.invalid}
                     >
-                      <SelectValue placeholder="Select severity…" />
+                      <SelectValue placeholder="Select severity..." />
                     </SelectTrigger>
                     <SelectContent>
                       {SEVERITIES.map((s) => (
@@ -239,7 +239,7 @@ export const IncidentsView = () => {
                   </FieldLabel>
                   <Textarea
                     id="incident-description"
-                    placeholder="Describe what happened, who was involved, and any actions already taken…"
+                    placeholder="Describe what happened, who was involved, and any actions already taken..."
                     rows={5}
                     className="resize-none"
                     disabled={step === 'submitting'}
@@ -272,7 +272,7 @@ export const IncidentsView = () => {
               aria-busy={step === 'submitting'}
               className="w-full"
             >
-              {step === 'submitting' ? 'Logging incident…' : 'Log incident'}
+              {step === 'submitting' ? 'Logging incident...' : 'Log incident'}
             </Button>
           </form>
         )}

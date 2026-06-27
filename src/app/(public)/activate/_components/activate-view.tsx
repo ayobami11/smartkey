@@ -146,7 +146,7 @@ export const ActivateView = () => {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <p className="text-sm text-muted-foreground">
-          Setting up your account…
+          Setting up your account...
         </p>
       </div>
     );
@@ -377,7 +377,7 @@ export const ActivateView = () => {
           )}
 
           <Button type="submit" disabled={isSubmitting} className="w-full">
-            {isSubmitting ? 'Activating…' : 'Activate account'}
+            {isSubmitting ? 'Activating...' : 'Activate account'}
           </Button>
         </form>
       </div>

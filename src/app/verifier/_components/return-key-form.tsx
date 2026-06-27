@@ -112,7 +112,7 @@ export const ReturnKeyForm = ({
               aria-busy={isSubmitting}
               style={isOffline ? { pointerEvents: 'none' } : undefined}
             >
-              {isSubmitting ? 'Marking returned…' : 'Confirm return'}
+              {isSubmitting ? 'Marking returned...' : 'Confirm return'}
             </Button>
           </span>
         </TooltipTrigger>

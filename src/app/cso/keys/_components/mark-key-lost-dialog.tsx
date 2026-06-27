@@ -74,9 +74,7 @@ export const MarkKeyLostDialog = ({ target, onClose, onMarked }: Props) => {
     <Dialog open={target !== null} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>
-            Mark key {target?.code} as lost
-          </DialogTitle>
+          <DialogTitle>Mark key {target?.code} as lost</DialogTitle>
           <DialogDescription>
             This will retire the key and open a HIGH-severity incident. This
             action cannot be undone.
@@ -92,7 +90,7 @@ export const MarkKeyLostDialog = ({ target, onClose, onMarked }: Props) => {
                 <Textarea
                   id="lost-note"
                   {...field}
-                  placeholder="Describe when and how the key went missing…"
+                  placeholder="Describe when and how the key went missing..."
                   className="resize-none min-h-32"
                   aria-invalid={fieldState.invalid}
                 />
@@ -120,7 +118,7 @@ export const MarkKeyLostDialog = ({ target, onClose, onMarked }: Props) => {
               disabled={marking}
               aria-busy={marking}
             >
-              {marking ? 'Marking…' : 'Mark as lost'}
+              {marking ? 'Marking...' : 'Mark as lost'}
             </Button>
           </DialogFooter>
         </form>

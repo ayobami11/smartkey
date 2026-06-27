@@ -34,7 +34,7 @@ export const RequestList = ({
           disabled={loadingMore}
           aria-busy={loadingMore}
         >
-          {loadingMore ? 'Loading…' : 'Load more'}
+          {loadingMore ? 'Loading...' : 'Load more'}
         </Button>
       </div>
     )}

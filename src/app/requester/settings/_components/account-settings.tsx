@@ -146,7 +146,7 @@ export const AccountSettings = () => {
             className="mt-4 w-fit"
             disabled={!form.formState.isDirty || form.formState.isSubmitting}
           >
-            {form.formState.isSubmitting ? 'Saving…' : 'Update profile'}
+            {form.formState.isSubmitting ? 'Saving...' : 'Update profile'}
           </Button>
         </form>
       </div>
