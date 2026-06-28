@@ -1,10 +1,11 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { KeyRoundIcon, PlusIcon } from 'lucide-react';
+import { AlertCircleIcon, KeyRoundIcon } from 'lucide-react';
 import Link from 'next/link';
 
 import { createBrowserClient } from '@/lib/supabase/client';
+import { ZONE_LABELS } from '@/lib/constants';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -93,47 +94,67 @@ export const AdminKeysView = () => {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {keys.map((key) => (
-          <div
-            key={key.id}
-            className="flex flex-col gap-4 rounded-lg border border-border bg-card p-5"
-          >
-            <div className="flex items-center gap-2.5">
-              <KeyRoundIcon className="size-5 text-primary" />
-              <div>
-                <code className="font-mono font-semibold">{key.code}</code>
-                <p className="text-sm text-muted-foreground">{key.room_name}</p>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <p className="text-xs font-medium text-muted-foreground">
-                Collectors ({key.authorisations.length}/3)
-              </p>
-              {key.authorisations.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic">
-                  No collectors assigned
-                </p>
-              ) : (
-                key.authorisations.map((auth) => (
+        {keys.map((key) => {
+          const allVacant = key.authorisations.length === 0;
+          const filledCount = key.authorisations.length;
+          return (
+            <Link
+              key={key.id}
+              href={`/cso/admin-keys/${key.id}`}
+              className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 shadow-[0_2px_4px_rgba(15,23,42,0.06)] transition-shadow hover:shadow-[0_4px_8px_rgba(15,23,42,0.08)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2">
                   <div
-                    key={auth.profile_id}
-                    className="text-xs text-foreground"
+                    className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${allVacant ? 'bg-amber-500/10' : 'bg-primary/10'}`}
                   >
-                    {auth.profile.full_name}
+                    <KeyRoundIcon
+                      className={`size-4 ${allVacant ? 'text-amber-500' : 'text-primary'}`}
+                      aria-hidden="true"
+                    />
                   </div>
-                ))
-              )}
-            </div>
+                  <code className="font-mono text-sm font-semibold text-foreground">
+                    {key.code}
+                  </code>
+                </div>
+                {allVacant && (
+                  <AlertCircleIcon
+                    className="size-4 shrink-0 text-amber-500"
+                    aria-label="No collectors authorised"
+                  />
+                )}
+              </div>
 
-            <Button variant="outline" size="sm" asChild>
-              <Link href={`/cso/admin-keys/${key.id}`}>
-                <PlusIcon className="size-4" />
-                Manage Collectors
-              </Link>
-            </Button>
-          </div>
-        ))}
+              <div className="flex flex-col gap-0.5">
+                <span className="text-sm font-medium text-foreground">
+                  {key.room_name}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {ZONE_LABELS[key.zone as keyof typeof ZONE_LABELS] ??
+                    key.zone}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div
+                  className="flex items-center gap-1"
+                  aria-label={`${filledCount} of 3 collectors authorised`}
+                >
+                  {[0, 1, 2].map((i) => (
+                    <div
+                      key={i}
+                      className={`size-2.5 rounded-full ${i < filledCount ? 'bg-primary' : 'border-2 border-dashed border-border'}`}
+                      aria-hidden="true"
+                    />
+                  ))}
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  {filledCount}/3 authorised
+                </span>
+              </div>
+            </Link>
+          );
+        })}
       </div>
 
       {keys.length === 0 && (
