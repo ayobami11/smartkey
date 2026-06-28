@@ -24,6 +24,7 @@ import {
   type GuestWeekendRequestFormInput,
 } from '@/lib/validation/schemas';
 import { apiFetch } from '@/lib/api';
+import { todayDateISO } from '@/lib/dates';
 import { AuthorizationLetterUpload } from '@/app/(public)/weekend-access/_components/authorization-letter-upload';
 
 // Types
@@ -33,10 +34,6 @@ type DepartmentOption = { id: string; name: string };
 type GuestWeekendRequestFormProps = {
   departments: DepartmentOption[];
 };
-
-// Helpers
-
-const todayIso = () => new Date().toISOString().slice(0, 10);
 
 // Component
 
@@ -373,7 +370,7 @@ export const GuestWeekendRequestForm = ({
             <Input
               id="guest-weekend-date"
               type="date"
-              min={todayIso()}
+              min={todayDateISO()}
               aria-invalid={fieldState.invalid}
               {...field}
             />

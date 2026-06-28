@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
 import { apiFetch } from '@/lib/api';
+import { subDaysISO } from '@/lib/dates';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -82,16 +83,8 @@ export const ReportsView = () => {
     queryKey: ['cso', 'reports', dateFilter],
     queryFn: async ({ pageParam }) => {
       const params = new URLSearchParams({ limit: '20' });
-      if (dateFilter === '7d')
-        params.set(
-          'from',
-          new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-        );
-      else if (dateFilter === '30d')
-        params.set(
-          'from',
-          new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-        );
+      if (dateFilter === '7d') params.set('from', subDaysISO(7));
+      else if (dateFilter === '30d') params.set('from', subDaysISO(30));
       if (pageParam) params.set('cursor', pageParam);
 
       const result = await apiFetch<{

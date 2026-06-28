@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { ClockIcon } from 'lucide-react';
 
 import { Progress } from '@/components/ui/progress';
+import { formatCountdown } from '@/lib/dates';
 
 type Props = {
   countdown: number;
@@ -13,24 +14,6 @@ type Props = {
 
 // Code lifetime per product spec — create_request RPC always sets expiry to now + 10 min
 const CODE_LIFETIME_MS = 10 * 60 * 1000;
-
-const formatCountdown = (seconds: number) => {
-  if (seconds >= 86400) {
-    const d = Math.floor(seconds / 86400);
-    const h = Math.floor((seconds % 86400) / 3600);
-    return `${d}d ${h}h`;
-  }
-  if (seconds >= 3600) {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    return `${h}h ${m}m`;
-  }
-  const m = Math.floor(seconds / 60)
-    .toString()
-    .padStart(2, '0');
-  const s = (seconds % 60).toString().padStart(2, '0');
-  return `${m}:${s}`;
-};
 
 export const CodeCountdown = ({ countdown, codeExpiresAt }: Props) => {
   const [now, setNow] = useState(() => Date.now());

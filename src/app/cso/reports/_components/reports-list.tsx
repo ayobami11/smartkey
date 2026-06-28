@@ -5,6 +5,9 @@ import { BotIcon, FlagIcon, KeyRoundIcon, RotateCcwIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 import { ReportsDialog } from '@/app/cso/reports/_components/reports-dialog';
+import { formatDate, formatTime } from '@/lib/dates';
+
+export { formatDate, formatTime };
 
 // Types
 
@@ -18,22 +21,6 @@ export type Report = {
   returned: number;
   flagged: number;
 };
-
-// Helpers
-
-export const formatDate = (iso: string) =>
-  new Date(iso).toLocaleDateString('en-GB', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
-
-export const formatTime = (iso: string) =>
-  new Date(iso).toLocaleTimeString('en-GB', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
 
 export function groupByDay(
   reports: Report[]

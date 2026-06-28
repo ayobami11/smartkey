@@ -36,6 +36,7 @@ import {
 } from '@/components/ui/tooltip';
 import { apiFetch } from '@/lib/api';
 import { createBrowserClient } from '@/lib/supabase/client';
+import { formatCountdown, formatDeadline, relativeTime } from '@/lib/dates';
 
 // Types
 
@@ -56,46 +57,6 @@ type SheetPhase =
   | { phase: 'expired' }
   | { phase: 'returned' }
   | { phase: 'error'; message: string };
-
-// Helpers
-
-const formatCountdown = (s: number): string => {
-  if (s >= 86400) {
-    return `${Math.floor(s / 86400)}d ${Math.floor((s % 86400) / 3600)}h`;
-  }
-  if (s >= 3600) {
-    return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
-  }
-  const m = Math.floor(s / 60)
-    .toString()
-    .padStart(2, '0');
-  const sec = (s % 60).toString().padStart(2, '0');
-  return `${m}:${sec}`;
-};
-
-const relativeTime = (iso: string) => {
-  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
-  if (diff < 1) return 'just now';
-  if (diff === 1) return '1 min ago';
-  if (diff < 60) return `${diff} min ago`;
-  const hours = Math.floor(diff / 60);
-  return hours === 1 ? '1 hr ago' : `${hours} hrs ago`;
-};
-
-const formatDeadline = (iso: string) => {
-  const date = new Date(iso);
-  const now = new Date();
-  const isToday = date.toDateString() === now.toDateString();
-  return isToday
-    ? `Today ${date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`
-    : date.toLocaleDateString('en-GB', {
-        weekday: 'short',
-        day: 'numeric',
-        month: 'short',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-};
 
 // Return code lifetime per request_return RPC — always now + 15 min
 const RETURN_CODE_LIFETIME_MS = 15 * 60 * 1000;

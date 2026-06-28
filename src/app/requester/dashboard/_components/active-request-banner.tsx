@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/tooltip';
 import { apiFetch } from '@/lib/api';
 import { createBrowserClient } from '@/lib/supabase/client';
+import { formatCountdown, secondsRemaining } from '@/lib/dates';
 
 // Types
 
@@ -24,29 +25,6 @@ type ActiveRequest = {
   code: string | null;
   code_expires_at: string | null;
   key: { code: string; room_name: string } | null;
-};
-
-// Helpers
-
-const secondsRemaining = (isoExpiry: string) =>
-  Math.max(0, Math.floor((new Date(isoExpiry).getTime() - Date.now()) / 1000));
-
-const formatCountdown = (seconds: number) => {
-  if (seconds >= 86400) {
-    const d = Math.floor(seconds / 86400);
-    const h = Math.floor((seconds % 86400) / 3600);
-    return `${d}d ${h}h`;
-  }
-  if (seconds >= 3600) {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    return `${h}h ${m}m`;
-  }
-  const m = Math.floor(seconds / 60)
-    .toString()
-    .padStart(2, '0');
-  const s = (seconds % 60).toString().padStart(2, '0');
-  return `${m}:${s}`;
 };
 
 // Component

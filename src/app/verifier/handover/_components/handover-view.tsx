@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/tooltip';
 import { apiFetch } from '@/lib/api';
 import { useConnectionStatus } from '@/hooks/use-connection-status';
+import { formatDate, formatTime } from '@/lib/dates';
 
 // Types
 
@@ -43,28 +44,13 @@ type Shift = {
 type OutstandingKey = {
   id: string;
   key: { code: string; room_name: string; zone: string };
-  requester: { id: string; full_name: string; photo_url: string | null };
+  requester: { id: string; full_name: string; photo_url: string | null } | null;
   issued_at: string;
   return_deadline: string;
   status: 'KEY_ISSUED' | 'KEY_OVERDUE';
 };
 
 type PageStep = 'loading' | 'ready' | 'success' | 'error';
-
-// Helpers
-
-const formatTime = (iso: string) =>
-  new Date(iso).toLocaleTimeString('en-GB', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-
-const formatDate = (iso: string) =>
-  new Date(iso).toLocaleDateString('en-GB', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-  });
 
 // Component
 
@@ -317,7 +303,8 @@ export const HandoverView = () => {
                           )}
                         </div>
                         <span className="truncate text-xs text-muted-foreground">
-                          {item.key.room_name} · {item.requester.full_name}
+                          {item.key.room_name} ·{' '}
+                          {item.requester?.full_name ?? 'External guest'}
                         </span>
                         <span className="font-mono text-xs text-muted-foreground">
                           Issued {formatTime(item.issued_at)}

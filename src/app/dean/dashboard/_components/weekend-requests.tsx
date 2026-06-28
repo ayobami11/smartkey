@@ -8,6 +8,7 @@ import { useConnectionStatus } from '@/hooks/use-connection-status';
 import { apiFetch } from '@/lib/api';
 import { useRealtime } from '@/hooks/use-realtime';
 import { Skeleton } from '@/components/ui/skeleton';
+import { formatDate } from '@/lib/dates';
 
 type PendingRequest = {
   id: string;
@@ -17,14 +18,6 @@ type PendingRequest = {
   requested_for: string;
   type: 'WEEKDAY' | 'WEEKEND';
 };
-
-const formatDate = (iso: string) =>
-  new Date(iso).toLocaleDateString('en-GB', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
 
 export const WeekendRequests = () => {
   const queryClient = useQueryClient();

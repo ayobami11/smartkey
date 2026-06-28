@@ -3,6 +3,7 @@ import { CalendarIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 import { type RequestStatus, type RequestType } from '@/lib/constants';
+import { formatDateNumeric } from '@/lib/dates';
 
 // Re-export so callers don't need to update their imports.
 export type { RequestStatus, RequestType };
@@ -67,13 +68,6 @@ const STATUS_CONFIG: Record<
   },
 };
 
-const formatDate = (iso: string) =>
-  new Date(iso).toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
-
 // Component
 
 type RequestCardProps = { request: RequestRow };
@@ -107,7 +101,7 @@ export const RequestCard = ({ request }: RequestCardProps) => {
           </p>
           <p className="flex items-center gap-1 text-xs text-muted-foreground">
             <CalendarIcon className="size-3 shrink-0" aria-hidden="true" />
-            {formatDate(request.created_at)}
+            {formatDateNumeric(request.created_at)}
           </p>
         </div>
         <Badge variant="outline" className="shrink-0 text-xs">

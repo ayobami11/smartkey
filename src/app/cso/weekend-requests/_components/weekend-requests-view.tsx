@@ -21,6 +21,7 @@ import {
 import { useRealtime } from '@/hooks/use-realtime';
 import { useConnectionStatus } from '@/hooks/use-connection-status';
 import { RiskTierBadge } from '@/components/smartkey/risk-tier-badge';
+import { GuestBadge } from '@/components/smartkey/guest-badge';
 import type { RiskTier } from '@/lib/ai/risk/types';
 
 import { Button } from '@/components/ui/button';
@@ -59,6 +60,7 @@ import {
   hodWeekendDecisionFormSchema,
   type HodWeekendDecisionFormInput,
 } from '@/lib/validation/schemas';
+import { formatDate, relativeTimeCompact as relativeTime } from '@/lib/dates';
 
 // Types
 
@@ -97,25 +99,6 @@ type PendingRequest = {
 };
 
 type DeptKey = { id: string; code: string; room_name: string };
-
-// Helpers
-
-const relativeTime = (iso: string) => {
-  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
-  if (diff < 1) return 'just now';
-  if (diff < 60) return `${diff}m ago`;
-  const hours = Math.floor(diff / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-};
-
-const formatDate = (iso: string) =>
-  new Date(iso).toLocaleDateString('en-GB', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
 
 const displayName = (req: PendingRequest) =>
   req.guest?.full_name ?? req.requester?.full_name ?? 'Unknown requester';
@@ -416,7 +399,7 @@ export const WeekendRequestsView = () => {
                       <span className="font-mono text-sm font-medium text-foreground">
                         {req.key?.code ?? 'Key on approval'}
                       </span>
-                      {isGuest && <ExternalBadge />}
+                      {isGuest && <GuestBadge label="External" showIcon />}
                       <RiskTierBadge
                         tier={req.risk_tier as RiskTier}
                         factors={[]}
@@ -475,7 +458,7 @@ export const WeekendRequestsView = () => {
           <SheetHeader className="border-b border-border p-6">
             <SheetTitle className="flex items-center gap-2">
               Weekend access request
-              {selected?.guest && <ExternalBadge />}
+              {selected?.guest && <GuestBadge label="External" showIcon />}
             </SheetTitle>
           </SheetHeader>
 
@@ -676,7 +659,7 @@ export const WeekendRequestsView = () => {
                                     </span>
                                   </span>
                                 ) : (
-                                  <SelectValue placeholder="Select an administration key" />
+                                  <SelectValue placeholder="Select a key" />
                                 )}
                               </SelectTrigger>
                               <SelectContent position="popper">
@@ -788,15 +771,3 @@ export const WeekendRequestsView = () => {
     </div>
   );
 };
-
-// Sub-components
-
-const ExternalBadge = () => (
-  <span
-    className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
-    aria-label="External requester"
-  >
-    <UserRoundIcon className="size-3" aria-hidden="true" />
-    External
-  </span>
-);

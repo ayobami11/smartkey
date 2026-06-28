@@ -33,6 +33,7 @@ import {
   RiskAcknowledgement,
   RiskTierBadge,
 } from '@/components/smartkey/risk-tier-badge';
+import { GuestBadge } from '@/components/smartkey/guest-badge';
 import { useRealtime } from '@/hooks/use-realtime';
 import { apiFetch } from '@/lib/api';
 import { useConnectionStatus } from '@/hooks/use-connection-status';
@@ -46,6 +47,7 @@ import {
   type IssueKeyFormInput,
 } from '@/lib/validation/schemas';
 import type { RiskFactor, RiskTier } from '@/lib/ai/risk/types';
+import { formatTime, relativeTime } from '@/lib/dates';
 
 // Types
 
@@ -83,21 +85,6 @@ type IssueResult = {
 };
 
 type SheetStep = 'code' | 'success';
-
-// Helpers
-
-const relativeTime = (iso: string) => {
-  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
-  if (diff < 1) return 'just now';
-  if (diff === 1) return '1 min ago';
-  return `${diff} min ago`;
-};
-
-const formatTime = (iso: string) =>
-  new Date(iso).toLocaleTimeString('en-GB', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
 
 // Component
 
@@ -318,6 +305,10 @@ export const LiveRequestQueue = () => {
                         tier={req.risk_tier}
                         factors={req.risk_factors}
                       />
+                      {req.guest !== null && <GuestBadge />}
+                      <span className="text-xs text-muted-foreground">
+                        &middot; {relativeTime(req.created_at)}
+                      </span>
                     </div>
                     <p className="truncate text-xs text-muted-foreground">
                       <span className="font-medium text-foreground">
@@ -327,9 +318,6 @@ export const LiveRequestQueue = () => {
                     </p>
                     <p className="truncate text-xs text-muted-foreground">
                       {req.key?.room_name ?? ''}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {relativeTime(req.created_at)}
                     </p>
                   </div>
                   <Tooltip>
@@ -535,43 +523,40 @@ export const LiveRequestQueue = () => {
                         Keys on bunch: {issueResult.key.key_count}
                       </p>
                     )}
-                    {!issueResult.is_guest &&
-                      issueResult.requester.full_name && (
-                        <p className="mt-1 text-sm text-muted-foreground">
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {issueResult.requester.full_name ? (
+                        <>
                           Issued to{' '}
                           <span className="font-medium text-foreground">
                             {issueResult.requester.full_name}
                           </span>{' '}
                           at{' '}
-                          <span className="font-medium text-foreground">
-                            {formatTime(issueResult.issued_at)}
-                          </span>
-                        </p>
+                        </>
+                      ) : (
+                        <>Issued at </>
                       )}
-                    {issueResult.is_guest && (
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        Issued at{' '}
-                        <span className="font-medium text-foreground">
-                          {formatTime(issueResult.issued_at)}
-                        </span>
-                      </p>
-                    )}
+                      <span className="font-medium text-foreground">
+                        {formatTime(issueResult.issued_at)}
+                      </span>
+                    </p>
                   </div>
-                  {issueResult.is_guest && issueResult.requester.full_name && (
+                  {issueResult.is_guest && (
                     <p
                       className="text-sm text-amber-600 dark:text-amber-400"
                       role="status"
                     >
-                      {issueResult.requester.full_name}
                       {issueResult.requester.id_document_type &&
-                        issueResult.requester.id_document_number && (
+                      issueResult.requester.id_document_number ? (
+                        <>
+                          {issueResult.requester.id_document_type}{' '}
                           <span className="font-mono">
-                            {' '}
-                            · {issueResult.requester.id_document_type}{' '}
                             {issueResult.requester.id_document_number}
-                          </span>
-                        )}{' '}
-                      — verify physical ID
+                          </span>{' '}
+                          — verify physical ID
+                        </>
+                      ) : (
+                        'Verify physical ID at the desk'
+                      )}
                     </p>
                   )}
                   <Button

@@ -1,8 +1,4 @@
-export const formatTime = (iso: string) =>
-  new Date(iso).toLocaleTimeString('en-GB', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+export { formatTime } from '@/lib/dates';
 
 export const formatFactors = (factors: unknown[] | undefined) => {
   if (!Array.isArray(factors) || factors.length === 0)

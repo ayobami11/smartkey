@@ -25,6 +25,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { apiFetch } from '@/lib/api';
 import { createBrowserClient } from '@/lib/supabase/client';
+import { formatDateShort, isTodayDate } from '@/lib/dates';
 
 import { WeekendAccessSheet } from '@/app/requester/dashboard/_components/weekend-access-sheet';
 
@@ -64,22 +65,6 @@ const STATUS_CONFIG: Record<
     stripe: 'bg-destructive',
   },
 };
-
-// Helpers
-
-const localDate = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
-    d.getDate()
-  ).padStart(2, '0')}`;
-
-const isToday = (isoDate: string) => isoDate === localDate(new Date());
-
-const formatDate = (isoDate: string) =>
-  new Date(`${isoDate}T00:00:00`).toLocaleDateString('en-GB', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-  });
 
 // Component
 
@@ -210,9 +195,9 @@ export const WeekendRequests = () => {
             const cfg = STATUS_CONFIG[req.status];
             const StatusIcon = cfg.icon;
             const collectToday =
-              req.status === 'APPROVED' && isToday(req.requested_for);
+              req.status === 'APPROVED' && isTodayDate(req.requested_for);
             const approvedFuture =
-              req.status === 'APPROVED' && !isToday(req.requested_for);
+              req.status === 'APPROVED' && !isTodayDate(req.requested_for);
 
             return (
               <div
@@ -244,7 +229,7 @@ export const WeekendRequests = () => {
                         className="size-3"
                         aria-hidden="true"
                       />
-                      {formatDate(req.requested_for)}
+                      {formatDateShort(req.requested_for)}
                     </p>
                     {errorId?.id === req.id && (
                       <p className="text-xs text-destructive" role="alert">
@@ -266,7 +251,7 @@ export const WeekendRequests = () => {
                   )}
                   {approvedFuture && (
                     <span className="shrink-0 text-xs text-muted-foreground">
-                      {formatDate(req.requested_for)}
+                      {formatDateShort(req.requested_for)}
                     </span>
                   )}
                 </div>

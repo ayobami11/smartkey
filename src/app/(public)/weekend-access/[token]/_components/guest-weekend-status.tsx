@@ -16,7 +16,20 @@ import {
 
 import { apiFetch } from '@/lib/api';
 import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+} from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { CodeCountdown } from '@/app/requester/request/[requestId]/code/_components/code-countdown';
+import {
+  formatDateLong,
+  formatDeadline,
+  isTodayDate,
+  secondsRemaining,
+} from '@/lib/dates';
 
 // Types
 
@@ -43,43 +56,6 @@ type GuestStatusData = {
 
 type GuestWeekendStatusProps = {
   token: string;
-};
-
-// Helpers
-
-const localDate = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
-    d.getDate()
-  ).padStart(2, '0')}`;
-
-const isToday = (isoDate: string) => isoDate === localDate(new Date());
-
-const formatDate = (isoDate: string) =>
-  new Date(`${isoDate}T00:00:00`).toLocaleDateString('en-GB', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
-
-const formatDeadline = (iso: string) =>
-  new Date(iso).toLocaleString('en-GB', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-
-const secondsRemaining = (isoExpiry: string) =>
-  Math.max(0, Math.floor((new Date(isoExpiry).getTime() - Date.now()) / 1000));
-
-const formatCountdown = (seconds: number) => {
-  const m = Math.floor(seconds / 60)
-    .toString()
-    .padStart(2, '0');
-  const s = (seconds % 60).toString().padStart(2, '0');
-  return `${m}:${s}`;
 };
 
 // Component
@@ -366,7 +342,7 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
   // APPROVED
 
   if (data.status === 'APPROVED') {
-    const collectToday = isToday(data.requested_for);
+    const collectToday = isTodayDate(data.requested_for);
     return (
       <Shell onRefresh={() => void fetchStatus()}>
         <StatusCard
@@ -376,7 +352,7 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
           body={
             collectToday
               ? 'Your request is approved. Generate your collection code now and present it at the security desk.'
-              : `Your request is approved. Your collection code will be available on ${formatDate(
+              : `Your request is approved. Your collection code will be available on ${formatDateLong(
                   data.requested_for
                 )}.`
           }
@@ -433,44 +409,37 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
         </div>
       )}
 
-      <div
-        className={`rounded-lg border p-6 text-center ${
-          isExpired
-            ? 'border-muted bg-muted/40'
-            : 'border-primary/20 bg-primary/5'
-        }`}
-        aria-live="polite"
-      >
-        {isExpired ? (
-          <>
-            <p className="font-medium text-foreground">Code expired</p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Updating your session&hellip;
-            </p>
-          </>
-        ) : (
-          <>
-            <p className="text-xs font-medium text-muted-foreground">
-              Your collection code
-            </p>
-            {data.code_expires_at && (
-              <div className="mt-2 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-                <ClockIcon className="size-3.5" aria-hidden="true" />
-                <span
-                  className="font-mono"
-                  aria-label={`Expires in ${formatCountdown(countdown)}`}
-                >
-                  {formatCountdown(countdown)}
-                </span>
-              </div>
-            )}
+      {isExpired ? (
+        <div
+          className="rounded-lg border border-muted bg-muted/40 p-6 text-center"
+          aria-live="polite"
+        >
+          <p className="font-medium text-foreground">Code expired</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Updating your session&hellip;
+          </p>
+        </div>
+      ) : (
+        <Card className="border-primary/20 bg-primary/5" aria-live="polite">
+          <div>
+            <CardHeader className="pb-0 text-center">
+              <CardDescription className="text-base">
+                Your collection code
+              </CardDescription>
+            </CardHeader>
+            <CodeCountdown
+              countdown={countdown}
+              codeExpiresAt={data.code_expires_at}
+            />
+          </div>
+          <CardContent className="pb-6 pt-6 text-center">
             <p
-              className="mt-4 font-mono text-6xl font-semibold tracking-[0.3em] text-foreground"
+              className="font-mono text-6xl font-semibold tracking-[0.3em] text-foreground"
               aria-label={`Collection code: ${data.code}`}
             >
               {data.code}
             </p>
-            <p className="mt-4 text-xs text-muted-foreground">
+            <p className="mt-4 text-sm text-muted-foreground">
               Show this to the security officer at the desk.
             </p>
             <Button
@@ -487,9 +456,9 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
               )}
               {copied ? 'Copied!' : 'Copy code'}
             </Button>
-          </>
-        )}
-      </div>
+          </CardContent>
+        </Card>
+      )}
     </Shell>
   );
 };
@@ -568,7 +537,7 @@ const RequestMeta = ({
   <div className="flex flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
     <p className="flex items-center gap-1.5">
       <CalendarClockIcon className="size-4" aria-hidden="true" />
-      {formatDate(requestedFor)}
+      {formatDateLong(requestedFor)}
     </p>
     {requestedRoom && (
       <p className="flex items-center gap-1.5 text-xs">

@@ -24,6 +24,7 @@ import {
   USER_STATUS_LABELS,
   USER_STATUS_CLASSES,
 } from '@/lib/constants';
+import { formatLastSignIn } from '@/lib/dates';
 
 // Re-export so callers that already import from here don't need to change.
 export type { UserRole, UserStatus };
@@ -49,27 +50,6 @@ export type ColumnCallbacks = {
 
 // Re-export maps so callers that already import from here don't need to change.
 export { ROLE_LABELS as ROLE_LABEL, USER_STATUS_LABELS as STATUS_LABEL };
-
-// Helpers
-
-const formatLastSignIn = (iso: string | null): string => {
-  if (!iso) return 'Never';
-  const d = new Date(iso);
-  const now = new Date();
-  const diffMs = now.getTime() - d.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return d.toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: diffDays > 365 ? 'numeric' : undefined,
-  });
-};
 
 // Custom filter: scalar cell value must be present in the filter string[]
 const multiValueFilter: FilterFn<UserRow> = (

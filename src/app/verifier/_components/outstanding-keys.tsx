@@ -29,8 +29,10 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
+import { GuestBadge } from '@/components/smartkey/guest-badge';
 import { ReturnKeyForm } from '@/app/verifier/_components/return-key-form';
 import { ReturnKeyOverrideForm } from '@/app/verifier/_components/return-key-override-form';
+import { formatDeadline, formatTime, relativeTime } from '@/lib/dates';
 
 // Types
 
@@ -50,38 +52,6 @@ type OutstandingKey = {
 
 type ReturnStep = 'confirm' | 'returning' | 'success';
 type ReturnMode = 'code' | 'override';
-
-// Helpers
-
-const formatTime = (iso: string) =>
-  new Date(iso).toLocaleTimeString('en-GB', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-
-const formatDeadline = (iso: string) => {
-  const date = new Date(iso);
-  const now = new Date();
-  const isToday = date.toDateString() === now.toDateString();
-  return isToday
-    ? `Today ${formatTime(iso)}`
-    : date.toLocaleDateString('en-GB', {
-        weekday: 'short',
-        day: 'numeric',
-        month: 'short',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-};
-
-const relativeTime = (iso: string) => {
-  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
-  if (diff < 1) return 'just now';
-  if (diff === 1) return '1 min ago';
-  if (diff < 60) return `${diff} min ago`;
-  const hours = Math.floor(diff / 60);
-  return hours === 1 ? '1 hr ago' : `${hours} hrs ago`;
-};
 
 // Component
 
@@ -271,13 +241,16 @@ export const OutstandingKeys = () => {
                           Overdue
                         </span>
                       )}
+                      {item.requester === null && <GuestBadge />}
+                      <span className="text-xs text-muted-foreground">
+                        &middot; {relativeTime(item.issued_at)}
+                      </span>
                     </div>
                     <p className="truncate text-xs text-muted-foreground">
                       {item.key?.room_name}
                     </p>
                     <p className="truncate text-xs text-muted-foreground">
-                      {item.requester?.full_name ?? '—'} · issued{' '}
-                      {relativeTime(item.issued_at)}
+                      {item.requester?.full_name ?? 'External guest'}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       Return by{' '}
