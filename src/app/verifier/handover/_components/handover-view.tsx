@@ -1,12 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import {
-  ArrowLeftRightIcon,
-  CheckCircleIcon,
-  ClipboardListIcon,
-  KeyRoundIcon,
-} from 'lucide-react';
+import Link from 'next/link';
+import { CheckCircleIcon, ClipboardListIcon, KeyRoundIcon } from 'lucide-react';
 
 import {
   AlertDialog,
@@ -72,6 +68,14 @@ export const HandoverView = () => {
     outstandingKeys.length > 0 &&
     outstandingKeys.every((k) => acknowledged.has(k.id));
 
+  const someAcknowledged = acknowledged.size > 0 && !allAcknowledged;
+
+  const selectAllChecked: boolean | 'indeterminate' = allAcknowledged
+    ? true
+    : someAcknowledged
+      ? 'indeterminate'
+      : false;
+
   // Fetch
 
   const fetchData = async () => {
@@ -125,6 +129,14 @@ export const HandoverView = () => {
     });
   };
 
+  const toggleAll = () => {
+    if (allAcknowledged) {
+      setAcknowledged(new Set());
+    } else {
+      setAcknowledged(new Set(outstandingKeys.map((k) => k.id)));
+    }
+  };
+
   const submitHandover = async (bulk: boolean) => {
     if (!shift) return;
     setSubmitting(true);
@@ -154,71 +166,80 @@ export const HandoverView = () => {
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
       {/* Page heading */}
-      <div className="flex items-center gap-3">
-        <div className="flex size-8 items-center justify-center rounded-lg bg-muted">
-          <ArrowLeftRightIcon
-            className="size-4 text-muted-foreground"
-            aria-hidden="true"
-          />
-        </div>
-        <div>
-          <h1 className="text-sm font-semibold text-foreground">
-            Shift handover
-          </h1>
-          <p className="text-xs text-muted-foreground">
-            Acknowledge all outstanding keys before your shift begins.
-          </p>
-        </div>
+      <div>
+        <h1 className="text-xl font-semibold text-foreground">
+          Shift handover
+        </h1>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          Acknowledge all outstanding keys before your shift begins.
+        </p>
       </div>
 
       {/* Loading */}
       {step === 'loading' && (
-        <div className="flex flex-col gap-4" aria-busy="true">
-          <Skeleton className="h-28 rounded-lg" />
+        <div
+          className="flex flex-col gap-4"
+          aria-busy="true"
+          aria-label="Loading handover information"
+        >
+          <Skeleton className="h-24 rounded-lg" />
           <Skeleton className="h-20 rounded-lg" />
-          <Skeleton className="h-20 rounded-lg" />
+          <Skeleton className="h-16 rounded-lg" />
+          <Skeleton className="h-16 rounded-lg" />
         </div>
       )}
 
       {/* Error */}
       {step === 'error' && (
         <div
-          className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
+          className="rounded-lg border border-destructive/30 bg-destructive/5 p-5"
           role="alert"
         >
-          <p className="font-medium">Failed to load handover information</p>
-          <p className="mt-1 text-destructive/80">{fetchError}</p>
+          <p className="text-sm font-semibold text-destructive">
+            Failed to load handover information
+          </p>
+          <p className="mt-1 text-sm text-destructive/80">{fetchError}</p>
           <Button
             variant="outline"
             size="sm"
-            className="mt-3 border-destructive/30 text-destructive hover:bg-destructive/10"
+            className="mt-4 border-destructive/30 text-destructive hover:bg-destructive/10"
             onClick={() => void fetchData()}
           >
-            Retry
+            Try again
           </Button>
         </div>
       )}
 
       {/* Success */}
       {step === 'success' && (
-        <div className="flex flex-col items-center gap-4 rounded-lg border border-emerald-200 bg-emerald-50 p-8 text-center dark:border-emerald-900 dark:bg-emerald-950/30">
-          <CheckCircleIcon
-            className="size-10 text-emerald-600"
-            aria-hidden="true"
-          />
+        <div className="flex flex-col items-center gap-6 rounded-lg border border-emerald-200 bg-emerald-50/80 p-10 text-center dark:border-emerald-900/60 dark:bg-emerald-950/30">
+          <div className="flex size-16 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/40">
+            <CheckCircleIcon
+              className="size-8 text-emerald-600 dark:text-emerald-400"
+              aria-hidden="true"
+            />
+          </div>
           <div>
-            <p className="font-medium text-foreground">Handover complete</p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
+              Handover complete
+            </p>
+            <p className="mt-2 text-xl font-semibold text-foreground">
+              Your shift has begun
+            </p>
             {handoverRef !== null && (
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="mt-1.5 text-sm text-muted-foreground">
                 {handoverRef === '0'
                   ? 'No outstanding keys to acknowledge.'
-                  : `${handoverRef} key${Number(handoverRef) !== 1 ? 's' : ''} acknowledged.`}
+                  : `${handoverRef} key${Number(handoverRef) !== 1 ? 's' : ''} acknowledged and recorded.`}
               </p>
             )}
             <p className="mt-1 text-sm text-muted-foreground">
-              Your shift has begun. The dashboard is now active.
+              The dashboard is now active.
             </p>
           </div>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/verifier">Go to dashboard</Link>
+          </Button>
         </div>
       )}
 
@@ -227,17 +248,28 @@ export const HandoverView = () => {
         <div className="flex flex-col gap-6">
           {/* Outgoing shift summary */}
           {shift && (
-            <div className="rounded-lg border border-border bg-card p-5 shadow-[0_2px_4px_rgba(15,23,42,0.06)]">
-              <p className="text-xs font-medium text-muted-foreground">
-                Outgoing shift
-              </p>
-              <p className="mt-1.5 text-sm font-medium text-foreground">
-                Shift {shift.shift_number} — {shift.primary_officer.full_name}
-              </p>
-              <p className="font-mono text-xs text-muted-foreground">
-                Started {formatDate(shift.started_at)} at{' '}
-                {formatTime(shift.started_at)}
-              </p>
+            <div className="overflow-hidden rounded-lg border border-border bg-card shadow-[0_2px_4px_rgba(15,23,42,0.06)]">
+              <div className="border-b border-border bg-muted/50 px-5 py-2.5">
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                  Outgoing shift
+                </p>
+              </div>
+              <div className="flex items-center gap-4 p-5">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                  <span className="text-sm font-bold text-primary">
+                    {shift.shift_number}
+                  </span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-foreground">
+                    {shift.primary_officer.full_name}
+                  </p>
+                  <p className="mt-0.5 font-mono text-xs text-muted-foreground">
+                    Shift {shift.shift_number} · {formatDate(shift.started_at)}{' '}
+                    · {formatTime(shift.started_at)}
+                  </p>
+                </div>
+              </div>
             </div>
           )}
 
@@ -246,83 +278,133 @@ export const HandoverView = () => {
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-foreground">
                 Outstanding keys
-                {outstandingKeys.length > 0 && (
-                  <span className="ml-2 font-mono text-xs text-muted-foreground">
-                    ({acknowledged.size}/{outstandingKeys.length})
-                  </span>
-                )}
               </h2>
+              {outstandingKeys.length > 0 && (
+                <span
+                  className={`rounded-full px-2.5 py-1 font-mono text-xs font-semibold tabular-nums ${
+                    allAcknowledged
+                      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                      : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                  }`}
+                  aria-live="polite"
+                  aria-label={`${acknowledged.size} of ${outstandingKeys.length} keys acknowledged`}
+                >
+                  {acknowledged.size}/{outstandingKeys.length}
+                </span>
+              )}
             </div>
 
-            {outstandingKeys.length === 0 ? (
-              <div className="flex items-center gap-3 rounded-lg border border-border bg-card p-5">
-                <ClipboardListIcon
-                  className="size-5 shrink-0 text-muted-foreground"
-                  aria-hidden="true"
-                />
-                <p className="text-sm text-muted-foreground">
-                  No keys are currently outstanding.
-                </p>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {outstandingKeys.map((item) => {
-                  const isOverdue = item.status === 'KEY_OVERDUE';
-                  const isChecked = acknowledged.has(item.id);
-                  return (
-                    <div
-                      key={item.id}
-                      className={`flex items-center gap-4 overflow-hidden rounded-lg border bg-card p-4 transition-colors ${
-                        isChecked
-                          ? 'border-emerald-200 dark:border-emerald-900'
-                          : 'border-border'
-                      }`}
+            <div className="overflow-hidden rounded-lg border border-border bg-card shadow-[0_2px_4px_rgba(15,23,42,0.06)]">
+              {outstandingKeys.length === 0 ? (
+                <div className="flex flex-col items-center gap-3 p-10 text-center">
+                  <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+                    <ClipboardListIcon
+                      className="size-5 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    No keys are currently outstanding.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {/* Select-all header row */}
+                  <div className="flex items-center gap-4 border-b border-border px-5 py-3">
+                    <Checkbox
+                      id="select-all-keys"
+                      checked={selectAllChecked}
+                      onCheckedChange={toggleAll}
+                      disabled={submitting || isOffline}
+                      aria-label="Select all keys"
+                    />
+                    <Label
+                      htmlFor="select-all-keys"
+                      className="cursor-pointer text-xs font-medium text-muted-foreground"
                     >
-                      <Checkbox
-                        id={`key-${item.id}`}
-                        checked={isChecked}
-                        onCheckedChange={() => toggleKey(item.id)}
-                        disabled={submitting || isOffline}
-                        aria-label={`Acknowledge key ${item.key.code}`}
-                      />
-                      <Label
-                        htmlFor={`key-${item.id}`}
-                        className="flex min-w-0 flex-1 cursor-pointer flex-col gap-0.5"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-sm font-medium text-foreground">
-                            {item.key.code}
-                          </span>
-                          {isOverdue && (
-                            <span
-                              className="rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive"
-                              aria-label="Key is overdue"
-                            >
-                              Overdue
-                            </span>
-                          )}
-                        </div>
-                        <span className="truncate text-xs text-muted-foreground">
-                          {item.key.room_name} ·{' '}
-                          {item.requester?.full_name ?? 'External guest'}
-                        </span>
-                        <span className="font-mono text-xs text-muted-foreground">
-                          Issued {formatTime(item.issued_at)}
-                        </span>
-                      </Label>
-                      <KeyRoundIcon
-                        className={`size-4 shrink-0 ${
+                      Mark all keys as acknowledged
+                    </Label>
+                  </div>
+
+                  {outstandingKeys.map((item, idx) => {
+                    const isOverdue = item.status === 'KEY_OVERDUE';
+                    const isChecked = acknowledged.has(item.id);
+                    const zoneLabel =
+                      item.key.zone === 'NEW_SENATE'
+                        ? 'New Senate'
+                        : 'Old Senate';
+                    return (
+                      <div
+                        key={item.id}
+                        className={`flex items-center gap-4 px-5 py-4 transition-colors duration-150 ${
+                          idx > 0 ? 'border-t border-border' : ''
+                        } ${
                           isChecked
-                            ? 'text-emerald-600'
-                            : 'text-muted-foreground'
+                            ? 'bg-emerald-50/80 dark:bg-emerald-950/30'
+                            : isOverdue
+                              ? 'bg-destructive/[0.03] dark:bg-destructive/[0.05]'
+                              : ''
                         }`}
-                        aria-hidden="true"
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                      >
+                        <Checkbox
+                          id={`key-${item.id}`}
+                          checked={isChecked}
+                          onCheckedChange={() => toggleKey(item.id)}
+                          disabled={submitting || isOffline}
+                          aria-label={`Acknowledge key ${item.key.code}`}
+                        />
+
+                        <Label
+                          htmlFor={`key-${item.id}`}
+                          className="flex min-w-0 flex-1 cursor-pointer flex-col items-start gap-0.5"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-sm font-semibold text-foreground">
+                              {item.key.code}
+                            </span>
+                            {isOverdue && (
+                              <span
+                                className="rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive"
+                                aria-label="Key is overdue"
+                              >
+                                Overdue
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                            {item.key.room_name}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {item.requester?.full_name ?? 'External guest'}
+                          </p>
+                        </Label>
+
+                        <div className="shrink-0 text-right">
+                          <p className="font-mono text-xs font-medium tabular-nums text-foreground">
+                            {formatTime(item.issued_at)}
+                          </p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {zoneLabel}
+                          </p>
+                        </div>
+
+                        {isChecked ? (
+                          <CheckCircleIcon
+                            className="size-5 shrink-0 text-emerald-500"
+                            aria-hidden="true"
+                          />
+                        ) : (
+                          <KeyRoundIcon
+                            className="size-4 shrink-0 text-muted-foreground"
+                            aria-hidden="true"
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+            </div>
           </div>
 
           {submitError && (
@@ -332,8 +414,8 @@ export const HandoverView = () => {
           )}
 
           {/* Actions */}
-          <div className="flex flex-col gap-3">
-            {/* Per-key acknowledge (when some are checked) */}
+          <div className="flex flex-col gap-2.5">
+            {/* Per-key acknowledge — enabled only when all are checked */}
             {outstandingKeys.length > 0 && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -342,11 +424,10 @@ export const HandoverView = () => {
                       onClick={() => submitHandover(false)}
                       disabled={isOffline || !allAcknowledged || submitting}
                       aria-busy={submitting}
-                      className="w-full"
-                      style={isOffline ? { pointerEvents: 'none' } : undefined}
+                      className={`w-full${isOffline ? ' pointer-events-none' : ''}`}
                     >
                       {submitting
-                        ? 'Completing handover...'
+                        ? 'Completing handover…'
                         : `Acknowledge ${outstandingKeys.length} key${outstandingKeys.length !== 1 ? 's' : ''}`}
                     </Button>
                   </span>
@@ -373,10 +454,10 @@ export const HandoverView = () => {
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle className="text-lg">
+                    <AlertDialogTitle>
                       Bulk acknowledge all keys?
                     </AlertDialogTitle>
-                    <AlertDialogDescription className="text-base">
+                    <AlertDialogDescription>
                       You are confirming responsibility for{' '}
                       {outstandingKeys.length} outstanding{' '}
                       {outstandingKeys.length === 1 ? 'key' : 'keys'} without
@@ -403,10 +484,10 @@ export const HandoverView = () => {
                       onClick={() => submitHandover(false)}
                       disabled={isOffline || submitting}
                       aria-busy={submitting}
-                      style={isOffline ? { pointerEvents: 'none' } : undefined}
+                      className={`w-full${isOffline ? ' pointer-events-none' : ''}`}
                     >
                       {submitting
-                        ? 'Completing handover...'
+                        ? 'Completing handover…'
                         : 'Complete handover'}
                     </Button>
                   </span>
