@@ -26,7 +26,11 @@ import { useQuery } from '@tanstack/react-query';
 
 import { toCsv, downloadCsv } from '@/lib/csv';
 import { createBrowserClient } from '@/lib/supabase/client';
-import { ROLE_LABELS, ROLE_CLASSES } from '@/lib/constants';
+import {
+  ROLE_LABELS,
+  ROLE_CLASSES,
+  GUEST_BADGE_CLASSES,
+} from '@/lib/constants';
 import { AuditTableSkeleton } from '@/app/cso/audit/_components/audit-table-skeleton';
 import { Button } from '@/components/ui/button';
 import {
@@ -139,7 +143,7 @@ const ACTOR_ROLE_CLASS: Record<string, string> = {
   Verifier: 'bg-blue-100 text-blue-700',
   Requester: 'bg-teal-100 text-teal-700',
   System: 'bg-muted text-muted-foreground',
-  Guest: 'bg-muted text-muted-foreground',
+  Guest: GUEST_BADGE_CLASSES,
 };
 
 const EVENT_TYPE_MAP: Record<string, AuditEventType> = {
