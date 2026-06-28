@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { KeyRoundIcon, PlusIcon, Trash2Icon, UserIcon } from 'lucide-react';
+import { toast } from 'sonner';
 
 import {
   AlertDialog,
@@ -196,6 +197,7 @@ export const KeyIdView = () => {
       },
     ]);
     setRemoveTarget(null);
+    toast.success(`${slot.name} removed from collectors.`);
   };
 
   const handleAdd = async () => {
@@ -235,6 +237,7 @@ export const KeyIdView = () => {
     }
     setAddPickerOpen(false);
     setSelectedCandidateId('');
+    toast.success(`${candidate?.full_name ?? 'Collector'} added successfully.`);
   };
 
   const filledCount = slots.filter((s) => s.filled).length;
