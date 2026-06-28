@@ -121,6 +121,136 @@ export const sendWeekendReminderEmail = async ({
     `,
   });
 
+// Approval notification for a registered requester's weekend request.
+export const sendWeekendApprovedEmail = async ({
+  to,
+  fullName,
+  link,
+  requestedFor,
+  keyCode,
+  roomName,
+}: {
+  to: string;
+  fullName: string;
+  link: string;
+  requestedFor: string;
+  keyCode: string;
+  roomName: string;
+}) =>
+  transporter.sendMail({
+    from: `"SmartKey" <${process.env.GMAIL_USER}>`,
+    to,
+    subject: 'Your weekend key request has been approved',
+    html: `
+      <div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:400px;margin:0 auto;padding:32px 16px;">
+        ${emailHeader}
+        <div style="background:#fff;border:1px solid #E2E8F0;border-top:none;padding:32px 24px;border-radius:0 0 8px 8px;">
+          <p style="margin:0 0 8px;color:#0F172A;font-size:16px;font-weight:600;">
+            Request approved, ${fullName}
+          </p>
+          <p style="margin:0 0 8px;color:#475569;font-size:14px;">
+            Your weekend access request for <strong>${roomName} (${keyCode})</strong>
+            on <strong>${requestedFor}</strong> has been approved.
+          </p>
+          <p style="margin:0 0 24px;color:#475569;font-size:14px;">
+            On the day, open the link below to generate your 6-digit collection code.
+            Present it at the security desk. The code is valid for 10&nbsp;minutes once generated.
+          </p>
+          <a href="${link}"
+            style="display:inline-block;background:#7B1F2D;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">
+            View your request
+          </a>
+          <p style="margin:24px 0 0;color:#94A3B8;font-size:12px;">
+            If you no longer need this key, you can cancel the request from the SmartKey app.
+          </p>
+        </div>
+      </div>
+    `,
+  });
+
+// Decline notification for a registered requester's weekend request.
+export const sendWeekendDeclinedEmail = async ({
+  to,
+  fullName,
+  note,
+}: {
+  to: string;
+  fullName: string;
+  note?: string;
+}) =>
+  transporter.sendMail({
+    from: `"SmartKey" <${process.env.GMAIL_USER}>`,
+    to,
+    subject: 'Your weekend key request was not approved',
+    html: `
+      <div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:400px;margin:0 auto;padding:32px 16px;">
+        ${emailHeader}
+        <div style="background:#fff;border:1px solid #E2E8F0;border-top:none;padding:32px 24px;border-radius:0 0 8px 8px;">
+          <p style="margin:0 0 8px;color:#0F172A;font-size:16px;font-weight:600;">
+            Request not approved, ${fullName}
+          </p>
+          <p style="margin:0 0 ${note ? '8px' : '24px'};color:#475569;font-size:14px;">
+            Your weekend access request has not been approved.
+          </p>
+          ${note ? `<p style="margin:0 0 24px;color:#475569;font-size:14px;">Note from your authoriser: ${note}</p>` : ''}
+          <p style="margin:0;color:#94A3B8;font-size:12px;">
+            Contact your faculty's Dean or the CSO if you believe this is an error.
+          </p>
+        </div>
+      </div>
+    `,
+  });
+
+// Approval notification for an external (guest) weekend request. Reuses the
+// same status-page link the guest received at submission so they can navigate
+// to it on the day and mint their collection code.
+export const sendGuestWeekendApprovedEmail = async ({
+  to,
+  fullName,
+  link,
+  requestedFor,
+  keyCode,
+  roomName,
+}: {
+  to: string;
+  fullName: string;
+  link: string;
+  requestedFor: string;
+  keyCode: string;
+  roomName: string;
+}) =>
+  transporter.sendMail({
+    from: `"SmartKey" <${process.env.GMAIL_USER}>`,
+    to,
+    subject: 'Your weekend access request has been approved',
+    html: `
+      <div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:400px;margin:0 auto;padding:32px 16px;">
+        ${emailHeader}
+        <div style="background:#fff;border:1px solid #E2E8F0;border-top:none;padding:32px 24px;border-radius:0 0 8px 8px;">
+          <p style="margin:0 0 8px;color:#0F172A;font-size:16px;font-weight:600;">
+            Request approved, ${fullName}
+          </p>
+          <p style="margin:0 0 8px;color:#475569;font-size:14px;">
+            Your weekend access request for <strong>${roomName} (${keyCode})</strong>
+            on <strong>${requestedFor}</strong> has been approved.
+          </p>
+          <p style="margin:0 0 24px;color:#475569;font-size:14px;">
+            On the day, use the link below to generate your 6-digit collection code and
+            present it alongside your ID at the security desk. The code is valid for
+            10&nbsp;minutes once generated.
+          </p>
+          <a href="${link}"
+            style="display:inline-block;background:#7B1F2D;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">
+            Get your collection code
+          </a>
+          <p style="margin:24px 0 0;color:#94A3B8;font-size:12px;">
+            Keep this link private. Anyone with it can view your request.
+          </p>
+        </div>
+      </div>
+    `,
+  });
+
 // Status-link email for an external (non-registered) weekend key request.
 // The link carries the unguessable access_token so the guest can track their
 // request, mint a collection code on the day, and present it at the desk.

@@ -3,7 +3,13 @@ import { z } from 'zod';
 
 import { verifySignature } from '@/lib/ai/signature/verifier';
 import { writeAuditEntry } from '@/lib/audit';
+import {
+  sendGuestWeekendApprovedEmail,
+  sendWeekendApprovedEmail,
+  sendWeekendDeclinedEmail,
+} from '@/lib/email/otp';
 import { logger } from '@/lib/logger';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
 import { err, ok } from '@/types/api';
 
@@ -33,6 +39,90 @@ const mapRpcError = (msg: string): { status: number; message: string } => {
   if (msg.includes('EXPIRED_CODE'))
     return { status: 404, message: 'Code has expired' };
   return { status: 500, message: 'Internal error' };
+};
+
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ?? 'https://smartkey-ochre.vercel.app';
+
+// Fetch request + requester details and send the approval/decline email.
+// Runs after the RPC succeeds. Email failures are logged but never bubble up.
+const notifyRequester = async (
+  requestId: string,
+  decision: 'APPROVED' | 'DECLINED',
+  note?: string
+) => {
+  try {
+    const admin = createAdminClient();
+
+    const { data: req } = await admin
+      .from('requests')
+      .select(
+        'requester_id, guest_id, access_token, requested_for, key:keys(code, room_name), guest:guest_requesters(full_name, email), profile:profiles!requests_requester_id_fkey(full_name, institutional_email)'
+      )
+      .eq('id', requestId)
+      .single();
+
+    if (!req) return;
+
+    const requestedFor = req.requested_for
+      ? new Date(req.requested_for).toLocaleDateString('en-GB', {
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric',
+        })
+      : '';
+
+    const key = Array.isArray(req.key) ? req.key[0] : req.key;
+    const keyCode = key?.code ?? '';
+    const roomName = key?.room_name ?? '';
+
+    if (req.guest_id && req.guest) {
+      const guest = Array.isArray(req.guest) ? req.guest[0] : req.guest;
+      if (!guest?.email) return;
+
+      if (decision === 'APPROVED') {
+        const link = `${siteUrl}/weekend-access/${req.access_token}`;
+        await sendGuestWeekendApprovedEmail({
+          to: guest.email,
+          fullName: guest.full_name,
+          link,
+          requestedFor,
+          keyCode,
+          roomName,
+        });
+      }
+      // Decline notification is not sent to guests — they can check the status page.
+      return;
+    }
+
+    const profile = Array.isArray(req.profile) ? req.profile[0] : req.profile;
+    if (!profile?.institutional_email) return;
+
+    if (decision === 'APPROVED') {
+      const link = `${siteUrl}/requester/request/${requestId}/code`;
+      await sendWeekendApprovedEmail({
+        to: profile.institutional_email,
+        fullName: profile.full_name,
+        link,
+        requestedFor,
+        keyCode,
+        roomName,
+      });
+    } else {
+      await sendWeekendDeclinedEmail({
+        to: profile.institutional_email,
+        fullName: profile.full_name,
+        note,
+      });
+    }
+  } catch (e) {
+    logger.error('hod-decision: notification email failed', {
+      requestId,
+      decision,
+      err: e instanceof Error ? e.message : String(e),
+    });
+  }
 };
 
 export const POST = async (request: NextRequest) => {
@@ -112,6 +202,7 @@ export const POST = async (request: NextRequest) => {
     }
 
     const result = Array.isArray(data) ? data[0] : data;
+    void notifyRequester(result.request_id, 'APPROVED');
     return NextResponse.json(
       ok({ request_id: result.request_id, status: 'APPROVED' })
     );
@@ -148,6 +239,7 @@ export const POST = async (request: NextRequest) => {
       }
 
       const result = Array.isArray(data) ? data[0] : data;
+      void notifyRequester(result.request_id, 'APPROVED');
       return NextResponse.json(
         ok({ request_id: result.request_id, status: 'APPROVED' })
       );
@@ -268,6 +360,7 @@ export const POST = async (request: NextRequest) => {
       }
 
       const result = Array.isArray(data) ? data[0] : data;
+      void notifyRequester(result.request_id, 'APPROVED');
       return NextResponse.json(
         ok({ request_id: result.request_id, status: 'APPROVED' })
       );
@@ -297,6 +390,7 @@ export const POST = async (request: NextRequest) => {
     }
 
     const result = Array.isArray(data) ? data[0] : data;
+    void notifyRequester(result.request_id, 'APPROVED');
     return NextResponse.json(
       ok({ request_id: result.request_id, status: 'APPROVED' })
     );
@@ -322,6 +416,7 @@ export const POST = async (request: NextRequest) => {
     }
 
     const result = Array.isArray(data) ? data[0] : data;
+    void notifyRequester(result.request_id, 'DECLINED', note);
     return NextResponse.json(
       ok({ request_id: result.request_id, status: 'DECLINED' })
     );
