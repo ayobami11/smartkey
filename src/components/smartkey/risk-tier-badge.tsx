@@ -37,11 +37,12 @@ const TIER_CONFIG: Record<RiskTier, TierConfig> = {
 
 type RiskTierBadgeProps = {
   tier: RiskTier;
-  factors: RiskFactor[];
+  factors?: RiskFactor[] | null;
 };
 
 const RiskTierBadge = ({ tier, factors }: RiskTierBadgeProps) => {
   const { label, icon: Icon, badgeClass } = TIER_CONFIG[tier];
+  const safeFactors = factors ?? [];
 
   const triggerButton = (
     <button
@@ -61,8 +62,8 @@ const RiskTierBadge = ({ tier, factors }: RiskTierBadgeProps) => {
         <Icon size={12} strokeWidth={2} aria-hidden="true" />
         {label}
       </span>
-      {factors.length > 0 && (
-        <RiskFactorPopover factors={factors} trigger={triggerButton} />
+      {safeFactors.length > 0 && (
+        <RiskFactorPopover factors={safeFactors} trigger={triggerButton} />
       )}
     </div>
   );
