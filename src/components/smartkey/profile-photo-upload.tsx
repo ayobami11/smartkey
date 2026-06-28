@@ -32,7 +32,7 @@ type ProfilePhotoUploadProps = {
   initialUrl?: string;
 };
 
-// Avatar + "Upload photo" control shared by every role's account settings.
+// Avatar + "Update photo" control shared by every role's account settings.
 // Uploads to POST /api/profile/photo on explicit save, not on file selection.
 export const ProfilePhotoUpload = ({
   name,
@@ -198,7 +198,7 @@ export const ProfilePhotoUpload = ({
               disabled={removing}
             >
               <UploadIcon className="size-3.5" aria-hidden="true" />
-              Upload photo
+              Update photo
             </Button>
             {photoUrl && (
               <AlertDialog>

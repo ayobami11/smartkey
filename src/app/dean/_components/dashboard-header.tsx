@@ -1,6 +1,7 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { usePathname, useParams } from 'next/navigation';
 
 import {
   Breadcrumb,
@@ -14,6 +15,7 @@ import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { DashboardHeaderAvatar } from '@/components/smartkey/dashboard-header-avatar';
 import { ModeToggle } from '@/components/smartkey/mode-toggle';
+import { createBrowserClient } from '@/lib/supabase/client';
 
 const ROUTES: Record<string, string> = {
   '/dean/keys': 'Key Inventory',
@@ -24,9 +26,27 @@ const ROUTES: Record<string, string> = {
 
 export const DashboardHeader = () => {
   const pathname = usePathname();
+  const params = useParams<{ keyId?: string }>();
   const isHome = pathname === '/dean/dashboard';
   const isKeyDetail = /^\/dean\/keys\/[^/]+$/.test(pathname);
   const pageTitle = ROUTES[pathname] ?? 'Dashboard';
+  const [keyCode, setKeyCode] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isKeyDetail || !params.keyId) return;
+    const supabase = createBrowserClient();
+    supabase
+      .from('keys')
+      .select('code')
+      .eq('id', params.keyId)
+      .single()
+      .then(({ data }) => {
+        if (data) setKeyCode(data.code);
+      });
+    return () => {
+      setKeyCode(null);
+    };
+  }, [isKeyDetail, params.keyId]);
 
   return (
     <header className="flex h-18 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-13 border-b border-border mb-6">
@@ -55,7 +75,7 @@ export const DashboardHeader = () => {
                 </BreadcrumbItem>
                 <BreadcrumbSeparator className="hidden md:block" />
                 <BreadcrumbItem>
-                  <BreadcrumbPage>Key Slot Management</BreadcrumbPage>
+                  <BreadcrumbPage>{keyCode ?? '…'}</BreadcrumbPage>
                 </BreadcrumbItem>
               </>
             ) : isHome ? (
