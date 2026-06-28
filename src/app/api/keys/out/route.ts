@@ -33,6 +33,7 @@ export const GET = async (request: NextRequest) => {
     .select(
       `id, status, issued_at, return_deadline, created_at,
        requester:profiles!requester_id(id, full_name, photo_url),
+       guest:guest_requesters!guest_id(id, full_name),
        key:keys!key_id(id, code, room_name, zone, status, key_count)`,
     )
     .in('status', ['KEY_ISSUED']);
@@ -65,7 +66,15 @@ export const GET = async (request: NextRequest) => {
       key?.status === 'OVERDUE' ||
       (row.return_deadline !== null &&
         new Date(row.return_deadline).getTime() < now);
-    return { ...row, status: overdue ? 'KEY_OVERDUE' : row.status };
+
+    // Normalise: registered requester takes precedence; fall back to guest name.
+    const guest = row.guest as { id: string; full_name: string } | null;
+    const requester =
+      row.requester ??
+      (guest ? { id: guest.id, full_name: guest.full_name, photo_url: null } : null);
+
+    const { guest: _g, ...rest } = row;
+    return { ...rest, requester, status: overdue ? 'KEY_OVERDUE' : row.status };
   });
 
   return NextResponse.json(ok({ outstanding }), { status: 200 });
