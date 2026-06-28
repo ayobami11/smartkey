@@ -51,10 +51,15 @@ export const USER_STATUS_LABELS: Record<UserStatus, string> = {
   DEACTIVATED: 'Deactivated',
 };
 
+/** Tailwind badge classes for the external/guest pill — shared across all badge sites. */
+export const GUEST_BADGE_CLASSES =
+  'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-200';
+
 /** Tailwind badge classes for user status pills. */
 export const USER_STATUS_CLASSES: Record<UserStatus, string> = {
-  ACTIVE: 'bg-emerald-100 text-emerald-700',
-  PENDING_ACTIVATION: 'bg-amber-100 text-amber-700',
+  ACTIVE:
+    'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300',
+  PENDING_ACTIVATION: 'bg-sky-100 text-sky-700',
   DEACTIVATED: 'bg-muted text-muted-foreground',
 };
 
@@ -148,7 +153,7 @@ export const INCIDENT_SEVERITY_LABELS: Record<IncidentSeverity, string> =
 /** Tailwind badge classes for incident severity pills. */
 export const INCIDENT_SEVERITY_CLASSES: Record<IncidentSeverity, string> = {
   LOW: 'bg-muted text-muted-foreground',
-  MEDIUM: 'bg-amber-100 text-amber-700',
+  MEDIUM: 'bg-orange-100 text-orange-700',
   HIGH: 'bg-destructive/10 text-destructive',
 };
 

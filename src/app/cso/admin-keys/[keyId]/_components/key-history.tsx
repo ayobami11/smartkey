@@ -20,6 +20,7 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty';
 import { Skeleton } from '@/components/ui/skeleton';
+import { formatDate } from '@/lib/dates';
 
 // Types
 
@@ -44,7 +45,7 @@ const STATUS_CONFIG = {
     label: 'Issued',
     stripe: 'bg-amber-500',
     badge:
-      'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400',
+      'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400',
     Icon: ClockIcon,
   },
   KEY_RETURNED: {
@@ -73,14 +74,6 @@ const STATUS_CONFIG = {
     Icon: BanIcon,
   },
 } as const;
-
-const formatDate = (iso: string) =>
-  new Date(iso).toLocaleDateString('en-GB', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
 
 // Component
 
