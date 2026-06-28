@@ -37,7 +37,7 @@ export const AccountSettings = () => {
         full_name: string;
         institutional_email: string;
         photo_url: string;
-        department: { name: string } | null;
+        unit: { name: string } | null;
       };
     }>('/api/profile/me').then((result) => {
       const profile = result.data?.profile;
@@ -45,7 +45,7 @@ export const AccountSettings = () => {
         form.reset({ full_name: profile.full_name ?? '' });
         setEmail(profile.institutional_email ?? '');
         setPhotoUrl(profile.photo_url ?? '');
-        setDepartment(profile.department?.name ?? '');
+        setDepartment(profile.unit?.name ?? '');
       }
       setProfileLoading(false);
     });
