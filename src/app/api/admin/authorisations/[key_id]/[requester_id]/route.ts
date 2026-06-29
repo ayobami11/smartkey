@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { logger } from '@/lib/logger';
 import { createServerClient } from '@/lib/supabase/server';
-import { err, ok } from '@/types/api';
+import { err } from '@/types/api';
 
 const mapRpcError = (msg: string): { status: number; message: string } => {
   if (msg.includes('NOT_AUTHENTICATED'))
@@ -47,5 +47,5 @@ export const DELETE = async (
     });
   }
 
-  return NextResponse.json(ok(null), { status: 204 });
+  return new NextResponse(null, { status: 204 });
 };
