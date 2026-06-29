@@ -52,14 +52,14 @@ describe('ProfilePhotoUpload', () => {
   it('renders the skeleton when loading=true', () => {
     render(<ProfilePhotoUpload name="Ada Lovelace" loading={true} />);
     expect(
-      screen.queryByRole('button', { name: /upload photo/i })
+      screen.queryByRole('button', { name: /update photo/i })
     ).not.toBeInTheDocument();
   });
 
-  it('renders the "Upload photo" button when not loading', () => {
+  it('renders the "Update photo" button when not loading', () => {
     render(<ProfilePhotoUpload name="Ada Lovelace" />);
     expect(
-      screen.getByRole('button', { name: /upload photo/i })
+      screen.getByRole('button', { name: /update photo/i })
     ).toBeInTheDocument();
   });
 
@@ -124,7 +124,7 @@ describe('ProfilePhotoUpload', () => {
     ).toBeInTheDocument();
   });
 
-  it('returns to the "Upload photo" state when Cancel is clicked', async () => {
+  it('returns to the "Update photo" state when Cancel is clicked', async () => {
     const user = userEvent.setup();
     render(<ProfilePhotoUpload name="Ada Lovelace" />);
     selectFile(
@@ -138,7 +138,7 @@ describe('ProfilePhotoUpload', () => {
       screen.getByRole('button', { name: /cancel photo selection/i })
     );
     expect(
-      screen.getByRole('button', { name: /upload photo/i })
+      screen.getByRole('button', { name: /update photo/i })
     ).toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: /save photo/i })
