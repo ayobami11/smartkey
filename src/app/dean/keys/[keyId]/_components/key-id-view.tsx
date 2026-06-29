@@ -211,6 +211,51 @@ export const KeyIdView = () => {
     });
     setAdding(false);
     if (result.error) {
+      // Refetch so the UI reflects actual DB state — the server may have
+      // committed the write before returning the error (ghost write).
+      const supabase = createBrowserClient();
+      const { data: freshAuths } = await supabase
+        .from('authorisations')
+        .select(
+          'profile_id, authorised_at, profile:profiles!profile_id(full_name, institutional_email)'
+        )
+        .eq('key_id', keyId);
+      if (freshAuths) {
+        const fresh: FilledSlot[] = freshAuths.map(
+          (a: Record<string, unknown>) => {
+            const p = a.profile as {
+              full_name: string;
+              institutional_email: string;
+            } | null;
+            return {
+              filled: true as const,
+              profile_id: a.profile_id as string,
+              name: p?.full_name ?? '—',
+              email: p?.institutional_email ?? '—',
+              authorisedAt: new Date(
+                a.authorised_at as string
+              ).toLocaleDateString('en-GB', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+              }),
+            };
+          }
+        );
+        setSlots([
+          ...fresh,
+          ...Array(Math.max(0, 3 - fresh.length)).fill({ filled: false }),
+        ]);
+        const authorisedIds = new Set(fresh.map((s) => s.profile_id));
+        setCandidates((prev) => prev.filter((c) => !authorisedIds.has(c.id)));
+        // Slot actually filled despite the error — close silently.
+        if (fresh.some((s) => s.profile_id === selectedCandidateId)) {
+          setAddPickerOpen(false);
+          setSelectedCandidateId('');
+          toast.success('Collector added successfully.');
+          return;
+        }
+      }
       setAddError(result.error);
       return;
     }

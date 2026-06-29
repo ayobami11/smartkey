@@ -13,6 +13,8 @@ const bodySchema = z.object({
 const mapRpcError = (msg: string): { status: number; message: string } => {
   if (msg.includes('NOT_AUTHENTICATED'))
     return { status: 401, message: 'Unauthorized' };
+  if (msg.includes('NOT_FOUND'))
+    return { status: 404, message: 'Key not found' };
   if (msg.includes('FORBIDDEN'))
     return { status: 403, message: 'Key not in your department' };
   if (msg.includes('CONFLICT: three'))
@@ -34,47 +36,60 @@ const mapRpcError = (msg: string): { status: number; message: string } => {
 };
 
 export const POST = async (request: NextRequest) => {
-  const supabase = await createServerClient();
+  try {
+    const supabase = await createServerClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user)
-    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user)
+      return NextResponse.json(err('Unauthorized', 401), { status: 401 });
 
-  const body = await request.json().catch(() => null);
-  const parsed = bodySchema.safeParse(body);
-  if (!parsed.success)
-    return NextResponse.json(err('Invalid request body', 422), { status: 422 });
-
-  const { key_id, requester_id } = parsed.data;
-
-  const { data, error } = await supabase.rpc('nominate_collector', {
-    p_key_id: key_id,
-    p_requester_id: requester_id,
-  });
-
-  if (error) {
-    const mapped = mapRpcError(error.message);
-    if (mapped.status === 500) {
-      const ref = crypto.randomUUID();
-      logger.error('nominate_collector rpc failed', {
-        err: error.message,
-        ref,
+    const body = await request.json().catch(() => null);
+    const parsed = bodySchema.safeParse(body);
+    if (!parsed.success)
+      return NextResponse.json(err('Invalid request body', 422), {
+        status: 422,
       });
-      return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
-        status: 500,
+
+    const { key_id, requester_id } = parsed.data;
+
+    const { data, error } = await supabase.rpc('nominate_collector', {
+      p_key_id: key_id,
+      p_requester_id: requester_id,
+    });
+
+    if (error) {
+      const mapped = mapRpcError(error.message);
+      if (mapped.status === 500) {
+        const ref = crypto.randomUUID().slice(0, 8);
+        logger.error('nominate_collector rpc failed', {
+          err: error.message,
+          ref,
+        });
+        return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
+          status: 500,
+        });
+      }
+      return NextResponse.json(err(mapped.message, mapped.status), {
+        status: mapped.status,
       });
     }
-    return NextResponse.json(err(mapped.message, mapped.status), {
-      status: mapped.status,
+
+    const slot_number = Array.isArray(data) ? data[0]?.slot_number : null;
+
+    return NextResponse.json(
+      ok({ authorisation_id: `${key_id}:${requester_id}`, slot_number }),
+      { status: 201 }
+    );
+  } catch (e) {
+    const ref = crypto.randomUUID().slice(0, 8);
+    logger.error('nominate_collector unexpected error', {
+      ref,
+      err: String(e),
+    });
+    return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
+      status: 500,
     });
   }
-
-  const slot_number = Array.isArray(data) ? data[0]?.slot_number : null;
-
-  return NextResponse.json(
-    ok({ authorisation_id: `${key_id}:${requester_id}`, slot_number }),
-    { status: 201 }
-  );
 };
