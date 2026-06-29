@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { startTransition, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { KeyRoundIcon, PlusIcon, Trash2Icon, UserIcon } from 'lucide-react';
 import { toast } from 'sonner';
@@ -181,23 +181,24 @@ export const KeyIdView = () => {
       setRemoveError(result.error);
       return;
     }
-    // Remove from slots, add back to candidates
-    setSlots((prev) =>
-      prev
-        .filter((s) => !(s.filled && s.profile_id === slot.profile_id))
-        .concat([{ filled: false }])
-        .slice(0, 3)
-    );
-    setCandidates((prev) => [
-      ...prev,
-      {
-        id: slot.profile_id,
-        full_name: slot.name,
-        institutional_email: slot.email,
-      },
-    ]);
-    setRemoveTarget(null);
-    toast.success(`${slot.name} removed from collectors.`);
+    toast.success(`${slot.name} removed from collectors for ${keyData?.code}.`);
+    startTransition(() => {
+      setRemoveTarget(null);
+      setSlots((prev) =>
+        prev
+          .filter((s) => !(s.filled && s.profile_id === slot.profile_id))
+          .concat([{ filled: false }])
+          .slice(0, 3)
+      );
+      setCandidates((prev) => [
+        ...prev,
+        {
+          id: slot.profile_id,
+          full_name: slot.name,
+          institutional_email: slot.email,
+        },
+      ]);
+    });
   };
 
   const handleAdd = async () => {
