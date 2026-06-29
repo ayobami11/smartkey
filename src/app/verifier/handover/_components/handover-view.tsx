@@ -4,17 +4,6 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { CheckCircleIcon, ClipboardListIcon, KeyRoundIcon } from 'lucide-react';
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -137,18 +126,19 @@ export const HandoverView = () => {
     }
   };
 
-  const submitHandover = async (bulk: boolean) => {
+  const submitHandover = async () => {
     if (!shift) return;
     setSubmitting(true);
     setSubmitError(null);
-    const keyIds = bulk
-      ? outstandingKeys.map((k) => k.id)
-      : Array.from(acknowledged);
     const result = await apiFetch<{ acknowledged_count: number }>(
       '/api/shifts/handover',
       {
         method: 'POST',
-        body: { outgoing_shift_id: shift.id, key_ids: keyIds, bulk },
+        body: {
+          outgoing_shift_id: shift.id,
+          key_ids: Array.from(acknowledged),
+          bulk: false,
+        },
       }
     );
     setSubmitting(false);
@@ -421,7 +411,7 @@ export const HandoverView = () => {
                 <TooltipTrigger asChild>
                   <span className="w-full">
                     <Button
-                      onClick={() => submitHandover(false)}
+                      onClick={() => submitHandover()}
                       disabled={isOffline || !allAcknowledged || submitting}
                       aria-busy={submitting}
                       className={`w-full${isOffline ? ' pointer-events-none' : ''}`}
@@ -440,48 +430,13 @@ export const HandoverView = () => {
               </Tooltip>
             )}
 
-            {/* Bulk acknowledge — always available, requires confirmation dialog */}
-            {outstandingKeys.length > 1 && (
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button
-                    variant="outline"
-                    disabled={isOffline || submitting}
-                    className={`w-full${isOffline ? ' pointer-events-none' : ''}`}
-                  >
-                    Bulk acknowledge all
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>
-                      Bulk acknowledge all keys?
-                    </AlertDialogTitle>
-                    <AlertDialogDescription>
-                      You are confirming responsibility for{' '}
-                      {outstandingKeys.length} outstanding{' '}
-                      {outstandingKeys.length === 1 ? 'key' : 'keys'} without
-                      reviewing each one individually. This is logged with your
-                      identity and cannot be undone.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => submitHandover(true)}>
-                      Confirm bulk acknowledge
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            )}
-
             {/* No outstanding keys — complete handover directly */}
             {outstandingKeys.length === 0 && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="w-full">
                     <Button
-                      onClick={() => submitHandover(false)}
+                      onClick={() => submitHandover()}
                       disabled={isOffline || submitting}
                       aria-busy={submitting}
                       className={`w-full${isOffline ? ' pointer-events-none' : ''}`}
