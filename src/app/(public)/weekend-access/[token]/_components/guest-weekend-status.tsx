@@ -52,6 +52,8 @@ type GuestStatusData = {
   key: { code: string; room_name: string } | null;
   code: string | null;
   code_expires_at: string | null;
+  return_code: string | null;
+  return_code_expires_at: string | null;
 };
 
 type GuestWeekendStatusProps = {
@@ -70,6 +72,16 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [, forceUpdate] = useState(0);
+
+  // Return-code state (KEY_ISSUED phase)
+  const [returnCode, setReturnCode] = useState<string | null>(null);
+  const [returnCodeExpiresAt, setReturnCodeExpiresAt] = useState<string | null>(
+    null
+  );
+  const [generatingReturn, setGeneratingReturn] = useState(false);
+  const [generateReturnError, setGenerateReturnError] = useState<string | null>(
+    null
+  );
 
   const expiredFiredRef = useRef(false);
 
@@ -102,6 +114,15 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
         if (result.error || !result.data) {
           setFetchError(result.error ?? 'Could not load your request.');
           return;
+        }
+        // Seed return-code state from server (handles page refreshes mid-return).
+        if (
+          result.data.status === 'KEY_ISSUED' &&
+          result.data.return_code &&
+          result.data.return_code_expires_at
+        ) {
+          setReturnCode(result.data.return_code);
+          setReturnCodeExpiresAt(result.data.return_code_expires_at);
         }
         setData(result.data);
       }
@@ -176,6 +197,32 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
     await navigator.clipboard.writeText(data.code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  // Generate a return code when handing back the key (KEY_ISSUED phase)
+
+  const returnCountdown = returnCodeExpiresAt
+    ? secondsRemaining(returnCodeExpiresAt)
+    : 0;
+  const returnCodeExpired =
+    returnCodeExpiresAt !== null && returnCountdown === 0;
+
+  const handleGenerateReturnCode = async () => {
+    setGeneratingReturn(true);
+    setGenerateReturnError(null);
+    const result = await apiFetch<{
+      return_code: string;
+      return_code_expires_at: string;
+    }>(`/api/public/weekend-request/${token}/return-code`, { method: 'POST' });
+    setGeneratingReturn(false);
+    if (result.error || !result.data) {
+      setGenerateReturnError(
+        result.error ?? 'Could not generate a return code. Try again.'
+      );
+      return;
+    }
+    setReturnCode(result.data.return_code);
+    setReturnCodeExpiresAt(result.data.return_code_expires_at);
   };
 
   // Loading
@@ -308,12 +355,16 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
     );
   }
 
-  // KEY_ISSUED
+  // KEY_ISSUED — show return code generator
 
   if (data.status === 'KEY_ISSUED') {
+    const hasActiveReturnCode =
+      returnCode !== null && returnCodeExpiresAt !== null && !returnCodeExpired;
+
     return (
       <Shell onRefresh={() => void fetchStatus()}>
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-6 text-center dark:border-emerald-900 dark:bg-emerald-950/30">
+        {/* Key context */}
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-center dark:border-emerald-900 dark:bg-emerald-950/30">
           <div className="flex items-center justify-center gap-2">
             <KeyRoundIcon
               className="size-5 text-emerald-700 dark:text-emerald-400"
@@ -327,7 +378,7 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
             </p>
           )}
           {data.return_deadline && (
-            <p className="mt-3 text-sm text-muted-foreground">
+            <p className="mt-2 text-sm text-muted-foreground">
               Return by{' '}
               <span className="font-medium text-foreground">
                 {formatDeadline(data.return_deadline)}
@@ -335,6 +386,73 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
             </p>
           )}
         </div>
+
+        {/* Return-code section */}
+        {hasActiveReturnCode && returnCode && returnCodeExpiresAt ? (
+          <Card className="border-primary/20 bg-primary/5" aria-live="polite">
+            <div>
+              <CardHeader className="pb-0 text-center">
+                <CardDescription className="text-base">
+                  Your return code
+                </CardDescription>
+              </CardHeader>
+              <CodeCountdown
+                countdown={returnCountdown}
+                codeExpiresAt={returnCodeExpiresAt}
+              />
+            </div>
+            <CardContent className="pb-6 pt-6 text-center">
+              <p
+                className="font-mono text-6xl font-semibold tracking-[0.3em] text-foreground"
+                aria-label={`Return code: ${returnCode}`}
+              >
+                {returnCode}
+              </p>
+              <p className="mt-4 text-sm text-muted-foreground">
+                Read this to the security officer when you hand back the key.
+              </p>
+            </CardContent>
+          </Card>
+        ) : returnCodeExpired ? (
+          <div className="flex flex-col gap-3 text-center">
+            <p className="text-sm text-muted-foreground">
+              Your return code expired. Generate a new one.
+            </p>
+            {generateReturnError && (
+              <p className="text-xs text-destructive" role="alert">
+                {generateReturnError}
+              </p>
+            )}
+            <Button
+              onClick={() => void handleGenerateReturnCode()}
+              disabled={generatingReturn}
+              aria-busy={generatingReturn}
+              className="w-full"
+            >
+              {generatingReturn ? 'Generating...' : 'Generate new return code'}
+            </Button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-muted-foreground">
+              When you&rsquo;re ready to hand back the key, generate a 6-digit
+              code and read it to the security officer.
+            </p>
+            {generateReturnError && (
+              <p className="text-xs text-destructive" role="alert">
+                {generateReturnError}
+              </p>
+            )}
+            <Button
+              onClick={() => void handleGenerateReturnCode()}
+              disabled={generatingReturn}
+              aria-busy={generatingReturn}
+              className="w-full"
+            >
+              {generatingReturn ? 'Generating...' : 'Generate return code'}
+            </Button>
+          </div>
+        )}
       </Shell>
     );
   }
