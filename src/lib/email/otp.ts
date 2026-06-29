@@ -251,6 +251,39 @@ export const sendGuestWeekendApprovedEmail = async ({
     `,
   });
 
+export const sendPasswordResetEmail = async ({
+  to,
+  link,
+}: {
+  to: string;
+  link: string;
+}) =>
+  transporter.sendMail({
+    from: `"SmartKey" <${process.env.GMAIL_USER}>`,
+    to,
+    subject: 'Reset your SmartKey password',
+    html: `
+      <div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:400px;margin:0 auto;padding:32px 16px;">
+        ${emailHeader}
+        <div style="background:#fff;border:1px solid #E2E8F0;border-top:none;padding:32px 24px;border-radius:0 0 8px 8px;">
+          <p style="margin:0 0 8px;color:#0F172A;font-size:16px;font-weight:600;">
+            Reset your password
+          </p>
+          <p style="margin:0 0 24px;color:#475569;font-size:14px;">
+            Click the button below to set a new password. This link expires in 1&nbsp;hour.
+          </p>
+          <a href="${link}"
+            style="display:inline-block;background:#7B1F2D;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">
+            Reset password
+          </a>
+          <p style="margin:24px 0 0;color:#94A3B8;font-size:12px;">
+            If you did not request a password reset, you can safely ignore this email.
+          </p>
+        </div>
+      </div>
+    `,
+  });
+
 // Status-link email for an external (non-registered) weekend key request.
 // The link carries the unguessable access_token so the guest can track their
 // request, mint a collection code on the day, and present it at the desk.
