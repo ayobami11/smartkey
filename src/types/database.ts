@@ -877,6 +877,14 @@ export type Database = {
           return_code_expires_at: string;
         }[];
       };
+      request_return_guest: {
+        Args: { p_access_token: string };
+        Returns: {
+          request_id: string;
+          return_code: string;
+          return_code_expires_at: string;
+        }[];
+      };
       return_key: {
         Args: {
           p_code?: string;
@@ -1089,7 +1097,6 @@ export const Constants = {
   },
 } as const;
 
-// Named type aliases for convenience across the codebase.
 export type UserRole = Database['public']['Enums']['user_role'];
 export type IncidentSeverity = Database['public']['Enums']['incident_severity'];
 export type IncidentStatus = Database['public']['Enums']['incident_status'];
