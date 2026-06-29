@@ -31,6 +31,8 @@ export const GET = async (
       return_deadline,
       code,
       code_expires_at,
+      return_code,
+      return_code_expires_at,
       requested_room,
       keys ( code, room_name ),
       guest_requesters ( full_name )
@@ -54,8 +56,8 @@ export const GET = async (
     return NextResponse.json(err('Request not found', 404), { status: 404 });
   }
 
-  // The code is only meaningful while the request is awaiting collection.
   const isCodeIssued = data.status === 'CODE_ISSUED';
+  const isKeyIssued = data.status === 'KEY_ISSUED';
 
   return NextResponse.json(
     ok({
@@ -70,6 +72,8 @@ export const GET = async (
         : null,
       code: isCodeIssued ? data.code : null,
       code_expires_at: isCodeIssued ? data.code_expires_at : null,
+      return_code: isKeyIssued ? data.return_code : null,
+      return_code_expires_at: isKeyIssued ? data.return_code_expires_at : null,
     }),
     { status: 200 }
   );

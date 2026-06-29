@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { logger } from '@/lib/logger';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
 import { err, ok } from '@/types/api';
 import type {
@@ -127,8 +128,10 @@ export const POST = async (request: NextRequest) => {
     occurred_at,
   } = parsed.data;
 
+  const adminSupabase = createAdminClient();
+
   // Get current active shift for linking.
-  const { data: currentShift } = await supabase
+  const { data: currentShift } = await adminSupabase
     .from('shifts')
     .select('id')
     .is('ended_at', null)
@@ -138,7 +141,7 @@ export const POST = async (request: NextRequest) => {
 
   // Do not pass `reference` — the DB generates it atomically via
   // incident_reference_seq, avoiding the race condition of a manual count.
-  const { data: incident, error: insertError } = await supabase
+  const { data: incident, error: insertError } = await adminSupabase
     .from('incidents')
     .insert({
       shift_id: currentShift?.id ?? null,

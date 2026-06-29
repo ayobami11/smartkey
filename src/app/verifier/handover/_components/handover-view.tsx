@@ -2,19 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { CheckCircleIcon, ClipboardListIcon, KeyRoundIcon } from 'lucide-react';
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -46,11 +36,12 @@ type OutstandingKey = {
   status: 'KEY_ISSUED' | 'KEY_OVERDUE';
 };
 
-type PageStep = 'loading' | 'ready' | 'success' | 'error';
+type PageStep = 'loading' | 'no-shift' | 'ready' | 'success' | 'error';
 
 // Component
 
 export const HandoverView = () => {
+  const router = useRouter();
   const connectionStatus = useConnectionStatus();
   const isOffline = connectionStatus === 'offline';
   const [step, setStep] = useState<PageStep>('loading');
@@ -63,6 +54,10 @@ export const HandoverView = () => {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [handoverRef, setHandoverRef] = useState<string | null>(null);
+
+  // Start-shift state (used when no active shift exists)
+  const [startShiftLoading, setStartShiftLoading] = useState(false);
+  const [startShiftError, setStartShiftError] = useState<string | null>(null);
 
   const allAcknowledged =
     outstandingKeys.length > 0 &&
@@ -90,11 +85,12 @@ export const HandoverView = () => {
       setStep('error');
       return;
     }
-    setShift(shiftResult.data?.shift ?? null);
+    const fetchedShift = shiftResult.data?.shift ?? null;
+    setShift(fetchedShift);
     if (!keysResult.error && keysResult.data) {
       setOutstandingKeys(keysResult.data.outstanding ?? []);
     }
-    setStep('ready');
+    setStep(fetchedShift ? 'ready' : 'no-shift');
   };
 
   useEffect(() => {
@@ -107,11 +103,12 @@ export const HandoverView = () => {
         setStep('error');
         return;
       }
-      setShift(shiftResult.data?.shift ?? null);
+      const fetchedShift = shiftResult.data?.shift ?? null;
+      setShift(fetchedShift);
       if (!keysResult.error && keysResult.data) {
         setOutstandingKeys(keysResult.data.outstanding ?? []);
       }
-      setStep('ready');
+      setStep(fetchedShift ? 'ready' : 'no-shift');
     });
   }, []);
 
@@ -137,18 +134,19 @@ export const HandoverView = () => {
     }
   };
 
-  const submitHandover = async (bulk: boolean) => {
+  const submitHandover = async () => {
     if (!shift) return;
     setSubmitting(true);
     setSubmitError(null);
-    const keyIds = bulk
-      ? outstandingKeys.map((k) => k.id)
-      : Array.from(acknowledged);
     const result = await apiFetch<{ acknowledged_count: number }>(
       '/api/shifts/handover',
       {
         method: 'POST',
-        body: { outgoing_shift_id: shift.id, key_ids: keyIds, bulk },
+        body: {
+          outgoing_shift_id: shift.id,
+          key_ids: Array.from(acknowledged),
+          bulk: false,
+        },
       }
     );
     setSubmitting(false);
@@ -161,6 +159,18 @@ export const HandoverView = () => {
     setStep('success');
   };
 
+  const startShift = async () => {
+    setStartShiftLoading(true);
+    setStartShiftError(null);
+    const result = await apiFetch('/api/shifts/start', { method: 'POST' });
+    setStartShiftLoading(false);
+    if (result.error) {
+      setStartShiftError(result.error);
+      return;
+    }
+    router.push('/verifier');
+  };
+
   // Render
 
   return (
@@ -168,10 +178,12 @@ export const HandoverView = () => {
       {/* Page heading */}
       <div>
         <h1 className="text-xl font-semibold text-foreground">
-          Shift handover
+          {step === 'no-shift' ? 'Start shift' : 'Shift handover'}
         </h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          Acknowledge all outstanding keys before your shift begins.
+          {step === 'no-shift'
+            ? 'No active shift found. Start your shift to access the dashboard.'
+            : 'Acknowledge all outstanding keys before your shift begins.'}
         </p>
       </div>
 
@@ -207,6 +219,116 @@ export const HandoverView = () => {
           >
             Try again
           </Button>
+        </div>
+      )}
+
+      {/* No active shift — start a new one */}
+      {step === 'no-shift' && (
+        <div className="flex flex-col gap-6">
+          <div className="overflow-hidden rounded-lg border border-border bg-card shadow-[0_2px_4px_rgba(15,23,42,0.06)]">
+            <div className="border-b border-border bg-muted/50 px-5 py-2.5">
+              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                New shift
+              </p>
+            </div>
+            <div className="p-5">
+              <p className="text-sm text-foreground">
+                There is no active shift to hand over from. You are starting a
+                fresh shift.
+              </p>
+              {outstandingKeys.length > 0 && (
+                <p className="mt-2 text-sm text-amber-700 dark:text-amber-400">
+                  {outstandingKeys.length} key
+                  {outstandingKeys.length !== 1 ? 's are' : ' is'} currently
+                  outstanding and will appear in your dashboard once your shift
+                  begins.
+                </p>
+              )}
+            </div>
+          </div>
+
+          {outstandingKeys.length > 0 && (
+            <div className="flex flex-col gap-3">
+              <h2 className="text-sm font-semibold text-foreground">
+                Outstanding keys
+              </h2>
+              <div className="overflow-hidden rounded-lg border border-border bg-card shadow-[0_2px_4px_rgba(15,23,42,0.06)]">
+                {outstandingKeys.map((item, idx) => {
+                  const isOverdue = item.status === 'KEY_OVERDUE';
+                  const zoneLabel =
+                    item.key.zone === 'NEW_SENATE'
+                      ? 'New Senate'
+                      : 'Old Senate';
+                  return (
+                    <div
+                      key={item.id}
+                      className={`flex items-center gap-4 px-5 py-4 ${idx > 0 ? 'border-t border-border' : ''}`}
+                    >
+                      <KeyRoundIcon
+                        className="size-4 shrink-0 text-muted-foreground"
+                        aria-hidden="true"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-sm font-semibold text-foreground">
+                            {item.key.code}
+                          </span>
+                          {isOverdue && (
+                            <span
+                              className="rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive"
+                              aria-label="Key is overdue"
+                            >
+                              Overdue
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                          {item.key.room_name}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {item.requester?.full_name ?? 'External guest'}
+                        </p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="font-mono text-xs font-medium tabular-nums text-foreground">
+                          {formatTime(item.issued_at)}
+                        </p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {zoneLabel}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {startShiftError && (
+            <p className="text-xs text-destructive" role="alert">
+              {startShiftError}
+            </p>
+          )}
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="w-full">
+                <Button
+                  onClick={() => void startShift()}
+                  disabled={isOffline || startShiftLoading}
+                  aria-busy={startShiftLoading}
+                  className={`w-full${isOffline ? ' pointer-events-none' : ''}`}
+                >
+                  {startShiftLoading ? 'Starting shift…' : 'Start shift'}
+                </Button>
+              </span>
+            </TooltipTrigger>
+            {isOffline && (
+              <TooltipContent>
+                Available again when you reconnect.
+              </TooltipContent>
+            )}
+          </Tooltip>
         </div>
       )}
 
@@ -421,7 +543,7 @@ export const HandoverView = () => {
                 <TooltipTrigger asChild>
                   <span className="w-full">
                     <Button
-                      onClick={() => submitHandover(false)}
+                      onClick={() => submitHandover()}
                       disabled={isOffline || !allAcknowledged || submitting}
                       aria-busy={submitting}
                       className={`w-full${isOffline ? ' pointer-events-none' : ''}`}
@@ -440,48 +562,13 @@ export const HandoverView = () => {
               </Tooltip>
             )}
 
-            {/* Bulk acknowledge — always available, requires confirmation dialog */}
-            {outstandingKeys.length > 1 && (
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button
-                    variant="outline"
-                    disabled={isOffline || submitting}
-                    className={`w-full${isOffline ? ' pointer-events-none' : ''}`}
-                  >
-                    Bulk acknowledge all
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>
-                      Bulk acknowledge all keys?
-                    </AlertDialogTitle>
-                    <AlertDialogDescription>
-                      You are confirming responsibility for{' '}
-                      {outstandingKeys.length} outstanding{' '}
-                      {outstandingKeys.length === 1 ? 'key' : 'keys'} without
-                      reviewing each one individually. This is logged with your
-                      identity and cannot be undone.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => submitHandover(true)}>
-                      Confirm bulk acknowledge
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            )}
-
             {/* No outstanding keys — complete handover directly */}
             {outstandingKeys.length === 0 && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="w-full">
                     <Button
-                      onClick={() => submitHandover(false)}
+                      onClick={() => submitHandover()}
                       disabled={isOffline || submitting}
                       aria-busy={submitting}
                       className={`w-full${isOffline ? ' pointer-events-none' : ''}`}

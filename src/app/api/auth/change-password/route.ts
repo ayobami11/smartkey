@@ -4,18 +4,13 @@ import { z } from 'zod';
 import { writeAuditEntry } from '@/lib/audit';
 import { logger } from '@/lib/logger';
 import { createServerClient } from '@/lib/supabase/server';
+import { password } from '@/lib/validation/primitives';
 import type { UserRole } from '@/types/database';
 import { err, ok } from '@/types/api';
 
 const bodySchema = z.object({
   current_password: z.string().min(1, 'Current password is required.'),
-  new_password: z
-    .string()
-    .min(12, 'Password must be at least 12 characters.')
-    .regex(/[A-Z]/, 'Must contain an uppercase letter.')
-    .regex(/[a-z]/, 'Must contain a lowercase letter.')
-    .regex(/[0-9]/, 'Must contain a number.')
-    .regex(/[^A-Za-z0-9]/, 'Must contain a symbol.'),
+  new_password: password,
 });
 
 export const POST = async (request: NextRequest) => {
