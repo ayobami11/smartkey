@@ -1,0 +1,241 @@
+'use client';
+
+import { useState } from 'react';
+
+import { CheckCircleIcon, FileWarningIcon } from 'lucide-react';
+
+import { apiFetch } from '@/lib/api';
+import { useConnectionStatus } from '@/hooks/use-connection-status';
+
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { RiskAcknowledgement } from '@/components/smartkey/risk-tier-badge';
+
+import type { SignatureMismatchAlert } from '@/app/cso/dashboard/_components/signature-mismatch-alerts';
+
+type SignatureMismatchDetailDialogProps = {
+  alert: SignatureMismatchAlert | null;
+  onOpenChange: (open: boolean) => void;
+  onResolved: () => void;
+};
+
+type ResolveDecision = 'APPROVED' | 'DECLINED';
+
+export const SignatureMismatchDetailDialog = ({
+  alert,
+  onOpenChange,
+  onResolved,
+}: SignatureMismatchDetailDialogProps) => {
+  const connectionStatus = useConnectionStatus();
+  const isOffline = connectionStatus !== 'connected';
+
+  const [acknowledged, setAcknowledged] = useState(false);
+  const [resolving, setResolving] = useState<ResolveDecision | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [resolvedAs, setResolvedAs] = useState<ResolveDecision | null>(null);
+
+  const handleOpenChange = (open: boolean) => {
+    if (!open) {
+      // Reset local state after the close animation so the next alert opens clean.
+      setAcknowledged(false);
+      setResolving(null);
+      setSubmitError(null);
+      setResolvedAs(null);
+    }
+    onOpenChange(open);
+  };
+
+  const handleResolve = async (decision: ResolveDecision) => {
+    if (!alert) return;
+    setResolving(decision);
+    setSubmitError(null);
+
+    const result = await apiFetch<{ request_id: string; status: string }>(
+      '/api/requests/hod-decision',
+      {
+        method: 'POST',
+        body: {
+          request_id: alert.id,
+          decision,
+          cso_override: true,
+        },
+      }
+    );
+
+    setResolving(null);
+
+    if (result.error) {
+      setSubmitError(result.error);
+      return;
+    }
+
+    setResolvedAs(decision);
+  };
+
+  return (
+    <Dialog open={!!alert} onOpenChange={handleOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        {alert && !resolvedAs && (
+          <>
+            <DialogHeader>
+              <DialogTitle>Signature mismatch</DialogTitle>
+              <DialogDescription>
+                {alert.requester?.full_name ?? 'This requester'}
+                {alert.key
+                  ? ` — ${alert.key.room_name} (${alert.key.code})`
+                  : ''}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+              <FileWarningIcon
+                className="size-4 shrink-0 text-destructive"
+                aria-hidden="true"
+              />
+              <p className="text-sm text-destructive">
+                {alert.mismatch_pct !== null
+                  ? `${alert.mismatch_pct}% mismatch`
+                  : 'Mismatch detected'}
+                {alert.threshold_pct !== null &&
+                  ` (threshold ${alert.threshold_pct}%)`}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Reference signature on file
+                </p>
+                {alert.ref_url ? (
+                  // Regular <img> intentionally — Storage URL preview, matching
+                  // the convention in profile-photo-preview.tsx.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={alert.ref_url}
+                    alt={`Reference signature on file for ${alert.requester?.full_name ?? 'this requester'}`}
+                    className="aspect-[2/1] w-full rounded-lg border border-border bg-muted object-contain"
+                  />
+                ) : (
+                  <div className="aspect-[2/1] w-full rounded-lg border border-border bg-muted" />
+                )}
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Submitted signature
+                </p>
+                {alert.submitted_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={alert.submitted_url}
+                    alt={`Submitted signature for the request from ${alert.requester?.full_name ?? 'this requester'}`}
+                    className="aspect-[2/1] w-full rounded-lg border border-border bg-muted object-contain"
+                  />
+                ) : (
+                  <div className="aspect-[2/1] w-full rounded-lg border border-border bg-muted" />
+                )}
+              </div>
+            </div>
+
+            <RiskAcknowledgement
+              acknowledged={acknowledged}
+              onAcknowledge={setAcknowledged}
+            />
+
+            {!!submitError && (
+              <p className="text-sm text-destructive" role="alert">
+                {submitError}
+              </p>
+            )}
+
+            <DialogFooter>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span tabIndex={isOffline ? 0 : -1}>
+                    <Button
+                      variant="destructive"
+                      disabled={
+                        isOffline || !acknowledged || resolving !== null
+                      }
+                      aria-busy={resolving === 'DECLINED'}
+                      onClick={() => handleResolve('DECLINED')}
+                    >
+                      Decline
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {isOffline && (
+                  <TooltipContent>
+                    Available again when you reconnect.
+                  </TooltipContent>
+                )}
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span tabIndex={isOffline ? 0 : -1}>
+                    <Button
+                      disabled={
+                        isOffline || !acknowledged || resolving !== null
+                      }
+                      aria-busy={resolving === 'APPROVED'}
+                      onClick={() => handleResolve('APPROVED')}
+                    >
+                      Approve anyway
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {isOffline && (
+                  <TooltipContent>
+                    Available again when you reconnect.
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </DialogFooter>
+          </>
+        )}
+
+        {alert && resolvedAs && (
+          <Card className="border-0 shadow-none">
+            <CardContent className="flex flex-col items-center gap-4 py-6 text-center">
+              <CheckCircleIcon
+                className="size-10 text-emerald-500"
+                aria-hidden="true"
+              />
+              <div>
+                <p className="font-medium text-foreground">
+                  {resolvedAs === 'APPROVED' ? 'Approved' : 'Declined'}
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {alert.requester?.full_name ?? 'The requester'} has been
+                  notified by email.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  handleOpenChange(false);
+                  onResolved();
+                }}
+              >
+                Close
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+};
