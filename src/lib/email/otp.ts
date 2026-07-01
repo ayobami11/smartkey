@@ -1,6 +1,6 @@
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const getResend = () => new Resend(process.env.RESEND_API_KEY);
 const FROM = process.env.RESEND_FROM_EMAIL ?? 'SmartKey <noreply@smartkey.app>';
 
 const emailHeader = `
@@ -16,7 +16,7 @@ export const sendOtpEmail = async ({
   to: string;
   code: string;
 }) =>
-  resend.emails.send({
+  getResend().emails.send({
     from: FROM,
     to,
     subject: 'Your SmartKey verification code',
@@ -41,7 +41,7 @@ export const sendActivationEmail = async ({
   link: string;
   isReinvite?: boolean;
 }) =>
-  resend.emails.send({
+  getResend().emails.send({
     from: FROM,
     to,
     subject: isReinvite
@@ -82,7 +82,7 @@ export const sendWeekendReminderEmail = async ({
   link: string;
   fullName: string;
 }) =>
-  resend.emails.send({
+  getResend().emails.send({
     from: FROM,
     to,
     subject: 'Get your SmartKey collection code today',
@@ -125,7 +125,7 @@ export const sendWeekendApprovedEmail = async ({
   keyCode: string;
   roomName: string;
 }) =>
-  resend.emails.send({
+  getResend().emails.send({
     from: FROM,
     to,
     subject: 'Your weekend key request has been approved',
@@ -165,7 +165,7 @@ export const sendWeekendDeclinedEmail = async ({
   fullName: string;
   note?: string;
 }) =>
-  resend.emails.send({
+  getResend().emails.send({
     from: FROM,
     to,
     subject: 'Your weekend key request was not approved',
@@ -203,7 +203,7 @@ export const sendGuestWeekendApprovedEmail = async ({
   keyCode: string;
   roomName: string;
 }) =>
-  resend.emails.send({
+  getResend().emails.send({
     from: FROM,
     to,
     subject: 'Your weekend access request has been approved',
@@ -242,7 +242,7 @@ export const sendPasswordResetEmail = async ({
   to: string;
   link: string;
 }) =>
-  resend.emails.send({
+  getResend().emails.send({
     from: FROM,
     to,
     subject: 'Reset your SmartKey password',
@@ -277,7 +277,7 @@ export const sendGuestWeekendEmail = async ({
   link: string;
   fullName: string;
 }) =>
-  resend.emails.send({
+  getResend().emails.send({
     from: FROM,
     to,
     subject: 'Your SmartKey weekend access request',
