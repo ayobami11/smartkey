@@ -1,14 +1,7 @@
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false,
-  auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD,
-  },
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
+const FROM = process.env.RESEND_FROM_EMAIL ?? 'SmartKey <noreply@smartkey.app>';
 
 const emailHeader = `
   <div style="background:#7B1F2D;padding:16px 24px;border-radius:8px 8px 0 0;">
@@ -23,8 +16,8 @@ export const sendOtpEmail = async ({
   to: string;
   code: string;
 }) =>
-  transporter.sendMail({
-    from: `"SmartKey" <${process.env.GMAIL_USER}>`,
+  resend.emails.send({
+    from: FROM,
     to,
     subject: 'Your SmartKey verification code',
     html: `
@@ -48,8 +41,8 @@ export const sendActivationEmail = async ({
   link: string;
   isReinvite?: boolean;
 }) =>
-  transporter.sendMail({
-    from: `"SmartKey" <${process.env.GMAIL_USER}>`,
+  resend.emails.send({
+    from: FROM,
     to,
     subject: isReinvite
       ? 'Your SmartKey access has been restored'
@@ -80,10 +73,6 @@ export const sendActivationEmail = async ({
     `,
   });
 
-// Morning-of reminder for an approved weekend request. No code is emailed for
-// the weekend flow — the requester (or guest) mints a short-lived collection
-// code from the linked page on the requested day. This nudge closes the gap
-// where an approved request would otherwise be forgotten until the day passed.
 export const sendWeekendReminderEmail = async ({
   to,
   link,
@@ -93,8 +82,8 @@ export const sendWeekendReminderEmail = async ({
   link: string;
   fullName: string;
 }) =>
-  transporter.sendMail({
-    from: `"SmartKey" <${process.env.GMAIL_USER}>`,
+  resend.emails.send({
+    from: FROM,
     to,
     subject: 'Get your SmartKey collection code today',
     html: `
@@ -121,7 +110,6 @@ export const sendWeekendReminderEmail = async ({
     `,
   });
 
-// Approval notification for a registered requester's weekend request.
 export const sendWeekendApprovedEmail = async ({
   to,
   fullName,
@@ -137,8 +125,8 @@ export const sendWeekendApprovedEmail = async ({
   keyCode: string;
   roomName: string;
 }) =>
-  transporter.sendMail({
-    from: `"SmartKey" <${process.env.GMAIL_USER}>`,
+  resend.emails.send({
+    from: FROM,
     to,
     subject: 'Your weekend key request has been approved',
     html: `
@@ -168,7 +156,6 @@ export const sendWeekendApprovedEmail = async ({
     `,
   });
 
-// Decline notification for a registered requester's weekend request.
 export const sendWeekendDeclinedEmail = async ({
   to,
   fullName,
@@ -178,8 +165,8 @@ export const sendWeekendDeclinedEmail = async ({
   fullName: string;
   note?: string;
 }) =>
-  transporter.sendMail({
-    from: `"SmartKey" <${process.env.GMAIL_USER}>`,
+  resend.emails.send({
+    from: FROM,
     to,
     subject: 'Your weekend key request was not approved',
     html: `
@@ -201,9 +188,6 @@ export const sendWeekendDeclinedEmail = async ({
     `,
   });
 
-// Approval notification for an external (guest) weekend request. Reuses the
-// same status-page link the guest received at submission so they can navigate
-// to it on the day and mint their collection code.
 export const sendGuestWeekendApprovedEmail = async ({
   to,
   fullName,
@@ -219,8 +203,8 @@ export const sendGuestWeekendApprovedEmail = async ({
   keyCode: string;
   roomName: string;
 }) =>
-  transporter.sendMail({
-    from: `"SmartKey" <${process.env.GMAIL_USER}>`,
+  resend.emails.send({
+    from: FROM,
     to,
     subject: 'Your weekend access request has been approved',
     html: `
@@ -258,8 +242,8 @@ export const sendPasswordResetEmail = async ({
   to: string;
   link: string;
 }) =>
-  transporter.sendMail({
-    from: `"SmartKey" <${process.env.GMAIL_USER}>`,
+  resend.emails.send({
+    from: FROM,
     to,
     subject: 'Reset your SmartKey password',
     html: `
@@ -284,9 +268,6 @@ export const sendPasswordResetEmail = async ({
     `,
   });
 
-// Status-link email for an external (non-registered) weekend key request.
-// The link carries the unguessable access_token so the guest can track their
-// request, mint a collection code on the day, and present it at the desk.
 export const sendGuestWeekendEmail = async ({
   to,
   link,
@@ -296,8 +277,8 @@ export const sendGuestWeekendEmail = async ({
   link: string;
   fullName: string;
 }) =>
-  transporter.sendMail({
-    from: `"SmartKey" <${process.env.GMAIL_USER}>`,
+  resend.emails.send({
+    from: FROM,
     to,
     subject: 'Your SmartKey weekend access request',
     html: `
