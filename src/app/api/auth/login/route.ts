@@ -79,10 +79,12 @@ export const POST = async (request: NextRequest) => {
     try {
       await sendOtpEmail({ to: email, code });
     } catch (emailErr) {
-      logger.error('OTP email failed', { email, err: String(emailErr) });
-      return NextResponse.json(err('Failed to send verification code', 500), {
-        status: 500,
-      });
+      const detail = String(emailErr);
+      logger.error('OTP email failed', { email, err: detail });
+      return NextResponse.json(
+        err(`Failed to send verification code: ${detail}`, 500),
+        { status: 500 }
+      );
     }
 
     return NextResponse.json(ok({ session: null, role, mfa_required: true }));
