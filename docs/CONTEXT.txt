@@ -1,0 +1,56 @@
+SMARTKEY — QUICK REFERENCE CONTEXT
+===================================
+
+ROLE NAMING
+-----------
+The faculty approver role is called "Dean" in all user-facing language.
+The DB enum value is `HOD` and internal identifiers (routes, RPCs, audit events,
+table names) retain the `hod` prefix for historical continuity. Do not rename
+them — the frontend already uses these paths.
+
+  DB role value : HOD
+  Human term    : Dean
+  Routes        : /hod, /api/requests/hod-decision  (unchanged)
+  Table         : hod_decisions                      (unchanged)
+  Columns       : departments.hod_id, requests.hod_decision_id  (unchanged)
+
+The CSO authorises Administration-group keys (no Dean exists for that group).
+
+DEPARTMENT MODEL
+----------------
+The key-owning unit is the faculty (or Administration group), NOT individual
+departments. Each faculty owns two keys: Dean's Office + Porter's Lodge.
+Administration owns central Senate offices (VC, DVCs, Registrar, Bursary,
+Librarian).
+
+  departments.authoriser = 'DEAN'  → faculty key; Dean approves/nominates
+  departments.authoriser = 'CSO'   → Administration key; CSO approves/nominates
+
+EMAIL PROVIDER
+--------------
+Nodemailer via Gmail SMTP. NOT Resend.
+
+  Host : smtp.gmail.com
+  Port : 587
+  Auth : GMAIL_USER + GMAIL_APP_PASSWORD (Gmail App Password, no spaces)
+  File : src/lib/email/otp.ts
+
+SIGNATURE VERIFICATION
+----------------------
+- Runs server-side only (Sharp + Pixelmatch).
+- Dean uploads reference signature/stamp at /hod/onboarding.
+- Verification runs when a Dean approves a weekend request.
+- Mismatch > 15% → approval held → CSO alert at /cso (signature-alerts feed).
+- CSO resolves via POST /api/requests/hod-decision with cso_override: true.
+- Administration-key approvals (CSO) skip signature verification (no reference).
+
+AI COMPONENTS
+-------------
+1. Risk engine   — pure TS, no external API, src/lib/ai/risk/
+2. Shift reports — Google Gemini (gemini-3.5-flash), src/lib/ai/reports/
+3. Sig verify    — Sharp + Pixelmatch, src/lib/ai/signature/
+
+AUDIT LOG
+---------
+Append-only. Never UPDATE or DELETE. Always write via src/lib/audit/.
+Every state-change RPC writes its own audit entry atomically.

@@ -106,7 +106,7 @@ Completes requester registration. Token from the invite link is validated before
 **File**: `src/app/api/auth/activate-hod/route.ts`
 **Roles**: HOD (invite link only)
 
-One-time HOD onboarding. Validates token, sets password, stores signature and stamp references, enables MFA.
+One-time Dean onboarding. Validates token, sets password, stores signature and stamp references, enables MFA.
 
 | Field       | Type           | Required |
 | ----------- | -------------- | -------- |
@@ -195,7 +195,7 @@ The RPC runs the risk engine, generates the code, and writes the audit entry ato
 **File**: `src/app/api/requests/pending/route.ts`
 **Roles**: HOD
 
-Returns requests for the HOD's department with `status = 'PENDING_HOD'`, including external (guest) requests for the department (joined `guest` details, `letter_url`, `requested_department_id`) so the HOD can review and assign a key before approving.
+Returns requests for the Dean's faculty with `status = 'PENDING_HOD'`, including external (guest) requests for the faculty (joined `guest` details, `letter_url`, `requested_department_id`) so the Dean can review and assign a key before approving.
 
 **Response `data`**: `{ "requests": [...] }`
 
@@ -204,7 +204,7 @@ Returns requests for the HOD's department with `status = 'PENDING_HOD'`, includi
 ### POST /api/requests/hod-decision
 
 **File**: `src/app/api/requests/hod-decision/route.ts`
-**Roles**: HOD (DEAN), CSO
+**Roles**: Dean (role: HOD), CSO
 **RPC**: `approve_weekend(request_id, hod_id, note?, signature_verified?, signature_mismatch_pct?, cso_override?)`, `approve_guest_weekend(request_id, hod_id, key_id, note?)`, or `decline_weekend(request_id, hod_id, note?, cso_override?)`
 
 | Field          | Type                       | Required                           |
@@ -217,15 +217,15 @@ Returns requests for the HOD's department with `status = 'PENDING_HOD'`, includi
 
 For approvals, the route runs signature verification before calling the RPC. If the mismatch exceeds the threshold, the approval is **held** — the RPC is never called — and a `SIGNATURE_MISMATCH` audit entry is written instead. The response in this case is `{ "request_id": "<uuid>", "status": "HELD_SIGNATURE_MISMATCH", "mismatch_pct": <number> }` (still HTTP 200 — this is not a route-level error).
 
-For an external (guest) request (`guest_id` set), the route requires a `key_id` in the body and calls `approve_guest_weekend` instead — the HOD assigns the key at approval, and signature verification is skipped (guests have no HOD reference signature; the HOD reviews the uploaded letter manually). The decline path reuses `decline_weekend` unchanged.
+For an external (guest) request (`guest_id` set), the route requires a `key_id` in the body and calls `approve_guest_weekend` instead — the Dean assigns the key at approval, and signature verification is skipped (guests have no Dean reference signature; the Dean reviews the uploaded letter manually). The decline path reuses `decline_weekend` unchanged.
 
-The **CSO** may call this route for **Administration** requests (keys whose department `authoriser = 'CSO'`). The CSO path skips signature verification (no reference signature exists for the CSO). The RPC re-validates that the actor's role matches the target department's `authoriser`, so an HOD acting on an Administration key — or the CSO acting on a faculty key — is rejected with `403`.
+The **CSO** may call this route for **Administration** requests (keys whose department `authoriser = 'CSO'`). The CSO path skips signature verification (no reference signature exists for the CSO). The RPC re-validates that the actor's role matches the target department's `authoriser`, so a Dean acting on an Administration key — or the CSO acting on a faculty key — is rejected with `403`.
 
 The CSO may also resolve a **held faculty-key mismatch** by passing `cso_override: true` with `decision: 'APPROVED'` or `'DECLINED'`. The RPC only honours this when a `SIGNATURE_MISMATCH` audit entry already exists for the request — it is not a general bypass of the Dean-authoriser gate. See `GET /api/ai/signature-alerts` for how the CSO discovers these.
 
 **Response `data`**: `{ "request_id": "<uuid>", "status": "CODE_ISSUED" | "HELD_SIGNATURE_MISMATCH" }`
 
-**Errors**: `403` request not in HOD's department, or `cso_override` used without a matching mismatch on record · `409` already decided · `422` validation
+**Errors**: `403` request not in Dean's faculty, or `cso_override` used without a matching mismatch on record · `409` already decided · `422` validation
 
 ---
 
@@ -397,7 +397,7 @@ These routes let an external person with no SmartKey account submit a weekend ke
 **Roles**: ALL (unauthenticated)
 **RPC**: `create_guest_weekend_request(full_name, email, phone, id_type, id_number, department_id, weekend_date, return_deadline, letter_url, requested_room)`
 
-Multipart form. Uploads the HOD authorisation letter to the `weekend-letters` bucket, creates the guest + request (`PENDING_HOD`, no code), and emails the status link to the guest (via the shared email sender in `src/lib/email/`). Email failure is logged but does not fail the request. Returns `201`.
+Multipart form. Uploads the Dean authorisation letter to the `weekend-letters` bucket, creates the guest + request (`PENDING_HOD`, no code), and emails the status link to the guest (via the shared email sender in `src/lib/email/`). Email failure is logged but does not fail the request. Returns `201`.
 
 | Field                | Type                       | Required |
 | -------------------- | -------------------------- | -------- |
@@ -441,7 +441,7 @@ Returns safe status fields for the guest's status/code page, read by `access_tok
 }
 ```
 
-`code` / `code_expires_at` are non-null only while `status = 'CODE_ISSUED'`; `key` is null until the HOD assigns one on approval.
+`code` / `code_expires_at` are non-null only while `status = 'CODE_ISSUED'`; `key` is null until the Dean assigns one on approval.
 
 **Errors**: `404` token not found
 
@@ -480,11 +480,11 @@ Fired automatically by the status page when the collection code's countdown reac
 **File**: `src/app/api/requests/[id]/letter/route.ts`
 **Roles**: HOD
 
-Returns a short-lived (5-minute) signed URL for a guest request's HOD authorisation letter so the HOD can preview it before approving. The letter lives in the private `weekend-letters` bucket; signing happens server-side with the admin client. Access is gated to the HOD whose department owns the request (RLS plus a department check).
+Returns a short-lived (5-minute) signed URL for a guest request's Dean authorisation letter so the Dean can preview it before approving. The letter lives in the private `weekend-letters` bucket; signing happens server-side with the admin client. Access is gated to the Dean whose faculty owns the request (RLS plus a faculty check).
 
 **Response `data`**: `{ "url": "<signed-url>" }`
 
-**Errors**: `403` not an HOD / not the request's department · `404` request has no letter · `500` signing failure
+**Errors**: `403` not a Dean / not the request's faculty · `404` request has no letter · `500` signing failure
 
 ---
 
@@ -534,7 +534,7 @@ Returns all requests with `status = 'KEY_ISSUED'` or `status = 'KEY_OVERDUE'`, j
 
 **Query params**: `key_id` · `requester_id` · `from` (ISO date) · `to` (ISO date) · `limit` · `cursor`
 
-HOD sees only their department's keys (RLS enforced). CSO sees all.
+Dean sees only their faculty's keys (RLS enforced). CSO sees all.
 
 **Response `data`**: `{ "transactions": [...], "next_cursor": "<opaque>" }`
 
@@ -608,26 +608,26 @@ No request body. Sets `profiles.status = 'DEACTIVATED'`. Supabase Auth session i
 **File**: `src/app/api/admin/users/[id]/route.ts`
 **Roles**: CSO
 
-Edits an existing user's `full_name` and — for departmental roles (HOD, REQUESTER) — `department_id`. Email and role are intentionally **not** editable here: the email is the auth login identity and chain-of-trust anchor, and role changes are out of scope. Writes a `USER_UPDATED` audit entry recording only the fields that actually changed. When an HOD moves department, the `departments.hod_id` reverse link is kept in sync.
+Edits an existing user's `full_name` and — for departmental roles (Dean/HOD, REQUESTER) — `department_id`. Email and role are intentionally **not** editable here: the email is the auth login identity and chain-of-trust anchor, and role changes are out of scope. Writes a `USER_UPDATED` audit entry recording only the fields that actually changed. When a Dean moves faculty, the `departments.hod_id` reverse link is kept in sync.
 
-| Field           | Type            | Required                  |
-| --------------- | --------------- | ------------------------- |
-| `full_name`     | `string`        | yes                       |
-| `department_id` | `string` (uuid) | HOD and REQUESTER targets |
+| Field           | Type            | Required                         |
+| --------------- | --------------- | -------------------------------- |
+| `full_name`     | `string`        | yes                              |
+| `department_id` | `string` (uuid) | Dean (HOD) and REQUESTER targets |
 
 **Response `data`**: `{ "profile_id": "<uuid>", "full_name": "<name>", "department_id": "<uuid|null>" }`
 
-**Errors**: `404` user not found · `409` destination department already has an HOD · `422` validation / department required / department not found
+**Errors**: `404` user not found · `409` destination faculty already has a Dean · `422` validation / faculty required / faculty not found
 
 ---
 
 ### POST /api/admin/authorisations
 
 **File**: `src/app/api/admin/authorisations/route.ts`
-**Roles**: HOD (faculty keys), CSO (Administration keys)
+**Roles**: Dean (faculty keys), CSO (Administration keys)
 **RPC**: `nominate_collector(key_id, requester_id)`
 
-Submits a collector nomination. The route delegates entirely to the `nominate_collector` RPC, which is authoriser-aware: an HOD nominates for keys in their own department, the CSO nominates for `authoriser='CSO'` (Administration) keys. Enforces the max-3-per-key constraint at the DB level.
+Submits a collector nomination. The route delegates entirely to the `nominate_collector` RPC, which is authoriser-aware: a Dean nominates for keys in their own faculty, the CSO nominates for `authoriser='CSO'` (Administration) keys. Enforces the max-3-per-key constraint at the DB level.
 
 | Field          | Type            | Required |
 | -------------- | --------------- | -------- |
@@ -636,17 +636,17 @@ Submits a collector nomination. The route delegates entirely to the `nominate_co
 
 **Response `data`**: `{ "authorisation_id": "<composite>", "slot_number": 2 }`
 
-**Errors**: `403` key not in your scope (HOD on another department's key, or CSO/HOD on the wrong authoriser type) · `409` three slots already filled · `409` requester already authorised for this key
+**Errors**: `403` key not in your scope (Dean on another faculty's key, or CSO/Dean on the wrong authoriser type) · `409` three slots already filled · `409` requester already authorised for this key
 
 ---
 
 ### DELETE /api/admin/authorisations/[key_id]/[requester_id]
 
 **File**: `src/app/api/admin/authorisations/[key_id]/[requester_id]/route.ts`
-**Roles**: HOD (faculty keys), CSO (Administration keys)
+**Roles**: Dean (faculty keys), CSO (Administration keys)
 **RPC**: `remove_collector(key_id, requester_id)`
 
-Removes a collector from a slot. Authoriser-aware via the `remove_collector` RPC (HOD for their department's keys, CSO for Administration keys). Writes audit entry.
+Removes a collector from a slot. Authoriser-aware via the `remove_collector` RPC (Dean for their faculty's keys, CSO for Administration keys). Writes audit entry.
 
 **Response `data`**: `null` (204)
 
@@ -849,7 +849,7 @@ Returns weekend requests currently held on `PENDING_HOD` with an unresolved `SIG
 | `hod_id`                  | `string` (uuid) | yes      |
 | `submitted_signature_url` | `string`        | yes      |
 
-Retrieves the HOD's reference signature from Supabase Storage, runs Sharp preprocessing on both, and runs Pixelmatch. Returns the mismatch ratio.
+Retrieves the Dean's reference signature from Supabase Storage, runs Sharp preprocessing on both, and runs Pixelmatch. Returns the mismatch ratio.
 
 **Response `data`**: `{ "mismatch_ratio": 0.04, "passed": true }`
 

@@ -18,7 +18,7 @@ This file is the companion to `DESIGN.md`. Where `DESIGN.md` describes the visua
 SmartKey is a four-role web application replacing the paper-based key management workflow at the University of Lagos Senate Building. The roles are:
 
 - **Chief Security Officer (CSO)**: senior administrator. Desktop-primary. Oversight, reports, audit log, user management.
-- **Head of Department (HOD)**: faculty member. Mixed device usage. Authorises up to three collectors per departmental key, signs weekend approvals.
+- **Dean (system role: HOD)**: faculty Dean. Mixed device usage. Authorises up to three collectors per faculty key, signs weekend approvals.
 - **Verifier (security personnel)**: 24/7 desk staff in 8-hour shifts. Shared desktop at the security desk. Issues and receives keys, performs shift handover.
 - **Requester (university staff)**: lowest-frequency user. Phone-primary. Requests a key, receives a 6-digit code by email, presents it at the desk.
 
@@ -26,7 +26,7 @@ Three AI components run in the background:
 
 1. **Risk scoring engine** — rule-based, evaluates each request and assigns Low/Medium/High tier visible to the verifier.
 2. **Gemini-generated shift reports** — readable summaries from raw event data, surfaced on the CSO dashboard.
-3. **Signature verification (Sharp + Pixelmatch)** — pixel-level match of HOD signatures against onboarded references.
+3. **Signature verification (Sharp + Pixelmatch)** — pixel-level match of Dean signatures against onboarded references.
 
 Success criteria: 80–90% reduction in end-to-end request processing time vs the manual baseline; zero missing or malformed audit log entries; WCAG 2.2 AA conformance; LCP ≤ 2.5s, CLS < 0.1, Lighthouse ≥ 85.
 
@@ -41,8 +41,8 @@ Success criteria: 80–90% reduction in end-to-end request processing time vs th
 - `/activate/:token` — Account activation: set password, accept terms, email OTP.
 - `/forgot-password` — Email-OTP-based password reset.
 - `/help` — Static FAQ and contact-the-CSO instructions.
-- `/weekend-access` — External (non-registered) weekend request form: department, weekend date, work description, name/email/phone, ID document type + number, HOD authorisation letter upload.
-- `/weekend-access/:token` — Session-less guest status/code page reached via the request's `access_token`: shows status, the HOD-assigned key once present, and the 6-digit code with countdown on the requested date.
+- `/weekend-access` — External (non-registered) weekend request form: department, weekend date, work description, name/email/phone, ID document type + number, Dean authorisation letter upload.
+- `/weekend-access/:token` — Session-less guest status/code page reached via the request's `access_token`: shows status, the Dean-assigned key once present, and the 6-digit code with countdown on the requested date.
 
 ### 2.2 CSO area
 
@@ -53,9 +53,9 @@ Success criteria: 80–90% reduction in end-to-end request processing time vs th
 - `/cso/keys` — Key inventory across both zones; create / retire key records.
 - `/cso/settings` — Operational hours, risk-rule weights, profile, theme.
 
-### 2.3 HOD area
+### 2.3 Dean area
 
-- `/hod` — Dashboard home: key grid for the department, weekend requests requiring action.
+- `/hod` — Dashboard home: key grid for the faculty, weekend requests requiring action.
 - `/hod/keys/:keyId` — Manage authorised collectors (max 3) for one key.
 - `/hod/weekend-requests` — Review and decide weekend access requests.
 - `/hod/onboarding` — One-time signature and stamp upload (forced on first login).
@@ -86,8 +86,8 @@ Success criteria: 80–90% reduction in end-to-end request processing time vs th
 1. User receives provisioning email from CSO with activation link.
 2. User clicks link → `/activate/:token`; sets password and accepts terms.
 3. System sends 6-digit email OTP; user enters it.
-4. Privileged roles (CSO, HOD, Verifier) confirm MFA preference (email OTP).
-5. HODs are routed to `/hod/onboarding` to upload signature and stamp before any other action.
+4. Privileged roles (CSO, Dean/HOD, Verifier) confirm MFA preference (email OTP).
+5. Deans are routed to `/hod/onboarding` to upload signature and stamp before any other action.
 6. User lands on their role dashboard home.
 
 ### 3.2 Requester: standard weekday key request
@@ -107,15 +107,15 @@ Exit conditions:
 
 1. On `/me`, tap "Request weekend access" → form opens.
 2. Select key, weekend date, work activity description, submit.
-3. Confirmation card shows pending HOD approval; user notified by email when decision is made.
+3. Confirmation card shows pending Dean approval; user notified by email when decision is made.
 
-### 3.4 HOD: authorise a collector
+### 3.4 Dean: authorise a collector
 
 1. On `/hod`, tap a key tile in the grid → opens slot management for that key.
 2. Tap a vacant slot (max 3) → search staff by name or email; select.
 3. Confirm authorisation; the staff member is now whitelisted for that key.
 
-### 3.5 HOD: review weekend access request
+### 3.5 Dean: review weekend access request
 
 1. On `/hod`, the weekend-requests panel shows pending items with badge count in nav.
 2. Tap a request → detail sheet shows requester, key, date, description.
@@ -185,11 +185,11 @@ The five screens below are anchor screens. Other screens follow the same pattern
 - **Active request banner**: present only if user has an issued, unexpired code or an outstanding key. Shows code (if pre-collection) or "Return by 17:00" with countdown.
 - **Authorised keys grid**: KeyTile per key (zone, room name, last used). Tap → request sheet.
 - **Weekend request CTA**: secondary button below the grid: "Request weekend access".
-- **Empty state**: when no keys authorised: friendly illustration + "Your HOD has not authorised any keys for you yet. Reach out to your department's HOD."
+- **Empty state**: when no keys authorised: friendly illustration + "Your Dean has not authorised any keys for you yet. Reach out to your faculty's Dean."
 
-### 4.3 HOD dashboard home
+### 4.3 Dean dashboard home
 
-**Layout**: two stacked sections on phone, two columns on desktop. Top: weekend requests requiring action (collapsible, badge with count). Bottom: department key grid showing each key with its three slots filled or vacant.
+**Layout**: two stacked sections on phone, two columns on desktop. Top: weekend requests requiring action (collapsible, badge with count). Bottom: faculty key grid showing each key with its three slots filled or vacant.
 
 **Required surfaces:**
 
@@ -233,7 +233,7 @@ A side sheet that opens from the queue or via the code-entry shortcut. Three log
 
 ### 5.1 Account provisioning and activation
 
-CSO provisions an account by entering name, institutional email, and role. The system creates a record with status "Pending activation" and emails an activation link with a single-use, 24-hour token. The user clicks the link, sets a password (minimum 12 chars, mixed case, number, symbol), accepts terms, and verifies their email with a 6-digit OTP. On success, the account moves to "Active". HODs are then routed to the signature and stamp onboarding.
+CSO provisions an account by entering name, institutional email, and role. The system creates a record with status "Pending activation" and emails an activation link with a single-use, 24-hour token. The user clicks the link, sets a password (minimum 12 chars, mixed case, number, symbol), accepts terms, and verifies their email with a 6-digit OTP. On success, the account moves to "Active". Deans are then routed to the signature and stamp onboarding.
 
 ### 5.2 Key request to collection (weekday)
 
@@ -246,9 +246,9 @@ CSO provisions an account by entering name, institutional email, and role. The s
 
 ### 5.3 Weekend access lifecycle
 
-A weekend request is a separate object from a weekday key request. A requester submits one through their dashboard; the HOD sees it in their pending panel and approves or declines. On approval, the system generates a code valid only on the requested weekend date, signed (by the HOD's onboarded signature reference), and recorded immutably. The verification code expires 24 hours after the requested date passes.
+A weekend request is a separate object from a weekday key request. A requester submits one through their dashboard; the Dean sees it in their pending panel and approves or declines. On approval, the system generates a code valid only on the requested weekend date, signed (by the Dean's onboarded signature reference), and recorded immutably. The verification code expires 24 hours after the requested date passes.
 
-**External (guest) variant.** The desk's real-world rule is that anyone may collect a key on the weekend provided they have HOD authorisation, so SmartKey also supports weekend requests from external people with no account. The guest submits at `/weekend-access` with their department, the weekend date, work description, name/email/phone, a declared ID document (type + number), and an uploaded HOD authorisation letter — they pick a department only, not a specific key. The request lands in the relevant HOD's pending panel flagged "External", showing the guest's details and letter. The HOD reviews the letter (no signature verification — guests have no reference signature), **assigns a key** from their department, and approves. The guest reaches a session-less status/code page via an unguessable token in their emailed link; on the requested date they mint the 6-digit code there, then present it at the desk, where the verifier checks the physical ID document (guests have no passport photo on file).
+**External (guest) variant.** The desk's real-world rule is that anyone may collect a key on the weekend provided they have Dean/CSO authorisation, so SmartKey also supports weekend requests from external people with no account. The guest submits at `/weekend-access` with their department, the weekend date, work description, name/email/phone, a declared ID document (type + number), and an uploaded Dean authorisation letter — they pick a department only, not a specific key. The request lands in the relevant Dean's pending panel flagged "External", showing the guest's details and letter. The Dean reviews the letter (no signature verification — guests have no reference signature), **assigns a key** from their faculty, and approves. The guest reaches a session-less status/code page via an unguessable token in their emailed link; on the requested date they mint the 6-digit code there, then present it at the desk, where the verifier checks the physical ID document (guests have no passport photo on file).
 
 ### 5.4 Shift handover
 
@@ -256,7 +256,7 @@ When a verifier opens the dashboard at the start of their shift, the system dete
 
 ### 5.5 Signature verification
 
-During HOD onboarding, the user uploads a scanned image of their signature and a separate image of the departmental stamp. The system processes each through Sharp (greyscale, normalised resolution) and stores the reference. When the HOD approves a memo, the embedded signature on the submission goes through the same preprocessing and is compared via Pixelmatch against the stored reference. Below threshold: approved silently. Above threshold: the request is held and a tampering alert is raised in the CSO feed.
+During Dean onboarding, the user uploads a scanned image of their signature and a separate image of the departmental stamp. The system processes each through Sharp (greyscale, normalised resolution) and stores the reference. When the Dean approves a weekend request, the embedded signature on the submission goes through the same preprocessing and is compared via Pixelmatch against the stored reference. Below threshold: approved silently. Above threshold: the request is held and a tampering alert is raised in the CSO feed.
 
 ### 5.6 Audit log search (CSO)
 
@@ -270,18 +270,18 @@ Every async surface needs four states: empty, loading, error, content. Plus offl
 
 ### 6.1 Empty states
 
-| Surface                        | Empty state copy                                          | Primary action |
-| ------------------------------ | --------------------------------------------------------- | -------------- |
-| Requester authorised keys grid | Your HOD has not authorised any keys for you yet.         | Contact HOD    |
-| Requester history              | You have not requested a key yet.                         | —              |
-| HOD key grid                   | No keys assigned to your department yet. Contact the CSO. | Contact CSO    |
-| HOD pending weekend requests   | No pending requests right now.                            | —              |
-| Verifier queue                 | No pending requests. New ones will appear here.           | —              |
-| Verifier outstanding keys      | No keys are currently issued.                             | —              |
-| CSO anomaly feed               | No anomalies in the last 24 hours.                        | —              |
-| CSO reports                    | No shift reports generated yet.                           | Generate now   |
-| CSO audit log results          | No events match these filters.                            | Reset filters  |
-| Notification centre            | No notifications yet.                                     | —              |
+| Surface                        | Empty state copy                                       | Primary action |
+| ------------------------------ | ------------------------------------------------------ | -------------- |
+| Requester authorised keys grid | Your Dean has not authorised any keys for you yet.     | Contact Dean   |
+| Requester history              | You have not requested a key yet.                      | —              |
+| Dean key grid                  | No keys assigned to your faculty yet. Contact the CSO. | Contact CSO    |
+| Dean pending weekend requests  | No pending requests right now.                         | —              |
+| Verifier queue                 | No pending requests. New ones will appear here.        | —              |
+| Verifier outstanding keys      | No keys are currently issued.                          | —              |
+| CSO anomaly feed               | No anomalies in the last 24 hours.                     | —              |
+| CSO reports                    | No shift reports generated yet.                        | Generate now   |
+| CSO audit log results          | No events match these filters.                         | Reset filters  |
+| Notification centre            | No notifications yet.                                  | —              |
 
 ### 6.2 Loading
 
@@ -320,7 +320,7 @@ Every async surface needs four states: empty, loading, error, content. Plus offl
 | New key request arrives              | In-app realtime + optional sound (off by default) | Verifier on duty          |
 | Key issued                           | In-app confirmation                               | Requester (status update) |
 | Key overdue (past EOD return)        | Email + in-app                                    | Requester + CSO           |
-| Weekend request submitted            | In-app + email                                    | HOD                       |
+| Weekend request submitted            | In-app + email                                    | Dean                      |
 | Weekend request decided              | Email + in-app                                    | Requester                 |
 | Anomaly detected (any tier ≥ Medium) | In-app realtime                                   | CSO                       |
 | Signature mismatch                   | In-app realtime + email                           | CSO                       |
@@ -354,7 +354,7 @@ Layout patterns:
 - **Verifier dashboard**: two-column at lg+; stacks at md and below; outstanding-keys collapses behind a tab on xs.
 - **CSO dashboard**: three-column at lg+; two-column at md (events stream collapses); single column with tabs at sm/xs.
 - **Requester home**: single column always. Grid 2-up at xs, 3-up at md, 4-up at lg.
-- **HOD key grid**: single column at xs; 2-up at sm; 3-up at lg.
+- **Dean key grid**: single column at xs; 2-up at sm; 3-up at lg.
 - **Code display**: always centred, full viewport width on xs, max 480px on larger.
 
 ---
@@ -377,7 +377,7 @@ Layout patterns:
 
 ### 9.3 Signature verification
 
-- **Where**: silently in the background of HOD-signed approvals; explicitly when a mismatch is detected.
+- **Where**: silently in the background of Dean-signed approvals; explicitly when a mismatch is detected.
 - **On match**: no UI surface; subtle audit-log entry "Signature verified".
 - **On mismatch**: CSO dashboard receives a tampering alert. Detail shows the reference signature, the failed sample, the mismatch percentage, and a link to the underlying request. Approval is held until CSO action.
 
@@ -390,8 +390,8 @@ These do not block design start but should be resolved before high-fidelity sign
 - Will the SmartKey wordmark be designed in-house or procured separately?
 - Is there a printer at the security desk, or are reports read on-screen and exported as PDF?
 - Should overdue-key reminders escalate (e.g., a second nudge after 1 hour past EOD)?
-- Who owns the operational hours configuration per zone — CSO only, or HODs for their department?
-- On signature mismatch, can the HOD self-resolve (re-upload reference) or must the CSO unblock?
+- Who owns the operational hours configuration per zone — CSO only, or Deans for their faculty?
+- On signature mismatch, can the Dean self-resolve (re-upload reference) or must the CSO unblock?
 - Sound alerts at the verifier desk — opt-in default; should we ship a sample audio?
 - Pilot tablet model for UAT — what specific device should layout testing target?
 - Retention policy: how long do audit logs and shift reports remain queryable in the UI before archive?
