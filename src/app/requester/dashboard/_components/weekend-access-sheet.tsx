@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { CalendarIcon } from 'lucide-react';
+
+import { AuthorizationLetterUpload } from '@/app/(public)/weekend-access/_components/authorization-letter-upload';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -32,6 +34,7 @@ import {
 import { apiFetch } from '@/lib/api';
 import { createBrowserClient } from '@/lib/supabase/client';
 import {
+  LETTER_MAX_BYTES,
   weekendRequestFormSchema,
   type WeekendRequestFormInput,
 } from '@/lib/validation/schemas';
@@ -64,6 +67,8 @@ export const WeekendAccessSheet = ({
   const [selectedKeyId, setSelectedKeyId] = useState('');
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [availableKeys, setAvailableKeys] = useState<AvailableKey[]>([]);
+  const [letterFile, setLetterFile] = useState<File | null>(null);
+  const letterInputRef = useRef<HTMLInputElement>(null);
 
   const form = useForm<WeekendRequestFormInput>({
     resolver: zodResolver(weekendRequestFormSchema),
@@ -102,6 +107,7 @@ export const WeekendAccessSheet = ({
       setSelectedKeyId('');
       setStep('weekend_form');
       setSubmitError(null);
+      setLetterFile(null);
       form.reset();
     }, 200);
   };
@@ -109,6 +115,29 @@ export const WeekendAccessSheet = ({
   const handleSubmit = async (values: WeekendRequestFormInput) => {
     setStep('submitting');
     setSubmitError(null);
+
+    let letterUrl: string | undefined;
+
+    if (letterFile) {
+      try {
+        const supabase = createBrowserClient();
+        const ext = letterFile.name.split('.').pop() ?? 'bin';
+        const path = `${userId}/${crypto.randomUUID()}.${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from('weekend-letters')
+          .upload(path, letterFile, { contentType: letterFile.type });
+        if (uploadError) throw uploadError;
+        const { data: urlData } = supabase.storage
+          .from('weekend-letters')
+          .getPublicUrl(path);
+        letterUrl = urlData.publicUrl;
+      } catch {
+        setSubmitError('Failed to upload signature image. Try again.');
+        setStep('weekend_form');
+        return;
+      }
+    }
+
     const result = await apiFetch<{ request_id: string }>(
       '/api/requests/submit',
       {
@@ -120,6 +149,7 @@ export const WeekendAccessSheet = ({
             `${values.weekend_date}T23:59:00`
           ).toISOString(),
           weekend_date: values.weekend_date,
+          ...(letterUrl ? { letter_url: letterUrl } : {}),
         },
       }
     );
@@ -261,6 +291,51 @@ export const WeekendAccessSheet = ({
                     </Field>
                   )}
                 />
+
+                {/* Hidden file input — triggered by AuthorizationLetterUpload */}
+                <input
+                  ref={letterInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png"
+                  className="sr-only"
+                  aria-hidden="true"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] ?? null;
+                    if (file && file.size > LETTER_MAX_BYTES) {
+                      setSubmitError(
+                        'Signature image must be 5 MB or smaller.'
+                      );
+                      e.target.value = '';
+                      return;
+                    }
+                    setSubmitError(null);
+                    setLetterFile(file);
+                  }}
+                />
+
+                <Field>
+                  <FieldLabel htmlFor="weekend-sig">
+                    Dean&apos;s signature{' '}
+                    <span className="font-normal text-muted-foreground">
+                      (optional)
+                    </span>
+                  </FieldLabel>
+                  <AuthorizationLetterUpload
+                    id="weekend-sig"
+                    file={letterFile}
+                    onPickClick={() => letterInputRef.current?.click()}
+                    onRemove={() => {
+                      setLetterFile(null);
+                      if (letterInputRef.current)
+                        letterInputRef.current.value = '';
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Upload a close-up photo of the Dean&apos;s signature from
+                    the authorisation memo. Enables automatic verification. PNG
+                    or JPG only.
+                  </p>
+                </Field>
               </form>
             )}
 

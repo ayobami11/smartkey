@@ -16,6 +16,7 @@ const bodySchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .optional(),
+  letter_url: z.url().optional(),
 });
 
 const mapRpcError = (msg: string): { status: number; message: string } => {
@@ -61,7 +62,8 @@ export const POST = async (request: NextRequest) => {
     return NextResponse.json(err('Invalid request body', 422), { status: 422 });
   }
 
-  const { key_id, type, return_deadline, weekend_date } = parsed.data;
+  const { key_id, type, return_deadline, weekend_date, letter_url } =
+    parsed.data;
 
   // Fetch risk context data in parallel before calling the RPC.
   const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -148,6 +150,19 @@ export const POST = async (request: NextRequest) => {
       tier,
       err: riskUpdateError.message,
     });
+  }
+
+  if (type === 'WEEKEND' && letter_url) {
+    const { error: letterUpdateError } = await adminClient
+      .from('requests')
+      .update({ letter_url })
+      .eq('id', result.request_id);
+    if (letterUpdateError) {
+      logger.error('failed to persist letter_url', {
+        requestId: result.request_id,
+        err: letterUpdateError.message,
+      });
+    }
   }
 
   if (type === 'WEEKEND') {

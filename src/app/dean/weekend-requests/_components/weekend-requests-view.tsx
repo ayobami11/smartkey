@@ -122,9 +122,9 @@ export const WeekendRequestsView = () => {
     resolver: zodResolver(hodWeekendDecisionFormSchema),
     defaultValues: { note: '', key_id: '', is_guest: false },
   });
-  const [decision, setDecision] = useState<'approved' | 'declined' | null>(
-    null
-  );
+  const [decision, setDecision] = useState<
+    'approved' | 'declined' | 'held' | null
+  >(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [decidedIds, setDecidedIds] = useState<Set<string>>(new Set());
@@ -230,18 +230,32 @@ export const WeekendRequestsView = () => {
 
     setSubmitting(true);
     setSubmitError(null);
-    const result = await apiFetch('/api/requests/hod-decision', {
+    const result = await apiFetch<{
+      request_id: string;
+      status: string;
+      mismatch_pct?: number;
+    }>('/api/requests/hod-decision', {
       method: 'POST',
       body: {
         request_id: selected.id,
         decision: choice,
         note: values.note?.trim() || undefined,
         ...(choice === 'APPROVED' && isGuest ? { key_id: values.key_id } : {}),
+        // For registered requests with an uploaded signature, trigger pixel-level
+        // verification against the Dean's onboarded reference.
+        ...(choice === 'APPROVED' && !isGuest && selected.letter_url
+          ? { submitted_signature_url: selected.letter_url }
+          : {}),
       },
     });
     setSubmitting(false);
     if (result.error) {
       setSubmitError(result.error);
+      return;
+    }
+    if (result.data?.status === 'HELD_SIGNATURE_MISMATCH') {
+      setDecision('held');
+      setDecidedIds((prev) => new Set(prev).add(selected.id));
       return;
     }
     setDecision(choice === 'APPROVED' ? 'approved' : 'declined');
@@ -414,6 +428,22 @@ export const WeekendRequestsView = () => {
                           </p>
                         </div>
                       </>
+                    ) : decision === 'held' ? (
+                      <>
+                        <AlertTriangleIcon
+                          className="size-10 text-amber-500"
+                          aria-hidden="true"
+                        />
+                        <div>
+                          <p className="font-medium text-foreground">
+                            Approval held — signature mismatch
+                          </p>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            The CSO has been notified and will review. You will
+                            be able to proceed once they resolve it.
+                          </p>
+                        </div>
+                      </>
                     ) : (
                       <>
                         <XCircleIcon
@@ -455,7 +485,7 @@ export const WeekendRequestsView = () => {
                     </div>
                   </div>
 
-                  {/* Guest identity + letter */}
+                  {/* Guest identity */}
                   {selected.guest && (
                     <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/40 p-4">
                       <div className="flex items-center gap-2 text-xs font-medium text-foreground">
@@ -487,31 +517,31 @@ export const WeekendRequestsView = () => {
                           {selected.guest.phone}
                         </p>
                       )}
-                      {selected.letter_url && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-fit"
-                          onClick={() => handleViewLetter(selected.id)}
-                          disabled={letterLoading}
-                          aria-busy={letterLoading}
-                        >
-                          <FileTextIcon
-                            className="size-3.5"
-                            aria-hidden="true"
-                          />
-                          {letterLoading
-                            ? 'Opening...'
-                            : letterUrl
-                              ? 'Letter opened'
-                              : 'View authorisation letter'}
-                          <ExternalLinkIcon
-                            className="size-3"
-                            aria-hidden="true"
-                          />
-                        </Button>
-                      )}
                     </div>
+                  )}
+
+                  {/* Authorisation letter / signature — shown for any request
+                      that has a letter_url (guest letter or registered
+                      requester's Dean signature upload). */}
+                  {selected.letter_url && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-fit"
+                      onClick={() => handleViewLetter(selected.id)}
+                      disabled={letterLoading}
+                      aria-busy={letterLoading}
+                    >
+                      <FileTextIcon className="size-3.5" aria-hidden="true" />
+                      {letterLoading
+                        ? 'Opening...'
+                        : letterUrl
+                          ? 'Signature opened'
+                          : selected.guest
+                            ? 'View authorisation letter'
+                            : 'View Dean signature'}
+                      <ExternalLinkIcon className="size-3" aria-hidden="true" />
+                    </Button>
                   )}
 
                   {/* Request details */}
