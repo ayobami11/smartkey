@@ -15,7 +15,7 @@
 | AI — risk      | Pure TypeScript rule engine (no external API)                                                       |
 | AI — reports   | Google Gemini API (server-side)                                                                     |
 | AI — signature | Sharp + Pixelmatch (server-side)                                                                    |
-| Email          | Resend                                                                                              |
+| Email          | Nodemailer (Gmail SMTP via `smtp.gmail.com:587`)                                                    |
 | Testing        | Vitest (unit), Playwright + axe-core (E2E)                                                          |
 | Hosting        | Vercel (frontend), Supabase (backend)                                                               |
 
@@ -26,7 +26,7 @@ Browser ──┬── Server Components / Server Actions ──┬── Supab
           │                                         ├── Supabase Realtime (websocket)
           │                                         ├── Supabase Storage
           │                                         ├── Gemini API (server-side only)
-          │                                         └── Resend (email)
+          │                                         └── Nodemailer / Gmail SMTP (email)
           │
           └── Realtime websocket subscriptions for live dashboards
 ```
@@ -59,7 +59,7 @@ src/
 │   │   ├── risk/        # rule engine
 │   │   ├── reports/     # Gemini integration
 │   │   └── signature/   # Sharp + Pixelmatch
-│   ├── email/           # Resend templates and senders
+│   ├── email/           # Nodemailer/Gmail SMTP templates and senders
 │   ├── auth/            # MFA flow, session helpers
 │   └── logger.ts        # structured logging
 ├── types/               # shared types and zod schemas
@@ -93,7 +93,7 @@ Key decisions live in `docs/adr/` as numbered records. Read them when in doubt.
 
 ## Auth and role gating
 
-`middleware.ts` reads the Supabase session and the user's role, gates routes by role, and rewrites unauthorised access to a 403 page. The role is stored in a `profiles.role` column (CSO, HOD, VERIFIER, REQUESTER) and joined into JWT claims via Supabase function.
+`middleware.ts` reads the Supabase session and the user's role, gates routes by role, and rewrites unauthorised access to a 403 page. The role is stored in a `profiles.role` column (`CSO`, `HOD`, `VERIFIER`, `REQUESTER`) and joined into JWT claims via Supabase function. The `HOD` role corresponds to the **Dean** in domain language; internal identifiers (routes, RPCs, audit events) retain the `hod` name for historical continuity.
 
 ## Realtime subscriptions
 
@@ -102,7 +102,7 @@ Every dashboard subscribes on mount to its relevant tables:
 - Verifier: `requests` (status='pending'), `outstanding_keys`, `current_shift`.
 - CSO: `anomalies`, `zone_counts` (materialised view), `recent_events`.
 - Requester: own `requests` row.
-- HOD: `weekend_requests` (department-scoped), department `keys`.
+- Dean (HOD): `weekend_requests` (faculty-scoped), faculty `keys`.
 
 Connection state is exposed via `useConnectionStatus()` and rendered as the green/amber/red dot in the app bar.
 
@@ -110,9 +110,9 @@ Connection state is exposed via `useConnectionStatus()` and rendered as the gree
 
 Every table has RLS. The patterns:
 
-- **profiles**: read your own + same-department staff (HOD); CSO reads all.
+- **profiles**: read your own + same-faculty staff (Dean/HOD); CSO reads all.
 - **keys**: read all (everyone needs to see keys they may interact with); write CSO only.
-- **requests**: read your own (requester) + verifier-on-shift + HOD for their department + CSO; write requester (own) + verifier (status transitions) + system (RPCs).
+- **requests**: read your own (requester) + verifier-on-shift + Dean (HOD) for their faculty + CSO; write requester (own) + verifier (status transitions) + system (RPCs).
 - **audit_log**: read CSO only; INSERT via RPC only; UPDATE/DELETE denied for everyone.
 - **shift_reports**: read CSO; INSERT via RPC only; UPDATE/DELETE denied.
 - **comments on reports**: read CSO; INSERT CSO; UPDATE/DELETE denied.

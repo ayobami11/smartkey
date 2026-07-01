@@ -12,11 +12,11 @@ A paper logbook at the University of Lagos Senate Building security desk, used t
 - No real-time check on whether a collector is currently authorised.
 - No detection of keys collected outside permitted hours.
 - Slow incident investigations because records are physical and not searchable.
-- HOD authorisations sent as paper memos minuted by the CSO.
+- Dean (HOD) authorisations sent as paper memos minuted by the CSO.
 
 ## What SmartKey provides
 
-- Role-specific dashboards for CSO, HOD, Verifier, Requester.
+- Role-specific dashboards for CSO, Dean (HOD), Verifier, Requester.
 - Immutable digital audit trail.
 - Three AI components: rule-based risk scoring, Gemini-generated shift reports, pixel-level signature verification.
 - Real-time updates via Supabase Realtime.
@@ -32,11 +32,11 @@ Senior administrator. Desktop-primary. One per institution.
 
 **Routes**: /cso, /cso/reports, /cso/audit, /cso/users, /cso/keys, /cso/settings.
 
-### Head of Department (HOD)
+### Dean (system role: HOD)
 
-Faculty member, mixed device usage. One per department (5 departments at launch, scaling).
+Faculty Dean, mixed device usage. One per faculty (2 pilot faculties at launch, scaling). The Administration group's keys are authorised by the CSO (no Dean exists for it).
 
-**Goals**: whitelist up to three authorised collectors per departmental key; approve weekend access requests; upload signature and stamp on first sign-in; track department activity.
+**Goals**: whitelist up to three authorised collectors per faculty key; approve weekend access requests; upload signature and stamp on first sign-in; track faculty activity.
 
 **Routes**: /hod, /hod/keys/:keyId, /hod/weekend-requests, /hod/onboarding, /hod/profile.
 
@@ -61,9 +61,9 @@ Departmental staff, primary device a phone. Lowest visit frequency, lowest toler
 - **Operational hours**: configurable per zone (default 06:00–22:00 weekday, closed weekend). Out-of-hours requests raise risk.
 - **Return SLA**: end of business day (17:00 default), configurable in CSO settings.
 - **Code expiry**: 10 minutes from generation. Expired code → request a new one (no auto-renew).
-- **Authorisation slots**: 3 per key, set by HOD.
-- **Weekend access**: separate flow. HOD-signed approval; code generated for the requested date; expires 24h after the date passes.
-- **Account onboarding**: CSO provisions; user activates via emailed link with 24h validity, then sets password and completes email-OTP. HODs are then forced into signature/stamp onboarding.
+- **Authorisation slots**: 3 per key, set by the Dean (for faculty keys) or CSO (for Administration keys).
+- **Weekend access**: separate flow. Dean/CSO-signed approval; code generated for the requested date; expires 24h after the date passes.
+- **Account onboarding**: CSO provisions; user activates via emailed link with 24h validity, then sets password and completes email-OTP. Deans are then forced into signature/stamp onboarding.
 
 ## Success criteria
 

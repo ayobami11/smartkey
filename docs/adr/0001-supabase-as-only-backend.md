@@ -8,7 +8,7 @@ SmartKey needs auth, database, realtime, storage, and email. We could compose th
 
 ## Decision
 
-Use Supabase for auth, database, realtime, and storage. Use Resend for email (Supabase's native email is sufficient for transactional but Resend gives us better template control for the activation and code emails).
+Use Supabase for auth, database, realtime, and storage. Use Nodemailer with Gmail SMTP for email (activation links, OTP codes, weekend reminders, password reset). Gmail App Password authentication over `smtp.gmail.com:587`.
 
 ## Consequences
 

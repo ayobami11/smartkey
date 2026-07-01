@@ -571,7 +571,7 @@ Sets key `status = 'RETIRED'`, creates an incident log entry of type `MISSING_KE
 | `role`                | `'HOD' \| 'VERIFIER' \| 'REQUESTER'` | yes               |
 | `department_id`       | `string` (uuid)                      | HOD and REQUESTER |
 
-Creates the profile, generates a 24-hour activation token, queues the invite email via Resend, and writes the audit entry — all inside the RPC.
+Creates the profile, generates a 24-hour activation token, queues the invite email via Nodemailer (Gmail SMTP), and writes the audit entry — all inside the RPC.
 
 **Response `data`**: `{ "profile_id": "<uuid>", "status": "PENDING_ACTIVATION" }`
 

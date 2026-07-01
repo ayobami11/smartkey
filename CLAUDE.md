@@ -6,7 +6,7 @@
 
 SmartKey is a key management web application for the University of Lagos Senate Building. It replaces a paper logbook with role-specific dashboards, an immutable audit trail, and three AI components: rule-based risk scoring, Gemini-generated shift reports, and pixel-level signature verification.
 
-Four roles share the application: **CSO** (admin oversight), **HOD** (faculty key authoriser), **Verifier** (security personnel at the desk), **Requester** (university staff).
+Four roles share the application: **CSO** (admin oversight), **Dean** (faculty key authoriser; system role `HOD`), **Verifier** (security personnel at the desk), **Requester** (university staff).
 
 For a full domain overview see @docs/PRODUCT.md.
 For architectural decisions see @docs/ARCHITECTURE.md.
@@ -21,7 +21,7 @@ For the design system see @design-system/DESIGN.md.
 - **Forms**: react-hook-form + zod
 - **AI**: Google Gemini (shift reports), rule-engine in TS (risk scoring), Sharp + Pixelmatch (signature verification)
 - **Testing**: Vitest (unit), Playwright (E2E with axe-core)
-- **Email**: Resend
+- **Email**: Nodemailer (Gmail SMTP via `smtp.gmail.com:587`)
 
 ## Directory map
 
