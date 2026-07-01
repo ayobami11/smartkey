@@ -204,25 +204,28 @@ Returns requests for the HOD's department with `status = 'PENDING_HOD'`, includi
 ### POST /api/requests/hod-decision
 
 **File**: `src/app/api/requests/hod-decision/route.ts`
-**Roles**: HOD, CSO
-**RPC**: `approve_weekend(request_id, hod_id, note?)`, `approve_guest_weekend(request_id, hod_id, key_id, note?)`, or `decline_weekend(request_id, hod_id, note?)`
+**Roles**: HOD (DEAN), CSO
+**RPC**: `approve_weekend(request_id, hod_id, note?, signature_verified?, signature_mismatch_pct?, cso_override?)`, `approve_guest_weekend(request_id, hod_id, key_id, note?)`, or `decline_weekend(request_id, hod_id, note?, cso_override?)`
 
-| Field        | Type                       | Required             |
-| ------------ | -------------------------- | -------------------- |
-| `request_id` | `string` (uuid)            | yes                  |
-| `decision`   | `'APPROVED' \| 'DECLINED'` | yes                  |
-| `key_id`     | `string` (uuid)            | guest approvals only |
-| `note`       | `string`                   | no                   |
+| Field          | Type                       | Required                           |
+| -------------- | -------------------------- | ---------------------------------- |
+| `request_id`   | `string` (uuid)            | yes                                |
+| `decision`     | `'APPROVED' \| 'DECLINED'` | yes                                |
+| `key_id`       | `string` (uuid)            | guest approvals only               |
+| `note`         | `string`                   | no                                 |
+| `cso_override` | `boolean`                  | CSO resolving a held mismatch only |
 
-For approvals, the RPC runs signature verification. If the mismatch exceeds the threshold, the request is held and a CSO alert is raised — this is not a route-level error.
+For approvals, the route runs signature verification before calling the RPC. If the mismatch exceeds the threshold, the approval is **held** — the RPC is never called — and a `SIGNATURE_MISMATCH` audit entry is written instead. The response in this case is `{ "request_id": "<uuid>", "status": "HELD_SIGNATURE_MISMATCH", "mismatch_pct": <number> }` (still HTTP 200 — this is not a route-level error).
 
 For an external (guest) request (`guest_id` set), the route requires a `key_id` in the body and calls `approve_guest_weekend` instead — the HOD assigns the key at approval, and signature verification is skipped (guests have no HOD reference signature; the HOD reviews the uploaded letter manually). The decline path reuses `decline_weekend` unchanged.
 
 The **CSO** may call this route for **Administration** requests (keys whose department `authoriser = 'CSO'`). The CSO path skips signature verification (no reference signature exists for the CSO). The RPC re-validates that the actor's role matches the target department's `authoriser`, so an HOD acting on an Administration key — or the CSO acting on a faculty key — is rejected with `403`.
 
-**Response `data`**: `{ "request_id": "<uuid>", "status": "CODE_ISSUED" }`
+The CSO may also resolve a **held faculty-key mismatch** by passing `cso_override: true` with `decision: 'APPROVED'` or `'DECLINED'`. The RPC only honours this when a `SIGNATURE_MISMATCH` audit entry already exists for the request — it is not a general bypass of the Dean-authoriser gate. See `GET /api/ai/signature-alerts` for how the CSO discovers these.
 
-**Errors**: `403` request not in HOD's department · `409` already decided · `422` validation
+**Response `data`**: `{ "request_id": "<uuid>", "status": "CODE_ISSUED" | "HELD_SIGNATURE_MISMATCH" }`
+
+**Errors**: `403` request not in HOD's department, or `cso_override` used without a matching mismatch on record · `409` already decided · `422` validation
 
 ---
 
@@ -795,6 +798,44 @@ The pg_cron job reads its bearer secret from Supabase Vault (`weekend_cron_secre
 Returns active high-risk access patterns: requests with `risk_tier = 'HIGH'` in the last 24 hours that have not been resolved. Read-only; the risk engine runs at request-submit time, not on this endpoint.
 
 **Response `data`**: `{ "alerts": [...] }`
+
+---
+
+### GET /api/ai/signature-alerts
+
+**File**: `src/app/api/ai/signature-alerts/route.ts`
+**Roles**: CSO
+
+Returns weekend requests currently held on `PENDING_HOD` with an unresolved `SIGNATURE_MISMATCH` audit entry (written by `POST /api/requests/hod-decision` when a Dean's submitted signature fails verification). Read-only. A request drops off this list once the CSO resolves it via `cso_override` on `POST /api/requests/hod-decision`.
+
+**Response `data`**:
+
+```json
+{
+  "alerts": [
+    {
+      "id": "<uuid>",
+      "requested_for": "2026-07-04",
+      "occurred_at": "<iso>",
+      "ref_url": "<url>",
+      "submitted_url": "<url>",
+      "mismatch_pct": 22.5,
+      "threshold_pct": 15,
+      "requester": {
+        "id": "<uuid>",
+        "full_name": "Dr. Bakare",
+        "institutional_email": "..."
+      },
+      "key": {
+        "id": "<uuid>",
+        "code": "NS-304",
+        "room_name": "Senate Hall A",
+        "zone": "NEW_SENATE"
+      }
+    }
+  ]
+}
+```
 
 ---
 

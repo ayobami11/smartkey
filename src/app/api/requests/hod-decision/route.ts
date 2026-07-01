@@ -25,6 +25,11 @@ const bodySchema = z.object({
   // the request has no key_id until then. Required when approving a guest
   // request; ignored for registered requests.
   key_id: z.uuid().optional(),
+  // CSO-only. Resolves a faculty-key request that a Dean's approval attempt
+  // held due to a signature mismatch. The RPC re-validates that a
+  // SIGNATURE_MISMATCH audit entry actually exists for this request before
+  // honouring the override.
+  cso_override: z.boolean().optional(),
 });
 
 const mapRpcError = (msg: string): { status: number; message: string } => {
@@ -155,8 +160,14 @@ export const POST = async (request: NextRequest) => {
     return NextResponse.json(err('Invalid request body', 422), { status: 422 });
   }
 
-  const { request_id, decision, note, submitted_signature_url, key_id } =
-    parsed.data;
+  const {
+    request_id,
+    decision,
+    note,
+    submitted_signature_url,
+    key_id,
+    cso_override,
+  } = parsed.data;
 
   // Detect whether this is an external (guest) request. Guests have no HOD
   // reference signature to compare, so they take a distinct approval path that
@@ -219,6 +230,7 @@ export const POST = async (request: NextRequest) => {
         p_note: note ?? undefined,
         p_signature_verified: true,
         p_signature_mismatch_pct: undefined,
+        p_cso_override: cso_override ?? false,
       });
 
       if (error) {
@@ -399,6 +411,7 @@ export const POST = async (request: NextRequest) => {
       p_request_id: request_id,
       p_hod_id: user.id,
       p_note: note ?? undefined,
+      p_cso_override: isCso ? (cso_override ?? false) : false,
     });
 
     if (error) {
