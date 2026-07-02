@@ -70,6 +70,33 @@ Located in `src/lib/ai/signature/`. Server-side only.
 
 **Tests**: `src/lib/ai/signature/verifier.test.ts` with fixture image pairs covering match, threshold-edge, mismatch.
 
+**How to trigger verification** (`POST /api/requests/hod-decision`):
+
+Verification only runs when the caller includes `submitted_signature_url` in the request body. The frontend must pass this URL when the requester uploaded a signed Dean authorisation letter.
+
+```json
+{
+  "request_id": "<uuid>",
+  "decision": "APPROVED",
+  "submitted_signature_url": "<signed-url-to-letter-in-weekend-letters-bucket>"
+}
+```
+
+Paths that **skip** verification:
+
+- `submitted_signature_url` is absent → approval proceeds without comparison (no letter was attached to the request).
+- Actor is CSO → CSO has no reference signature; `approve_weekend` is called directly with `signature_verified: true`.
+- Request is a guest request → goes to `approve_guest_weekend`; the Dean reviews the uploaded letter manually and no pixel comparison runs.
+
+Server-side sequence when `submitted_signature_url` is present:
+
+1. Fetch `profile.signature_ref_url` (Dean's onboarded reference) and `submitted_signature_url` in parallel.
+2. Call `verifySignature(refBuffer, subBuffer)` → returns `{ mismatch_ratio, passed }`.
+3. If `passed = false`: write `SIGNATURE_MISMATCH` audit entry with both URLs and the mismatch %; return `{ status: "HELD_SIGNATURE_MISMATCH", mismatch_pct }` (HTTP 200 — the RPC is never called).
+4. If `passed = true`: call `approve_weekend` RPC with `signature_verified: true` and the actual `mismatch_pct`; return `{ status: "APPROVED" }`.
+
+The CSO resolves a held mismatch by calling the same route with `cso_override: true`.
+
 ## Implementation status (as of 2026-06-16)
 
 - **Risk scoring engine**: ✅ Done (PR #38). `src/lib/ai/risk/` contains `types.ts`, `rules.ts`, `thresholds.ts`, and `engine.ts`. 24 unit tests cover every rule and tier boundary. `POST /api/requests/submit` runs the engine and back-fills `risk_tier` + `risk_factors` on the request row via the admin client.
