@@ -238,7 +238,9 @@ export const KeyIdView = () => {
     }
     setAddPickerOpen(false);
     setSelectedCandidateId('');
-    toast.success(`${candidate?.full_name ?? 'Collector'} added successfully.`);
+    toast.success(
+      `${candidate?.full_name ?? 'Collector'} added to collectors for ${keyData?.code}.`
+    );
   };
 
   const filledCount = slots.filter((s) => s.filled).length;

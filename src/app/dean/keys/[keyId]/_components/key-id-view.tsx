@@ -251,10 +251,15 @@ export const KeyIdView = () => {
         const authorisedIds = new Set(fresh.map((s) => s.profile_id));
         setCandidates((prev) => prev.filter((c) => !authorisedIds.has(c.id)));
         // Slot actually filled despite the error — close silently.
-        if (fresh.some((s) => s.profile_id === selectedCandidateId)) {
+        const addedSlot = fresh.find(
+          (s) => s.profile_id === selectedCandidateId
+        );
+        if (addedSlot) {
           setAddPickerOpen(false);
           setSelectedCandidateId('');
-          toast.success('Collector added successfully.');
+          toast.success(
+            `${addedSlot.name} added to collectors for ${keyData?.code}.`
+          );
           return;
         }
       }
@@ -285,7 +290,9 @@ export const KeyIdView = () => {
     }
     setAddPickerOpen(false);
     setSelectedCandidateId('');
-    toast.success(`${candidate?.full_name ?? 'Collector'} added successfully.`);
+    toast.success(
+      `${candidate?.full_name ?? 'Collector'} added to collectors for ${keyData?.code}.`
+    );
   };
 
   const filledCount = slots.filter((s) => s.filled).length;
