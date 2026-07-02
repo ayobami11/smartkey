@@ -175,7 +175,6 @@ export const ProfilePhotoUpload = ({
               disabled={uploading}
               aria-busy={uploading}
             >
-              <UploadIcon className="size-3.5" aria-hidden="true" />
               {uploading ? 'Saving...' : 'Save photo'}
             </Button>
             <Button
