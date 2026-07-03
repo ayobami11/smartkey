@@ -247,6 +247,9 @@ export const KeyIdView = () => {
   const zoneLabel =
     keyData?.zone === 'NEW_SENATE' ? 'New Senate' : 'Old Senate';
   const dept = keyData?.unit as { name: string } | null;
+  const selectedCandidate = candidates.find(
+    (c) => c.id === selectedCandidateId
+  );
 
   if (loading) {
     return (
@@ -383,7 +386,21 @@ export const KeyIdView = () => {
                       onValueChange={setSelectedCandidateId}
                     >
                       <SelectTrigger id={`picker-${idx}`} className="text-xs">
-                        <SelectValue placeholder="Select a collector" />
+                        {selectedCandidate ? (
+                          <span className="flex items-center gap-1.5 overflow-hidden">
+                            <span className="shrink-0 font-medium">
+                              {selectedCandidate.full_name}
+                            </span>
+                            <span className="shrink-0 text-muted-foreground">
+                              ·
+                            </span>
+                            <span className="truncate text-muted-foreground">
+                              {selectedCandidate.institutional_email}
+                            </span>
+                          </span>
+                        ) : (
+                          <SelectValue placeholder="Select a collector" />
+                        )}
                       </SelectTrigger>
                       <SelectContent position="popper">
                         {candidates.length === 0 ? (
@@ -393,7 +410,14 @@ export const KeyIdView = () => {
                         ) : (
                           candidates.map((c) => (
                             <SelectItem key={c.id} value={c.id}>
-                              {c.full_name}
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-sm font-medium">
+                                  {c.full_name}
+                                </span>
+                                <span className="text-xs text-muted-foreground">
+                                  {c.institutional_email}
+                                </span>
+                              </div>
                             </SelectItem>
                           ))
                         )}

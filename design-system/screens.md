@@ -196,6 +196,8 @@ The five screens below are anchor screens. Other screens follow the same pattern
 - **Pending requests panel**: list of weekend requests with requester, key, date, time. Accept/decline or open detail.
 - **Key grid**: KeyTile per key. Each tile shows three slot indicators (filled/vacant). Tap → slot management.
 - **Filter**: segmented control: "All keys" / "Has vacant slot" / "Recently used".
+- **Recent activity feed**: last 5 issue/return events for the faculty's keys, sourced from `GET /api/keys/history` (auto-scoped to the Dean's faculty). Read-only, realtime-updated; not a substitute for the key grid or `/dean/keys` detail views.
+- **Authorised collectors table**: one row per collector slot (up to 3) across every faculty key, including vacant slots, read directly from `authorisations` (RLS-scoped via the key's faculty). Read-only, realtime-updated; links out to `/dean/keys` for management rather than duplicating the per-key slot UI.
 - **Onboarding nudge**: if signature or stamp not yet uploaded, persistent banner at top until complete; blocks weekend approvals until done.
 
 ### 4.4 CSO dashboard home
@@ -276,6 +278,8 @@ Every async surface needs four states: empty, loading, error, content. Plus offl
 | Requester history              | You have not requested a key yet.                      | —              |
 | Dean key grid                  | No keys assigned to your faculty yet. Contact the CSO. | Contact CSO    |
 | Dean pending weekend requests  | No pending requests right now.                         | —              |
+| Dean recent activity feed      | No key activity yet.                                   | —              |
+| Dean collectors table          | No keys assigned to your faculty yet. Contact the CSO. | Contact CSO    |
 | Verifier queue                 | No pending requests. New ones will appear here.        | —              |
 | Verifier outstanding keys      | No keys are currently issued.                          | —              |
 | CSO anomaly feed               | No anomalies in the last 24 hours.                     | —              |

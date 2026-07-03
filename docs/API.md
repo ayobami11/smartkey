@@ -63,7 +63,7 @@ Error strings are user-facing. Stack traces and Supabase error messages never ap
 
 If `mfa_required` is `true`, the client must complete `/api/auth/verify-otp` before the session is usable. Supabase Auth handles OTP delivery.
 
-**Errors**: `401` invalid credentials · `422` schema validation
+**Errors**: `401` invalid credentials · `422` schema validation · `503` network connection failed (Supabase connectivity failure — distinguished from invalid credentials via `isAuthRetryableFetchError`, not conflated into a `401`)
 
 ---
 

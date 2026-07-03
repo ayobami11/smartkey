@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
-
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiFetch } from '@/lib/api';
+import { useRealtime } from '@/hooks/use-realtime';
+import { useConnectionStatus } from '@/hooks/use-connection-status';
+
 import { Button } from '@/components/ui/button';
 import {
   Empty,
@@ -13,66 +14,71 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty';
 import { Skeleton } from '@/components/ui/skeleton';
-import { formatDate } from '@/lib/dates';
+import { SectionCardHeader } from '@/components/smartkey/section-card-header';
 import {
   getTransactionDate,
   getTransactionReturnLine,
   TRANSACTION_STATUS_CONFIG,
   type Transaction,
 } from '@/components/smartkey/transaction-status';
+import { formatDate, relativeTimeCompact } from '@/lib/dates';
 
-type Props = { keyId: string };
+const QUERY_KEY = ['dean', 'recent-activity'];
 
-// Component
+// One-line, past-tense description of what happened, e.g. "Dr. Bakare
+// collected the key for Senate Hall A (NS-304)" — the card's headline
+// rather than listing the key and requester as separate, disconnected facts.
+const describeActivity = (tx: Transaction): string => {
+  const who = tx.requester?.full_name ?? 'Someone';
+  const what = tx.key
+    ? `the key for ${tx.key.room_name} (${tx.key.code})`
+    : 'a key';
+  switch (tx.status) {
+    case 'KEY_ISSUED':
+      return `${who} collected ${what}`;
+    case 'KEY_RETURNED':
+      return `${who} returned ${what}`;
+    case 'EXPIRED':
+      return `${who}’s request to collect ${what} expired`;
+    case 'CANCELLED':
+      return `${who} cancelled their request to collect ${what}`;
+    case 'DECLINED':
+      return `${who}’s request to collect ${what} was declined`;
+  }
+};
 
-export const KeyHistory = ({ keyId }: Props) => {
-  const [extra, setExtra] = useState<Transaction[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
+export const RecentActivity = () => {
+  const queryClient = useQueryClient();
+  const connectionStatus = useConnectionStatus();
+
+  useRealtime({
+    table: 'requests',
+    onInsert: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
+    onUpdate: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
+  });
 
   const {
-    data: firstPage = [],
+    data: transactions = [],
     isLoading,
     error,
     refetch,
   } = useQuery({
-    queryKey: ['key-history', keyId],
+    queryKey: QUERY_KEY,
+    refetchInterval: connectionStatus !== 'connected' ? 10_000 : false,
     queryFn: async (): Promise<Transaction[]> => {
       const result = await apiFetch<{
         transactions: Transaction[];
         next_cursor: string | null;
-      }>(`/api/keys/history?key_id=${keyId}&limit=10`);
+      }>('/api/keys/history?limit=5');
       if (result.error || !result.data)
-        throw new Error(result.error ?? 'Failed to load history.');
-      setCursor(result.data.next_cursor);
-      setHasMore(result.data.next_cursor !== null);
-      setExtra([]);
+        throw new Error(result.error ?? 'Failed to load recent activity.');
       return result.data.transactions;
     },
   });
 
-  const handleLoadMore = async () => {
-    if (!cursor) return;
-    setLoadingMore(true);
-    const result = await apiFetch<{
-      transactions: Transaction[];
-      next_cursor: string | null;
-    }>(`/api/keys/history?key_id=${keyId}&limit=10&cursor=${cursor}`);
-    setLoadingMore(false);
-    if (result.error || !result.data) return;
-    setExtra((prev) => [...prev, ...result.data!.transactions]);
-    setCursor(result.data.next_cursor);
-    setHasMore(result.data.next_cursor !== null);
-  };
-
-  const transactions = [...firstPage, ...extra];
-
   return (
-    <div>
-      <h2 className="mb-3 text-sm font-semibold text-foreground">
-        Transaction history
-      </h2>
+    <div className="flex flex-col gap-4">
+      <SectionCardHeader title="Recent activity" />
 
       {isLoading && (
         <div className="flex flex-col gap-3" aria-busy="true">
@@ -102,16 +108,20 @@ export const KeyHistory = ({ keyId }: Props) => {
       {!isLoading && !error && transactions.length === 0 && (
         <Empty className="border border-border bg-card">
           <EmptyContent>
-            <EmptyTitle>No transaction history yet.</EmptyTitle>
+            <EmptyTitle>No key activity yet.</EmptyTitle>
             <EmptyDescription>
-              Issued, returned, and declined requests will appear here.
+              Issued and returned keys for your faculty will appear here.
             </EmptyDescription>
           </EmptyContent>
         </Empty>
       )}
 
       {!isLoading && !error && transactions.length > 0 && (
-        <div className="flex flex-col gap-3">
+        <div
+          className="flex flex-col gap-3"
+          aria-live="polite"
+          aria-relevant="additions"
+        >
           {transactions.map((tx) => {
             const config = TRANSACTION_STATUS_CONFIG[tx.status];
             const { Icon } = config;
@@ -142,38 +152,26 @@ export const KeyHistory = ({ keyId }: Props) => {
                         {tx.type === 'WEEKEND' ? 'Weekend' : 'Weekday'}
                       </span>
                     </div>
-                    <p className="text-sm font-medium text-foreground">
-                      {tx.requester?.full_name ?? 'Unknown'}
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {describeActivity(tx)}
                     </p>
                     {returnLine && (
-                      <p className="text-xs text-muted-foreground">
+                      <p className="truncate text-xs text-muted-foreground">
                         {returnLine}
                       </p>
                     )}
                   </div>
                   <time
                     dateTime={dateIso}
+                    title={formatDate(dateIso)}
                     className="shrink-0 text-xs text-muted-foreground"
                   >
-                    {formatDate(dateIso)}
+                    {relativeTimeCompact(dateIso)}
                   </time>
                 </div>
               </div>
             );
           })}
-
-          {hasMore && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full"
-              disabled={loadingMore}
-              aria-busy={loadingMore}
-              onClick={handleLoadMore}
-            >
-              {loadingMore ? 'Loading...' : 'Load more'}
-            </Button>
-          )}
         </div>
       )}
     </div>

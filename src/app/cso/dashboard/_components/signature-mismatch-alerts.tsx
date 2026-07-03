@@ -20,7 +20,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 
 import { formatTime } from '@/app/cso/dashboard/_components/helpers';
-import { SectionCardHeader } from '@/app/cso/dashboard/_components/section-card-header';
+import { SectionCardHeader } from '@/components/smartkey/section-card-header';
 import { SignatureMismatchDetailDialog } from '@/app/cso/dashboard/_components/signature-mismatch-detail-dialog';
 
 // Types
