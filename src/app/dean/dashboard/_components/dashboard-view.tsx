@@ -5,6 +5,8 @@ import { useEffect, useState } from 'react';
 import { createBrowserClient } from '@/lib/supabase/client';
 
 import { WeekendRequests } from '@/app/dean/dashboard/_components/weekend-requests';
+import { RecentActivity } from '@/app/dean/dashboard/_components/recent-activity';
+import { CollectorsTable } from '@/app/dean/dashboard/_components/collectors-table';
 
 const getGreeting = () => {
   const hour = new Date().getHours();
@@ -59,6 +61,8 @@ export const DashboardView = () => {
       </div>
 
       <WeekendRequests />
+      <RecentActivity />
+      <CollectorsTable />
     </div>
   );
 };
