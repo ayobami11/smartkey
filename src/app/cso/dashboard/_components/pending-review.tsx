@@ -22,6 +22,7 @@ import {
   formatFactors,
   formatTime,
 } from '@/app/cso/dashboard/_components/helpers';
+import { SectionCardHeader } from '@/app/cso/dashboard/_components/section-card-header';
 
 // Types
 
@@ -95,7 +96,12 @@ export const PendingReview = () => {
 
   return (
     <div className="flex flex-col gap-4">
-      <h2 className="text-sm font-semibold text-foreground">Pending review</h2>
+      <SectionCardHeader
+        title="Pending review"
+        count={queue.length}
+        countLabel="awaiting your decision"
+        badgeVariant="primary"
+      />
 
       {queueLoading && (
         <div className="flex flex-col gap-3" aria-busy="true">

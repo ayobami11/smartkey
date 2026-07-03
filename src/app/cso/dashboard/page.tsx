@@ -1,16 +1,8 @@
-import Link from 'next/link';
-import {
-  FileTextIcon,
-  SearchIcon,
-  SirenIcon,
-  UserPlusIcon,
-} from 'lucide-react';
-
 export const metadata = { title: 'Dashboard' };
 
-import { Button } from '@/components/ui/button';
-
-import { LiveZoneCounts } from '@/app/cso/dashboard/_components/live-zone-counts';
+import { EventsChart } from '@/app/cso/dashboard/_components/events-chart';
+import { IncidentsChart } from '@/app/cso/dashboard/_components/incidents-chart';
+import { KeysChart } from '@/app/cso/dashboard/_components/keys-chart';
 import { PendingReview } from '@/app/cso/dashboard/_components/pending-review';
 import { RiskAlerts } from '@/app/cso/dashboard/_components/risk-alerts';
 import { SignatureMismatchAlerts } from '@/app/cso/dashboard/_components/signature-mismatch-alerts';
@@ -18,47 +10,30 @@ import { WeekendRequests } from '@/app/cso/dashboard/_components/weekend-request
 
 export default function CsoDashboardPage() {
   return (
-    <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
-      {/* Quick actions */}
-      <div className="flex flex-wrap items-center gap-2">
-        <Button asChild>
-          <Link href="/cso/reports">
-            <FileTextIcon className="size-4" aria-hidden="true" />
-            Generate report now
-          </Link>
-        </Button>
-        <Button asChild variant="outline">
-          <Link href="/cso/audit">
-            <SearchIcon className="size-4" aria-hidden="true" />
-            Search audit log
-          </Link>
-        </Button>
-        <Button asChild variant="outline">
-          <Link href="/cso/audit">
-            <SirenIcon className="size-4" aria-hidden="true" />
-            View incidents
-          </Link>
-        </Button>
-        <Button asChild variant="outline">
-          <Link href="/cso/users">
-            <UserPlusIcon className="size-4" aria-hidden="true" />
-            Provision user
-          </Link>
-        </Button>
+    <div className="flex flex-1 flex-col gap-8 p-4 pt-0">
+      <div>
+        <h1 className="text-xl font-semibold text-foreground">Dashboard</h1>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          Live overview of pending decisions, key status, and recent activity.
+        </p>
       </div>
 
-      {/* Three-column layout */}
-      <div className="grid flex-1 items-start gap-6 lg:grid-cols-3">
-        <LiveZoneCounts />
+      {/* Needs your attention */}
+      <div className="grid gap-6 lg:grid-cols-2">
         <PendingReview />
+        <SignatureMismatchAlerts />
         <RiskAlerts />
+        <WeekendRequests />
       </div>
 
-      {/* Signature mismatches — held approvals awaiting CSO review */}
-      <SignatureMismatchAlerts />
+      {/* Live status */}
+      <KeysChart />
 
-      {/* Weekend requests */}
-      <WeekendRequests />
+      {/* Trends */}
+      <div className="grid gap-6 md:grid-cols-2">
+        <IncidentsChart />
+        <EventsChart />
+      </div>
     </div>
   );
 }

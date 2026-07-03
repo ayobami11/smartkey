@@ -20,6 +20,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 
 import { formatTime } from '@/app/cso/dashboard/_components/helpers';
+import { SectionCardHeader } from '@/app/cso/dashboard/_components/section-card-header';
 import { SignatureMismatchDetailDialog } from '@/app/cso/dashboard/_components/signature-mismatch-detail-dialog';
 
 // Types
@@ -80,9 +81,12 @@ export const SignatureMismatchAlerts = () => {
 
   return (
     <div className="flex flex-col gap-4">
-      <h2 className="text-sm font-semibold text-foreground">
-        Signature mismatches
-      </h2>
+      <SectionCardHeader
+        title="Signature mismatches"
+        count={alerts.length}
+        countLabel="held for review"
+        badgeVariant="primary"
+      />
 
       {isLoading && (
         <div className="flex flex-col gap-3" aria-busy="true">
