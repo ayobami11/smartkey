@@ -31,6 +31,7 @@ import {
   ROLE_CLASSES,
   GUEST_BADGE_CLASSES,
 } from '@/lib/constants';
+import { EVENT_TYPE_MAP, type AuditEventType } from '@/lib/audit/event-types';
 import { AuditTableSkeleton } from '@/app/cso/audit/_components/audit-table-skeleton';
 import { Button } from '@/components/ui/button';
 import {
@@ -73,16 +74,6 @@ import {
 } from '@/components/ui/table';
 
 // Types
-
-type AuditEventType =
-  | 'REQUEST'
-  | 'ISSUE'
-  | 'RETURN'
-  | 'ANOMALY'
-  | 'HANDOVER'
-  | 'LOGIN'
-  | 'SETTINGS'
-  | 'SIGNATURE';
 
 type AuditEntry = {
   id: string;
@@ -144,29 +135,6 @@ const ACTOR_ROLE_CLASS: Record<string, string> = {
   Requester: 'bg-teal-100 text-teal-700',
   System: 'bg-muted text-muted-foreground',
   Guest: GUEST_BADGE_CLASSES,
-};
-
-const EVENT_TYPE_MAP: Record<string, AuditEventType> = {
-  REQUEST_CREATED: 'REQUEST',
-  REQUEST_CANCELLED: 'REQUEST',
-  REQUEST_EXPIRED: 'REQUEST',
-  CODE_ISSUED: 'REQUEST',
-  REQUEST_APPROVED_CSO: 'REQUEST',
-  REQUEST_DECLINED_CSO: 'REQUEST',
-  HOD_APPROVED: 'REQUEST',
-  HOD_DECLINED: 'REQUEST',
-  KEY_ISSUED: 'ISSUE',
-  KEY_RETURNED: 'RETURN',
-  KEY_OVERDUE: 'ANOMALY',
-  HANDOVER_KEY_ACKNOWLEDGED: 'HANDOVER',
-  USER_PROVISIONED: 'SETTINGS',
-  USER_DEACTIVATED: 'SETTINGS',
-  USER_UPDATED: 'SETTINGS',
-  PASSWORD_CHANGED: 'SETTINGS',
-  SHIFT_REPORT_INITIATED: 'SETTINGS',
-  REPORT_COMMENT_ADDED: 'SETTINGS',
-  SIGNATURE_MISMATCH: 'SIGNATURE',
-  LOGIN_SUCCEEDED: 'LOGIN',
 };
 
 const TYPE_TO_EVENTS: Partial<Record<AuditEventType, string[]>> = {
