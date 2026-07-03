@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 
 import { format } from 'date-fns';
-import { Cell, Pie, PieChart } from 'recharts';
+import { Cell, Label, Pie, PieChart } from 'recharts';
 
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -160,7 +160,7 @@ export const KeysChart = () => {
                   >
                     <ChartContainer
                       config={zoneChartConfig}
-                      className="aspect-square! h-24 w-24"
+                      className="aspect-square! h-32 w-32"
                     >
                       <PieChart>
                         <ChartTooltip
@@ -172,13 +172,46 @@ export const KeysChart = () => {
                           data={pieData}
                           dataKey="value"
                           nameKey="name"
-                          innerRadius={28}
-                          outerRadius={40}
+                          innerRadius={36}
+                          outerRadius={52}
                           strokeWidth={2}
                         >
                           {pieData.map((entry) => (
                             <Cell key={entry.name} fill={entry.fill} />
                           ))}
+                          <Label
+                            content={({ viewBox }) => {
+                              if (
+                                !viewBox ||
+                                !('cx' in viewBox) ||
+                                !('cy' in viewBox)
+                              )
+                                return null;
+                              return (
+                                <text
+                                  x={viewBox.cx}
+                                  y={viewBox.cy}
+                                  textAnchor="middle"
+                                  dominantBaseline="middle"
+                                >
+                                  <tspan
+                                    x={viewBox.cx}
+                                    y={viewBox.cy - 8}
+                                    className="fill-foreground text-xl font-semibold"
+                                  >
+                                    {zone.total}
+                                  </tspan>
+                                  <tspan
+                                    x={viewBox.cx}
+                                    y={viewBox.cy + 10}
+                                    className="fill-muted-foreground text-xs"
+                                  >
+                                    keys
+                                  </tspan>
+                                </text>
+                              );
+                            }}
+                          />
                         </Pie>
                       </PieChart>
                     </ChartContainer>
