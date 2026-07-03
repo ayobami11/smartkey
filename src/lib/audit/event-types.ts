@@ -1,0 +1,52 @@
+// Categorises raw audit_log.event names into a small set of types shared by
+// the CSO audit table filter (src/app/cso/audit/_components/audit-table.tsx)
+// and the dashboard activity chart (src/app/cso/dashboard/_components/events-chart.tsx).
+
+export type AuditEventType =
+  | 'REQUEST'
+  | 'ISSUE'
+  | 'RETURN'
+  | 'ANOMALY'
+  | 'HANDOVER'
+  | 'LOGIN'
+  | 'SETTINGS'
+  | 'SIGNATURE';
+
+export const EVENT_TYPE_MAP: Record<string, AuditEventType> = {
+  REQUEST_CREATED: 'REQUEST',
+  REQUEST_CANCELLED: 'REQUEST',
+  REQUEST_EXPIRED: 'REQUEST',
+  CODE_ISSUED: 'REQUEST',
+  REQUEST_APPROVED_CSO: 'REQUEST',
+  REQUEST_DECLINED_CSO: 'REQUEST',
+  HOD_APPROVED: 'REQUEST',
+  HOD_DECLINED: 'REQUEST',
+  KEY_ISSUED: 'ISSUE',
+  KEY_RETURNED: 'RETURN',
+  KEY_OVERDUE: 'ANOMALY',
+  HANDOVER_KEY_ACKNOWLEDGED: 'HANDOVER',
+  USER_PROVISIONED: 'SETTINGS',
+  USER_DEACTIVATED: 'SETTINGS',
+  USER_UPDATED: 'SETTINGS',
+  PASSWORD_CHANGED: 'SETTINGS',
+  SHIFT_REPORT_INITIATED: 'SETTINGS',
+  REPORT_COMMENT_ADDED: 'SETTINGS',
+  SIGNATURE_MISMATCH: 'SIGNATURE',
+  LOGIN_SUCCEEDED: 'LOGIN',
+};
+
+export const EVENT_TYPE_FALLBACK: AuditEventType = 'SETTINGS';
+
+export const getEventType = (event: string | undefined): AuditEventType =>
+  EVENT_TYPE_MAP[event ?? ''] ?? EVENT_TYPE_FALLBACK;
+
+export const EVENT_TYPE_LABELS: Record<AuditEventType, string> = {
+  REQUEST: 'Request',
+  ISSUE: 'Issue',
+  RETURN: 'Return',
+  ANOMALY: 'Anomaly',
+  HANDOVER: 'Handover',
+  LOGIN: 'Login',
+  SETTINGS: 'Settings',
+  SIGNATURE: 'Signature',
+};

@@ -24,6 +24,8 @@ import {
 } from '@/components/ui/empty';
 import { Skeleton } from '@/components/ui/skeleton';
 
+import { SectionCardHeader } from '@/app/cso/dashboard/_components/section-card-header';
+
 // Types
 
 type WeekendRequest = {
@@ -116,22 +118,13 @@ export const WeekendRequests = () => {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-foreground">
-          Weekend requests
-          {requests.length > 0 && (
-            <span
-              className="ml-2 inline-flex items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-xs font-semibold text-primary-foreground"
-              aria-label={`${requests.length} pending`}
-            >
-              {requests.length}
-            </span>
-          )}
-        </h2>
-        <Button asChild variant="ghost" size="sm" className="h-7 text-xs">
-          <Link href="/cso/weekend-requests">View all</Link>
-        </Button>
-      </div>
+      <SectionCardHeader
+        title="Weekend requests"
+        count={requests.length}
+        countLabel="pending"
+        badgeVariant="neutral"
+        viewAllHref="/cso/weekend-requests"
+      />
 
       {isLoading && (
         <div className="flex flex-col gap-3" aria-busy="true">

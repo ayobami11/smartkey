@@ -21,6 +21,7 @@ import {
   formatFactors,
   formatTime,
 } from '@/app/cso/dashboard/_components/helpers';
+import { SectionCardHeader } from '@/app/cso/dashboard/_components/section-card-header';
 
 // Types
 
@@ -73,7 +74,12 @@ export const RiskAlerts = () => {
 
   return (
     <div className="flex flex-col gap-4">
-      <h2 className="text-sm font-semibold text-foreground">Risk alerts</h2>
+      <SectionCardHeader
+        title="Risk alerts"
+        count={alerts.length}
+        countLabel="high-risk in the last 24 hours"
+        badgeVariant="neutral"
+      />
 
       {isLoading && (
         <div className="flex flex-col gap-3" aria-busy="true">
