@@ -3,13 +3,6 @@
 import { useState } from 'react';
 
 import { useQuery } from '@tanstack/react-query';
-import {
-  BanIcon,
-  CheckIcon,
-  ClockIcon,
-  HourglassIcon,
-  XCircleIcon,
-} from 'lucide-react';
 
 import { apiFetch } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -21,59 +14,14 @@ import {
 } from '@/components/ui/empty';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatDate } from '@/lib/dates';
-
-// Types
-
-type Transaction = {
-  id: string;
-  type: 'WEEKDAY' | 'WEEKEND';
-  status: 'KEY_ISSUED' | 'KEY_RETURNED' | 'EXPIRED' | 'CANCELLED' | 'DECLINED';
-  requested_for: string;
-  issued_at: string | null;
-  returned_at: string | null;
-  return_deadline: string;
-  created_at: string;
-  requester: { id: string; full_name: string } | null;
-};
+import {
+  getTransactionDate,
+  getTransactionReturnLine,
+  TRANSACTION_STATUS_CONFIG,
+  type Transaction,
+} from '@/components/smartkey/transaction-status';
 
 type Props = { keyId: string };
-
-// Helpers
-
-const STATUS_CONFIG = {
-  KEY_ISSUED: {
-    label: 'Issued',
-    stripe: 'bg-amber-500',
-    badge:
-      'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400',
-    Icon: ClockIcon,
-  },
-  KEY_RETURNED: {
-    label: 'Returned',
-    stripe: 'bg-emerald-500',
-    badge:
-      'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400',
-    Icon: CheckIcon,
-  },
-  EXPIRED: {
-    label: 'Expired',
-    stripe: 'bg-muted-foreground',
-    badge: 'bg-muted text-muted-foreground',
-    Icon: HourglassIcon,
-  },
-  CANCELLED: {
-    label: 'Cancelled',
-    stripe: 'bg-muted-foreground',
-    badge: 'bg-muted text-muted-foreground',
-    Icon: XCircleIcon,
-  },
-  DECLINED: {
-    label: 'Declined',
-    stripe: 'bg-destructive',
-    badge: 'bg-destructive/10 text-destructive',
-    Icon: BanIcon,
-  },
-} as const;
 
 // Component
 
@@ -165,20 +113,11 @@ export const KeyHistory = ({ keyId }: Props) => {
       {!isLoading && !error && transactions.length > 0 && (
         <div className="flex flex-col gap-3">
           {transactions.map((tx) => {
-            const config = STATUS_CONFIG[tx.status];
+            const config = TRANSACTION_STATUS_CONFIG[tx.status];
             const { Icon } = config;
 
-            const dateIso =
-              tx.status === 'KEY_ISSUED' || tx.status === 'KEY_RETURNED'
-                ? (tx.issued_at ?? tx.requested_for)
-                : tx.requested_for;
-
-            const returnLine =
-              tx.status === 'KEY_RETURNED' && tx.returned_at
-                ? `Returned ${formatDate(tx.returned_at)}`
-                : tx.status === 'KEY_ISSUED'
-                  ? `Due ${formatDate(tx.return_deadline)}`
-                  : null;
+            const dateIso = getTransactionDate(tx);
+            const returnLine = getTransactionReturnLine(tx);
 
             return (
               <div

@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/empty';
 import { Skeleton } from '@/components/ui/skeleton';
 
-import { SectionCardHeader } from '@/app/cso/dashboard/_components/section-card-header';
+import { SectionCardHeader } from '@/components/smartkey/section-card-header';
 
 // Types
 
