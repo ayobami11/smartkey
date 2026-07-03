@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, isAuthRetryableFetchError } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -40,6 +40,17 @@ export const POST = async (request: NextRequest) => {
 
   const { data: authData, error: authError } =
     await verifier.auth.signInWithPassword({ email, password });
+
+  if (authError && isAuthRetryableFetchError(authError)) {
+    logger.error('Login failed: unable to reach the authentication service', {
+      email,
+      err: String(authError),
+    });
+    return NextResponse.json(
+      err('Network connection failed. Please try again later.', 503),
+      { status: 503 }
+    );
+  }
 
   if (authError || !authData.session) {
     return NextResponse.json(err('Invalid email or password', 401), {
