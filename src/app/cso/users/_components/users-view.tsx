@@ -94,6 +94,7 @@ export const UsersView = () => {
       return;
     }
     setRevoking(false);
+    toast.success(`Access revoked for ${revokeTarget.name}.`);
     setRevokeTarget(null);
     refetch();
   };
