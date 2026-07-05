@@ -21,8 +21,8 @@ const riskRules = [
   },
   {
     id: 'weekend_no_memo',
-    name: 'Weekend without HOD memo',
-    description: 'Weekend request without an HOD-approved memo on file.',
+    name: 'Weekend without Dean memo',
+    description: 'Weekend request without a Dean-approved memo on file.',
     weight: 4,
     enabled: true,
   },

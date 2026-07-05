@@ -33,7 +33,7 @@ const notificationItems = [
     id: 'weekend-decided-email',
     label: 'Weekend request decided',
     description:
-      'Email when your HOD approves or declines a weekend access request.',
+      'Email when your Dean approves or declines a weekend access request.',
     channel: 'email',
   },
 ] as const;

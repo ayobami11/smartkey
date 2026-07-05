@@ -240,8 +240,8 @@ export const AuthorizedKeys = () => {
             </EmptyMedia>
             <EmptyTitle>No keys authorised</EmptyTitle>
             <EmptyDescription>
-              Your HOD has not authorised any keys for you yet. Reach out to
-              your department&#39;s HOD.
+              Your Dean has not authorised any keys for you yet. Reach out to
+              your faculty&apos;s Dean.
             </EmptyDescription>
           </EmptyHeader>
         </Empty>

@@ -277,7 +277,7 @@ export const SignatureAndStampSettings = () => {
           Signature &amp; stamp
         </h2>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          Reference images used for pixel-level verification of HOD approvals.
+          Reference images used for pixel-level verification of Dean approvals.
         </p>
       </div>
 

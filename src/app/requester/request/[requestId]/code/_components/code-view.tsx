@@ -61,7 +61,7 @@ const formatDeadline = (iso: string) => {
 const statusMessage: Record<string, string> = {
   KEY_RETURNED: 'This key has already been returned. Thank you!',
   CANCELLED: 'This request was cancelled.',
-  DECLINED: 'This request was declined by your HOD.',
+  DECLINED: 'This request was declined by your Dean.',
   PENDING_HOD: 'This request is awaiting approval.',
   EXPIRED: 'This request has expired.',
 };
