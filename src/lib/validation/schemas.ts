@@ -76,6 +76,27 @@ export const editUserSchema = z.object({
   unit_id: z.string().optional(),
 });
 
+export const createKeyFormSchema = z.object({
+  code: z
+    .string()
+    .trim()
+    .min(1, 'Key code is required.')
+    .regex(
+      /^[A-Z0-9]+-\d+$/,
+      'Code must be uppercase letters/digits, a hyphen, then digits (e.g. NS-304).'
+    ),
+  zone: z.enum(['NEW_SENATE', 'OLD_SENATE'], { error: 'Select a zone.' }),
+  room_name: z.string().trim().min(1, 'Room name is required.'),
+  unit_id: z.string().uuid('Select a unit.'),
+  key_count: z
+    .number()
+    .int()
+    .min(1, 'Minimum 1 key.')
+    .max(20, 'Maximum 20 keys.'),
+});
+
+export type CreateKeyFormInput = z.infer<typeof createKeyFormSchema>;
+
 export const authoriseCollectorSchema = z.object({
   /** UUID of the key to authorise the requester for. */
   key_id: z.string().min(1, 'Key is required'),

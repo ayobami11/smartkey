@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useEffect, useState } from 'react';
-import { PlusIcon, SearchIcon } from 'lucide-react';
+import { SearchIcon } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
 import { useMediaQuery } from '@/hooks/use-media-query';
@@ -33,6 +33,7 @@ import {
 } from '@/app/cso/keys/_components/key-card';
 import { KeyCards } from '@/app/cso/keys/_components/key-cards';
 import { KeysEmpty } from '@/app/cso/keys/_components/keys-empty';
+import { CreateKeyDialog } from '@/app/cso/keys/_components/create-key-dialog';
 import { MarkKeyLostDialog } from '@/app/cso/keys/_components/mark-key-lost-dialog';
 import {
   OutstandingKeys,
@@ -225,10 +226,7 @@ export const KeysView = () => {
             Master inventory of all keys across both Senate zones.
           </p>
         </div>
-        <Button>
-          <PlusIcon className="size-4" aria-hidden="true" />
-          Add key
-        </Button>
+        <CreateKeyDialog onCreated={() => refetchKeys()} />
       </div>
 
       <Tabs

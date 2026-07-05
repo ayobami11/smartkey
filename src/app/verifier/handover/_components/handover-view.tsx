@@ -145,7 +145,7 @@ export const HandoverView = () => {
         body: {
           outgoing_shift_id: shift.id,
           key_ids: Array.from(acknowledged),
-          bulk: false,
+          bulk: allAcknowledged,
         },
       }
     );
