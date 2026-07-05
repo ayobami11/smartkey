@@ -260,6 +260,7 @@ export const GET = async () => {
       .select(
         'id, full_name, institutional_email, role, status, photo_url, created_at, department:units!unit_id(name)'
       )
+      .neq('status', 'DEACTIVATED')
       .order('created_at', { ascending: false }),
     createAdminClient().auth.admin.listUsers({ perPage: 1000 }),
   ]);

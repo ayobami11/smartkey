@@ -66,7 +66,6 @@ const ROLE_OPTIONS: { label: string; value: UserRole }[] = [
 const STATUS_OPTIONS: { label: string; value: UserStatus }[] = [
   { label: STATUS_LABEL.ACTIVE, value: 'ACTIVE' },
   { label: STATUS_LABEL.PENDING_ACTIVATION, value: 'PENDING_ACTIVATION' },
-  { label: STATUS_LABEL.DEACTIVATED, value: 'DEACTIVATED' },
 ];
 
 // Component
