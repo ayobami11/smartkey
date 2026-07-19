@@ -102,6 +102,10 @@ export const secondsRemaining = (isoExpiry: string): number =>
 export const isTodayDate = (isoDate: string): boolean =>
   format(new Date(), 'yyyy-MM-dd') === isoDate;
 
+// Check whether a YYYY-MM-DD date string is strictly before today (local time)
+export const isPastDate = (isoDate: string): boolean =>
+  isoDate < format(new Date(), 'yyyy-MM-dd');
+
 // ISO string N days before now (for filter presets)
 export const subDaysISO = (n: number): string =>
   subDays(new Date(), n).toISOString();

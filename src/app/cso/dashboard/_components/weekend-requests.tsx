@@ -12,6 +12,7 @@ import {
 
 import { useRealtime } from '@/hooks/use-realtime';
 import { useConnectionStatus } from '@/hooks/use-connection-status';
+import { isPastDate } from '@/lib/dates';
 import { createBrowserClient } from '@/lib/supabase/client';
 
 import { Button } from '@/components/ui/button';
@@ -24,6 +25,7 @@ import {
 } from '@/components/ui/empty';
 import { Skeleton } from '@/components/ui/skeleton';
 
+import { ExpiredBadge } from '@/components/smartkey/expired-badge';
 import { SectionCardHeader } from '@/components/smartkey/section-card-header';
 
 // Types
@@ -198,6 +200,7 @@ export const WeekendRequests = () => {
                             External
                           </span>
                         )}
+                        {isPastDate(req.requested_for) && <ExpiredBadge />}
                       </div>
                       <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                         {req.key_code ? (

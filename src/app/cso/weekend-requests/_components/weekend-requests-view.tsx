@@ -22,6 +22,7 @@ import { useRealtime } from '@/hooks/use-realtime';
 import { useConnectionStatus } from '@/hooks/use-connection-status';
 import { RiskTierBadge } from '@/components/smartkey/risk-tier-badge';
 import { GuestBadge } from '@/components/smartkey/guest-badge';
+import { ExpiredBadge } from '@/components/smartkey/expired-badge';
 import type { RiskTier } from '@/lib/ai/risk/types';
 
 import { Button } from '@/components/ui/button';
@@ -60,7 +61,11 @@ import {
   hodWeekendDecisionFormSchema,
   type HodWeekendDecisionFormInput,
 } from '@/lib/validation/schemas';
-import { formatDate, relativeTimeCompact as relativeTime } from '@/lib/dates';
+import {
+  formatDate,
+  isPastDate,
+  relativeTimeCompact as relativeTime,
+} from '@/lib/dates';
 
 // Types
 
@@ -317,6 +322,7 @@ export const WeekendRequestsView = () => {
   };
 
   const visibleRequests = pendingRequests.filter((r) => !decidedIds.has(r.id));
+  const selectedExpired = selected ? isPastDate(selected.requested_for) : false;
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
@@ -378,8 +384,10 @@ export const WeekendRequestsView = () => {
         <div className="flex flex-col gap-3">
           {visibleRequests.map((req) => {
             const isGuest = !!req.guest;
-            const stripeClass =
-              req.risk_tier === 'HIGH'
+            const expired = isPastDate(req.requested_for);
+            const stripeClass = expired
+              ? 'bg-muted-foreground'
+              : req.risk_tier === 'HIGH'
                 ? 'bg-destructive'
                 : req.risk_tier === 'MEDIUM'
                   ? 'bg-amber-500'
@@ -400,6 +408,7 @@ export const WeekendRequestsView = () => {
                         {req.key?.code ?? 'Key on approval'}
                       </span>
                       {isGuest && <GuestBadge label="External" showIcon />}
+                      {expired && <ExpiredBadge />}
                       <RiskTierBadge
                         tier={req.risk_tier as RiskTier}
                         factors={[]}
@@ -621,6 +630,7 @@ export const WeekendRequestsView = () => {
                         aria-hidden="true"
                       />
                       {formatDate(selected.requested_for)}
+                      {selectedExpired && <ExpiredBadge />}
                     </div>
                   </div>
 
@@ -716,6 +726,13 @@ export const WeekendRequestsView = () => {
                     </p>
                   )}
 
+                  {selectedExpired && (
+                    <p className="text-sm text-muted-foreground" role="alert">
+                      This request&apos;s date has passed — it can no longer be
+                      approved or declined.
+                    </p>
+                  )}
+
                   {/* Note */}
                   <Controller
                     name="note"
@@ -743,7 +760,7 @@ export const WeekendRequestsView = () => {
                   <div className="flex flex-col gap-3 sm:flex-row">
                     <Button
                       className="h-auto flex-1 px-4 py-2.5"
-                      disabled={submitting || isOffline}
+                      disabled={submitting || isOffline || selectedExpired}
                       aria-busy={submitting}
                       onClick={form.handleSubmit((values) =>
                         handleDecision('APPROVED', values)
@@ -754,7 +771,7 @@ export const WeekendRequestsView = () => {
                     <Button
                       variant="outline"
                       className="h-auto flex-1 px-4 py-2.5 border-destructive text-destructive hover:bg-destructive/5 hover:text-destructive"
-                      disabled={submitting || isOffline}
+                      disabled={submitting || isOffline || selectedExpired}
                       onClick={() =>
                         handleDecision('DECLINED', form.getValues())
                       }
