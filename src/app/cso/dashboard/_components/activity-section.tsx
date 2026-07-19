@@ -19,7 +19,14 @@ export const ActivitySection = () => {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-foreground">Trends</h2>
-        <TimeRangeFilter value={value} onChange={setValue} />
+        <TimeRangeFilter
+          value={value}
+          onChange={(next) => {
+            // allowAllTime isn't set here, so `next` is always a bounded
+            // TimeRangeValue — this guard just keeps that guarantee typed.
+            if (next.preset !== 'all') setValue(next);
+          }}
+        />
       </div>
       <div className="grid gap-6 md:grid-cols-2">
         <IncidentsChart range={value.range} />

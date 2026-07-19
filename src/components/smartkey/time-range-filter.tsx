@@ -9,8 +9,8 @@ import {
   RANGE_PRESET_OPTIONS,
   rangeFromDates,
   rangeFromPreset,
+  type OptionalTimeRangeValue,
   type RangePreset,
-  type TimeRangeValue,
 } from '@/lib/date-range';
 import { formatDateNumeric } from '@/lib/dates';
 
@@ -24,16 +24,28 @@ import {
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 type TimeRangeFilterProps = {
-  value: TimeRangeValue;
-  onChange: (value: TimeRangeValue) => void;
+  value: OptionalTimeRangeValue;
+  onChange: (value: OptionalTimeRangeValue) => void;
+  // Adds an "All time" option alongside the presets, for surfaces that
+  // should show full history by default (e.g. an audit log) rather than
+  // always requiring a bounded window (e.g. a trend chart).
+  allowAllTime?: boolean;
 };
 
-export const TimeRangeFilter = ({ value, onChange }: TimeRangeFilterProps) => {
+export const TimeRangeFilter = ({
+  value,
+  onChange,
+  allowAllTime,
+}: TimeRangeFilterProps) => {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<DayPickerRange | undefined>();
 
   const handlePresetChange = (preset: string) => {
     if (!preset) return;
+    if (preset === 'all') {
+      onChange({ preset: 'all', range: null });
+      return;
+    }
     const typedPreset = preset as Exclude<RangePreset, 'custom'>;
     onChange({ preset: typedPreset, range: rangeFromPreset(typedPreset) });
   };
@@ -64,6 +76,11 @@ export const TimeRangeFilter = ({ value, onChange }: TimeRangeFilterProps) => {
         onValueChange={handlePresetChange}
         aria-label="Time range"
       >
+        {allowAllTime && (
+          <ToggleGroupItem value="all" aria-label="All time">
+            All time
+          </ToggleGroupItem>
+        )}
         {RANGE_PRESET_OPTIONS.map((option) => (
           <ToggleGroupItem
             key={option.value}

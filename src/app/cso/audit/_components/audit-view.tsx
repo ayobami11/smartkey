@@ -12,6 +12,7 @@ import {
 
 import { apiFetch } from '@/lib/api';
 import { toCsv, downloadCsv } from '@/lib/csv';
+import { type OptionalTimeRangeValue } from '@/lib/date-range';
 import { logger } from '@/lib/logger';
 import {
   type IncidentType,
@@ -22,6 +23,7 @@ import {
   INCIDENT_SEVERITY_CLASSES,
 } from '@/lib/constants';
 
+import { TimeRangeFilter } from '@/components/smartkey/time-range-filter';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -94,6 +96,10 @@ export const AuditView = () => {
   const [incidentSeverityFilter, setIncidentSeverityFilter] = useState<
     IncidentSeverity[]
   >([]);
+  const [incidentRange, setIncidentRange] = useState<OptionalTimeRangeValue>({
+    preset: 'all',
+    range: null,
+  });
 
   // Export
   const auditExportRef = useRef<(() => Promise<void>) | null>(null);
@@ -125,6 +131,10 @@ export const AuditView = () => {
 
     const params = new URLSearchParams({ limit: '50' });
     if (cursor) params.set('cursor', cursor);
+    if (incidentRange.range) {
+      params.set('from', incidentRange.range.from);
+      params.set('to', incidentRange.range.to);
+    }
 
     const result = await apiFetch<{
       incidents: Record<string, unknown>[];
@@ -152,6 +162,19 @@ export const AuditView = () => {
       fetchIncidents(true);
     }
   }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Re-fetch from scratch whenever the range changes (skip the initial mount
+  // — that's already handled by the effect above). Unlike the type/severity
+  // filters, the range must be applied server-side to be meaningful across
+  // the full history, not just the currently-loaded page(s).
+  const isFirstIncidentRangeRender = useRef(true);
+  useEffect(() => {
+    if (isFirstIncidentRangeRender.current) {
+      isFirstIncidentRangeRender.current = false;
+      return;
+    }
+    fetchIncidents(true);
+  }, [incidentRange]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Client-side filtering
 
@@ -390,6 +413,11 @@ export const AuditView = () => {
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
+            <TimeRangeFilter
+              value={incidentRange}
+              onChange={setIncidentRange}
+              allowAllTime
+            />
           </div>
 
           {/* Loading */}

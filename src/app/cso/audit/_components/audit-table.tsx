@@ -25,6 +25,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 
 import { toCsv, downloadCsv } from '@/lib/csv';
+import { type OptionalTimeRangeValue } from '@/lib/date-range';
 import { createBrowserClient } from '@/lib/supabase/client';
 import {
   ROLE_LABELS,
@@ -33,6 +34,7 @@ import {
 } from '@/lib/constants';
 import { EVENT_TYPE_MAP, type AuditEventType } from '@/lib/audit/event-types';
 import { AuditTableSkeleton } from '@/app/cso/audit/_components/audit-table-skeleton';
+import { TimeRangeFilter } from '@/components/smartkey/time-range-filter';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -368,11 +370,15 @@ export const AuditTable = ({
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search);
   const [roleFilter, setRoleFilter] = useState<RoleFilterValue[]>([]);
+  const [range, setRange] = useState<OptionalTimeRangeValue>({
+    preset: 'all',
+    range: null,
+  });
 
   const { pageIndex, pageSize } = pagination;
 
   // Shared filter key — used by both queries so they stay in sync.
-  const filterKey = { typeFilter, debouncedSearch, roleFilter };
+  const filterKey = { typeFilter, debouncedSearch, roleFilter, range };
 
   // Derive mapped events once so both queries use the same value.
   const mappedEvents =
@@ -391,6 +397,11 @@ export const AuditTable = ({
         .from('audit_log')
         .select('*', { count: 'exact', head: true });
       if (mappedEvents.length > 0) q = q.in('event', mappedEvents);
+      if (range.range) {
+        q = q
+          .gte('occurred_at', range.range.from)
+          .lte('occurred_at', range.range.to);
+      }
       if (debouncedSearch.trim()) {
         const term = `%${debouncedSearch.trim()}%`;
         q = q.ilike('actor_name', term);
@@ -430,6 +441,11 @@ export const AuditTable = ({
         .order('occurred_at', { ascending: false })
         .range(from, to);
       if (mappedEvents.length > 0) q = q.in('event', mappedEvents);
+      if (range.range) {
+        q = q
+          .gte('occurred_at', range.range.from)
+          .lte('occurred_at', range.range.to);
+      }
       if (debouncedSearch.trim()) {
         const term = `%${debouncedSearch.trim()}%`;
         q = q.ilike('actor_name', term);
@@ -472,6 +488,11 @@ export const AuditTable = ({
       .order('occurred_at', { ascending: false })
       .range(0, EXPORT_MAX_ROWS - 1);
     if (mappedEvents.length > 0) q = q.in('event', mappedEvents);
+    if (range.range) {
+      q = q
+        .gte('occurred_at', range.range.from)
+        .lte('occurred_at', range.range.to);
+    }
     if (debouncedSearch.trim()) {
       const term = `%${debouncedSearch.trim()}%`;
       q = q.or(`event.ilike.${term},actor_name.ilike.${term}`);
@@ -538,6 +559,11 @@ export const AuditTable = ({
     setRoleFilter((prev) =>
       prev.includes(value) ? prev.filter((r) => r !== value) : [...prev, value]
     );
+    table.setPageIndex(0);
+  };
+
+  const handleRangeChange = (next: OptionalTimeRangeValue) => {
+    setRange(next);
     table.setPageIndex(0);
   };
 
@@ -671,6 +697,11 @@ export const AuditTable = ({
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
+            <TimeRangeFilter
+              value={range}
+              onChange={handleRangeChange}
+              allowAllTime
+            />
           </div>
         </div>
       )}

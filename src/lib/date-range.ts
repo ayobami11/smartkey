@@ -7,6 +7,12 @@ export type DateRange = { from: string; to: string };
 
 export type TimeRangeValue = { preset: RangePreset; range: DateRange };
 
+// A time range control that also allows an unbounded "all time" state —
+// used where showing full history by default matters (e.g. an audit log),
+// unlike a trend chart which always wants a bounded window.
+export type AllTimeValue = { preset: 'all'; range: null };
+export type OptionalTimeRangeValue = TimeRangeValue | AllTimeValue;
+
 export type BucketUnit = 'hour' | 'day' | 'week';
 
 const PRESET_DURATIONS: Record<Exclude<RangePreset, 'custom'>, Duration> = {
@@ -20,10 +26,10 @@ export const RANGE_PRESET_OPTIONS: {
   value: Exclude<RangePreset, 'custom'>;
   label: string;
 }[] = [
-  { value: '1d', label: '1d' },
-  { value: '1w', label: '1w' },
-  { value: '1m', label: '1m' },
-  { value: '1y', label: '1y' },
+  { value: '1d', label: '1D' },
+  { value: '1w', label: '1W' },
+  { value: '1m', label: '1M' },
+  { value: '1y', label: '1Y' },
 ];
 
 export const rangeFromPreset = (
