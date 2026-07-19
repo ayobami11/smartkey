@@ -1,7 +1,6 @@
 export const metadata = { title: 'Dashboard' };
 
-import { EventsChart } from '@/app/cso/dashboard/_components/events-chart';
-import { IncidentsChart } from '@/app/cso/dashboard/_components/incidents-chart';
+import { ActivitySection } from '@/app/cso/dashboard/_components/activity-section';
 import { KeysChart } from '@/app/cso/dashboard/_components/keys-chart';
 import { PendingReview } from '@/app/cso/dashboard/_components/pending-review';
 import { RiskAlerts } from '@/app/cso/dashboard/_components/risk-alerts';
@@ -30,10 +29,7 @@ export default function CsoDashboardPage() {
       <KeysChart />
 
       {/* Trends */}
-      <div className="grid gap-6 md:grid-cols-2">
-        <IncidentsChart />
-        <EventsChart />
-      </div>
+      <ActivitySection />
     </div>
   );
 }

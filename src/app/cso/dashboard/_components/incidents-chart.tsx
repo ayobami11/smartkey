@@ -1,12 +1,11 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { format } from 'date-fns';
 import { CheckCircleIcon } from 'lucide-react';
 import { Bar, BarChart, Cell, XAxis, YAxis } from 'recharts';
 
 import { apiFetch } from '@/lib/api';
-import { subDaysISO } from '@/lib/dates';
+import { formatRangeLabel, type DateRange } from '@/lib/date-range';
 import { useConnectionStatus } from '@/hooks/use-connection-status';
 
 import { Button } from '@/components/ui/button';
@@ -52,20 +51,17 @@ const severityChartConfig: ChartConfig = {
   count: { label: 'Incidents' },
 };
 
-const QUERY_KEY = ['cso', 'incident-severity'];
-const MAX_PAGES = 3; // safety net if 30-day volume ever exceeds one page
-const WINDOW_DAYS = 30;
+type IncidentsChartProps = { range: DateRange };
+
+const QUERY_KEY_BASE = ['cso', 'incident-severity'];
+const MAX_PAGES = 3; // safety net if the window's volume ever exceeds one page
 
 // Component
 
-export const IncidentsChart = () => {
+export const IncidentsChart = ({ range }: IncidentsChartProps) => {
   const connectionStatus = useConnectionStatus();
 
-  // "4 June - 3 July 2026" — the exact window the incidents query covers.
-  const dateRangeLabel = `${format(new Date(subDaysISO(WINDOW_DAYS)), 'd MMMM')} - ${format(
-    new Date(),
-    'd MMMM yyyy'
-  )}`;
+  const dateRangeLabel = formatRangeLabel(range);
 
   const {
     data: rows = [],
@@ -73,10 +69,11 @@ export const IncidentsChart = () => {
     error,
     refetch,
   } = useQuery({
-    queryKey: QUERY_KEY,
+    queryKey: [...QUERY_KEY_BASE, range.from, range.to],
     refetchInterval: connectionStatus !== 'connected' ? 10_000 : false,
     queryFn: async (): Promise<SeverityRow[]> => {
-      const from = encodeURIComponent(subDaysISO(WINDOW_DAYS));
+      const from = encodeURIComponent(range.from);
+      const to = encodeURIComponent(range.to);
       const counts: Record<SeverityRow['severity'], number> = {
         LOW: 0,
         MEDIUM: 0,
@@ -85,7 +82,7 @@ export const IncidentsChart = () => {
 
       let cursor: string | null = null;
       for (let page = 0; page < MAX_PAGES; page++) {
-        const url = `/api/incidents?from=${from}&limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`;
+        const url = `/api/incidents?from=${from}&to=${to}&limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`;
         const result: Awaited<ReturnType<typeof apiFetch<IncidentsResponse>>> =
           await apiFetch<IncidentsResponse>(url);
         if (result.error || !result.data)
@@ -151,7 +148,7 @@ export const IncidentsChart = () => {
               <EmptyContent>
                 <EmptyTitle>No incidents logged</EmptyTitle>
                 <EmptyDescription>
-                  No incidents in the last {WINDOW_DAYS} days.
+                  No incidents from {dateRangeLabel}.
                 </EmptyDescription>
               </EmptyContent>
             </Empty>
@@ -159,7 +156,7 @@ export const IncidentsChart = () => {
             <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 shadow-[0_2px_4px_rgba(15,23,42,0.06)]">
               <div
                 role="img"
-                aria-label={`Incident severity, last ${WINDOW_DAYS} days: ${rows
+                aria-label={`Incident severity, ${dateRangeLabel}: ${rows
                   .map(
                     (r) =>
                       `${r.count} ${SEVERITY_LABELS[r.severity].toLowerCase()}`
