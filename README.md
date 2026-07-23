@@ -65,7 +65,6 @@ as a black-box decision.
   Security, email-OTP MFA, websocket subscriptions, file storage)
 - **UI**: Tailwind CSS with shadcn/ui and lucide-react icons
 - **Forms**: react-hook-form with zod
-- **Email**: Resend
 - **Testing**: Vitest (unit and component), Playwright with axe-core (E2E),
   pgTAP (database)
 - **Hosting**: Vercel (frontend and API routes), Supabase Cloud (backend)
