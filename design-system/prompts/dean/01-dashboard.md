@@ -1,6 +1,6 @@
-# HOD Dashboard Home
+# Dean Dashboard Home
 
-> **How to use this file**: copy everything below the dashed line into Stitch as a single prompt. `DESIGN.md` is loaded as Stitch project context, so do not paste it; only paste this file. The output will be the **`/hod` — HOD dashboard home** screen.
+> **How to use this file**: copy everything below the dashed line into Stitch as a single prompt. `DESIGN.md` is loaded as Stitch project context, so do not paste it; only paste this file. The output will be the **`/dean/dashboard` — Dean dashboard home** screen.
 
 ---
 
@@ -9,48 +9,40 @@
 SmartKey is a four-role web application replacing the paper-based key management workflow at the University of Lagos Senate Building. The roles are:
 
 - **Chief Security Officer (CSO)**: senior administrator. Desktop-primary. Oversight, reports, audit log, user management.
-- **Head of Department (HOD)**: faculty member. Mixed device usage. Authorises up to three collectors per departmental key, signs weekend approvals.
+- **Dean** (system role `DEAN`): faculty member. Mixed device usage. Authorises up to three collectors per unit key, signs weekend approvals. The Administration unit's keys are authorised by the CSO instead — no Dean exists for it.
 - **Verifier (security personnel)**: 24/7 desk staff in 8-hour shifts. Shared desktop at the security desk. Issues and receives keys, performs shift handover.
 - **Requester (university staff)**: lowest-frequency user. Phone-primary. Requests a key, receives a 6-digit code by email, presents it at the desk.
 
-Three AI components run in the background: rule-based risk scoring (visible to verifiers as Low/Medium/High tier), Gemini-generated shift reports (CSO dashboard), and pixel-level signature verification (HOD signed approvals). WCAG 2.2 AA conformance is the floor. Use the SmartKey design system from DESIGN.md — do not invent colours, typography, or component styling.
+Three AI components run in the background: rule-based risk scoring (visible to verifiers as Low/Medium/High tier), Gemini-generated shift reports (CSO dashboard), and pixel-level signature verification (Dean-signed approvals). WCAG 2.2 AA conformance is the floor. Use the SmartKey design system from DESIGN.md — do not invent colours, typography, or component styling.
 
-## HOD area routes
+Grouping term: SmartKey organises keys by **Unit** (not "Department" or "Faculty").
 
-- `/hod` — Dashboard home: department key grid, weekend requests requiring action
-- `/hod/keys/:keyId` — Manage authorised collectors (max 3) for one key
-- `/hod/weekend-requests` — Review and decide weekend access requests
-- `/hod/onboarding` — One-time signature and stamp upload (forced on first login)
-- `/hod/profile` — Profile, theme, notifications
+## Dean area routes
 
-## Flow: HOD authorises a collector
+- `/dean/dashboard` — Dashboard home: pending weekend requests, recent key activity, collectors table (no key grid here — that moved to its own route)
+- `/dean/keys` — Unit key inventory grid
+- `/dean/keys/:keyId` — Manage authorised collectors (max 3) for one key
+- `/dean/weekend-requests` — Review and decide weekend access requests (registered and guest)
+- `/dean/onboarding` — One-time signature and stamp upload, forced on first login
+- `/dean/settings` — Account, signature & stamp replacement, notifications
 
-1. On `/hod`, tap a key tile in the grid → opens slot management for that key.
-2. Tap a vacant slot (max 3) → search staff by name or email; select.
+## Flow: Collector authorisation
+
+1. On `/dean/keys`, tap a key tile → opens slot management for that key.
+2. Tap a vacant slot (max 3) → search staff by name or email within the Dean's own unit; select.
 3. Confirm authorisation; the staff member is now whitelisted for that key.
 
-## Flow: HOD reviews weekend access request
+## Flow: Weekend access request review (Dean)
 
-1. On `/hod`, the weekend-requests panel shows pending items with badge count in nav.
-2. Tap a request → detail sheet shows requester, key, date, description.
-3. Choose Approve or Decline (with optional note). Approval auto-expires after 24 hours.
-
-## Screen spec: HOD dashboard home
-
-**Layout**: two stacked sections on phone, two columns on desktop. Top: weekend requests requiring action (collapsible, badge with count). Bottom: department key grid showing each key with its three slots filled or vacant.
-
-**Required surfaces:**
-
-- **Pending requests panel**: list of weekend requests with requester, key, date, time. Accept/decline or open detail.
-- **Key grid**: KeyTile per key. Each tile shows three slot indicators (filled/vacant). Tap → slot management.
-- **Filter**: segmented control: "All keys" / "Has vacant slot" / "Recently used".
-- **Onboarding nudge**: if signature or stamp not yet uploaded, persistent banner at top until complete; blocks weekend approvals until done.
+1. On `/dean/dashboard`, the weekend-requests panel shows pending items with a badge count.
+2. Tap a request → detail sheet shows requester/guest, key, date, description.
+3. Choose Approve or Decline (with an optional note). For a registered requester with an uploaded signature, approval runs signature verification first — a mismatch holds the approval for CSO review instead of applying it.
 
 ## Notifications and realtime behaviour
 
 - Persistent banners are for state that affects what the user can do (offline, onboarding incomplete, shift not handed over).
 - Toasts are for transient confirmations only (3-second auto-dismiss). Never show critical information solely via toast.
-- Realtime updates: small dot in app bar (green/amber/red) shows connection state.
+- Realtime updates: small dot in app bar (green connected / amber reconnecting / red offline) shows connection state.
 - Notification centre: top-right bell icon with badge count.
 
 ## Responsive breakpoints
@@ -67,14 +59,16 @@ Generate the screen at xs (mobile) and lg (desktop) at minimum. Touch targets mi
 
 ## Generation request
 
-Generate the HOD dashboard home (`/hod`) using the spec above.
+Generate the Dean dashboard home (`/dean/dashboard`). **Important structural note**: this dashboard does **not** show a key grid — the key grid moved to its own `/dean/keys` route. This dashboard shows three widgets, stacked vertically, none of them a key grid.
 
-**Placeholder data**:
+**Greeting header**: "Good morning/afternoon/evening, [Name]." with the Dean's unit name as a subtitle.
 
-- HOD name "Prof. Okonkwo, Faculty of Engineering"
-- Pending weekend requests (2 items): Dr. Bakare requesting NS-304 for Sat 3 May, "Lab equipment maintenance"; Mrs. Adeleke requesting OS-12 for Sun 4 May, "Departmental retreat preparation".
-- Department key grid (6 keys): NS-304 (3 slots filled), NS-305 (2 of 3 filled, 1 vacant), NS-306 (3 filled), OS-11 (1 of 3, 2 vacant), OS-12 (3 filled), OS-13 (0 of 3, all vacant — show this prominently).
+**Widget 1 — Weekend requests panel**: near-identical treatment to the CSO dashboard's version — amber-striped rows for pending weekend requests, GuestBadge for external requesters, ExpiredBadge if the date passed, key code or "Key on approval" for unassigned guest requests, requested date, a "Review" link. Header "View all" link → `/dean/weekend-requests`. Empty: "No pending requests right now."
 
-**Onboarding nudge state**: also generate a variant where the HOD has not yet uploaded their signature — top of page shows a persistent maroon-soft banner: "Upload your signature and stamp to enable weekend approvals." with a primary "Set up now" button → `/hod/onboarding`. While this banner shows, the weekend requests panel is greyed out with a caption "Available after signature setup."
+**Widget 2 — Recent activity**: a feed of the unit's key transactions, rendered as one-line past-tense narrative sentences (e.g. "Dr. Bakare collected the key for Senate Hall A (NS-304)"), each with a status stripe/badge (Issued / Returned / Expired / Cancelled / Declined) and a relative timestamp. Empty: "No key activity yet."
 
-Generate at 1440px (desktop, two-column) and 390px (mobile, stacked). Both with and without the onboarding nudge.
+**Widget 3 — Collectors table**: a table of the unit's keys and their authorised-collector slots — grouped rows per key (Key / Name / Email / Date assigned) using row-span for the key column, with any unfilled slots summarised as an italic amber row spanning the remaining columns ("2 slots unassigned"). Realtime-refetched when authorisations change. Header "View all" link → `/dean/keys`. Empty: "No keys assigned to your unit yet. Contact the CSO."
+
+Use placeholder data: Dean "Prof. Okonkwo, Faculty of Engineering". Weekend requests (2 items). Recent activity (4 items). Collectors table (3 keys, one fully filled, one with 1 vacant slot, one with 2 vacant slots).
+
+Generate at 1440px (desktop) and 390px (mobile, stacked). Show light mode primary; one section in dark mode for theme reference.

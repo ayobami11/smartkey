@@ -1,6 +1,6 @@
-# CSO Audit Log
+# CSO Audit Log &amp; Incidents
 
-> **How to use this file**: copy everything below the dashed line into Stitch as a single prompt. `DESIGN.md` is loaded as Stitch project context, so do not paste it; only paste this file. The output will be the **`/cso/audit` — Searchable audit log** screen.
+> **How to use this file**: copy everything below the dashed line into Stitch as a single prompt. `DESIGN.md` is loaded as Stitch project context, so do not paste it; only paste this file. The output will be the **`/cso/audit` — Audit Log and Incidents (tabbed)** screen.
 
 ---
 
@@ -9,20 +9,24 @@
 SmartKey is a four-role web application replacing the paper-based key management workflow at the University of Lagos Senate Building. The roles are:
 
 - **Chief Security Officer (CSO)**: senior administrator. Desktop-primary. Oversight, reports, audit log, user management.
-- **Head of Department (HOD)**: faculty member. Mixed device usage. Authorises up to three collectors per departmental key, signs weekend approvals.
+- **Dean** (system role `DEAN`): faculty member. Mixed device usage. Authorises up to three collectors per unit key, signs weekend approvals. The Administration unit's keys are authorised by the CSO instead — no Dean exists for it.
 - **Verifier (security personnel)**: 24/7 desk staff in 8-hour shifts. Shared desktop at the security desk. Issues and receives keys, performs shift handover.
 - **Requester (university staff)**: lowest-frequency user. Phone-primary. Requests a key, receives a 6-digit code by email, presents it at the desk.
 
-Three AI components run in the background: rule-based risk scoring (visible to verifiers as Low/Medium/High tier), Gemini-generated shift reports (CSO dashboard), and pixel-level signature verification (HOD signed approvals). WCAG 2.2 AA conformance is the floor. Use the SmartKey design system from DESIGN.md — do not invent colours, typography, or component styling.
+Three AI components run in the background: rule-based risk scoring (visible to verifiers as Low/Medium/High tier), Gemini-generated shift reports (CSO dashboard), and pixel-level signature verification (Dean-signed approvals). WCAG 2.2 AA conformance is the floor. Use the SmartKey design system from DESIGN.md — do not invent colours, typography, or component styling.
+
+Grouping term: SmartKey organises keys by **Unit** (not "Department" or "Faculty").
 
 ## CSO area routes
 
-- `/cso` — Dashboard home (live key counts per zone, anomaly alerts, today's events)
-- `/cso/reports` — Generated shift reports (Gemini-produced); download, comment
-- `/cso/audit` — Searchable, filterable audit log of every event
-- `/cso/users` — User management (provision new accounts, deactivate)
-- `/cso/keys` — Key inventory across both zones; create / retire key records
-- `/cso/settings` — Operational hours, risk-rule weights, profile, theme
+- `/cso/dashboard` — Dashboard home (pending decisions, live per-zone key counts, anomaly/signature alerts, trend charts)
+- `/cso/admin-keys` — Administration-unit key inventory + collector slot management
+- `/cso/audit` — Audit Log and Incidents in one tabbed screen, searchable and filterable
+- `/cso/users` — User list, provisioning, editing, revoking access
+- `/cso/keys` — Key inventory across both zones; create keys, mark lost/retired
+- `/cso/reports` — Generated shift reports (Gemini-produced) list + detail; comment, download PDF
+- `/cso/settings` — Operational hours, risk-rule weights, notifications, account
+- `/cso/weekend-requests` — Review queue for Administration-unit weekend requests
 
 ## Responsive breakpoints
 
@@ -44,28 +48,20 @@ If the screen depends on realtime data, also design the offline state: persisten
 
 ## Generation request
 
-Generate the CSO audit log search screen (`/cso/audit`).
+Generate the CSO audit screen (`/cso/audit`) — **this is one screen with two tabs**, "Audit Log" and "Incidents", not two separate pages.
 
-**Layout**: top filter bar (sticky), virtualised result list below.
+**Header row**: page heading, a "Log incident" button (visible only on the Incidents tab — opens a right-side sheet), and an "Export CSV" button that exports whichever tab is currently active.
 
-**Filter bar**:
+**Audit Log tab**:
+Filter bar: a search-by-actor-name input (with a search icon), a Role multi-select dropdown (CSO / Dean / Verifier / Requester / **Guest** — guest-initiated events are a real category), an Event-type multi-select dropdown, and the shared TimeRangeFilter (preset chips + custom range + an "All time" option).
 
-- Free-text search input (left, full-flex): "Search by user name, key code, or event ID"
-- Event type multi-select dropdown: Request, Issue, Return, Anomaly, Handover, Login, Settings change, Signature verification.
-- Zone filter: All / New Senate / Old Senate.
-- Date range picker (presets: Today, Last 7 days, Last 30 days, Custom).
-- User filter: search dropdown.
-- "Reset filters" link on the right.
+Below the filters, a data table with columns: event-type icon, Name, Role badge, Unit, event description (plain English, e.g. "Issued key NS-304 to Dr. Bakare") with a monospace key-code chip inline, and Time. Server-paginated with a page-size select (10/25/50/100) and numbered pagination with ellipsis for large ranges.
 
-**Result list**:
-Each row is a single-line card showing: event type icon (left), actor name and role, event description in plain English ("Issued key Senate-304 to Dr. Bakare"), key code monospace badge, timestamp (right, code-md JetBrains Mono "2026-05-01 14:32"). Tap to expand inline for the full event payload (collapsed JSON-style view of the structured event data, but rendered as a readable key-value list, not raw JSON).
+Loading = a skeleton table matching the column layout. Empty row = "No events match these filters."
 
-Pagination: virtualised infinite scroll; small footer at the bottom of the visible list "Loaded 50 of 1,247 events. Scroll to load more."
+**Incidents tab**:
+Filter bar: Type multi-select, Severity multi-select, and the shared TimeRangeFilter. Below, a cursor-paginated list of incident rows: reference code (monospace, e.g. "INC-2026-0042"), severity pill, type, description, timestamp. Empty state: siren icon, "No incidents recorded." "Load more" button at the bottom.
 
-**Empty state**: "No events match these filters." with primary "Reset filters" button.
+**Log incident sheet** (right-side, opened from the header button): Type select (Missing key / Suspicious activity / Equipment fault / Procedural / Other), Severity select (an amber warning note appears when High is selected: "CSO will be notified immediately"), Description textarea. On submit, the sheet shows a success state with the generated incident reference and a "Log another" link.
 
-**Loading state**: skeleton rows preserving height.
-
-**Top-right of page**: "Export results" button (CSV download), only enabled when filters return ≤ 10,000 events.
-
-Use placeholder data: 12 events spanning login → request → issue → anomaly → return events for one day. Include one expanded event showing the full payload structure. Generate at 1440px (desktop) only — this is a power-user screen, mobile is read-only and lower priority.
+Use placeholder data: 12 audit events spanning login → request → issue → anomaly → return, including one guest-initiated event (role shown as "Guest", no actor name in the Role column styling that other rows get). 4 incidents across severities. Generate at 1440px (desktop) — this is a power-user screen; mobile can be a simplified single-column read view.

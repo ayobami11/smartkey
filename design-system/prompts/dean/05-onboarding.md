@@ -1,6 +1,6 @@
-# HOD Signature & Stamp Onboarding
+# Dean Signature &amp; Stamp Onboarding
 
-> **How to use this file**: copy everything below the dashed line into Stitch as a single prompt. `DESIGN.md` is loaded as Stitch project context, so do not paste it; only paste this file. The output will be the **`/hod/onboarding` — One-time signature and stamp upload** screen.
+> **How to use this file**: copy everything below the dashed line into Stitch as a single prompt. `DESIGN.md` is loaded as Stitch project context, so do not paste it; only paste this file. The output will be the **`/dean/onboarding` — One-time signature and stamp upload** screen.
 
 ---
 
@@ -9,24 +9,28 @@
 SmartKey is a four-role web application replacing the paper-based key management workflow at the University of Lagos Senate Building. The roles are:
 
 - **Chief Security Officer (CSO)**: senior administrator. Desktop-primary. Oversight, reports, audit log, user management.
-- **Head of Department (HOD)**: faculty member. Mixed device usage. Authorises up to three collectors per departmental key, signs weekend approvals.
+- **Dean** (system role `DEAN`): faculty member. Mixed device usage. Authorises up to three collectors per unit key, signs weekend approvals. The Administration unit's keys are authorised by the CSO instead — no Dean exists for it.
 - **Verifier (security personnel)**: 24/7 desk staff in 8-hour shifts. Shared desktop at the security desk. Issues and receives keys, performs shift handover.
 - **Requester (university staff)**: lowest-frequency user. Phone-primary. Requests a key, receives a 6-digit code by email, presents it at the desk.
 
-Three AI components run in the background: rule-based risk scoring (visible to verifiers as Low/Medium/High tier), Gemini-generated shift reports (CSO dashboard), and pixel-level signature verification (HOD signed approvals). WCAG 2.2 AA conformance is the floor. Use the SmartKey design system from DESIGN.md — do not invent colours, typography, or component styling.
+Three AI components run in the background: rule-based risk scoring (visible to verifiers as Low/Medium/High tier), Gemini-generated shift reports (CSO dashboard), and pixel-level signature verification (Dean-signed approvals). WCAG 2.2 AA conformance is the floor. Use the SmartKey design system from DESIGN.md — do not invent colours, typography, or component styling.
 
-## HOD area routes
+Grouping term: SmartKey organises keys by **Unit** (not "Department" or "Faculty").
 
-- `/hod` — Dashboard home: department key grid, weekend requests requiring action
-- `/hod/keys/:keyId` — Manage authorised collectors (max 3) for one key
-- `/hod/weekend-requests` — Review and decide weekend access requests
-- `/hod/onboarding` — One-time signature and stamp upload (forced on first login)
-- `/hod/profile` — Profile, theme, notifications
+## Dean area routes
+
+- `/dean/dashboard` — Dashboard home: pending weekend requests, recent key activity, collectors table (no key grid here — that moved to its own route)
+- `/dean/keys` — Unit key inventory grid
+- `/dean/keys/:keyId` — Manage authorised collectors (max 3) for one key
+- `/dean/weekend-requests` — Review and decide weekend access requests (registered and guest)
+- `/dean/onboarding` — One-time signature and stamp upload, forced on first login
+- `/dean/settings` — Account, signature & stamp replacement, notifications
 
 ## AI surface: Signature verification
 
-- **On match**: no UI surface; subtle audit-log entry "Signature verified".
-- **On mismatch**: CSO dashboard receives a tampering alert. Detail shows the reference signature, the failed sample, the mismatch percentage, and a link to the underlying request. Approval is held until CSO action.
+- **On match**: no UI surface; a subtle audit-log entry "Signature verified".
+- **On mismatch (weekend approval)**: the approval is held for CSO review — the reference signature, the submitted sample, and the mismatch percentage are shown side by side on the CSO dashboard.
+- **On mismatch (Dean replacing their own reference later, from Settings)**: the update itself is held for CSO review instead of applying immediately — see `06-settings.md`.
 
 ## Responsive breakpoints
 
@@ -42,39 +46,16 @@ Generate the screen at xs (mobile) and lg (desktop) at minimum. Touch targets mi
 
 ## Generation request
 
-Generate the HOD onboarding screen (`/hod/onboarding`). This is a forced first-login flow that blocks all other HOD features until complete.
+Generate the Dean onboarding screen (`/dean/onboarding`). This is a forced first-login flow that blocks all other Dean features until complete. It's a **3-step wizard with a numbered/checkmark stepper**, plus an implicit 4th "done" state — generate all four.
 
-**Layout**: centred max-width 720px card on desktop, full-width on mobile. Stepper at top: "Signature" → "Departmental stamp" → "Confirm".
+**Layout**: centred max-width 720px card on desktop, full-width on mobile. Stepper at the top showing 3 steps with the current one highlighted and completed ones checkmarked: "Signature" → "Stamp" → "Confirm".
 
-**Step 1 — Signature**:
+**Step 1 — Signature**: heading "Upload your signature". Body: "Sign on a clean white sheet of paper, scan or photograph it, and upload the image." A drag/click dropzone (dashed border, cloud-upload icon, "Click to browse," PNG/JPG max 5MB) that swaps to a live preview with a "Replace" button once a file is chosen. Primary "Continue" button, disabled until a file is uploaded.
 
-- Heading: "Upload your signature"
-- Body: "Sign on a clean white sheet of paper, scan or photograph it, and upload the image. We'll process it to compare against future approvals you sign."
-- **Uploader**: drag-and-drop zone with dashed border. Supports drag-drop or click-to-browse. Accepts PNG, JPG, max 5MB.
-- After upload, a **two-pane preview**:
-  - Left: the original uploaded image as the user sees it.
-  - Right: the system's processed reference (greyscale, normalised, the actual image used for matching). Caption beneath the right image: "This is what we'll compare future signatures against."
-- "Replace" link below the previews to upload a different one.
-- Primary "Continue" button (disabled until upload complete).
+**Step 2 — Stamp**: identical pattern to Step 1, but for the departmental/unit stamp. Heading "Upload your departmental stamp." Back/Continue buttons.
 
-**Step 2 — Departmental stamp**:
-Same pattern as Step 1, but for the stamp.
+**Step 3 — Confirm**: heading "Confirm and finish". Side-by-side thumbnail previews of both uploaded images (signature, stamp). Password field + Confirm password field (both with show/hide toggles). A required confirmation checkbox: "I confirm this is my signature and departmental stamp." Back / "Finish setup" buttons — "Finish setup" disabled until the checkbox is ticked and passwords are valid.
 
-- Heading: "Upload your departmental stamp"
-- Body: "Stamp on white paper, scan or photograph, upload."
-- Same uploader and two-pane preview.
-- Primary "Continue" button.
+**Step 4 — Done**: green check icon, heading "Setup complete," body "You're ready to use SmartKey." Primary "Continue to dashboard" button → `/dean/dashboard`.
 
-**Step 3 — Confirm**:
-
-- Heading "Confirm and finish"
-- Side-by-side cards showing both processed references (signature + stamp).
-- Below: a confirmation paragraph "These references will be used to verify your future weekend approvals. You can update them later from your profile."
-- Required checkbox: "I confirm these are my signature and departmental stamp."
-- Primary "Finish setup" button.
-
-**Done state**: success card with "Setup complete. You're ready to use SmartKey." and primary "Continue to dashboard" → `/hod`.
-
-**Error state for upload**: file too large or wrong format — inline error below the uploader using standard error microcopy.
-
-Generate at 1440px (desktop) and 390px (mobile). Show all three steps and the done state.
+Generate at 1440px (desktop) and 390px (mobile). Show all four steps.

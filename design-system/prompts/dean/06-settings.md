@@ -1,6 +1,6 @@
-# HOD Profile
+# Dean Settings
 
-> **How to use this file**: copy everything below the dashed line into Stitch as a single prompt. `DESIGN.md` is loaded as Stitch project context, so do not paste it; only paste this file. The output will be the **`/hod/profile` — Profile, signature management, settings** screen.
+> **How to use this file**: copy everything below the dashed line into Stitch as a single prompt. `DESIGN.md` is loaded as Stitch project context, so do not paste it; only paste this file. The output will be the **`/dean/settings` — Account, signature &amp; stamp, notifications** screen.
 
 ---
 
@@ -9,24 +9,28 @@
 SmartKey is a four-role web application replacing the paper-based key management workflow at the University of Lagos Senate Building. The roles are:
 
 - **Chief Security Officer (CSO)**: senior administrator. Desktop-primary. Oversight, reports, audit log, user management.
-- **Head of Department (HOD)**: faculty member. Mixed device usage. Authorises up to three collectors per departmental key, signs weekend approvals.
+- **Dean** (system role `DEAN`): faculty member. Mixed device usage. Authorises up to three collectors per unit key, signs weekend approvals. The Administration unit's keys are authorised by the CSO instead — no Dean exists for it.
 - **Verifier (security personnel)**: 24/7 desk staff in 8-hour shifts. Shared desktop at the security desk. Issues and receives keys, performs shift handover.
 - **Requester (university staff)**: lowest-frequency user. Phone-primary. Requests a key, receives a 6-digit code by email, presents it at the desk.
 
-Three AI components run in the background: rule-based risk scoring (visible to verifiers as Low/Medium/High tier), Gemini-generated shift reports (CSO dashboard), and pixel-level signature verification (HOD signed approvals). WCAG 2.2 AA conformance is the floor. Use the SmartKey design system from DESIGN.md — do not invent colours, typography, or component styling.
+Three AI components run in the background: rule-based risk scoring (visible to verifiers as Low/Medium/High tier), Gemini-generated shift reports (CSO dashboard), and pixel-level signature verification (Dean-signed approvals). WCAG 2.2 AA conformance is the floor. Use the SmartKey design system from DESIGN.md — do not invent colours, typography, or component styling.
 
-## HOD area routes
+Grouping term: SmartKey organises keys by **Unit** (not "Department" or "Faculty").
 
-- `/hod` — Dashboard home: department key grid, weekend requests requiring action
-- `/hod/keys/:keyId` — Manage authorised collectors (max 3) for one key
-- `/hod/weekend-requests` — Review and decide weekend access requests
-- `/hod/onboarding` — One-time signature and stamp upload (forced on first login)
-- `/hod/profile` — Profile, theme, notifications
+## Dean area routes
+
+- `/dean/dashboard` — Dashboard home: pending weekend requests, recent key activity, collectors table (no key grid here — that moved to its own route)
+- `/dean/keys` — Unit key inventory grid
+- `/dean/keys/:keyId` — Manage authorised collectors (max 3) for one key
+- `/dean/weekend-requests` — Review and decide weekend access requests (registered and guest)
+- `/dean/onboarding` — One-time signature and stamp upload, forced on first login
+- `/dean/settings` — Account, signature & stamp replacement, notifications
 
 ## AI surface: Signature verification
 
-- **On match**: no UI surface; subtle audit-log entry "Signature verified".
-- **On mismatch**: CSO dashboard receives a tampering alert. Detail shows the reference signature, the failed sample, the mismatch percentage, and a link to the underlying request. Approval is held until CSO action.
+- **On match**: no UI surface; a subtle audit-log entry "Signature verified".
+- **On mismatch (weekend approval)**: the approval is held for CSO review.
+- **On mismatch (Dean replacing their own reference here in Settings)**: the update is **held for CSO review** instead of applying immediately — an amber state shows the mismatch percentage; pending approvals already using the previous reference are unaffected by the hold.
 
 ## Responsive breakpoints
 
@@ -42,34 +46,20 @@ Generate the screen at xs (mobile) and lg (desktop) at minimum. Touch targets mi
 
 ## Generation request
 
-Generate the HOD profile screen (`/hod/profile`).
+Generate the Dean settings screen (`/dean/settings`).
 
-**Layout**: left nav (sticky desktop, top tabs mobile) with four sections: "Account", "Signature & stamp", "Notifications", "Appearance".
+**Layout**: left navigation (sticky desktop, top tabs mobile) with three sections: "Account", "Signature & stamp", "Notifications".
 
-**Section 1 — Account**:
+**Section 1 — Account**: photo upload (avatar with initials fallback, Update/Remove photo with a confirmation dialog on remove), Full name (editable), Institutional email (read-only), **Unit** (read-only, caption "Managed by your CSO. Contact them to update."), "Update profile" button (enabled only once something changed). Below: a separate "Change password" card (current/new/confirm fields, show/hide toggles).
 
-- Photo upload (avatar with initials fallback)
-- Name (editable)
-- Institutional email (read-only with caption "Managed by CSO")
-- Department (read-only)
-- Save button.
+**Section 2 — Signature & stamp**: two side-by-side cards ("Signature" / "Departmental stamp"), each showing the current reference image (or an empty placeholder if none), a "Replace" button that opens a file picker → preview state → "Apply replacement" / "Cancel" buttons. On applying, generate **three possible outcomes**:
 
-**Section 2 — Signature & stamp**:
-Two cards side-by-side (stack on mobile). Each card shows:
+- **Success**: green check, "Reference updated successfully."
+- **Held**: amber state, "Update held for CSO review." — shows the mismatch percentage and a note that the CSO has been notified via the audit trail.
+- **Error**: destructive banner with a generic retry message.
 
-- Heading ("Signature" / "Departmental stamp")
-- The current processed reference (greyscale preview)
-- Caption: "Last updated [date]"
-- "Replace" button — opens the same uploader pattern as onboarding.
+Footer note beneath both cards: "Changes are logged to the audit trail. Pending approvals using your previous reference are not affected."
 
-Below the cards: a small note "Changes are logged to the audit trail. Pending approvals using your previous reference are not affected."
+**Section 3 — Notifications**: three toggles — "Weekend requests submitted (in-app)", "Weekend requests submitted (email)", "Daily digest email".
 
-**Section 3 — Notifications**:
-Toggles: "Weekend requests submitted (in-app)", "Weekend requests submitted (email)", "Daily digest of your department's activity (email)".
-
-**Section 4 — Appearance**:
-Theme select (System / Light / Dark).
-Change password button.
-Sign out (destructive button at the bottom).
-
-Use placeholder data: HOD "Prof. Okonkwo", Faculty of Engineering, signature and stamp uploaded 3 months ago. Generate at 1440px (desktop) and 390px (mobile).
+Use placeholder data: Dean "Prof. Okonkwo", Faculty of Engineering, signature and stamp uploaded 3 months ago. Generate the Account and Signature & stamp sections at all three outcome states (success/held/error) plus the Notifications section. At 1440px (desktop) and 390px (mobile).

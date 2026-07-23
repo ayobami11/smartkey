@@ -1,6 +1,6 @@
 # Verifier Shift Handover
 
-> **How to use this file**: copy everything below the dashed line into Stitch as a single prompt. `DESIGN.md` is loaded as Stitch project context, so do not paste it; only paste this file. The output will be the **`/verifier/handover` — Locked screen at start of every shift** screen.
+> **How to use this file**: copy everything below the dashed line into Stitch as a single prompt. `DESIGN.md` is loaded as Stitch project context, so do not paste it; only paste this file. The output will be the **`/verifier/handover`** screen. **Addition vs. the original prompt**: a "no prior shift / start a shift" state that precedes the handover-acknowledgement state — the very first shift ever (or any time there's genuinely nothing to hand over from) has no outgoing officer to acknowledge.
 
 ---
 
@@ -9,29 +9,29 @@
 SmartKey is a four-role web application replacing the paper-based key management workflow at the University of Lagos Senate Building. The roles are:
 
 - **Chief Security Officer (CSO)**: senior administrator. Desktop-primary. Oversight, reports, audit log, user management.
-- **Head of Department (HOD)**: faculty member. Mixed device usage. Authorises up to three collectors per departmental key, signs weekend approvals.
+- **Dean** (system role `DEAN`): faculty member. Mixed device usage. Authorises up to three collectors per unit key, signs weekend approvals. The Administration unit's keys are authorised by the CSO instead — no Dean exists for it.
 - **Verifier (security personnel)**: 24/7 desk staff in 8-hour shifts. Shared desktop at the security desk. Issues and receives keys, performs shift handover.
 - **Requester (university staff)**: lowest-frequency user. Phone-primary. Requests a key, receives a 6-digit code by email, presents it at the desk.
 
-Three AI components run in the background: rule-based risk scoring (visible to verifiers as Low/Medium/High tier), Gemini-generated shift reports (CSO dashboard), and pixel-level signature verification (HOD signed approvals). WCAG 2.2 AA conformance is the floor. Use the SmartKey design system from DESIGN.md — do not invent colours, typography, or component styling.
+Three AI components run in the background: rule-based risk scoring (visible to verifiers as Low/Medium/High tier), Gemini-generated shift reports (CSO dashboard), and pixel-level signature verification (Dean-signed approvals). WCAG 2.2 AA conformance is the floor. Use the SmartKey design system from DESIGN.md — do not invent colours, typography, or component styling.
+
+Grouping term: SmartKey organises keys by **Unit** (not "Department" or "Faculty").
 
 ## Verifier area routes
 
-- `/verifier` — Dashboard home: pending requests, outstanding keys, shift state
-- `/verifier/issue` — Issue-key flow: enter code, confirm collector, mark issued
-- `/verifier/return` — Receive-key flow: select outstanding key, confirm return
-- `/verifier/handover` — Shift handover acknowledgement (locked screen until complete)
-- `/verifier/incidents` — Log a new incident; review own shift history
+- `/verifier/dashboard` — Live request queue and outstanding keys, with the issue-key and return-key flows opening as side sheets from this one screen
+- `/verifier/handover` — Shift handover acknowledgement, locked at the start of every shift; also covers the "no prior shift / start a shift" state
+- `/verifier/incidents` — Log a new incident; review own shift's incidents
 
-## Flow: Verifier shift handover
+## Flow: Shift handover
 
-The dashboard is locked behind the handover screen at the start of every new shift. Outgoing officer's shift summary at top; outstanding keys below as a checklist. Incoming officer must acknowledge each (or bulk-acknowledge with explicit confirmation) before the dashboard unlocks. Acknowledgement is logged with the incoming officer's identity and timestamp.
+The dashboard is locked behind the handover screen at the start of every new shift. If there is no prior shift at all to hand over from, the screen instead shows a "Start shift" state: a read-only list of any currently outstanding keys and a single "Start shift" button — no per-key acknowledgement required. Otherwise: the outgoing officer's shift summary sits at the top; outstanding keys are listed below as a checklist with a tri-state select-all row plus per-row checkboxes. The incoming officer must acknowledge each key (or bulk-acknowledge with an explicit confirmation dialog) before the dashboard unlocks. Acknowledgement is logged with the incoming officer's identity and timestamp.
 
 ## AI surface: Gemini-generated shift reports
 
 - **Treatment**: long-form readable card with sections: outstanding keys, flagged events, unresolved incidents, chain-of-custody summary. Body-md prose; embedded ShiftTimeline for visual log.
-- **Editing**: report itself is immutable. CSO can add comments (timestamped, signed) and download the comments alongside as a single PDF.
-- **Disclosure**: small caption at foot of every report: "Generated by AI from shift event data".
+- **Editing**: report itself is immutable. CSO can add comments and download the report plus comments as a single PDF.
+- **Disclosure**: small caption at the foot of every report: "Generated by AI from shift event data".
 
 ## Responsive breakpoints
 
@@ -47,24 +47,16 @@ Generate the screen at xs (mobile) and lg (desktop) at minimum. Touch targets mi
 
 ## Generation request
 
-Generate the shift handover acknowledgement screen (`/verifier/handover`). This screen LOCKS the verifier dashboard until completed — it is the first thing the incoming officer sees.
+Generate the shift handover screen (`/verifier/handover`) across its full state machine. This screen LOCKS the verifier dashboard until completed.
 
-**Layout**: full-screen, no app navigation visible (replaced by a minimal banner showing "Shift handover required" in the maroon primary band). Two-column on desktop, single column on mobile.
+**State 1 — Loading**: 4 skeleton blocks in the shape of the "ready" layout below.
 
-**Left column — Shift summary from outgoing officer**:
-Sticky card. Header: "Outgoing shift summary — Officer Adeleke, Shift 1 (00:00–08:00)".
-Content: the Gemini-generated shift report (condensed view), with the same section structure as the CSO's full report but trimmed: Summary, Outstanding keys, Flagged events, Unresolved incidents. Small "Read full report" link to open the full version in a sheet.
+**State 2 — Error**: destructive alert card, "Try again" button.
 
-**Right column — Acknowledgement checklist (HandoverChecklist component)**:
-Header: "Acknowledge outstanding keys" with a count badge "5 of 7 acknowledged".
-Each row is a checklist item with: key code (code-md), room, current collector, time issued, expected return time. Each row has an inline checkbox.
+**State 3 — No prior shift ("Start shift")**: title becomes "Start shift" (not "Shift handover"). Card: "There is no active shift to hand over from. You are starting a fresh shift." An amber note appears if there happen to be outstanding keys already (e.g. system was seeded). A read-only list below shows any outstanding keys (code, Overdue pill, room, requester name or "External guest", issue time, zone label). A single "Start shift" button (offline-guarded) — no acknowledgement checklist, since there's no prior officer to acknowledge from. Routes to `/verifier/dashboard` on submit.
 
-Above the list, a header row with: "Bulk acknowledge all" checkbox (tri-state — unchecked / partial / all). Tapping it triggers a confirmation dialog: "You are acknowledging 7 outstanding keys without per-row review. Are you sure?" with "Acknowledge all" (primary) and "Cancel" (secondary). This is intentional friction — bulk-ack is permitted but never silent.
+**State 4 — Ready (normal handover)**: title "Shift handover". Top: outgoing-shift summary card (a shift-number avatar, outgoing officer's name, "Shift N · date · time"). Below: an outstanding-keys checklist card — a header row with a select-all checkbox (tri-state: unchecked / indeterminate / all-checked), then one row per outstanding key with its own checkbox, code, an Overdue pill where relevant, room, requester name, issue time, zone, and a trailing icon (check-circle once acknowledged, key icon otherwise). A progress badge shows "[acknowledged]/[total]" (amber until complete, emerald once all are checked). The bulk-acknowledge action requires an explicit confirmation dialog before applying — never silent. Submit button text is conditional: "Acknowledge N keys" while incomplete (disabled until every row is checked), or "Complete handover" immediately if there happen to be zero outstanding keys.
 
-**Primary action**: full-width sticky-bottom "Begin shift" button. Disabled until every row is checked. Once enabled and tapped, the screen unlocks and routes to `/verifier` with a persistent confirmation banner: "Shift handover complete. Begin shift at 08:00. Acknowledged 7 keys from Officer Adeleke."
+**State 5 — Success**: emerald celebratory panel, check-circle icon, "Handover complete / Your shift has begun," an acknowledged-count summary, "Go to dashboard" link.
 
-**Locked-state warning**: if the user tries to navigate away or close the tab, browser confirmation dialog: "Shift handover not complete. Leave anyway?"
-
-**Empty case**: if there are no outstanding keys at the start of the shift, the right column shows a friendly empty state "No outstanding keys to acknowledge. You're ready to start." with the "Begin shift" button immediately enabled.
-
-Use placeholder data: 7 outstanding keys (mix of overdue and on-time), incoming Officer Musa, outgoing Officer Adeleke. Generate at 1440px (desktop) and 390px (mobile).
+Use placeholder data: 7 outstanding keys (mix of overdue and on-time, one issued to an external guest), incoming Officer Musa, outgoing Officer Adeleke for State 4; an empty/fresh scenario for State 3. Generate at 1440px (desktop) and 390px (mobile).

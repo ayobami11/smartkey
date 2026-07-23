@@ -9,20 +9,24 @@
 SmartKey is a four-role web application replacing the paper-based key management workflow at the University of Lagos Senate Building. The roles are:
 
 - **Chief Security Officer (CSO)**: senior administrator. Desktop-primary. Oversight, reports, audit log, user management.
-- **Head of Department (HOD)**: faculty member. Mixed device usage. Authorises up to three collectors per departmental key, signs weekend approvals.
+- **Dean** (system role `DEAN`): faculty member. Mixed device usage. Authorises up to three collectors per unit key, signs weekend approvals. The Administration unit's keys are authorised by the CSO instead — no Dean exists for it.
 - **Verifier (security personnel)**: 24/7 desk staff in 8-hour shifts. Shared desktop at the security desk. Issues and receives keys, performs shift handover.
 - **Requester (university staff)**: lowest-frequency user. Phone-primary. Requests a key, receives a 6-digit code by email, presents it at the desk.
 
-Three AI components run in the background: rule-based risk scoring (visible to verifiers as Low/Medium/High tier), Gemini-generated shift reports (CSO dashboard), and pixel-level signature verification (HOD signed approvals). WCAG 2.2 AA conformance is the floor. Use the SmartKey design system from DESIGN.md — do not invent colours, typography, or component styling.
+Three AI components run in the background: rule-based risk scoring (visible to verifiers as Low/Medium/High tier), Gemini-generated shift reports (CSO dashboard), and pixel-level signature verification (Dean-signed approvals). WCAG 2.2 AA conformance is the floor. Use the SmartKey design system from DESIGN.md — do not invent colours, typography, or component styling.
+
+Grouping term: SmartKey organises keys by **Unit** (not "Department" or "Faculty").
 
 ## CSO area routes
 
-- `/cso` — Dashboard home (live key counts per zone, anomaly alerts, today's events)
-- `/cso/reports` — Generated shift reports (Gemini-produced); download, comment
-- `/cso/audit` — Searchable, filterable audit log of every event
-- `/cso/users` — User management (provision new accounts, deactivate)
-- `/cso/keys` — Key inventory across both zones; create / retire key records
-- `/cso/settings` — Operational hours, risk-rule weights, profile, theme
+- `/cso/dashboard` — Dashboard home (pending decisions, live per-zone key counts, anomaly/signature alerts, trend charts)
+- `/cso/admin-keys` — Administration-unit key inventory + collector slot management
+- `/cso/audit` — Audit Log and Incidents in one tabbed screen, searchable and filterable
+- `/cso/users` — User list, provisioning, editing, revoking access
+- `/cso/keys` — Key inventory across both zones; create keys, mark lost/retired
+- `/cso/reports` — Generated shift reports (Gemini-produced) list + detail; comment, download PDF
+- `/cso/settings` — Operational hours, risk-rule weights, notifications, account
+- `/cso/weekend-requests` — Review queue for Administration-unit weekend requests
 
 ## Responsive breakpoints
 
@@ -38,32 +42,16 @@ Generate the screen at xs (mobile) and lg (desktop) at minimum. Touch targets mi
 
 ## Generation request
 
-Generate the CSO settings screen (`/cso/settings`).
+Generate the CSO settings screen (`/cso/settings`). Note: the Operational, Risk rules, and Notifications sections are currently **static/demo** in the shipped app — they render real controls but aren't wired to a persistence API yet. Design them at full visual fidelity anyway (a Save button and all), just don't invent a "saved!" confirmation state for them beyond what's specified below.
 
 **Layout**: left navigation (sticky on desktop, top tabs on mobile) with four sections: "Operational", "Risk rules", "Notifications", "Account".
 
-**Section 1 — Operational**:
+**Section 1 — Operational**: operational hours per zone (two cards, one per zone), each with weekday and weekend rows using "From"/"To" time inputs (24-hour, default 06:00–22:00 weekday), and a "Closed" toggle for weekend hours that disables the time inputs when on. Below: a Return-deadline select (default "End of current day") and a Code-expiry numeric input (minutes, default 10). "Save operational settings" button at the bottom.
 
-- Operational hours per zone (two cards, one per zone). Each card has weekday and weekend rows with "From" and "To" time inputs (24-hour format, default 06:00–22:00 weekday, "Closed" toggle for weekend).
-- Return deadline: dropdown (default "End of business day (17:00)", options: 17:00, 18:00, Custom).
-- Code expiry: numeric input "minutes after generation" (default 10).
-- Save button at the bottom of the section.
+**Section 2 — Risk rules**: a table of the 5 real rule names with an editable weight (1–10 number input) and an enabled toggle per row: "Outside operational hours", "Outstanding key not returned", "Weekend without Dean memo", "Excess request frequency", "Collector not whitelisted". Below the table, a "Tier thresholds" card: Low ≤ N and Medium ≤ N number inputs, High > N shown read-only (derived). "Save risk rules" button.
 
-**Section 2 — Risk rules**:
-A table of rule conditions with editable weights. Each row: rule name (read-only), description (read-only, plain English), weight (numeric input 1–10), enabled toggle.
+**Section 3 — Notifications**: toggle list — "Anomaly alerts (in-app)", "Anomaly alerts (email)", "Signature mismatches (email)", "Daily digest at 08:00".
 
-Rules: "Outside operational hours", "Outstanding key not returned", "Weekend without HOD memo", "Excess request frequency", "Collector not whitelisted".
-
-Below the table: "Tier thresholds" with three numeric inputs: Low ≤ N, Medium ≤ N, High > N. Defaults 3 / 6.
-
-A small caption at the foot: "Changes apply to new requests only. Existing risk scores are not retroactively updated."
-
-**Section 3 — Notifications**:
-Toggle list: "Anomaly alerts (in-app)", "Anomaly alerts (email)", "Signature mismatches (email)", "Daily digest at 08:00".
-
-**Section 4 — Account**:
-Profile (name, email, photo upload), Theme (System / Light / Dark), Change password, Sign out (destructive button at bottom).
-
-Save behaviour: every section has its own Save button. Changes are not saved until the section's Save is pressed (warn on tab change with unsaved changes via a dialog). All settings changes are logged to the audit log.
+**Section 4 — Account**: profile card (photo upload with avatar + initials fallback, editable full name, read-only institutional email) and a separate "Change password" card (current/new/confirm fields with show/hide toggles).
 
 Generate at 1440px (desktop) and 390px (mobile).

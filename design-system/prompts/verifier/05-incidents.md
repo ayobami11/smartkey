@@ -1,6 +1,6 @@
 # Verifier Incident Log
 
-> **How to use this file**: copy everything below the dashed line into Stitch as a single prompt. `DESIGN.md` is loaded as Stitch project context, so do not paste it; only paste this file. The output will be the **`/verifier/incidents` — Log a new incident, review history** screen.
+> **How to use this file**: copy everything below the dashed line into Stitch as a single prompt. `DESIGN.md` is loaded as Stitch project context, so do not paste it; only paste this file. The output will be the **`/verifier/incidents`** screen — a single-column form, not a list+create pair. Incident history browsing lives on the CSO's audit screen, not here.
 
 ---
 
@@ -9,19 +9,19 @@
 SmartKey is a four-role web application replacing the paper-based key management workflow at the University of Lagos Senate Building. The roles are:
 
 - **Chief Security Officer (CSO)**: senior administrator. Desktop-primary. Oversight, reports, audit log, user management.
-- **Head of Department (HOD)**: faculty member. Mixed device usage. Authorises up to three collectors per departmental key, signs weekend approvals.
+- **Dean** (system role `DEAN`): faculty member. Mixed device usage. Authorises up to three collectors per unit key, signs weekend approvals. The Administration unit's keys are authorised by the CSO instead — no Dean exists for it.
 - **Verifier (security personnel)**: 24/7 desk staff in 8-hour shifts. Shared desktop at the security desk. Issues and receives keys, performs shift handover.
 - **Requester (university staff)**: lowest-frequency user. Phone-primary. Requests a key, receives a 6-digit code by email, presents it at the desk.
 
-Three AI components run in the background: rule-based risk scoring (visible to verifiers as Low/Medium/High tier), Gemini-generated shift reports (CSO dashboard), and pixel-level signature verification (HOD signed approvals). WCAG 2.2 AA conformance is the floor. Use the SmartKey design system from DESIGN.md — do not invent colours, typography, or component styling.
+Three AI components run in the background: rule-based risk scoring (visible to verifiers as Low/Medium/High tier), Gemini-generated shift reports (CSO dashboard), and pixel-level signature verification (Dean-signed approvals). WCAG 2.2 AA conformance is the floor. Use the SmartKey design system from DESIGN.md — do not invent colours, typography, or component styling.
+
+Grouping term: SmartKey organises keys by **Unit** (not "Department" or "Faculty").
 
 ## Verifier area routes
 
-- `/verifier` — Dashboard home: pending requests, outstanding keys, shift state
-- `/verifier/issue` — Issue-key flow: enter code, confirm collector, mark issued
-- `/verifier/return` — Receive-key flow: select outstanding key, confirm return
-- `/verifier/handover` — Shift handover acknowledgement (locked screen until complete)
-- `/verifier/incidents` — Log a new incident; review own shift history
+- `/verifier/dashboard` — Live request queue and outstanding keys, with the issue-key and return-key flows opening as side sheets from this one screen
+- `/verifier/handover` — Shift handover acknowledgement, locked at the start of every shift; also covers the "no prior shift / start a shift" state
+- `/verifier/incidents` — Log a new incident; review own shift's incidents
 
 ## Responsive breakpoints
 
@@ -37,28 +37,17 @@ Generate the screen at xs (mobile) and lg (desktop) at minimum. Touch targets mi
 
 ## Generation request
 
-Generate two screens: incident list and create-incident form.
+Generate the incident-logging screen (`/verifier/incidents`). This is a **single-column card form**, not a list-plus-create-dialog pair — the shipped screen is just the form itself, centred in a max-width container.
 
-**Screen 1 — Incident list (`/verifier/incidents`)**:
-Layout: page heading "Incidents" with primary "Log new incident" button on the right. Tabs: "This shift" (default), "All my shifts", "Unresolved".
+**Fields, in order**:
 
-Each incident as a card row: incident type icon (left), summary line (e.g., "Missing key NS-205 — flagged at 11:22"), short description (truncated 80 chars), status badge (Open / Resolved / Escalated), time logged. Tap to expand inline.
+1. **Incident type** (select): Missing key / Suspicious activity / Equipment fault / Procedural / Other — each option shows a short hint subtext both in the trigger and in the dropdown item.
+2. **Severity** (select): Low / Medium / High, each with a hint subtext.
+3. **High-severity warning banner** — conditional, shown only when Severity = High: a destructive-tinted banner with an alert-triangle icon: "High severity incidents alert the CSO immediately."
+4. **Description** (textarea, 6 rows) — helper text below: "Be specific. This entry is immutable once submitted."
 
-**Empty state**: "No incidents this shift. That's a good thing." with the "Log new incident" button.
+Primary "Log incident" button, full-width.
 
-**Screen 2 — Create incident form** (modal or full-screen sheet):
-Title: "Log incident". Fields:
+**Success state**: emerald panel, the generated incident reference shown in monospace/uppercase (e.g. "INC-2026-0042"), heading "Incident recorded." The body message differs by severity: for High, "The CSO has been notified immediately."; for Low/Medium, "…appended to the audit log." A "Log another incident" link resets the form to blank.
 
-- Incident type (select): Missing key, Suspicious activity, Equipment fault, Procedural issue, Other.
-- Related key (search-and-select; optional)
-- Related person (search-and-select; optional)
-- Time of occurrence (defaults to now; editable)
-- Description (textarea, required, min 30 chars, max 1000)
-- Severity (radio: Low / Medium / High)
-- Photo attachment (optional, drag-drop, max 5MB)
-
-Below the form: helper text "Incidents are immutable once submitted. Double-check before logging." Primary "Log incident" button, secondary "Cancel".
-
-**Submitted state**: success card "Incident logged at 14:32. Reference: INC-2026-0042. Forwarded to CSO." with primary "Done" button → returns to the list with the new item at top.
-
-Use placeholder data: 3 incidents this shift (1 missing key open, 1 procedural resolved, 1 suspicious activity escalated). Generate at 1440px (desktop) and 390px (mobile).
+Generate: the empty form, the High-severity variant with its warning banner visible, and the success state. At 1440px (desktop) and 390px (mobile).
