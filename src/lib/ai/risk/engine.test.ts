@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { DEFAULT_RISK_CONFIG } from './default-config';
 import { evaluateRisk } from './engine';
-import type { RiskContext } from './types';
+import type { RiskContext, RiskEngineConfig } from './types';
 
 // Default tier config: MEDIUM ≥ 4, HIGH ≥ 7 (matches getTierConfig defaults)
 
@@ -17,7 +18,7 @@ const safeCtx: RiskContext = {
 
 describe('evaluateRisk — tier boundaries', () => {
   it('returns LOW when no rules fire (weight 0)', () => {
-    const result = evaluateRisk(safeCtx);
+    const result = evaluateRisk(safeCtx, DEFAULT_RISK_CONFIG);
     expect(result.tier).toBe('LOW');
     expect(result.factors).toHaveLength(0);
     expect(result.totalWeight).toBe(0);
@@ -29,7 +30,7 @@ describe('evaluateRisk — tier boundaries', () => {
       ...safeCtx,
       requestedAt: new Date('2026-06-09T06:00:00'), // before 07:00
     };
-    const result = evaluateRisk(ctx);
+    const result = evaluateRisk(ctx, DEFAULT_RISK_CONFIG);
     expect(result.tier).toBe('LOW');
     expect(result.totalWeight).toBe(3);
   });
@@ -37,7 +38,7 @@ describe('evaluateRisk — tier boundaries', () => {
   it('returns MEDIUM at MEDIUM boundary (weight 4)', () => {
     // weekend_without_memo fires (weight 4)
     const ctx: RiskContext = { ...safeCtx, requestType: 'WEEKEND' };
-    const result = evaluateRisk(ctx);
+    const result = evaluateRisk(ctx, DEFAULT_RISK_CONFIG);
     expect(result.tier).toBe('MEDIUM');
     expect(result.totalWeight).toBe(4);
   });
@@ -50,7 +51,7 @@ describe('evaluateRisk — tier boundaries', () => {
       requestType: 'WEEKEND',
       recentRequestCount: 6, // above default threshold of 5
     };
-    const result = evaluateRisk(ctx);
+    const result = evaluateRisk(ctx, DEFAULT_RISK_CONFIG);
     expect(result.tier).toBe('MEDIUM');
     expect(result.totalWeight).toBe(6);
   });
@@ -62,7 +63,7 @@ describe('evaluateRisk — tier boundaries', () => {
       hasOutstandingKey: true,
       recentRequestCount: 6,
     };
-    const result = evaluateRisk(ctx);
+    const result = evaluateRisk(ctx, DEFAULT_RISK_CONFIG);
     expect(result.tier).toBe('HIGH');
     expect(result.totalWeight).toBe(7);
   });
@@ -77,7 +78,7 @@ describe('evaluateRisk — tier boundaries', () => {
       recentRequestCount: 6,
       isWhitelisted: false,
     };
-    const result = evaluateRisk(ctx);
+    const result = evaluateRisk(ctx, DEFAULT_RISK_CONFIG);
     expect(result.tier).toBe('HIGH');
     // outside(3) + outstanding(5) + weekend(4) + frequency(2) + whitelist(5) = 19
     expect(result.totalWeight).toBe(19);
@@ -86,9 +87,55 @@ describe('evaluateRisk — tier boundaries', () => {
 
   it('factors list contains the firing rule names', () => {
     const ctx: RiskContext = { ...safeCtx, hasOutstandingKey: true };
-    const result = evaluateRisk(ctx);
+    const result = evaluateRisk(ctx, DEFAULT_RISK_CONFIG);
     expect(result.factors.map((f) => f.rule)).toContain(
       'outstanding_key_not_returned'
     );
+  });
+});
+
+describe('evaluateRisk — configurable rules and thresholds', () => {
+  it('a disabled rule never fires, even when its condition is met', () => {
+    const config: RiskEngineConfig = {
+      ...DEFAULT_RISK_CONFIG,
+      rules: {
+        ...DEFAULT_RISK_CONFIG.rules,
+        outstanding_key_not_returned: { weight: 5, enabled: false },
+      },
+    };
+    const ctx: RiskContext = { ...safeCtx, hasOutstandingKey: true };
+    const result = evaluateRisk(ctx, config);
+    expect(result.factors.map((f) => f.rule)).not.toContain(
+      'outstanding_key_not_returned'
+    );
+    expect(result.totalWeight).toBe(0);
+    expect(result.tier).toBe('LOW');
+  });
+
+  it('a custom weight changes totalWeight and can shift the tier', () => {
+    const config: RiskEngineConfig = {
+      ...DEFAULT_RISK_CONFIG,
+      rules: {
+        ...DEFAULT_RISK_CONFIG.rules,
+        weekend_without_memo: { weight: 10, enabled: true },
+      },
+    };
+    const ctx: RiskContext = { ...safeCtx, requestType: 'WEEKEND' };
+    const result = evaluateRisk(ctx, config);
+    expect(result.totalWeight).toBe(10);
+    expect(result.tier).toBe('HIGH');
+  });
+
+  it('custom tier thresholds shift the boundary independently of weights', () => {
+    const config: RiskEngineConfig = {
+      ...DEFAULT_RISK_CONFIG,
+      tier: { mediumMin: 5, highMin: 8 },
+    };
+    // weekend_without_memo fires (weight 4) — MEDIUM under default thresholds,
+    // but LOW once mediumMin is raised to 5.
+    const ctx: RiskContext = { ...safeCtx, requestType: 'WEEKEND' };
+    const result = evaluateRisk(ctx, config);
+    expect(result.totalWeight).toBe(4);
+    expect(result.tier).toBe('LOW');
   });
 });

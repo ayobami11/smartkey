@@ -1,9 +1,28 @@
+import type { TierConfig } from './thresholds';
+
 export type RiskTier = 'LOW' | 'MEDIUM' | 'HIGH';
 
 export type RiskFactor = {
   rule: string;
   description: string;
   weight: number;
+};
+
+// Canonical rule identifiers — must match the `rule` string each function in
+// rules.ts returns, and the risk_rule_key Postgres enum.
+export type RiskRuleKey =
+  | 'outside_operational_hours'
+  | 'outstanding_key_not_returned'
+  | 'weekend_without_memo'
+  | 'excess_request_frequency'
+  | 'collector_not_whitelisted';
+
+// CSO-editable engine configuration, sourced from risk_rule_config /
+// risk_tier_config. Only weight/enabled are configurable per rule — the
+// per-rule env tunables (e.g. OPERATING_HOURS_START/END) stay env-only.
+export type RiskEngineConfig = {
+  rules: Record<RiskRuleKey, { weight: number; enabled: boolean }>;
+  tier: TierConfig;
 };
 
 // Pre-fetched context passed to the engine — no DB calls inside the engine.

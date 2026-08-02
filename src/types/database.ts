@@ -477,6 +477,48 @@ export type Database = {
           },
         ];
       };
+      risk_rule_config: {
+        Row: {
+          enabled: boolean;
+          rule_key: Database['public']['Enums']['risk_rule_key'];
+          updated_at: string;
+          weight: number;
+        };
+        Insert: {
+          enabled?: boolean;
+          rule_key: Database['public']['Enums']['risk_rule_key'];
+          updated_at?: string;
+          weight: number;
+        };
+        Update: {
+          enabled?: boolean;
+          rule_key?: Database['public']['Enums']['risk_rule_key'];
+          updated_at?: string;
+          weight?: number;
+        };
+        Relationships: [];
+      };
+      risk_tier_config: {
+        Row: {
+          high_min: number;
+          id: string;
+          medium_min: number;
+          updated_at: string;
+        };
+        Insert: {
+          high_min: number;
+          id?: string;
+          medium_min: number;
+          updated_at?: string;
+        };
+        Update: {
+          high_min?: number;
+          id?: string;
+          medium_min?: number;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       shift_handovers: {
         Row: {
           acknowledged_at: string;
@@ -735,6 +777,7 @@ export type Database = {
       };
       approve_weekend: {
         Args: {
+          p_cso_override?: boolean;
           p_hod_id: string;
           p_note?: string;
           p_request_id: string;
@@ -780,10 +823,22 @@ export type Database = {
         }[];
       };
       decline_weekend: {
-        Args: { p_hod_id: string; p_note?: string; p_request_id: string };
+        Args: {
+          p_cso_override?: boolean;
+          p_hod_id: string;
+          p_note?: string;
+          p_request_id: string;
+        };
         Returns: {
           decision_id: string;
           request_id: string;
+        }[];
+      };
+      dismiss_expired_request: {
+        Args: { p_actor_id: string; p_request_id: string };
+        Returns: {
+          request_id: string;
+          status: string;
         }[];
       };
       expire_guest_request: {
@@ -906,6 +961,10 @@ export type Database = {
           shift_id: string;
         }[];
       };
+      update_risk_config: {
+        Args: { p_high_min: number; p_medium_min: number; p_rules: Json };
+        Returns: undefined;
+      };
       user_department_id: { Args: never; Returns: string };
       user_role: { Args: never; Returns: string };
       user_unit_id: { Args: never; Returns: string };
@@ -932,6 +991,12 @@ export type Database = {
         | 'DECLINED'
         | 'APPROVED';
       request_type: 'WEEKDAY' | 'WEEKEND';
+      risk_rule_key:
+        | 'outside_operational_hours'
+        | 'outstanding_key_not_returned'
+        | 'weekend_without_memo'
+        | 'excess_request_frequency'
+        | 'collector_not_whitelisted';
       risk_tier: 'LOW' | 'MEDIUM' | 'HIGH';
       user_role: 'CSO' | 'DEAN' | 'VERIFIER' | 'REQUESTER';
       user_status: 'PENDING_ACTIVATION' | 'ACTIVE' | 'DEACTIVATED';
@@ -1089,6 +1154,13 @@ export const Constants = {
         'APPROVED',
       ],
       request_type: ['WEEKDAY', 'WEEKEND'],
+      risk_rule_key: [
+        'outside_operational_hours',
+        'outstanding_key_not_returned',
+        'weekend_without_memo',
+        'excess_request_frequency',
+        'collector_not_whitelisted',
+      ],
       risk_tier: ['LOW', 'MEDIUM', 'HIGH'],
       user_role: ['CSO', 'DEAN', 'VERIFIER', 'REQUESTER'],
       user_status: ['PENDING_ACTIVATION', 'ACTIVE', 'DEACTIVATED'],

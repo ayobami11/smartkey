@@ -8,6 +8,16 @@ const transporter = nodemailer.createTransport({
     user: process.env.GMAIL_USER,
     pass: process.env.GMAIL_APP_PASSWORD,
   },
+  // Force IPv4. Node resolves smtp.gmail.com to an IPv6 address first on many
+  // networks; where there is no IPv6 route that fails with ENETUNREACH before
+  // the IPv4 address is ever tried.
+  family: 4,
+  // Without these, a blocked or filtered port 587 hangs on the OS TCP timeout
+  // (~20s+ observed locally), which overruns the serverless function budget on
+  // Vercel and makes login appear to freeze rather than fail.
+  connectionTimeout: 10_000,
+  greetingTimeout: 10_000,
+  socketTimeout: 15_000,
 });
 
 const emailHeader = `

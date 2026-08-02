@@ -219,6 +219,7 @@ export const AUDIT_EVENTS = [
   'SIGNATURE_MISMATCH',
   'SHIFT_REPORT_INITIATED',
   'REPORT_COMMENT_ADDED',
+  'RISK_CONFIG_UPDATED',
 ] as const;
 
 export type AuditEvent = (typeof AUDIT_EVENTS)[number];

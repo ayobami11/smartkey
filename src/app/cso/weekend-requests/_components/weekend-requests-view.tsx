@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Controller, useForm } from 'react-hook-form';
 import {
   AlertTriangleIcon,
+  ArchiveIcon,
   CalendarIcon,
   CheckCircleIcon,
   ExternalLinkIcon,
@@ -127,9 +128,11 @@ export const WeekendRequestsView = () => {
     resolver: zodResolver(hodWeekendDecisionFormSchema),
     defaultValues: { note: '', key_id: '', is_guest: false },
   });
-  const [decision, setDecision] = useState<'approved' | 'declined' | null>(
-    null
-  );
+  const [decision, setDecision] = useState<
+    'approved' | 'declined' | 'dismissed' | null
+  >(null);
+  const [dismissingId, setDismissingId] = useState<string | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [decidedIds, setDecidedIds] = useState<Set<string>>(new Set());
@@ -321,6 +324,31 @@ export const WeekendRequestsView = () => {
     setDecidedIds((prev) => new Set(prev).add(selected.id));
   };
 
+  // Clears a request whose date has passed out of the queue. The request moves
+  // to EXPIRED — it stays in the requester's history and the audit log, it just
+  // stops occupying the pending list. `fromSheet` keeps the detail sheet open
+  // to show the persistent confirmation.
+  const handleDismiss = async (requestId: string, fromSheet = false) => {
+    setDismissingId(requestId);
+    setListError(null);
+    setSubmitError(null);
+    const result = await apiFetch<{ request_id: string; status: string }>(
+      '/api/requests/dismiss',
+      { method: 'POST', body: { request_id: requestId } }
+    );
+    setDismissingId(null);
+    if (result.error) {
+      if (fromSheet) setSubmitError(result.error);
+      else setListError(result.error);
+      return;
+    }
+    setDecidedIds((prev) => new Set(prev).add(requestId));
+    if (fromSheet) setDecision('dismissed');
+    queryClient.invalidateQueries({
+      queryKey: ['cso', 'requests', 'pending-weekend'],
+    });
+  };
+
   const visibleRequests = pendingRequests.filter((r) => !decidedIds.has(r.id));
   const selectedExpired = selected ? isPastDate(selected.requested_for) : false;
 
@@ -362,6 +390,13 @@ export const WeekendRequestsView = () => {
             Retry
           </Button>
         </div>
+      )}
+
+      {/* Dismiss failure (list-level, outside the detail sheet) */}
+      {listError && (
+        <p className="text-sm text-destructive" role="alert">
+          {listError}
+        </p>
       )}
 
       {/* Empty */}
@@ -428,29 +463,63 @@ export const WeekendRequestsView = () => {
                       {formatDate(req.requested_for)}
                     </p>
                   </div>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleSelect(req)}
-                          disabled={isOffline}
-                          aria-label={`Review weekend request from ${displayName(req)}`}
-                          className={
-                            isOffline ? 'pointer-events-none' : undefined
-                          }
-                        >
-                          Review
-                        </Button>
-                      </span>
-                    </TooltipTrigger>
-                    {isOffline && (
-                      <TooltipContent>
-                        Available again when you reconnect.
-                      </TooltipContent>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleSelect(req)}
+                            disabled={isOffline}
+                            aria-label={`Review weekend request from ${displayName(req)}`}
+                            className={
+                              isOffline ? 'pointer-events-none' : undefined
+                            }
+                          >
+                            Review
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      {isOffline && (
+                        <TooltipContent>
+                          Available again when you reconnect.
+                        </TooltipContent>
+                      )}
+                    </Tooltip>
+                    {expired && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDismiss(req.id)}
+                              disabled={isOffline || dismissingId === req.id}
+                              aria-busy={dismissingId === req.id}
+                              aria-label={`Dismiss expired request from ${displayName(req)}`}
+                              className={
+                                isOffline ? 'pointer-events-none' : undefined
+                              }
+                            >
+                              <ArchiveIcon
+                                className="size-3.5"
+                                aria-hidden="true"
+                              />
+                              {dismissingId === req.id
+                                ? 'Dismissing...'
+                                : 'Dismiss'}
+                            </Button>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {isOffline
+                            ? 'Available again when you reconnect.'
+                            : 'Clear this lapsed request from the queue. It stays in the audit log.'}
+                        </TooltipContent>
+                      </Tooltip>
                     )}
-                  </Tooltip>
+                  </div>
                 </div>
               </div>
             );
@@ -488,6 +557,23 @@ export const WeekendRequestsView = () => {
                           </p>
                           <p className="mt-1 text-sm text-muted-foreground">
                             {displayName(selected)} has been notified by email.
+                          </p>
+                        </div>
+                      </>
+                    ) : decision === 'dismissed' ? (
+                      <>
+                        <ArchiveIcon
+                          className="size-10 text-muted-foreground"
+                          aria-hidden="true"
+                        />
+                        <div>
+                          <p className="font-medium text-foreground">
+                            Dismissed.
+                          </p>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            This lapsed request has been cleared from the queue.
+                            It remains in the audit log and in{' '}
+                            {displayName(selected)}&apos;s history.
                           </p>
                         </div>
                       </>
@@ -729,7 +815,8 @@ export const WeekendRequestsView = () => {
                   {selectedExpired && (
                     <p className="text-sm text-muted-foreground" role="alert">
                       This request&apos;s date has passed — it can no longer be
-                      approved or declined.
+                      approved or declined. Dismiss it to clear it from the
+                      queue; it stays in the audit log.
                     </p>
                   )}
 
@@ -756,29 +843,46 @@ export const WeekendRequestsView = () => {
                     )}
                   />
 
-                  {/* Decision buttons */}
-                  <div className="flex flex-col gap-3 sm:flex-row">
-                    <Button
-                      className="h-auto flex-1 px-4 py-2.5"
-                      disabled={submitting || isOffline || selectedExpired}
-                      aria-busy={submitting}
-                      onClick={form.handleSubmit((values) =>
-                        handleDecision('APPROVED', values)
-                      )}
-                    >
-                      {submitting ? 'Submitting...' : 'Approve'}
-                    </Button>
+                  {/* Decision buttons — a lapsed request can only be
+                      dismissed, so swap the pair for a single clear action
+                      rather than showing two permanently disabled buttons. */}
+                  {selectedExpired ? (
                     <Button
                       variant="outline"
-                      className="h-auto flex-1 px-4 py-2.5 border-destructive text-destructive hover:bg-destructive/5 hover:text-destructive"
-                      disabled={submitting || isOffline || selectedExpired}
-                      onClick={() =>
-                        handleDecision('DECLINED', form.getValues())
-                      }
+                      className="h-auto w-full px-4 py-2.5"
+                      disabled={isOffline || dismissingId === selected.id}
+                      aria-busy={dismissingId === selected.id}
+                      onClick={() => handleDismiss(selected.id, true)}
                     >
-                      Decline
+                      <ArchiveIcon className="size-4" aria-hidden="true" />
+                      {dismissingId === selected.id
+                        ? 'Dismissing...'
+                        : 'Dismiss request'}
                     </Button>
-                  </div>
+                  ) : (
+                    <div className="flex flex-col gap-3 sm:flex-row">
+                      <Button
+                        className="h-auto flex-1 px-4 py-2.5"
+                        disabled={submitting || isOffline}
+                        aria-busy={submitting}
+                        onClick={form.handleSubmit((values) =>
+                          handleDecision('APPROVED', values)
+                        )}
+                      >
+                        {submitting ? 'Submitting...' : 'Approve'}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="h-auto flex-1 px-4 py-2.5 border-destructive text-destructive hover:bg-destructive/5 hover:text-destructive"
+                        disabled={submitting || isOffline}
+                        onClick={() =>
+                          handleDecision('DECLINED', form.getValues())
+                        }
+                      >
+                        Decline
+                      </Button>
+                    </div>
+                  )}
                 </>
               )}
             </div>
