@@ -1,0 +1,3668 @@
+{
+  "info": {
+    "_postman_id": "5f2a7c10-9d34-4b8e-a1c6-7e0b2d4f6a81",
+    "name": "SmartKey API",
+    "description": "Every server-side route in SmartKey (60 handlers across 54 files), grouped by the role that calls it.\n\n## Read this before your first request\n\n**1. Auth is cookie-based, not Bearer.** `POST /api/auth/login` writes a Supabase session into a role-namespaced cookie (`sb-<project-ref>-cso`, `-dean`, `-verifier`, `-requester`). Postman's cookie jar stores it automatically. Do not set an `Authorization` header on user routes; it is ignored.\n\n**2. Every authenticated request MUST send a `Referer` header.** This is the non-obvious part. For `/api/*` paths the middleware cannot derive the role namespace from the URL, so it falls back to the `Referer` (see `src/lib/supabase/middleware.ts` and `namespaceFromReferer` in `src/lib/supabase/cookies.ts`). With no `Referer`, the request resolves to the transient `activate` namespace, finds no session, and returns 401 — even though you are logged in.\n\nEvery request in this collection already carries the correct `Referer`. If you copy a request elsewhere, carry the header with it:\n\n| Calling role | Referer value |\n| --- | --- |\n| CSO | `{{baseUrl}}/cso` |\n| Dean | `{{baseUrl}}/dean` |\n| Verifier | `{{baseUrl}}/verifier` |\n| Requester | `{{baseUrl}}/requester` |\n\nThe `x-smartkey-namespace` header is set by the middleware and overwritten on every request, so sending it yourself does nothing.\n\n**3. CSO, Dean and Verifier require email OTP.** Login returns `mfa_required: true` and mails a 6-digit code; the session is not usable until `POST /api/auth/verify-otp` succeeds. Requester skips MFA and is signed in straight from login.\n\n**4. Response envelope.** Every route returns `{ data, error, status }`. On success `error` is null; on failure `data` is null and `error` is a user-facing string. 204 responses have no body.\n\nSee `docs/postman/README.md` for the full walkthrough and `docs/API.md` for the per-route reference.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "description": "Origin of the running Next.js app."
+    },
+    {
+      "key": "otp",
+      "value": "",
+      "description": "6-digit code from the OTP email. Paste before running Verify OTP."
+    },
+    {
+      "key": "keyId",
+      "value": "",
+      "description": "Auto-filled where possible; otherwise paste a keys.id UUID."
+    },
+    {
+      "key": "unitId",
+      "value": "",
+      "description": "Auto-filled by 'List units'."
+    },
+    {
+      "key": "requestId",
+      "value": "",
+      "description": "Auto-filled by requester/dean/verifier request calls."
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "description": "Auto-filled by 'List users' / 'Provision user'."
+    },
+    {
+      "key": "shiftId",
+      "value": "",
+      "description": "Auto-filled by 'Start shift' / 'Current shift'."
+    },
+    {
+      "key": "reportId",
+      "value": "",
+      "description": "Auto-filled by 'Generate shift report'."
+    },
+    {
+      "key": "collectionCode",
+      "value": "",
+      "description": "6-digit collection code; auto-filled on submit / weekend-code."
+    },
+    {
+      "key": "returnCode",
+      "value": "",
+      "description": "6-digit return code; auto-filled by 'Request return code'."
+    },
+    {
+      "key": "guestToken",
+      "value": "",
+      "description": "Guest access_token; auto-filled by the public weekend-request submit."
+    },
+    {
+      "key": "cronSecret",
+      "value": "",
+      "description": "CRON_SECRET from .env.local. System folder only."
+    },
+    {
+      "key": "serviceRoleKey",
+      "value": "",
+      "description": "SUPABASE_SERVICE_ROLE_KEY. System folder only — never ships to a browser."
+    }
+  ],
+  "item": [
+    {
+      "name": "00 — Auth",
+      "description": "Start here. Run Login, then Verify OTP for CSO/Dean/Verifier. Postman stores the session cookie for you.",
+      "item": [
+        {
+          "name": "Login (CSO)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "if (body.data && body.data.mfa_required) {",
+                  "  console.log('MFA required — check the inbox, set {{otp}}, then run Verify OTP.');",
+                  "} else if (body.data) {",
+                  "  console.log('Signed in without MFA as', body.data.role);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"cso@unilag.edu.ng\",\n  \"password\": \"replace-me\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            },
+            "description": "Verifies credentials on a throwaway client, then writes the session into the cookie namespace for the account's role.\n\nReturns `{ session, role, mfa_required }`. For CSO / DEAN / VERIFIER `mfa_required` is true, `session` is null, and a 6-digit code is emailed — the session cookie exists but is only usable after Verify OTP. REQUESTER returns a live session and `mfa_required: false`.\n\nNo `Referer` needed: this route passes the namespace explicitly.\n\nErrors: 401 invalid credentials · 422 schema · 503 auth service unreachable (distinguished from 401 via `isAuthRetryableFetchError`, so a network blip never reads as a wrong password)."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"session\": null,\n    \"role\": \"CSO\",\n    \"mfa_required\": true\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"Invalid credentials\",\n  \"status\": 401\n}"
+            }
+          ]
+        },
+        {
+          "name": "Login (Requester — no MFA)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"requester@unilag.edu.ng\",\n  \"password\": \"replace-me\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            },
+            "description": "Same route as above. REQUESTER is the only role exempt from MFA, so this single call leaves you fully signed in — the fastest path to exercising the requester flow."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"session\": \"<jwt>\",\n    \"role\": \"REQUESTER\",\n    \"mfa_required\": false\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"Invalid request body\",\n  \"status\": 422\n}"
+            }
+          ]
+        },
+        {
+          "name": "Verify OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"cso@unilag.edu.ng\",\n  \"otp\": \"{{otp}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/verify-otp",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "verify-otp"]
+            },
+            "description": "Completes MFA. `email` is required alongside `otp` — the route looks the profile up by `institutional_email` to know which cookie namespace login wrote to.\n\nThe stored code is a SHA-256 hash with a 10-minute expiry and is cleared on success, so a code cannot be replayed. Writes a `LOGIN_SUCCEEDED` audit entry with `method: 'OTP'`.\n\nErrors: 401 invalid or expired code · 422 schema."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"session\": \"<jwt>\"\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"Invalid or expired code\",\n  \"status\": 401\n}"
+            }
+          ]
+        },
+        {
+          "name": "Resend OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"cso@unilag.edu.ng\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/resend-otp",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "resend-otp"]
+            },
+            "description": "Mints a fresh 10-minute MFA code. Always returns 200 with `data: null` whether or not the email matches a profile — deliberate, to prevent account enumeration."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": null,\n  \"status\": 200\n}"
+            }
+          ]
+        },
+        {
+          "name": "Change password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/cso",
+                "description": "Required — selects the session cookie namespace."
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"current_password\": \"replace-me\",\n  \"new_password\": \"Test@123456!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/change-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "change-password"]
+            },
+            "description": "Re-authenticates with `current_password` before applying the change, so a hijacked session alone cannot rotate the password. Writes a `PASSWORD_CHANGED` audit entry.\n\n`new_password` must satisfy `src/lib/validation/primitives.ts`: 12–64 chars with upper, lower, digit and symbol.\n\nErrors: 401 not authenticated or wrong current password · 422 policy failure."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"Current password is incorrect\",\n  \"status\": 401\n}"
+            }
+          ]
+        },
+        {
+          "name": "Reset password (request email)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"cso@unilag.edu.ng\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/reset-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "reset-password"]
+            },
+            "description": "Triggers the Supabase password-reset email. Always 200 (no enumeration). The emailed link lands on `GET /api/auth/callback`."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": null,\n  \"status\": 200\n}"
+            }
+          ]
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/cso"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "logout"]
+            },
+            "description": "Invalidates the current Supabase session. No body. The `Referer` decides which role's session is ended — omit it and you will clear the wrong namespace."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": null,\n  \"status\": 200\n}"
+            }
+          ]
+        },
+        {
+          "name": "Register (requester activation)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/activate"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "password",
+                  "value": "Test@123456!",
+                  "type": "text",
+                  "description": "12–64 chars, upper + lower + digit + symbol."
+                },
+                {
+                  "key": "passport_photo",
+                  "type": "file",
+                  "src": [],
+                  "description": "Required for REQUESTER. Max 5 MB."
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "register"]
+            },
+            "description": "Multipart. **Not directly runnable in Postman** without first completing the invite link in a browser: there is no `token` field — the invite is a Supabase magic link that resolves through `GET /api/auth/callback` into a session in the `activate` namespace, and this route only reads that session.\n\nListed here so the contract is documented. Errors: 401 no activation session · 422 weak password or missing photo · 413 photo over 5 MB."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"profile_id\": \"<uuid>\"\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"Password must be at least 12 characters and include upper, lower, number and symbol\",\n  \"status\": 422\n}"
+            }
+          ]
+        },
+        {
+          "name": "Activate Dean (signature + stamp)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/dean/onboarding"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "password",
+                  "value": "Test@123456!",
+                  "type": "text"
+                },
+                {
+                  "key": "signature",
+                  "type": "file",
+                  "src": [],
+                  "description": "Reference signature image. Max 5 MB."
+                },
+                {
+                  "key": "stamp",
+                  "type": "file",
+                  "src": [],
+                  "description": "Departmental stamp image. Max 5 MB."
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/activate-hod",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "activate-hod"]
+            },
+            "description": "One-time Dean onboarding. Same activation-session precondition as Register — no `token` field.\n\nStores the two images in the `hod-signatures` bucket and writes their URLs to `profiles.signature_ref_url` / `stamp_ref_url`. The signature becomes the reference every later weekend approval is pixel-matched against.\n\nErrors: 401 no activation session · 403 profile is not DEAN · 422 validation · 413 image over 5 MB."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"profile_id\": \"<uuid>\",\n    \"redirect\": \"/hod\"\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"No valid activation session\",\n  \"status\": 401\n}"
+            }
+          ]
+        },
+        {
+          "name": "Auth callback (redirect handler)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/callback?code=PKCE_CODE&next=/dean/onboarding",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "callback"],
+              "query": [
+                {
+                  "key": "code",
+                  "value": "PKCE_CODE",
+                  "description": "One-time PKCE code from the emailed link."
+                },
+                {
+                  "key": "next",
+                  "value": "/dean/onboarding",
+                  "description": "Where to send the user afterwards. Defaults to /."
+                }
+              ]
+            },
+            "description": "Not a JSON API — a redirect handler. Exchanges the emailed one-time PKCE code for a session in the `activate` namespace, then 302s to `next`. On failure redirects to `/forgot-password?error=expired`.\n\nThis is the missing link that makes Register and Activate Dean work; documented so the flow reads end to end."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "Temporary Redirect",
+              "code": 307,
+              "_postman_previewlanguage": "text",
+              "header": [
+                {
+                  "key": "Location",
+                  "value": "/requester/dashboard"
+                }
+              ],
+              "cookie": [],
+              "body": ""
+            },
+            {
+              "name": "Error",
+              "status": "Temporary Redirect",
+              "code": 307,
+              "_postman_previewlanguage": "text",
+              "header": [
+                {
+                  "key": "Location",
+                  "value": "/forgot-password?error=expired"
+                }
+              ],
+              "cookie": [],
+              "body": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01 — Requester",
+      "description": "Sign in with 'Login (Requester)' first. No OTP step for this role.",
+      "item": [
+        {
+          "name": "Submit request (weekday)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "if (b.data) {",
+                  "  pm.collectionVariables.set('requestId', b.data.request_id);",
+                  "  if (b.data.code) pm.collectionVariables.set('collectionCode', b.data.code);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/requester"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"key_id\": \"{{keyId}}\",\n  \"type\": \"WEEKDAY\",\n  \"return_deadline\": \"2026-08-03T17:00:00.000Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/requests/submit",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "requests", "submit"]
+            },
+            "description": "Calls the `create_request` RPC, which checks authorisation, runs the rule-based risk engine, mints the code and writes the audit entry in one transaction.\n\nWEEKDAY returns a 6-digit code immediately (`CODE_ISSUED`, 10-minute expiry). WEEKEND returns **no code** and lands on `PENDING_HOD` awaiting a Dean/CSO decision — the code is minted on the day via 'Get weekend code'.\n\nOptional `letter_url` attaches a Dean-signed letter (uploaded client-side to `weekend-letters`) so signature verification can run at approval.\n\nErrors: 403 not authorised for this key · 409 an active request already exists for it · 422 outside operational hours."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"request_id\": \"<uuid>\",\n    \"code\": \"482913\",\n    \"code_expires_at\": \"<iso>\",\n    \"risk_tier\": \"LOW\"\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"An active request already exists for this key\",\n  \"status\": 409\n}"
+            }
+          ]
+        },
+        {
+          "name": "Submit request (weekend)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "if (b.data) pm.collectionVariables.set('requestId', b.data.request_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/requester"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"key_id\": \"{{keyId}}\",\n  \"type\": \"WEEKEND\",\n  \"weekend_date\": \"2026-08-08\",\n  \"return_deadline\": \"2026-08-08T17:00:00.000Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/requests/submit",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "requests", "submit"]
+            },
+            "description": "`weekend_date` must be a Saturday or Sunday. Response is `{ request_id, status: 'PENDING_HOD', risk_tier }` — deliberately no code. Next stop: the Dean's queue."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"request_id\": \"<uuid>\",\n    \"status\": \"PENDING_HOD\",\n    \"risk_tier\": \"LOW\"\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"Requests are only accepted within operational hours\",\n  \"status\": 422\n}"
+            }
+          ]
+        },
+        {
+          "name": "My requests",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/requester"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/requests/my?limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "requests", "my"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "CODE_ISSUED,KEY_ISSUED",
+                  "description": "Comma-separated request_status values.",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Max 50."
+                },
+                {
+                  "key": "cursor",
+                  "value": "",
+                  "description": "Opaque cursor from next_cursor.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Cursor-paginated history for the signed-in requester, newest first, with the key joined. Returns `{ requests, next_cursor }`."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"requests\": [\n      {\n        \"id\": \"<uuid>\",\n        \"key\": {\n          \"code\": \"NS-304\",\n          \"room_name\": \"Senate Hall A\"\n        },\n        \"type\": \"WEEKDAY\",\n        \"status\": \"KEY_ISSUED\",\n        \"created_at\": \"<iso>\"\n      }\n    ],\n    \"next_cursor\": null\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get weekend code (on the day)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "if (b.data && b.data.code) pm.collectionVariables.set('collectionCode', b.data.code);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/requester"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"request_id\": \"{{requestId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/requests/weekend-code",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "requests", "weekend-code"]
+            },
+            "description": "Mints the 10-minute collection code for an `APPROVED` weekend request — **only on the requested date**. Moves it to `CODE_ISSUED`.\n\nThe code is deliberately never emailed at approval time; keeping it short-lived and same-day is the whole point of the weekend flow.\n\nErrors: 403 not your request · 409 not in APPROVED state · 422 TOO_EARLY (before the date)."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"request_id\": \"<uuid>\",\n    \"code\": \"592014\",\n    \"code_expires_at\": \"<iso>\"\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"This request is not yet on its requested date\",\n  \"status\": 422\n}"
+            }
+          ]
+        },
+        {
+          "name": "Request return code",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "if (b.data && b.data.return_code) pm.collectionVariables.set('returnCode', b.data.return_code);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/requester"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"request_id\": \"{{requestId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/requests/request-return",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "requests", "request-return"]
+            },
+            "description": "Generates a 6-digit **return** code (15-minute expiry) the requester reads out at the desk, so a verifier cannot log a phantom return alone. Status stays `KEY_ISSUED`; audit `RETURN_CODE_GENERATED`.\n\nErrors: 403 not your request · 409 key not currently issued · 404 not found."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"request_id\": \"<uuid>\",\n    \"return_code\": \"104857\",\n    \"return_code_expires_at\": \"<iso>\"\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"Key is not currently issued\",\n  \"status\": 409\n}"
+            }
+          ]
+        },
+        {
+          "name": "Expire a lapsed code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/requester"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"request_id\": \"{{requestId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/requests/expire",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "requests", "expire"]
+            },
+            "description": "Fired automatically by the UI when the countdown hits 0. Idempotent — returns the current status without erroring if the request already moved on.\n\nNote the branch: a WEEKEND code lapsing **on its own date** rolls back to `APPROVED` (audit `CODE_EXPIRED`) so the requester can mint a fresh one the same day. A weekday code, or a weekend code after the date has passed, terminates to `EXPIRED`.\n\nErrors: 403 not your request · 409 code has not expired yet."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"request_id\": \"<uuid>\",\n    \"status\": \"EXPIRED\"\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"Code has not expired yet\",\n  \"status\": 409\n}"
+            }
+          ]
+        },
+        {
+          "name": "Cancel request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/requester"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"request_id\": \"{{requestId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/requests/cancel",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "requests", "cancel"]
+            },
+            "description": "Cancellable from any pre-collection state you own: `CODE_ISSUED`, or `PENDING_HOD` / `APPROVED` for a weekend request whose code has not been minted — the manual escape hatch before the nightly job expires it.\n\nErrors: 403 not your request · 409 not in a cancellable state."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"request_id\": \"<uuid>\",\n    \"status\": \"CANCELLED\"\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"Request is not in a cancellable state\",\n  \"status\": 409\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 — Dean",
+      "description": "Sign in as a Dean (login + verify OTP). Scoped to the Dean's own unit by RLS.",
+      "item": [
+        {
+          "name": "Pending weekend requests",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "if (b.data && b.data.requests && b.data.requests.length) {",
+                  "  pm.collectionVariables.set('requestId', b.data.requests[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/dean"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/requests/pending",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "requests", "pending"]
+            },
+            "description": "`status = 'PENDING_HOD'` for the Dean's unit, including external (guest) requests with the guest details, `letter_url` and `requested_unit_id` joined so the Dean can review and assign a key before approving.\n\nAlso callable by the **CSO**, who gets the Administration-routed requests (units with `authoriser = 'CSO'` have no Dean)."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"requests\": [\n      {\n        \"id\": \"<uuid>\",\n        \"requester\": {\n          \"full_name\": \"Dr. Bakare\"\n        },\n        \"key\": {\n          \"code\": \"NS-304\"\n        },\n        \"requested_for\": \"2026-08-08\",\n        \"status\": \"PENDING_HOD\"\n      }\n    ]\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            }
+          ]
+        },
+        {
+          "name": "Approve weekend request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/dean"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"request_id\": \"{{requestId}}\",\n  \"decision\": \"APPROVED\",\n  \"note\": \"Approved for scheduled maintenance.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/requests/hod-decision",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "requests", "hod-decision"]
+            },
+            "description": "Moves the request to `APPROVED` via the `approve_weekend` RPC. **No code is minted here** — the requester mints one on the day. So the success status is `\"APPROVED\"`, never `\"CODE_ISSUED\"`.\n\nIf you include `submitted_signature_url`, the letter's signature is pixel-matched (Sharp + Pixelmatch) against the Dean's onboarded reference first. Over the threshold (default 15%) the approval is **held**: the RPC is never called, a `SIGNATURE_MISMATCH` audit entry is written, and you get HTTP **200** with `{ status: 'HELD_SIGNATURE_MISMATCH', mismatch_pct }` — a held approval is not a route error, so check the status field, not just the HTTP code.\n\nThe RPC re-validates the actor against the unit's `authoriser`, so a Dean acting on an Administration key (or the CSO on a faculty key) is rejected with 403 regardless of what the route allowed."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"request_id\": \"<uuid>\",\n    \"status\": \"APPROVED\"\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"This request has already been decided\",\n  \"status\": 409\n}"
+            }
+          ]
+        },
+        {
+          "name": "Approve guest request (assign key)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/dean"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"request_id\": \"{{requestId}}\",\n  \"decision\": \"APPROVED\",\n  \"key_id\": \"{{keyId}}\",\n  \"note\": \"Letter verified against faculty records.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/requests/hod-decision",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "requests", "hod-decision"]
+            },
+            "description": "Same endpoint, guest branch. When the request has a `guest_id`, `key_id` becomes **required** — a guest picks a unit, not a key, so the Dean assigns the actual key at approval. Routes to `approve_guest_weekend`.\n\nSignature verification is skipped: guests have no reference signature on file, so the Dean reviews the uploaded letter by eye (see 'Preview authorisation letter')."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"request_id\": \"<uuid>\",\n    \"status\": \"APPROVED\"\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"key_id is required to approve an external request\",\n  \"status\": 422\n}"
+            }
+          ]
+        },
+        {
+          "name": "Decline weekend request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/dean"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"request_id\": \"{{requestId}}\",\n  \"decision\": \"DECLINED\",\n  \"note\": \"No authorisation on file for this date.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/requests/hod-decision",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "requests", "hod-decision"]
+            },
+            "description": "Routes to `decline_weekend`. Returns `{ status: 'DECLINED' }`. Works for guest and registered requests alike; no `key_id` needed."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"request_id\": \"<uuid>\",\n    \"status\": \"DECLINED\"\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"This request has already been decided\",\n  \"status\": 409\n}"
+            }
+          ]
+        },
+        {
+          "name": "Preview authorisation letter",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/dean"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/requests/{{requestId}}/letter",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "requests", "{{requestId}}", "letter"]
+            },
+            "description": "Returns a 5-minute signed URL for the guest's uploaded letter. The `weekend-letters` bucket is private; signing happens server-side with the admin client and is gated to the Dean whose unit owns the request (CSO also permitted).\n\nErrors: 403 not your unit · 404 request has no letter."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"url\": \"<signed-url>\"\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"This request has no authorisation letter on file\",\n  \"status\": 404\n}"
+            }
+          ]
+        },
+        {
+          "name": "Key history (unit-scoped)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/dean"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/keys/history?limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "keys", "history"],
+              "query": [
+                {
+                  "key": "key_id",
+                  "value": "{{keyId}}",
+                  "disabled": true
+                },
+                {
+                  "key": "requester_id",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "from",
+                  "value": "2026-08-01",
+                  "description": "ISO date.",
+                  "disabled": true
+                },
+                {
+                  "key": "to",
+                  "value": "2026-08-31",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "cursor",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Shared with the CSO. A Dean automatically sees only their own unit's keys (enforced in-query and by RLS); the CSO sees everything. Backs the Dean dashboard's recent-activity feed."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"transactions\": [\n      {\n        \"id\": \"<uuid>\",\n        \"key\": {\n          \"code\": \"OS-112\",\n          \"room_name\": \"Dean's Office\"\n        },\n        \"collected_at\": \"<iso>\",\n        \"returned_at\": \"<iso>\"\n      }\n    ],\n    \"next_cursor\": null\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 — Verifier",
+      "description": "The security desk. Sign in as a Verifier (login + verify OTP), then start a shift.",
+      "item": [
+        {
+          "name": "Start shift",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "if (b.data && b.data.shift) pm.collectionVariables.set('shiftId', b.data.shift.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/verifier"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/shifts/start",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "shifts", "start"]
+            },
+            "description": "No body. Opens a shift for the signed-in officer and derives the next shift number (wraps 1→2→3→1).\n\nRejects with 409 if a shift is already open — the officer should run the handover instead. Returns 201."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"shift\": {\n      \"id\": \"<uuid>\",\n      \"shift_number\": 1,\n      \"started_at\": \"<iso>\"\n    }\n  },\n  \"error\": null,\n  \"status\": 201\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"A shift is already active for this officer\",\n  \"status\": 409\n}"
+            }
+          ]
+        },
+        {
+          "name": "Current shift",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "if (b.data && b.data.shift) pm.collectionVariables.set('shiftId', b.data.shift.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/verifier"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/shifts/current",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "shifts", "current"]
+            },
+            "description": "The open shift with officer identities and elapsed time. Also readable by the CSO."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"shift\": {\n      \"id\": \"<uuid>\",\n      \"shift_number\": 2,\n      \"started_at\": \"<iso>\",\n      \"primary_officer\": {\n        \"id\": \"<uuid>\",\n        \"full_name\": \"Officer Musa\"\n      }\n    }\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            }
+          ]
+        },
+        {
+          "name": "Live queue",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/verifier"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/requests/live-queue",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "requests", "live-queue"]
+            },
+            "description": "All `CODE_ISSUED` requests, oldest first. This is the **initial load only** — the dashboard keeps itself current over a Supabase Realtime subscription, so do not poll this."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"requests\": [\n      {\n        \"id\": \"<uuid>\",\n        \"requester\": {\n          \"full_name\": \"Dr. Bakare\"\n        },\n        \"key\": {\n          \"code\": \"NS-304\",\n          \"room_name\": \"Senate Hall A\"\n        },\n        \"risk_tier\": \"LOW\",\n        \"created_at\": \"<iso>\"\n      }\n    ]\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            }
+          ]
+        },
+        {
+          "name": "Collect key (issue)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/verifier"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{collectionCode}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/requests/collect",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "requests", "collect"]
+            },
+            "description": "The desk's highest-frequency call. `code` is the only field — the verifier is taken from the server-verified session, and any client-supplied `verifier_id` is deliberately ignored so a collection cannot be attributed to another officer.\n\nThe response carries `is_guest`. For a guest it is true and `requester` holds the declared ID document with a null `photo_url` (the officer checks the physical ID); for a registered requester you get the passport photo. The shape is additive, so registered-only consumers are unaffected.\n\nErrors: 404 code not found or expired · 409 key already issued."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"request_id\": \"<uuid>\",\n    \"is_guest\": false,\n    \"requester\": {\n      \"full_name\": \"Dr. Bakare\",\n      \"photo_url\": \"<url>\"\n    },\n    \"key\": {\n      \"code\": \"NS-304\",\n      \"room_name\": \"Senate Hall A\"\n    },\n    \"issued_at\": \"<iso>\"\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"Code not found or expired\",\n  \"status\": 404\n}"
+            }
+          ]
+        },
+        {
+          "name": "Outstanding keys",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/verifier"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/keys/out",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "keys", "out"],
+              "query": [
+                {
+                  "key": "zone",
+                  "value": "NEW_SENATE",
+                  "description": "NEW_SENATE | OLD_SENATE",
+                  "disabled": true
+                },
+                {
+                  "key": "overdue_only",
+                  "value": "true",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Everything currently out. Shared with the CSO.\n\nOverdue is **derived**, not just read: the hourly `mark_key_overdue` job flips the key's own status, but the route also compares `return_deadline` to now, so the badge is correct even between cron runs. Rows come back with `status: 'KEY_OVERDUE'` in that case."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"outstanding\": [\n      {\n        \"request_id\": \"<uuid>\",\n        \"key\": {\n          \"code\": \"NS-304\",\n          \"room_name\": \"Senate Hall A\"\n        },\n        \"requester\": {\n          \"full_name\": \"Dr. Bakare\"\n        },\n        \"issued_at\": \"<iso>\",\n        \"return_deadline\": \"<iso>\",\n        \"status\": \"KEY_ISSUED\"\n      }\n    ]\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            }
+          ]
+        },
+        {
+          "name": "Return key (verified by code)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/verifier"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"request_id\": \"{{requestId}}\",\n  \"code\": \"{{returnCode}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/keys/return",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "keys", "return"]
+            },
+            "description": "Exactly one of `code` or `override_reason` must be present — the schema refuses both-missing.\n\nThis is the verified path: the requester read out their return code, so the audit event is `KEY_RETURNED`. Add `returner_id` if someone other than the original requester is handing the key back."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"request_id\": \"<uuid>\",\n    \"returned_at\": \"<iso>\",\n    \"verified\": true\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"Return code not recognised or expired\",\n  \"status\": 404\n}"
+            }
+          ]
+        },
+        {
+          "name": "Return key (unverified override)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/verifier"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"request_id\": \"{{requestId}}\",\n  \"override_reason\": \"Requester could not access their phone at the desk.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/keys/return",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "keys", "return"]
+            },
+            "description": "The escape hatch when the requester cannot produce a code. Completes the return but records it as `KEY_RETURNED_UNVERIFIED` **and** raises a `SUSPICIOUS_ACTIVITY` incident to the CSO when a shift is open — deliberately visible, never silent. `override_reason` must be at least 3 characters."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"request_id\": \"<uuid>\",\n    \"returned_at\": \"<iso>\",\n    \"verified\": false\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"Either a code or an override reason is required\",\n  \"status\": 422\n}"
+            }
+          ]
+        },
+        {
+          "name": "Shift handover",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/verifier"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"outgoing_shift_id\": \"{{shiftId}}\",\n  \"key_ids\": [],\n  \"bulk\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/shifts/handover",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "shifts", "handover"]
+            },
+            "description": "The incoming officer acknowledges every outstanding key. `key_ids` must match the actual outstanding set or you get 422 — this is chain-of-custody, so a partial list is rejected rather than quietly accepted. One audit entry is written per key.\n\nErrors: 409 handover already completed for this shift."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"handover_id\": \"<uuid>\",\n    \"acknowledged_count\": 3\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"Handover already completed for this shift\",\n  \"status\": 409\n}"
+            }
+          ]
+        },
+        {
+          "name": "Log incident",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/verifier"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"EQUIPMENT_FAULT\",\n  \"severity\": \"MEDIUM\",\n  \"description\": \"Key cabinet lock sticking on the second row.\",\n  \"occurred_at\": \"2026-08-02T09:15:00.000Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/incidents",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "incidents"]
+            },
+            "description": "Append-only — there is no update or delete endpoint by design, mirroring a physical incident book.\n\n`type`: MISSING_KEY | SUSPICIOUS_ACTIVITY | EQUIPMENT_FAULT | PROCEDURAL | OTHER. `severity`: LOW | MEDIUM | HIGH. Optional `related_key_id`, `related_person_id`.\n\nHIGH severity additionally raises a realtime CSO alert. Returns a human-readable `reference` like `INC-2026-0042`."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"incident_id\": \"<uuid>\",\n    \"reference\": \"INC-2026-0042\"\n  },\n  \"error\": null,\n  \"status\": 201\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 — CSO · oversight",
+      "description": "Monitoring, incidents, reports and AI alert surfaces. Sign in as CSO (login + verify OTP).",
+      "item": [
+        {
+          "name": "High-risk queue",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/cso"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/requests/cso-queue",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "requests", "cso-queue"]
+            },
+            "description": "Requests with `risk_tier = 'HIGH'` and status `CODE_ISSUED` or `KEY_ISSUED`.\n\nWorth being precise about: there is **no `PENDING_CSO` status** in the schema. High risk does not hold a request for CSO sign-off — this is a review/intervention surface over requests that are already issuable or issued, not a gate in front of the Dean decision."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"requests\": [\n      {\n        \"id\": \"<uuid>\",\n        \"requester\": {\n          \"full_name\": \"Dr. Bakare\"\n        },\n        \"key\": {\n          \"code\": \"NS-304\"\n        },\n        \"risk_tier\": \"HIGH\",\n        \"status\": \"CODE_ISSUED\"\n      }\n    ]\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            }
+          ]
+        },
+        {
+          "name": "CSO decision on a high-risk request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/cso"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"request_id\": \"{{requestId}}\",\n  \"decision\": \"DECLINED\",\n  \"note\": \"Collector could not be reached to confirm.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/requests/cso-decision",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "requests", "cso-decision"]
+            },
+            "description": "Intervention, not an approval gate. `DECLINED` cancels the request (`CODE_ISSUED` → `CANCELLED`, audit `REQUEST_DECLINED_CSO`). `APPROVED` changes no state at all — it is a recorded acknowledgement that the CSO reviewed it and let it stand (audit `REQUEST_APPROVED_CSO`).\n\n`note` is accepted by the schema but is not currently persisted anywhere."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"request_id\": \"<uuid>\",\n    \"status\": \"CANCELLED\"\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"Not authorised — CSO role required\",\n  \"status\": 403\n}"
+            }
+          ]
+        },
+        {
+          "name": "Risk alerts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/cso"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ai/risk-alerts",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai", "risk-alerts"]
+            },
+            "description": "Unresolved HIGH-tier requests from the last 24 hours. Read-only — the rule engine runs at submit time, not here, so this never recomputes a score."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"alerts\": [\n      {\n        \"id\": \"<uuid>\",\n        \"requester\": {\n          \"full_name\": \"Dr. Bakare\"\n        },\n        \"key\": {\n          \"code\": \"NS-304\"\n        },\n        \"risk_tier\": \"HIGH\",\n        \"created_at\": \"<iso>\"\n      }\n    ]\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            }
+          ]
+        },
+        {
+          "name": "Signature mismatch alerts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/cso"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ai/signature-alerts",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai", "signature-alerts"]
+            },
+            "description": "Weekend requests stuck on `PENDING_HOD` with an unresolved `SIGNATURE_MISMATCH` audit entry. Each alert carries both image URLs and the mismatch percentage so the CSO can compare side by side.\n\nA request drops off this list once resolved via `cso_override` on hod-decision (next request)."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"alerts\": [\n      {\n        \"id\": \"<uuid>\",\n        \"requested_for\": \"2026-07-04\",\n        \"occurred_at\": \"<iso>\",\n        \"ref_url\": \"<url>\",\n        \"submitted_url\": \"<url>\",\n        \"mismatch_pct\": 22.5,\n        \"threshold_pct\": 15,\n        \"requester\": {\n          \"id\": \"<uuid>\",\n          \"full_name\": \"Dr. Bakare\",\n          \"institutional_email\": \"bakare@unilag.edu.ng\"\n        },\n        \"key\": {\n          \"id\": \"<uuid>\",\n          \"code\": \"NS-304\",\n          \"room_name\": \"Senate Hall A\",\n          \"zone\": \"NEW_SENATE\"\n        }\n      }\n    ]\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            }
+          ]
+        },
+        {
+          "name": "Override a held mismatch",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/cso"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"request_id\": \"{{requestId}}\",\n  \"decision\": \"APPROVED\",\n  \"cso_override\": true,\n  \"note\": \"Compared against filed specimen; genuine.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/requests/hod-decision",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "requests", "hod-decision"]
+            },
+            "description": "Lets the CSO settle a faculty-key request that a Dean's approval attempt held on a signature mismatch.\n\nThis is **not** a general bypass of the Dean-authoriser gate: the RPC itself checks that a `SIGNATURE_MISMATCH` audit entry already exists for the request and returns 403 otherwise. Enforced in the function body, not just the route, so it holds even if something calls the RPC directly."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"request_id\": \"<uuid>\",\n    \"status\": \"APPROVED\"\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"cso_override requires an existing signature mismatch on this request\",\n  \"status\": 403\n}"
+            }
+          ]
+        },
+        {
+          "name": "Incidents",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/cso"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/incidents?limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "incidents"],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "MISSING_KEY",
+                  "disabled": true
+                },
+                {
+                  "key": "severity",
+                  "value": "HIGH",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "OPEN",
+                  "description": "OPEN | RESOLVED | ESCALATED",
+                  "disabled": true
+                },
+                {
+                  "key": "from",
+                  "value": "2026-08-01",
+                  "disabled": true
+                },
+                {
+                  "key": "to",
+                  "value": "2026-08-31",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "cursor",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Read-only, cursor-paginated. Append-only log — no update or delete endpoint exists."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"incidents\": [\n      {\n        \"id\": \"<uuid>\",\n        \"reference\": \"INC-2026-0042\",\n        \"type\": \"MISSING_KEY\",\n        \"severity\": \"HIGH\",\n        \"status\": \"OPEN\",\n        \"occurred_at\": \"<iso>\"\n      }\n    ],\n    \"next_cursor\": null\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            }
+          ]
+        },
+        {
+          "name": "Mark key lost",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/cso"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"key_id\": \"{{keyId}}\",\n  \"note\": \"Not returned after two follow-ups; presumed lost.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/keys/mark-lost",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "keys", "mark-lost"]
+            },
+            "description": "Retires the key and opens a `MISSING_KEY` incident at HIGH severity in one go. Returns `{ key_id, incident_id }`. Writes an audit entry."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"key_id\": \"<uuid>\",\n    \"incident_id\": \"<uuid>\"\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            }
+          ]
+        },
+        {
+          "name": "List shift reports",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/cso"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports?limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "reports"],
+              "query": [
+                {
+                  "key": "shift_id",
+                  "value": "{{shiftId}}",
+                  "disabled": true
+                },
+                {
+                  "key": "from",
+                  "value": "2026-08-01",
+                  "disabled": true
+                },
+                {
+                  "key": "to",
+                  "value": "2026-08-31",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "cursor",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Cursor-paginated list of generated reports."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"reports\": [\n      {\n        \"id\": \"<uuid>\",\n        \"shift_id\": \"<uuid>\",\n        \"generated_at\": \"<iso>\"\n      }\n    ],\n    \"next_cursor\": null\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            }
+          ]
+        },
+        {
+          "name": "Generate shift report",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "if (b.data) pm.collectionVariables.set('reportId', b.data.report_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/cso"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shift_id\": \"{{shiftId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/generate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "reports", "generate"]
+            },
+            "description": "Creates the immutable `shift_reports` row via RPC (uniqueness guard + audit entry), then calls Gemini with the shift's audit events and persists `{ markdown, timeline, metadata }` through the admin client — RLS blocks a direct UPDATE even for the CSO.\n\nFalls back to a deterministic template when Gemini is unavailable or the output will not parse, so generation always succeeds. Every report renders with a 'Generated by AI from shift event data' disclosure.\n\nErrors: 409 a report already exists for this shift."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"report_id\": \"<uuid>\",\n    \"generated_at\": \"<iso>\"\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"A report has already been generated for this shift\",\n  \"status\": 409\n}"
+            }
+          ]
+        },
+        {
+          "name": "Comment on a report",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/cso"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Reviewed. Follow up on the 14:20 unverified return.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/{{reportId}}/comments",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "reports", "{{reportId}}", "comments"]
+            },
+            "description": "The report body itself is immutable; comments are the sanctioned way to annotate it. Comments are themselves immutable after insert."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"comment_id\": \"<uuid>\",\n    \"created_at\": \"<iso>\"\n  },\n  \"error\": null,\n  \"status\": 201\n}"
+            }
+          ]
+        },
+        {
+          "name": "Key history (all units)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/cso"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/keys/history?limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "keys", "history"],
+              "query": [
+                {
+                  "key": "key_id",
+                  "value": "{{keyId}}",
+                  "disabled": true
+                },
+                {
+                  "key": "requester_id",
+                  "value": "{{userId}}",
+                  "disabled": true
+                },
+                {
+                  "key": "from",
+                  "value": "2026-08-01",
+                  "disabled": true
+                },
+                {
+                  "key": "to",
+                  "value": "2026-08-31",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "cursor",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Same route the Dean calls, but unscoped — the CSO sees every unit."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"transactions\": [\n      {\n        \"id\": \"<uuid>\",\n        \"key\": {\n          \"code\": \"NS-304\",\n          \"room_name\": \"Senate Hall A\"\n        },\n        \"collected_at\": \"<iso>\",\n        \"returned_at\": \"<iso>\"\n      }\n    ],\n    \"next_cursor\": null\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 — CSO · administration",
+      "description": "User provisioning, units, key inventory and collector authorisation slots.",
+      "item": [
+        {
+          "name": "List users",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "if (b.data && b.data.users && b.data.users.length) {",
+                  "  pm.collectionVariables.set('userId', b.data.users[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/cso"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "users"]
+            },
+            "description": "Returns **every** non-deactivated profile in one shot with the unit joined. Deliberately takes no query params and does no pagination — filtering and paging happen client-side in the CSO users table. Do not expect `next_cursor` here."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"users\": [\n      {\n        \"id\": \"<uuid>\",\n        \"full_name\": \"Dr. Bakare\",\n        \"institutional_email\": \"bakare@unilag.edu.ng\",\n        \"role\": \"DEAN\",\n        \"status\": \"ACTIVE\",\n        \"unit\": {\n          \"name\": \"Faculty of Engineering\"\n        }\n      }\n    ]\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            }
+          ]
+        },
+        {
+          "name": "Provision user",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "if (b.data) pm.collectionVariables.set('userId', b.data.profile_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/cso"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"full_name\": \"Dr. Amina Bello\",\n  \"institutional_email\": \"abello@unilag.edu.ng\",\n  \"role\": \"DEAN\",\n  \"unit_id\": \"{{unitId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "users"]
+            },
+            "description": "Creates the profile, mints a 24-hour activation token, queues the invite email and writes the audit entry — all inside the `provision_user` RPC.\n\n`role` is DEAN | VERIFIER | REQUESTER (never CSO — that account is seeded). `unit_id` is required for DEAN and REQUESTER. Note the RPC parameter is still named `p_department_id` for historical reasons but writes to `profiles.unit_id`.\n\nErrors: 409 email already registered · 422 validation."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"profile_id\": \"<uuid>\",\n    \"status\": \"PENDING_ACTIVATION\"\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"This email is already registered\",\n  \"status\": 409\n}"
+            }
+          ]
+        },
+        {
+          "name": "Edit user",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/cso"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"full_name\": \"Dr. Amina Bello-Adeyemi\",\n  \"unit_id\": \"{{unitId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "users", "{{userId}}"]
+            },
+            "description": "Name and unit only. Email and role are intentionally **not** editable: the email is the auth login identity and the chain-of-trust anchor, and role changes are out of scope.\n\nMoving a Dean keeps the `units.hod_id` reverse link in sync. The `USER_UPDATED` audit entry records only fields that actually changed.\n\nErrors: 409 destination unit already has a Dean · 422 unit required / not found."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"profile_id\": \"<uuid>\",\n    \"full_name\": \"Dr. Bakare\",\n    \"unit_id\": \"<uuid>\"\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"Destination faculty already has a Dean assigned\",\n  \"status\": 409\n}"
+            }
+          ]
+        },
+        {
+          "name": "Revoke access",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/cso"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users/{{userId}}/revoke",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "users", "{{userId}}", "revoke"]
+            },
+            "description": "No body. Sets `status = 'DEACTIVATED'` and invalidates the Supabase session immediately. The profile row is kept so the audit trail stays intact — accounts are never deleted.\n\nErrors: 404 not found · 409 already deactivated."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"profile_id\": \"<uuid>\",\n    \"status\": \"DEACTIVATED\"\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"This user is already deactivated\",\n  \"status\": 409\n}"
+            }
+          ]
+        },
+        {
+          "name": "Resend invite",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/cso"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users/{{userId}}/resend-invite",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "users", "{{userId}}", "resend-invite"]
+            },
+            "description": "No body. Sends a fresh activation link to a user still `PENDING_ACTIVATION` — for when the original 24-hour link lapsed unused.\n\nErrors: 409 user is already ACTIVE, or is DEACTIVATED (reinstate first)."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"profile_id\": \"<uuid>\",\n    \"status\": \"PENDING_ACTIVATION\"\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"User is already active\",\n  \"status\": 409\n}"
+            }
+          ]
+        },
+        {
+          "name": "List units",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "if (b.data && b.data.units && b.data.units.length) {",
+                  "  pm.collectionVariables.set('unitId', b.data.units[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/cso"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/units",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "units"]
+            },
+            "description": "Every unit — a faculty, or the single Administration group. Each row carries its Dean, a `hasActiveHod` flag (used to grey the unit out in the Dean-role picker) and `hasAvailableKey`.\n\nRun this first: it populates `{{unitId}}` for the provisioning calls."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"units\": [\n      {\n        \"id\": \"<uuid>\",\n        \"name\": \"Faculty of Engineering\",\n        \"authoriser\": \"DEAN\",\n        \"hasActiveHod\": true,\n        \"hasAvailableKey\": true\n      }\n    ]\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            }
+          ]
+        },
+        {
+          "name": "List units (legacy alias)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/cso"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/departments",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "departments"]
+            },
+            "description": "Pre-rename duplicate of 'List units'. Identical behaviour; the only difference is the payload key — `{ departments: [...] }` instead of `{ units: [...] }`.\n\nPrefer `/api/admin/units` in new code. This one is a leftover from the `departments` → `units` rename and is a retirement candidate once nothing calls it."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"departments\": [\n      {\n        \"id\": \"<uuid>\",\n        \"name\": \"Faculty of Engineering\",\n        \"authoriser\": \"DEAN\",\n        \"hasActiveHod\": true,\n        \"hasAvailableKey\": true\n      }\n    ]\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            }
+          ]
+        },
+        {
+          "name": "Create key",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "if (b.data) pm.collectionVariables.set('keyId', b.data.key_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/cso"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"NS-304\",\n  \"zone\": \"NEW_SENATE\",\n  \"room_name\": \"Senate Hall A\",\n  \"unit_id\": \"{{unitId}}\",\n  \"key_count\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/keys",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "keys"]
+            },
+            "description": "Adds a key to the inventory at status `AVAILABLE`. Returns 201 with `{ key_id }`.\n\n`code` must match `^[A-Z0-9]+-\\d+$` (e.g. `NS-304`). `key_count` (1–20, default 1) is how many physical keys are on the bunch — the verifier sees it at issue and return."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"key_id\": \"<uuid>\"\n  },\n  \"error\": null,\n  \"status\": 201\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"Validation failed\",\n  \"status\": 422\n}"
+            }
+          ]
+        },
+        {
+          "name": "Nominate collector",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/cso"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"key_id\": \"{{keyId}}\",\n  \"requester_id\": \"{{userId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/authorisations",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "authorisations"]
+            },
+            "description": "Fills one of the three collector slots for a key. Called by the **Dean** for their own unit's keys, or the **CSO** for Administration keys — the route delegates entirely to the authoriser-aware `nominate_collector` RPC, which is why one endpoint serves both roles. Switch the `Referer` to `{{baseUrl}}/dean` when testing as a Dean.\n\nThe max-3 limit is a database trigger, not an application check, so it cannot be raced past.\n\nErrors: 403 key outside your scope · 409 three slots already filled · 409 already authorised."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"authorisation_id\": \"<uuid>-<uuid>\",\n    \"slot_number\": 2\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"Three authorisation slots are already filled for this key\",\n  \"status\": 409\n}"
+            }
+          ]
+        },
+        {
+          "name": "Remove collector",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/cso"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/authorisations/{{keyId}}/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": [
+                "api",
+                "admin",
+                "authorisations",
+                "{{keyId}}",
+                "{{userId}}"
+              ]
+            },
+            "description": "Frees a slot. Same authoriser-aware rules as nomination. Returns **204 with no body** — `apiFetch` normalises that to `{ data: null, error: null, status: 204 }`.\n\nErrors: 403 key outside your scope · 404 authorisation not found."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "No Content",
+              "code": 204,
+              "_postman_previewlanguage": "text",
+              "header": [],
+              "cookie": [],
+              "body": ""
+            },
+            {
+              "name": "Error",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"Authorisation not found\",\n  \"status\": 404\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "06 — Profile (any signed-in role)",
+      "description": "Self-service account settings. Change the Referer to match whichever role you are signed in as.",
+      "item": [
+        {
+          "name": "Get my profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/cso"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/profile/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "profile", "me"]
+            },
+            "description": "The caller's own profile including role-specific fields (`signature_ref_url` / `stamp_ref_url` for Deans) and the joined unit. Backs every role's settings page."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"profile\": {\n      \"id\": \"<uuid>\",\n      \"full_name\": \"Dr. Bakare\",\n      \"institutional_email\": \"bakare@unilag.edu.ng\",\n      \"role\": \"DEAN\",\n      \"status\": \"ACTIVE\",\n      \"photo_url\": null,\n      \"signature_ref_url\": \"<url>\",\n      \"stamp_ref_url\": \"<url>\",\n      \"unit_id\": \"<uuid>\",\n      \"unit\": {\n        \"id\": \"<uuid>\",\n        \"name\": \"Faculty of Engineering\"\n      }\n    }\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update my name",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/cso"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"full_name\": \"Officer Musa Ibrahim\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/profile/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "profile", "me"]
+            },
+            "description": "Only `full_name` is mutable here. Email belongs to Supabase Auth, the photo has its own route, and unit/role changes are CSO-only via `/api/admin/users/[id]`."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"full_name\": \"Dr. Bakare\"\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"full_name is required\",\n  \"status\": 422\n}"
+            }
+          ]
+        },
+        {
+          "name": "Upload profile photo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/cso"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "photo",
+                  "type": "file",
+                  "src": [],
+                  "description": "Image, max 5 MB."
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/profile/photo",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "profile", "photo"]
+            },
+            "description": "Multipart. Replaces the caller's own photo in the `passport-photos` bucket — the storage path is keyed by user id, so one route serves every role.\n\nErrors: 422 missing file or non-image · 413 over 5 MB."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"photo_url\": \"<url>\"\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Payload Too Large",
+              "code": 413,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"File must be an image under 5MB\",\n  \"status\": 413\n}"
+            }
+          ]
+        },
+        {
+          "name": "Delete profile photo",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/cso"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/profile/photo",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "profile", "photo"]
+            },
+            "description": "Removes the stored file(s) and clears `photo_url`. No body."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"Not authenticated\",\n  \"status\": 401\n}"
+            }
+          ]
+        },
+        {
+          "name": "Replace signature or stamp (Dean)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/dean"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "type",
+                  "value": "signature",
+                  "type": "text",
+                  "description": "signature | stamp"
+                },
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": [],
+                  "description": "Replacement image, max 5 MB."
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/profile/signature",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "profile", "signature"]
+            },
+            "description": "Dean-only, post-onboarding replacement. If a reference already exists the upload is pixel-matched against it first — you cannot silently swap the specimen every later approval is checked against.\n\nOver threshold: the reference is **not** replaced, a `SIGNATURE_MISMATCH` audit entry (`context: 'reference_replacement'`) goes to the CSO, and you get HTTP 200 with `{ status: 'HELD_SIGNATURE_MISMATCH', mismatch_pct, message }`. Under threshold: `{ status: 'updated', new_url }` plus a `SIGNATURE_REFERENCE_UPDATED` entry.\n\nErrors: 403 not DEAN · 422 bad type or missing image · 413 over 5 MB."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"status\": \"updated\",\n    \"new_url\": \"<url>\"\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"status\": \"HELD_SIGNATURE_MISMATCH\",\n    \"mismatch_pct\": 22.5,\n    \"message\": \"Submitted image does not match the reference on file — replacement held for review.\"\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "07 — Public · guest weekend access",
+      "description": "No authentication anywhere in this folder. An external person with no SmartKey account requests weekend access; a Dean approves and assigns a key; the guest mints a code on the day. Identified end to end by an unguessable access_token.",
+      "item": [
+        {
+          "name": "Submit guest weekend request",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "if (b.data) {",
+                  "  pm.collectionVariables.set('guestToken', b.data.access_token);",
+                  "  pm.collectionVariables.set('requestId', b.data.request_id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "full_name",
+                  "value": "Jane Doe",
+                  "type": "text"
+                },
+                {
+                  "key": "email",
+                  "value": "jane@example.com",
+                  "type": "text"
+                },
+                {
+                  "key": "phone",
+                  "value": "+2348012345678",
+                  "type": "text",
+                  "description": "Optional."
+                },
+                {
+                  "key": "id_document_type",
+                  "value": "National ID (NIN)",
+                  "type": "text"
+                },
+                {
+                  "key": "id_document_number",
+                  "value": "A1234567",
+                  "type": "text"
+                },
+                {
+                  "key": "requested_room",
+                  "value": "Senate Hall A",
+                  "type": "text",
+                  "description": "Free text — the guest states what they need; the Dean assigns the actual key."
+                },
+                {
+                  "key": "department_id",
+                  "value": "{{unitId}}",
+                  "type": "text",
+                  "description": "Field name is still department_id even though the table is now units."
+                },
+                {
+                  "key": "weekend_date",
+                  "value": "2026-08-08",
+                  "type": "text",
+                  "description": "ISO date, must be Sat or Sun."
+                },
+                {
+                  "key": "return_deadline",
+                  "value": "2026-08-08T17:00:00.000Z",
+                  "type": "text",
+                  "description": "ISO datetime with offset."
+                },
+                {
+                  "key": "letter",
+                  "type": "file",
+                  "src": [],
+                  "description": "Dean authorisation letter. PDF, JPG or PNG, max 5 MB."
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/public/weekend-request",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "public", "weekend-request"]
+            },
+            "description": "Multipart, unauthenticated, returns 201.\n\nGuests are modelled as their own `guest_requesters` entity — never a profile, because `profiles.id` references `auth.users` and a guest profile would require an auth user and break the `invited_by` chain of trust.\n\nUploads the letter to the private `weekend-letters` bucket, creates the request at `PENDING_HOD` with no code, and emails the status link. A failed email is logged but does not fail the request — hence the `access_token` in the response as a fallback.\n\nThe whole `/api/public/*` prefix bypasses session resolution in middleware, and the underlying guest RPCs have execute revoked from `anon`/`public` — they run only through this server route with the service-role client.\n\nErrors: 404 unit not found · 422 validation · 413 letter over 5 MB."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"access_token\": \"<uuid>\",\n    \"request_id\": \"<uuid>\"\n  },\n  \"error\": null,\n  \"status\": 201\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"Validation failed\",\n  \"status\": 422\n}"
+            }
+          ]
+        },
+        {
+          "name": "Check guest request status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "if (b.data && b.data.code) pm.collectionVariables.set('collectionCode', b.data.code);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/public/weekend-request/{{guestToken}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "public", "weekend-request", "{{guestToken}}"]
+            },
+            "description": "The session-less status page payload, read by `access_token`. Returns only safe fields: status, requested date, the room they asked for, the assigned key once a Dean has picked one, and the code + expiry while `CODE_ISSUED`.\n\n`key` is null until approval; `code` / `code_expires_at` are non-null only while `CODE_ISSUED`."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"request_id\": \"<uuid>\",\n    \"full_name\": \"Jane Doe\",\n    \"status\": \"APPROVED\",\n    \"requested_for\": \"2026-06-20\",\n    \"return_deadline\": \"<iso>\",\n    \"requested_room\": \"Senate Hall A\",\n    \"key\": {\n      \"code\": \"NS-304\",\n      \"room_name\": \"Senate Hall A\"\n    },\n    \"code\": null,\n    \"code_expires_at\": null\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"Not found\",\n  \"status\": 404\n}"
+            }
+          ]
+        },
+        {
+          "name": "Mint guest collection code",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "if (b.data && b.data.code) pm.collectionVariables.set('collectionCode', b.data.code);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/public/weekend-request/{{guestToken}}/code",
+              "host": ["{{baseUrl}}"],
+              "path": [
+                "api",
+                "public",
+                "weekend-request",
+                "{{guestToken}}",
+                "code"
+              ]
+            },
+            "description": "Guest analogue of the requester's weekend-code call. 10-minute code, on the requested date only, moving the request to `CODE_ISSUED`. No body.\n\nErrors: 409 not in APPROVED state · 422 TOO_EARLY · 404 token not found."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"request_id\": \"<uuid>\",\n    \"code\": \"671420\",\n    \"code_expires_at\": \"<iso>\"\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"This request is not yet on its requested date\",\n  \"status\": 422\n}"
+            }
+          ]
+        },
+        {
+          "name": "Mint guest return code",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const b = pm.response.json();",
+                  "if (b.data && b.data.return_code) pm.collectionVariables.set('returnCode', b.data.return_code);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/public/weekend-request/{{guestToken}}/return-code",
+              "host": ["{{baseUrl}}"],
+              "path": [
+                "api",
+                "public",
+                "weekend-request",
+                "{{guestToken}}",
+                "return-code"
+              ]
+            },
+            "description": "Guest analogue of `POST /api/requests/request-return` — a 15-minute return code so the guest is in the loop on the handback just like a registered requester. No body; status stays `KEY_ISSUED`.\n\nThe verifier then enters it through the normal `POST /api/keys/return`, which validates a return code regardless of whether the holder is registered or a guest.\n\nErrors: 404 token not found · 409 key not currently issued."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"return_code\": \"338291\",\n    \"return_code_expires_at\": \"<iso>\"\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"Key is not currently issued\",\n  \"status\": 409\n}"
+            }
+          ]
+        },
+        {
+          "name": "Expire guest code",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/public/weekend-request/{{guestToken}}/expire",
+              "host": ["{{baseUrl}}"],
+              "path": [
+                "api",
+                "public",
+                "weekend-request",
+                "{{guestToken}}",
+                "expire"
+              ]
+            },
+            "description": "Fired by the guest status page when the countdown hits 0. Idempotent. Same same-day rollback semantics as the registered path.\n\nErrors: 409 code has not expired yet · 404 token not found."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"request_id\": \"<uuid>\",\n    \"status\": \"EXPIRED\"\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"Code has not expired yet\",\n  \"status\": 409\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "08 — System (secret-guarded)",
+      "description": "Not user-facing and not called from a browser. Both routes authenticate with a shared secret rather than a session. Populate {{cronSecret}} / {{serviceRoleKey}} from .env.local before running.",
+      "item": [
+        {
+          "name": "Weekend reminders (cron)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{cronSecret}}",
+                "description": "Shared CRON_SECRET — not a user session."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/cron/weekend-reminders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "cron", "weekend-reminders"]
+            },
+            "description": "Called by the `weekend-code-reminders` pg_cron job at 06:00 UTC on Sat/Sun. Emails every `APPROVED` weekend request due today (registered and guest) a nudge to mint their code, then stamps `reminder_sent_at` so a retry never double-sends.\n\nNo collection code is ever included — the code is always minted on the day. pg_cron reads the bearer secret from Supabase Vault (`weekend_cron_secret`), which must match `CRON_SECRET`.\n\nReturns `{ sent, failed }`. Errors: 401 wrong/missing secret · 500 CRON_SECRET not configured."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"sent\": 2,\n    \"failed\": 0\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"Missing or incorrect bearer secret\",\n  \"status\": 401\n}"
+            }
+          ]
+        },
+        {
+          "name": "Verify signature (internal)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-internal-secret",
+                "value": "{{serviceRoleKey}}",
+                "description": "SUPABASE_SERVICE_ROLE_KEY. Never reachable from a browser."
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"hod_id\": \"{{userId}}\",\n  \"submitted_signature_url\": \"https://example.supabase.co/storage/v1/object/public/weekend-letters/sample.png\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/ai/verify-signature",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai", "verify-signature"]
+            },
+            "description": "Exposes the Sharp + Pixelmatch pipeline directly: fetches the Dean's reference and the submitted image, greyscales both, normalises to 800×400, thresholds to binary, then diffs pixel by pixel.\n\nReturns `{ mismatch_ratio, passed }` against `SIGNATURE_DIFF_THRESHOLD` (default 0.15). Useful for calibrating the threshold against real signature samples.\n\nErrors: 403 wrong internal secret · 422 Dean has no reference signature on file."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"mismatch_ratio\": 0.04,\n    \"passed\": true\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
