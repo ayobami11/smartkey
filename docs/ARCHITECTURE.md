@@ -4,8 +4,8 @@
 
 | Layer          | Technology                                                                                          |
 | -------------- | --------------------------------------------------------------------------------------------------- |
-| Frontend       | Next.js 15 (App Router), React 19, TypeScript strict                                                |
-| UI             | Tailwind CSS v3, shadcn/ui, lucide-react icons                                                      |
+| Frontend       | Next.js 16 (App Router), React 19, TypeScript strict                                                |
+| UI             | Tailwind CSS v4, shadcn/ui, lucide-react icons                                                      |
 | Forms          | react-hook-form + zod                                                                               |
 | State          | React Server Components + server actions; client state via React hooks; URL state via search params |
 | Database       | Supabase (Postgres)                                                                                 |
@@ -102,7 +102,7 @@ Every dashboard subscribes on mount to its relevant tables:
 - Verifier: `requests` (status='pending'), `outstanding_keys`, `current_shift`.
 - CSO: `anomalies`, `zone_counts` (materialised view), `recent_events`.
 - Requester: own `requests` row.
-- Dean (HOD): `weekend_requests` (faculty-scoped), faculty `keys`.
+- Dean: `weekend_requests` (faculty-scoped), faculty `keys`.
 
 Connection state is exposed via `useConnectionStatus()` and rendered as the green/amber/red dot in the app bar.
 
@@ -110,9 +110,9 @@ Connection state is exposed via `useConnectionStatus()` and rendered as the gree
 
 Every table has RLS. The patterns:
 
-- **profiles**: read your own + same-faculty staff (Dean/HOD); CSO reads all.
+- **profiles**: read your own + same-faculty staff (Dean); CSO reads all.
 - **keys**: read all (everyone needs to see keys they may interact with); write CSO only.
-- **requests**: read your own (requester) + verifier-on-shift + Dean (HOD) for their faculty + CSO; write requester (own) + verifier (status transitions) + system (RPCs).
+- **requests**: read your own (requester) + verifier-on-shift + Dean for their faculty + CSO; write requester (own) + verifier (status transitions) + system (RPCs).
 - **audit_log**: read CSO only; INSERT via RPC only; UPDATE/DELETE denied for everyone.
 - **shift_reports**: read CSO; INSERT via RPC only; UPDATE/DELETE denied.
 - **comments on reports**: read CSO; INSERT CSO; UPDATE/DELETE denied.

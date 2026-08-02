@@ -8,6 +8,78 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-02 — Docs sync: reference docs vs live schema
+
+- **Why**: `docs/DATABASE.md`, `docs/API.md`, `docs/ARCHITECTURE.md`, `docs/PRODUCT.md`, and `CLAUDE.md` had drifted from the live `smartkey` Supabase project. Two structural migrations were never back-ported into the docs: the 2026-06-26 `HOD` → `DEAN` role-enum rename (see that entry below) and the 2026-06-27 `departments` → `units` table/column rename (`20260627111159_rename_departments_to_units.sql`, not previously logged here). Verified directly against the live project via the Supabase MCP server (`list_tables`, function/enum introspection queries).
+- **`user_role` enum**: docs said `'CSO' | 'HOD' | 'VERIFIER' | 'REQUESTER'`; the live enum is `'CSO' | 'DEAN' | 'VERIFIER' | 'REQUESTER'`. Only identifiers (`hod_decisions`, `HOD_APPROVED`/`HOD_DECLINED`, the `hod-decision` route, RPC params like `hod_id`/`p_department_id`) still carry the old name — the enum value itself does not.
+- **`departments` → `units`**: the table is `units`; `profiles.department_id` → `unit_id`, `keys.department_id` → `unit_id`, `requests.requested_department_id` → `unit_id`. The `department_authoriser` enum type, `authorisations`/`hod_decisions` internals, and RPC parameter names (`p_department_id`) were deliberately left unrenamed by the migration and are documented as such rather than "fixed" to `unit`.
+- **Undocumented columns added**: `keys.key_count` (int, default 1, from the 2026-06-25 faculty/Administration remodel) and `profiles.activation_token` (from `provision_user`) — both existed in the DB but were missing from `docs/DATABASE.md`.
+- **Undocumented RPCs added to `docs/DATABASE.md`**: `mark_key_overdue()` (hourly `pg_cron`, flips overdue keys — the `overdue-key-check` Edge Function in `supabase/functions/` wraps the same RPC but `pg_cron` calls it directly, not through the function), `schedule_pending_shift_report()` (daily 18:00 UTC `pg_cron`, inserts a `PENDING_GENERATION` placeholder row — nothing currently fills it in, so it does not complete report generation on its own), and `request_return_guest(access_token)` (guest analogue of `request_return`, added `20260629074319_guest_return_code.sql`).
+- **Undocumented route added to `docs/API.md`**: `POST /api/public/weekend-request/[token]/return-code`, which calls `request_return_guest` — implemented but had no API.md entry.
+- **No schema changes** — this entry covers documentation only.
+
+### 2026-08-02 — Docs sync continued: BACKEND.md, TESTING.md, GITHUB.md, DATABASE.md RPC drift
+
+- **Why**: companion pass to the docs-sync entry above, covering the docs that pass didn't touch, plus a few more drift points found in `docs/DATABASE.md` while cross-checking `supabase/migrations/` directly.
+- `docs/DATABASE.md`: `requests_key_required_after_pending` constraint doc corrected — widened in `20260616120547_fix_guest_decline_constraint.sql` to allow `DECLINED` (not just `PENDING_HOD`); `expire_request`/`expire_guest_request`/`expire_lapsed_codes` docs corrected for the `20260627213243_weekend_code_expiry_rollback.sql` behaviour (a weekend code lapsing on its own requested date now rolls back to `APPROVED` instead of terminating to `EXPIRED`, audit `CODE_EXPIRED`); `authorisations.authorised_by` doc corrected — it's Dean-or-CSO depending on the key's `authoriser`, not unconditionally "HOD".
+- `docs/API.md`: fixed field/response drift the earlier pass didn't cover — `verify-otp` requires `email` alongside `otp`; `register`/`activate-hod` have no `token` field (the invite-link session comes from `GET /api/auth/callback`, now documented) and only enforce an 8-char password minimum (flagged as weaker than the product spec's 12-char/mixed/symbol rule — a follow-up ticket, not a doc fix); `POST /api/requests/collect` ignores any client-supplied `verifier_id` and uses the session; `hod-decision`'s success response is `"APPROVED"`/`"DECLINED"`, never `"CODE_ISSUED"`; `cso-queue`/`cso-decision` corrected — there is no `PENDING_CSO` status, and `cso-decision` APPROVED is a no-op acknowledgement, not a state transition. Documented 12 previously-undocumented routes: `GET /api/admin/units` (+ its near-duplicate legacy alias `GET /api/admin/departments`), `POST /api/admin/keys`, `POST /api/admin/users/[id]/resend-invite`, `GET/POST/DELETE /api/profile/me|photo|signature`, `POST /api/shifts/start`, `POST/GET /api/auth/resend-otp|change-password|callback`. Added `mark_key_overdue`/`schedule_pending_shift_report` to the RPC cross-reference table (cron-only, no route caller).
+- `docs/BACKEND.md`: tech-stack table corrected (Next.js "v14+" → 16, Tailwind "v3" → v4, matching `package.json`/`CLAUDE.md`). Added a note to §9 explaining the two background jobs no longer run through their Edge Functions over HTTP — see the 2026-06-22 "in-SQL jobs" entry below; the Edge Functions stay deployed but pg_cron calls the RPCs directly now.
+- `docs/ARCHITECTURE.md`: tech-stack table corrected the same way; three lingering "(HOD)" parentheticals in the RLS/Realtime sections dropped now that the file's own auth section already establishes Dean is the current role name.
+- `docs/TESTING.md`: removed the fictional pgTAP/`test:db` claim (no `supabase/tests/` directory or script exists — flagged as not-yet-implemented rather than deleted, since it's the stated intent) and the fictional `design:lint`/Lighthouse CI claims (neither exists anywhere in `.github/`); corrected the component-test co-location claim to match the actual `src/tests/<area>/*.test.tsx` convention; corrected the CI description — it's two separate workflows (`ci.yml`, `e2e.yml`), the latter PR-only and skipped for docs/supabase-only changes.
+- `docs/GITHUB.md` §7: reconciled the work-order table against `docs/BACKEND.md` §14 and actual repo state — #20 (RiskTierBadge/RiskFactorPopover), #21 (Gemini reports), #22 (signature verification), #24 (edge functions), #25 (CI/CD) were all still marked ⬜/🔄 despite being done; corrected to ✅ with a note pointing future readers to §14 as the more current source.
+- **No schema or app-code changes** — this entry covers documentation only.
+
+### 2026-07-25 — Remove unused Supabase Claude plugin
+
+- `.claude/settings.json`: removed `supabase` from `enabledPlugins` — unused, no functional effect on the app.
+
+### 2026-07-23 — Design-system prompt docs synced to Dean/Unit rename; component test sweep
+
+- **Why**: `design-system/prompts/` (the 34 Stitch prompt files + `screens.md`-adjacent specs) still said "HOD" and "Department" throughout, months after the app itself renamed to Dean/Unit — the same class of drift this changelog exists to catch, just in the design docs rather than the API docs. A new `design-system/prompts/_shared-blocks.md` canonical source was added specifically so the next rename doesn't require another file-by-file archaeology dig across 34 files.
+- `c483abc` renames HOD → Dean and Department → Unit across every prompt file; `73eeac0` adds prompts for screens that didn't have one yet; `37e9a4b` adds the shared-blocks source file itself.
+- `ad9a14d`: component test coverage extended to the remaining untested components in `src/components/smartkey/` (unit tests, not E2E).
+
+### 2026-07-19 — Weekend request expiry guard on decisions; CSO chart time-range filters; middleware relocated
+
+- `97d89a4`: `middleware.ts` moved from the repo root into `src/` — Next.js wasn't reliably picking it up from the root in this setup.
+- `a39b40e`, `110d2bb`: a shared time-range filter component added for the CSO dashboard's events/incidents charts, then extended to the audit log and incidents tabs so all four surfaces filter consistently.
+- `77a1e7a`: weekend requests whose requested date has already passed are now marked as such in the UI and Dean/CSO decision actions are blocked on them — the client-side companion to the `expire_stale_weekend_requests` DB job, closing the gap where a decision UI could still show a stale request as actionable for a moment after its date passed.
+
+### 2026-07-05 — Weekend approval past-date guard; CSO create-key dialog
+
+- `97a8d7f`: weekend approvals guarded against being approved for a date that has already passed; deactivated users hidden from key-assignment/collector pickers.
+- `a1666f2`: CSO "create key" dialog added (backs `POST /api/admin/keys`, documented above); a bulk-acknowledge flag bug in the verifier handover flow fixed.
+
+### 2026-07-03 — CSO dashboard charts; Dean recent-activity/collectors widgets; auth network-failure distinction
+
+- **Why**: `design-system/screens.md` §4.3 and §4.4 specified a Dean "recent activity feed" + "authorised collectors table" and CSO chart surfaces that had never been built — this closes that gap, plus fixes a real bug where a Supabase connectivity outage was indistinguishable from a wrong password.
+- `5629f00`, `19610d1`, `e92e3b4`: Recharts-based dashboard charts (donut + trend) added to the CSO dashboard for keys, incidents, and events; new `@google/generative-ai`-adjacent dependency `recharts` (`c1697a2`).
+- `1aba088`: Dean dashboard gained a read-only recent-activity feed (sourced from `GET /api/keys/history`, faculty-scoped via RLS) and an authorised-collectors table (sourced from `authorisations`) — the two surfaces `screens.md` §4.3 calls for.
+- `45ac3fe`: `POST /api/auth/login` now distinguishes a Supabase connectivity failure from invalid credentials via `isAuthRetryableFetchError`, returning `503` instead of conflating it into `401` — this is the behaviour `docs/API.md`'s login error table already documented; the code just hadn't shipped it yet at the time that doc line was written.
+
+### 2026-07-01 — Signature verification wired into weekend requests; CSO signature-mismatch review; email provider reverted
+
+- **Why**: signature verification (`src/lib/ai/signature/verifier.ts`) had existed since 2026-06-12 but nothing in the registered-requester weekend flow ever actually populated `submitted_signature_url`, so the pipeline had never run from real usage — only guest/CSO paths (which skip it) had been exercised.
+- `4ba5f0e`: registered (non-guest) weekend requests can now optionally attach a Dean-signature image at submit (uploaded client-side to `weekend-letters`, passed through as `letter_url` on `POST /api/requests/submit`); the Dean approval sheet passes it through as `submitted_signature_url` to `hod-decision`, closing the loop. A `HELD_SIGNATURE_MISMATCH` response now renders an explicit held-confirmation card instead of being silently treated as an approval.
+- `11fdc76` (PR #52): new CSO surface to review and `cso_override` a held signature mismatch — the UI for the `GET /api/ai/signature-alerts` + `cso_override` flow `docs/API.md` describes.
+- `7d51fa4`, `927d96c`, `083530a`: email sending was briefly switched to Resend, then reverted back to Nodemailer/Gmail SMTP after a build-time crash from eager client initialisation. Net effect: no change from what `CLAUDE.md`/`docs/BACKEND.md` already documented.
+- `fac3d56`: a repo-wide HOD→Dean sweep across `docs/API.md` and `design-system/screens.md` (superseded in scope by the two 2026-08-02 entries above, which found further drift these commits didn't catch — mostly in `docs/DATABASE.md` and the RPC-level detail in `docs/API.md`).
+
+### 2026-06-29 — Guest return codes; verifier shift-start flow
+
+- `57b4a81`, `15b0d8c`: new `request_return_guest(access_token)` RPC and a matching button on the guest weekend status page, so an external guest can generate a return code the same way a registered requester does via `POST /api/requests/request-return`. Documented above as `POST /api/public/weekend-request/[token]/return-code`.
+- `e5c4b77`, `9af8516`: verifier dashboard gained an explicit "start shift" action (`POST /api/shifts/start`, documented above); a bug where the incidents route 500'd on shift lookup/insert fixed by switching to the admin client.
+- `20d7cc5`: bulk shift-handover acknowledgement replaced with a select-all checkbox instead of a single implicit "acknowledge all" button.
+- `9035d8c`: password-reset email now sent via the same branded Nodemailer template as other transactional email, instead of Supabase's default.
+
+### 2026-06-27 — `departments` → `units` rename propagated through the API and UI layers; weekend code expiry rollback; signature/stamp replace flow; first test suite
+
+- **Why**: the DB-level rename (`20260627111159_rename_departments_to_units.sql`, documented in the two 2026-08-02 entries above) needed the API and UI layers updated to match on the same day, plus a UX fix for a weekend-code dead end and the project's first real automated test coverage.
+- `897899b`, `549b8d0`, `dbfb4d7`, `d4aa421`, `8204e6c`, `7cd1b67`: `unit_id`/`units` propagated through API routes (new `GET/POST /api/admin/units`), lib utilities, and UI labels/dropdowns.
+- `398182c`: weekend collection-code expiry behaviour changed — a code that lapses on its own requested date now rolls back the request to `APPROVED` (so the requester can mint a fresh code the same day) instead of terminating to `EXPIRED`; only a code lapsing after its date has passed, or a weekday code, still terminates. See the `20260627213243_weekend_code_expiry_rollback.sql` note in the 2026-08-02 entry above.
+- `20344b9`: Dean/CSO signature and stamp onboarding gained a "replace" flow, reusing the same Sharp+Pixelmatch pipeline as initial onboarding (`POST /api/profile/signature`, documented above).
+- `e49d5e9`, `ec5231b`: first real Vitest + React Testing Library suite added (`src/tests/` tree) — the origin of the `src/tests/<area>/*.test.tsx` convention that `docs/TESTING.md` now documents in place of the co-located-test convention it used to claim.
+
 ### 2026-06-26 — Role rename: HOD → DEAN (structural)
 
 - **Why**: the system was built with an `HOD` (Head of Department) role, but the real authoriser at the Senate Building is the **Dean** of each faculty — not a generic HOD. The rename brings the role name in line with the faculty model introduced 2026-06-25.

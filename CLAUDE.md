@@ -49,11 +49,11 @@ npm run format       # Format src/** with Prettier
 npm run format:check # Check formatting without writing
 npm run typecheck    # tsc --noEmit
 npm run db:migrate   # Apply Supabase migrations
-npm run design:lint  # Validate design-system/DESIGN.md
-npm run design:export # Re-export Tailwind config from DESIGN.md
 npm test             # Run unit tests
 npm run test:e2e     # Run Playwright E2E with axe-core checks
 ```
+
+`npm run design:lint` / `npm run design:export` are not real scripts — no `design:*` entry exists in `package.json`. To validate `design-system/DESIGN.md`, run `npx @google/design.md lint DESIGN.md` directly (see `design-system/prompts/README.md`); there is no equivalent export command wired up yet.
 
 ## Coding conventions
 
@@ -63,7 +63,7 @@ npm run test:e2e     # Run Playwright E2E with axe-core checks
 - Default to **Server Components**; add `"use client"` only when needed (state, effects, browser APIs).
 - Event handlers prefixed `handle`: `handleSubmit`, `handleClick`.
 - File names: PascalCase for components, kebab-case for utilities.
-- Co-locate tests: `KeyTile.tsx` → `KeyTile.test.tsx`.
+- Tests live in a parallel `src/tests/<area>/` tree, not co-located with the component (e.g. `src/components/smartkey/risk-tier-badge.tsx` → `src/tests/smartkey/risk-tier-badge.test.tsx`). Follow this convention for new tests rather than co-locating.
 - All API responses follow the shape `{ data, error, status }`.
 
 ## Design system rules (these matter)

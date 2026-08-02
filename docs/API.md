@@ -12,7 +12,7 @@ Each route entry shows:
 
 - **Method + path** — the HTTP verb and URL.
 - **File** — the `route.ts` that implements it under `src/app/api/`.
-- **Roles** — which roles are permitted (`CSO` | `HOD` | `VERIFIER` | `REQUESTER` | `ALL` | `SYSTEM`).
+- **Roles** — which roles are permitted (`CSO` | `DEAN` | `VERIFIER` | `REQUESTER` | `ALL` | `SYSTEM`). Some routes/statuses/RPCs keep the historical `hod` name (e.g. `hod-decision`, `PENDING_HOD`) for continuity — see `docs/GLOSSARY.md`.
 - **Request** — required body fields with their Zod-equivalent types.
 - **Response** — the `data` payload on success.
 - **Errors** — expected non-200 codes and the conditions that trigger them.
@@ -70,10 +70,11 @@ If `mfa_required` is `true`, the client must complete `/api/auth/verify-otp` bef
 ### POST /api/auth/verify-otp
 
 **File**: `src/app/api/auth/verify-otp/route.ts`
-**Roles**: HOD, VERIFIER, REQUESTER (new device)
+**Roles**: DEAN, VERIFIER, REQUESTER (new device)
 
 | Field | Type                | Required |
 | ----- | ------------------- | -------- |
+| `email` | `string` (email)  | yes      |
 | `otp` | `string` (6 digits) | yes      |
 
 **Response `data`**: `{ "session": "<jwt>" }` — full session after MFA.
@@ -87,37 +88,37 @@ If `mfa_required` is `true`, the client must complete `/api/auth/verify-otp` bef
 **File**: `src/app/api/auth/register/route.ts`
 **Roles**: REQUESTER (invite link only)
 
-Completes requester registration. Token from the invite link is validated before any write.
+Completes requester registration. There is no `token` field — the invite link is a Supabase magic link that resolves through `GET /api/auth/callback` (below) into a short-lived session in the transient `activate` cookie namespace **before** the browser ever reaches this route; this route just reads that session.
 
-| Field            | Type                             | Required |
-| ---------------- | -------------------------------- | -------- |
-| `token`          | `string`                         | yes      |
-| `password`       | `string` (min 12, mixed, symbol) | yes      |
-| `passport_photo` | `File` (image)                   | yes      |
+| Field            | Type                    | Required |
+| ---------------- | ----------------------- | -------- |
+| `password`       | `string` (min 8)        | yes      |
+| `passport_photo` | `File` (image, max 5MB) | yes      |
 
 **Response `data`**: `{ "profile_id": "<uuid>" }`
 
-**Errors**: `400` expired/invalid token · `422` weak password or missing photo
+**Errors**: `401` no valid activation session · `422` password under 8 chars or missing photo · `413` photo over 5MB
+
+**Note**: the password rule here (min 8, no composition requirement) is weaker than the "min 12, mixed case, number, symbol" rule stated in `design-system/screens.md` §5.1 and `docs/PRODUCT.md` — the code has not caught up to the product spec. Worth a follow-up ticket rather than a doc fix, since relaxing the spec further would be the wrong direction.
 
 ---
 
 ### POST /api/auth/activate-hod
 
 **File**: `src/app/api/auth/activate-hod/route.ts`
-**Roles**: HOD (invite link only)
+**Roles**: DEAN (invite link only)
 
-One-time Dean onboarding. Validates token, sets password, stores signature and stamp references, enables MFA.
+One-time Dean onboarding. There is no `token` field — as with `/api/auth/register`, the invite link resolves through `GET /api/auth/callback` into a session in the `activate` namespace before this route runs. Sets password, stores signature and stamp references, enables MFA.
 
 | Field       | Type           | Required |
 | ----------- | -------------- | -------- |
-| `token`     | `string`       | yes      |
-| `password`  | `string`       | yes      |
+| `password`  | `string` (min 8) | yes    |
 | `signature` | `File` (image) | yes      |
 | `stamp`     | `File` (image) | yes      |
 
 **Response `data`**: `{ "profile_id": "<uuid>", "redirect": "/hod" }`
 
-**Errors**: `400` invalid token · `422` validation · `413` image too large
+**Errors**: `401` no valid activation session · `422` validation · `413` image too large
 
 ---
 
@@ -147,6 +148,50 @@ Triggers a Supabase Auth password-reset email. Always returns 200 (no email enum
 
 ---
 
+### GET /api/auth/callback
+
+**File**: `src/app/api/auth/callback/route.ts`
+**Roles**: ALL (unauthenticated)
+
+Not a JSON API route — a redirect handler. Supabase invite/reset/magic-link emails point here with `?code=...&next=...`. Exchanges the one-time PKCE `code` for a session in the transient `activate` cookie namespace via `exchangeCodeForSession`, then redirects to `next` (defaults to `/`). This is the route that makes the session `/api/auth/register` and `/api/auth/activate-hod` read — those two never see a `token` field. On failure, redirects to `/forgot-password?error=expired`.
+
+**Response**: HTTP redirect, not a JSON envelope.
+
+---
+
+### POST /api/auth/resend-otp
+
+**File**: `src/app/api/auth/resend-otp/route.ts`
+**Roles**: ALL (unauthenticated — email-based, pre-session)
+
+| Field   | Type             | Required |
+| ------- | ---------------- | -------- |
+| `email` | `string` (email) | yes      |
+
+Re-sends the login MFA code for a known `institutional_email`, storing a fresh hashed code + 10-minute expiry in the user's `app_metadata`. Always returns 200 regardless of whether the email matches a profile (no enumeration) — mirrors `/api/auth/reset-password`'s pattern.
+
+**Response `data`**: `null`
+
+---
+
+### POST /api/auth/change-password
+
+**File**: `src/app/api/auth/change-password/route.ts`
+**Roles**: ALL (authenticated)
+
+| Field              | Type     | Required |
+| ------------------ | -------- | -------- |
+| `current_password` | `string` | yes      |
+| `new_password`     | `string` | yes      |
+
+Verifies `current_password` by re-authenticating (`signInWithPassword`) before applying the change. Writes a `PASSWORD_CHANGED` audit entry.
+
+**Response `data`**: `null`
+
+**Errors**: `401` not authenticated or current password incorrect · `422` validation
+
+---
+
 ## 2. Requests
 
 ### POST /api/requests/submit
@@ -161,16 +206,27 @@ Triggers a Supabase Auth password-reset email. Always returns 200 (no email enum
 | `type`            | `'WEEKDAY' \| 'WEEKEND'`   | yes          |
 | `return_deadline` | `string` (ISO timestamptz) | yes          |
 | `weekend_date`    | `string` (ISO date)        | WEEKEND only |
+| `letter_url`      | `string`                   | no — optional Dean-signature image the requester uploaded client-side to `weekend-letters`; persisted on the request row for later signature verification at Dean approval |
 
 The RPC runs the risk engine, generates the code, and writes the audit entry atomically.
 
-**Response `data`**:
+**Response `data`** (WEEKDAY):
 
 ```json
 {
   "request_id": "<uuid>",
   "code": "123456",
   "code_expires_at": "<iso>",
+  "risk_tier": "LOW"
+}
+```
+
+**Response `data`** (WEEKEND — no code yet; status starts `PENDING_HOD`, awaiting Dean/CSO decision):
+
+```json
+{
+  "request_id": "<uuid>",
+  "status": "PENDING_HOD",
   "risk_tier": "LOW"
 }
 ```
@@ -193,9 +249,9 @@ The RPC runs the risk engine, generates the code, and writes the audit entry ato
 ### GET /api/requests/pending
 
 **File**: `src/app/api/requests/pending/route.ts`
-**Roles**: HOD
+**Roles**: DEAN, CSO
 
-Returns requests for the Dean's faculty with `status = 'PENDING_HOD'`, including external (guest) requests for the faculty (joined `guest` details, `letter_url`, `requested_department_id`) so the Dean can review and assign a key before approving.
+Returns requests for the Dean's faculty with `status = 'PENDING_HOD'`, including external (guest) requests for the faculty (joined `guest` details, `letter_url`, `requested_unit_id`) so the Dean can review and assign a key before approving. The CSO may also call this route — it returns Administration-routed pending requests for CSO review (`authoriser='CSO'` units have no Dean).
 
 **Response `data`**: `{ "requests": [...] }`
 
@@ -204,7 +260,7 @@ Returns requests for the Dean's faculty with `status = 'PENDING_HOD'`, including
 ### POST /api/requests/hod-decision
 
 **File**: `src/app/api/requests/hod-decision/route.ts`
-**Roles**: Dean (role: HOD), CSO
+**Roles**: Dean (role: DEAN), CSO
 **RPC**: `approve_weekend(request_id, hod_id, note?, signature_verified?, signature_mismatch_pct?, cso_override?)`, `approve_guest_weekend(request_id, hod_id, key_id, note?)`, or `decline_weekend(request_id, hod_id, note?, cso_override?)`
 
 | Field          | Type                       | Required                           |
@@ -223,7 +279,7 @@ The **CSO** may call this route for **Administration** requests (keys whose depa
 
 The CSO may also resolve a **held faculty-key mismatch** by passing `cso_override: true` with `decision: 'APPROVED'` or `'DECLINED'`. The RPC only honours this when a `SIGNATURE_MISMATCH` audit entry already exists for the request — it is not a general bypass of the Dean-authoriser gate. See `GET /api/ai/signature-alerts` for how the CSO discovers these.
 
-**Response `data`**: `{ "request_id": "<uuid>", "status": "CODE_ISSUED" | "HELD_SIGNATURE_MISMATCH" }`
+**Response `data`**: `{ "request_id": "<uuid>", "status": "APPROVED" | "DECLINED" | "HELD_SIGNATURE_MISMATCH" }` — note this is `"APPROVED"`/`"DECLINED"` (the `hod_decisions.decision` / request status the RPC actually sets), not `"CODE_ISSUED"` — no code is minted at Dean-decision time; the requester mints one later via `POST /api/requests/weekend-code`.
 
 **Errors**: `403` request not in Dean's faculty, or `cso_override` used without a matching mismatch on record · `409` already decided · `422` validation
 
@@ -234,7 +290,7 @@ The CSO may also resolve a **held faculty-key mismatch** by passing `cso_overrid
 **File**: `src/app/api/requests/cso-queue/route.ts`
 **Roles**: CSO
 
-Returns escalated requests (risk HIGH or restricted-zone) with `status = 'PENDING_CSO'`.
+Returns requests with `risk_tier = 'HIGH'` and `status` in `('CODE_ISSUED', 'KEY_ISSUED')`. There is no `PENDING_CSO` status in the schema — high-risk requests are not held for a separate CSO approval step before collection; this queue is a review/intervention surface over requests that are already issuable or issued, not a gate in front of `hod-decision`. It does not filter on a restricted-zone flag specifically (that's folded into `risk_tier` by the risk engine).
 
 **Response `data`**: `{ "requests": [...] }`
 
@@ -245,15 +301,17 @@ Returns escalated requests (risk HIGH or restricted-zone) with `status = 'PENDIN
 **File**: `src/app/api/requests/cso-decision/route.ts`
 **Roles**: CSO
 
+CSO intervention on a high-risk `CODE_ISSUED` request surfaced by `cso-queue` above — not an approval gate every request passes through. `decision: 'DECLINED'` cancels the request (`CODE_ISSUED` → `CANCELLED`, admin client, audit `REQUEST_DECLINED_CSO`); `decision: 'APPROVED'` makes no state change (a no-op acknowledgement that the CSO has reviewed and is letting it proceed), audit `REQUEST_APPROVED_CSO`.
+
 | Field        | Type                       | Required |
 | ------------ | -------------------------- | -------- |
 | `request_id` | `string` (uuid)            | yes      |
 | `decision`   | `'APPROVED' \| 'DECLINED'` | yes      |
-| `note`       | `string`                   | no       |
+| `note`       | `string`                   | no — accepted by the schema but not currently persisted anywhere |
 
-**Response `data`**: `{ "request_id": "<uuid>", "status": "CODE_ISSUED" }`
+**Response `data`**: `{ "request_id": "<uuid>", "status": "CANCELLED" | "CODE_ISSUED" }` (`CANCELLED` on decline, unchanged `CODE_ISSUED` on approve)
 
-**Errors**: `409` already decided · `422` validation
+**Errors**: `401` unauthenticated · `403` not CSO · `422` validation
 
 ---
 
@@ -274,10 +332,11 @@ Returns all requests with `status = 'CODE_ISSUED'`, ordered by `created_at` asce
 **Roles**: VERIFIER
 **RPC**: `issue_key(request_id, verifier_id)`
 
-| Field         | Type                | Required |
-| ------------- | ------------------- | -------- |
-| `code`        | `string` (6 digits) | yes      |
-| `verifier_id` | `string` (uuid)     | yes      |
+| Field  | Type                | Required |
+| ------ | ------------------- | -------- |
+| `code` | `string` (6 digits) | yes      |
+
+`verifier_id` is **not** a request field — the route derives it from the server-verified session (`user.id`), never a client-supplied value, so a verifier can't attribute a collection to someone else's session.
 
 The RPC looks up the request by code, validates it, marks the key issued, clears the code, and writes the audit entry.
 
@@ -494,7 +553,7 @@ Fired automatically by the status page when the collection code's countdown reac
 ### GET /api/requests/[id]/letter
 
 **File**: `src/app/api/requests/[id]/letter/route.ts`
-**Roles**: HOD
+**Roles**: DEAN
 
 Returns a short-lived (5-minute) signed URL for a guest request's Dean authorisation letter so the Dean can preview it before approving. The letter lives in the private `weekend-letters` bucket; signing happens server-side with the admin client. Access is gated to the Dean whose faculty owns the request (RLS plus a faculty check).
 
@@ -546,7 +605,7 @@ Returns all requests with `status = 'KEY_ISSUED'` or `status = 'KEY_OVERDUE'`, j
 ### GET /api/keys/history
 
 **File**: `src/app/api/keys/history/route.ts`
-**Roles**: CSO, HOD
+**Roles**: CSO, DEAN
 
 **Query params**: `key_id` · `requester_id` · `from` (ISO date) · `to` (ISO date) · `limit` · `cursor`
 
@@ -578,14 +637,14 @@ Sets key `status = 'RETIRED'`, creates an incident log entry of type `MISSING_KE
 
 **File**: `src/app/api/admin/users/route.ts`
 **Roles**: CSO
-**RPC**: `provision_user(name, email, role, department_id?)`
+**RPC**: `provision_user(name, email, role, department_id?)` — the RPC parameter keeps its historical `p_department_id` name but writes to `profiles.unit_id`
 
-| Field                 | Type                                 | Required          |
-| --------------------- | ------------------------------------ | ----------------- |
-| `full_name`           | `string`                             | yes               |
-| `institutional_email` | `string` (email)                     | yes               |
-| `role`                | `'HOD' \| 'VERIFIER' \| 'REQUESTER'` | yes               |
-| `department_id`       | `string` (uuid)                      | HOD and REQUESTER |
+| Field                 | Type                                  | Required           |
+| --------------------- | -------------------------------------- | ------------------ |
+| `full_name`           | `string`                              | yes                 |
+| `institutional_email` | `string` (email)                      | yes                 |
+| `role`                | `'DEAN' \| 'VERIFIER' \| 'REQUESTER'` | yes                 |
+| `unit_id`             | `string` (uuid)                       | DEAN and REQUESTER  |
 
 Creates the profile, generates a 24-hour activation token, queues the invite email via Nodemailer (Gmail SMTP), and writes the audit entry — all inside the RPC.
 
@@ -600,9 +659,9 @@ Creates the profile, generates a 24-hour activation token, queues the invite ema
 **File**: `src/app/api/admin/users/route.ts`
 **Roles**: CSO
 
-**Query params**: `role` · `department_id` · `status` (`PENDING_ACTIVATION | ACTIVE | DEACTIVATED`) · `limit` · `cursor`
+No query params — the route returns every non-deactivated profile unconditionally (joined with `unit:units!unit_id(name)`) and defers role/unit/status filtering and pagination to the client. There is no cursor-based pagination.
 
-**Response `data`**: `{ "users": [...], "next_cursor": "<opaque>" }`
+**Response `data`**: `{ "users": [...] }`
 
 ---
 
@@ -619,21 +678,68 @@ No request body. Sets `profiles.status = 'DEACTIVATED'`. Supabase Auth session i
 
 ---
 
+### POST /api/admin/users/[id]/resend-invite
+
+**File**: `src/app/api/admin/users/[id]/resend-invite/route.ts`
+**Roles**: CSO
+
+No request body. Re-sends a fresh activation link for a user still `PENDING_ACTIVATION` (e.g. their original 24-hour link expired unused).
+
+**Response `data`**: `{ "profile_id": "<uuid>", "status": "PENDING_ACTIVATION" }`
+
+**Errors**: `404` user not found · `409` user is already `ACTIVE` or is `DEACTIVATED` (reinstate first)
+
+---
+
 ### PATCH /api/admin/users/[id]
 
 **File**: `src/app/api/admin/users/[id]/route.ts`
 **Roles**: CSO
 
-Edits an existing user's `full_name` and — for departmental roles (Dean/HOD, REQUESTER) — `department_id`. Email and role are intentionally **not** editable here: the email is the auth login identity and chain-of-trust anchor, and role changes are out of scope. Writes a `USER_UPDATED` audit entry recording only the fields that actually changed. When a Dean moves faculty, the `departments.hod_id` reverse link is kept in sync.
+Edits an existing user's `full_name` and — for departmental roles (Dean, REQUESTER) — `unit_id`. Email and role are intentionally **not** editable here: the email is the auth login identity and chain-of-trust anchor, and role changes are out of scope. Writes a `USER_UPDATED` audit entry recording only the fields that actually changed. When a Dean moves faculty, the `units.hod_id` reverse link is kept in sync.
 
-| Field           | Type            | Required                         |
-| --------------- | --------------- | -------------------------------- |
-| `full_name`     | `string`        | yes                              |
-| `department_id` | `string` (uuid) | Dean (HOD) and REQUESTER targets |
+| Field     | Type            | Required                       |
+| --------- | --------------- | ------------------------------- |
+| `full_name` | `string`      | yes                              |
+| `unit_id`   | `string` (uuid) | Dean and REQUESTER targets     |
 
-**Response `data`**: `{ "profile_id": "<uuid>", "full_name": "<name>", "department_id": "<uuid|null>" }`
+**Response `data`**: `{ "profile_id": "<uuid>", "full_name": "<name>", "unit_id": "<uuid|null>" }`
 
-**Errors**: `404` user not found · `409` destination faculty already has a Dean · `422` validation / faculty required / faculty not found
+**Errors**: `404` user not found · `409` destination faculty already has a Dean · `422` validation / unit required / unit not found
+
+---
+
+### GET /api/admin/units
+
+**File**: `src/app/api/admin/units/route.ts`
+**Roles**: CSO
+
+No query params. Returns every unit (faculty or Administration) with its Dean, an `hasActiveHod` flag (an `ACTIVE` Dean is already assigned — used to grey out that unit in the Dean-role picker on `POST /api/admin/users`), and a `hasAvailableKey` flag.
+
+**Response `data`**: `{ "units": [...] }`
+
+**Note**: `GET /api/admin/departments` (`src/app/api/admin/departments/route.ts`) is an undocumented near-duplicate of this route, differing only in returning `{ "departments": [...] }` instead of `{ "units": [...] }` — appears to be a pre-rename leftover kept for some caller that hasn't migrated. Worth confirming whether anything still calls it and retiring it if not.
+
+---
+
+### POST /api/admin/keys
+
+**File**: `src/app/api/admin/keys/route.ts`
+**Roles**: CSO
+
+| Field       | Type                            | Required |
+| ----------- | -------------------------------- | -------- |
+| `code`      | `string` (matches `^[A-Z0-9]+-\d+$`) | yes  |
+| `zone`      | `'NEW_SENATE' \| 'OLD_SENATE'`  | yes      |
+| `room_name` | `string`                         | yes      |
+| `unit_id`   | `string` (uuid)                  | yes      |
+| `key_count` | `integer` (1–20, default 1)      | no       |
+
+Creates a new key record (status `AVAILABLE`). Returns `201`.
+
+**Response `data`**: `{ "key_id": "<uuid>" }`
+
+**Errors**: `403` not CSO · `422` validation
 
 ---
 
@@ -672,6 +778,19 @@ Removes a collector from a slot. Authoriser-aware via the `remove_collector` RPC
 
 ## 5. Shifts and Handover
 
+### POST /api/shifts/start
+
+**File**: `src/app/api/shifts/start/route.ts`
+**Roles**: VERIFIER
+
+No request body. Starts a new shift for the calling verifier: rejects with `409` if a shift is already active (`ended_at IS NULL`) — the officer should go through handover instead. Otherwise derives the next shift number (wraps 1→2→3→1) and inserts the row.
+
+**Response `data`**: `{ "shift": { "id": "<uuid>", "shift_number": 1, "started_at": "<iso>" } }`. Returns `201`.
+
+**Errors**: `401` unauthenticated · `403` not VERIFIER · `409` a shift is already active
+
+---
+
 ### GET /api/shifts/current
 
 **File**: `src/app/api/shifts/current/route.ts`
@@ -700,6 +819,89 @@ If `bulk = true`, all keys are acknowledged in one confirmation. Audit entry wri
 **Response `data`**: `{ "handover_id": "<uuid>", "acknowledged_count": 3 }`
 
 **Errors**: `409` handover already completed for this shift · `422` key_ids does not match actual outstanding keys
+
+---
+
+## 5a. Profile (self-service, any authenticated role)
+
+### GET /api/profile/me
+
+**File**: `src/app/api/profile/me/route.ts`
+**Roles**: ALL (authenticated)
+
+Returns the caller's own profile, including role-specific fields (`signature_ref_url`, `stamp_ref_url` for Deans) and the joined unit name. Backs every role's account-settings page.
+
+**Response `data`**: `{ "profile": { "id", "full_name", "institutional_email", "role", "status", "photo_url", "signature_ref_url", "stamp_ref_url", "unit_id", "unit": { "id", "name" } } }`
+
+**Errors**: `401` unauthenticated · `404` profile not found
+
+---
+
+### PATCH /api/profile/me
+
+**File**: `src/app/api/profile/me/route.ts`
+**Roles**: ALL (authenticated)
+
+Only `full_name` is mutable here — email is managed by Supabase Auth, photo by `POST /api/profile/photo`, and a Dean's signature/stamp by `POST /api/profile/signature`.
+
+| Field       | Type   | Required |
+| ----------- | ------ | -------- |
+| `full_name` | `string` | yes    |
+
+**Response `data`**: `{ "full_name": "<name>" }`
+
+**Errors**: `401` unauthenticated · `422` missing/blank full_name
+
+---
+
+### POST /api/profile/photo
+
+**File**: `src/app/api/profile/photo/route.ts`
+**Roles**: ALL (authenticated)
+
+Multipart form; replaces the caller's own profile photo in the `passport-photos` bucket. One route serves every role's settings screen (the storage folder is keyed by user id, not a role namespace).
+
+| Field   | Type                    | Required |
+| ------- | ------------------------ | -------- |
+| `photo` | `File` (image, max 5MB) | yes      |
+
+**Response `data`**: `{ "photo_url": "<url>" }`
+
+**Errors**: `401` unauthenticated · `422` missing file or not an image type · `413` over 5MB
+
+---
+
+### DELETE /api/profile/photo
+
+**File**: `src/app/api/profile/photo/route.ts`
+**Roles**: ALL (authenticated)
+
+No request body. Removes the caller's own photo file(s) from storage and clears `photo_url`.
+
+**Response `data`**: `null`
+
+**Errors**: `401` unauthenticated
+
+---
+
+### POST /api/profile/signature
+
+**File**: `src/app/api/profile/signature/route.ts`
+**Roles**: DEAN
+
+Replaces a Dean's signature or stamp reference image (post-onboarding). If a reference is already on file, the new upload is compared pixel-level against it via the same Sharp + Pixelmatch pipeline as `POST /api/ai/verify-signature` before the replacement is allowed.
+
+| Field   | Type                    | Required                        |
+| ------- | ------------------------ | -------------------------------- |
+| `type`  | `'signature' \| 'stamp'` | yes                              |
+| `image` | `File` (image, max 5MB) | yes                               |
+
+If the mismatch exceeds `SIGNATURE_DIFF_THRESHOLD` (default 15%), the reference is **not** replaced — a `SIGNATURE_MISMATCH` audit entry is written (`context: 'reference_replacement'`) and the response reports the held state (still HTTP 200). Otherwise the reference is replaced and a `SIGNATURE_REFERENCE_UPDATED` entry is written.
+
+**Response `data`** (held): `{ "status": "HELD_SIGNATURE_MISMATCH", "mismatch_pct": <number>, "message": "..." }`
+**Response `data`** (updated): `{ "status": "updated", "new_url": "<url>" }`
+
+**Errors**: `401` unauthenticated · `403` not DEAN · `422` missing/invalid type or image · `413` over 5MB
 
 ---
 
@@ -896,6 +1098,8 @@ If `passed = false`, the caller raises a CSO alert and holds the approval.
 | `generate_shift_report`        | POST /api/reports/generate                      | yes                     |
 | `add_report_comment`           | POST /api/reports/[id]/comments                 | yes                     |
 | `provision_user`               | POST /api/admin/users                           | yes                     |
+| `mark_key_overdue`             | cron only (`pg_cron`, hourly) — no route caller | yes — per key           |
+| `schedule_pending_shift_report`| cron only (`pg_cron`, daily 18:00) — no route caller | yes — when a CSO exists |
 
 All RPCs are defined in `supabase/migrations/`. See `docs/DATABASE.md` for parameter signatures.
 
