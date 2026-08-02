@@ -2,80 +2,80 @@
   "info": {
     "_postman_id": "5f2a7c10-9d34-4b8e-a1c6-7e0b2d4f6a81",
     "name": "SmartKey API",
-    "description": "Every server-side route in SmartKey (60 handlers across 54 files), grouped by the role that calls it.\n\n## Read this before your first request\n\n**1. Auth is cookie-based, not Bearer.** `POST /api/auth/login` writes a Supabase session into a role-namespaced cookie (`sb-<project-ref>-cso`, `-dean`, `-verifier`, `-requester`). Postman's cookie jar stores it automatically. Do not set an `Authorization` header on user routes; it is ignored.\n\n**2. Every authenticated request MUST send a `Referer` header.** This is the non-obvious part. For `/api/*` paths the middleware cannot derive the role namespace from the URL, so it falls back to the `Referer` (see `src/lib/supabase/middleware.ts` and `namespaceFromReferer` in `src/lib/supabase/cookies.ts`). With no `Referer`, the request resolves to the transient `activate` namespace, finds no session, and returns 401 — even though you are logged in.\n\nEvery request in this collection already carries the correct `Referer`. If you copy a request elsewhere, carry the header with it:\n\n| Calling role | Referer value |\n| --- | --- |\n| CSO | `{{baseUrl}}/cso` |\n| Dean | `{{baseUrl}}/dean` |\n| Verifier | `{{baseUrl}}/verifier` |\n| Requester | `{{baseUrl}}/requester` |\n\nThe `x-smartkey-namespace` header is set by the middleware and overwritten on every request, so sending it yourself does nothing.\n\n**3. CSO, Dean and Verifier require email OTP.** Login returns `mfa_required: true` and mails a 6-digit code; the session is not usable until `POST /api/auth/verify-otp` succeeds. Requester skips MFA and is signed in straight from login.\n\n**4. Response envelope.** Every route returns `{ data, error, status }`. On success `error` is null; on failure `data` is null and `error` is a user-facing string. 204 responses have no body.\n\nSee `docs/postman/README.md` for the full walkthrough and `docs/API.md` for the per-route reference.",
+    "description": "<div style=\"color:#111827;\">Every server-side route in SmartKey (60 handlers across 54 files), grouped by the role that calls it.\n\n## Read this before your first request\n\n**1. Auth is cookie-based, not Bearer.** `POST /api/auth/login` writes a Supabase session into a role-namespaced cookie (`sb-<project-ref>-cso`, `-dean`, `-verifier`, `-requester`). Postman's cookie jar stores it automatically. Do not set an `Authorization` header on user routes; it is ignored.\n\n**2. Every authenticated request MUST send a `Referer` header.** This is the non-obvious part. For `/api/*` paths the middleware cannot derive the role namespace from the URL, so it falls back to the `Referer` (see `src/lib/supabase/middleware.ts` and `namespaceFromReferer` in `src/lib/supabase/cookies.ts`). With no `Referer`, the request resolves to the transient `activate` namespace, finds no session, and returns 401 — even though you are logged in.\n\nEvery request in this collection already carries the correct `Referer`. If you copy a request elsewhere, carry the header with it:\n\n| Calling role | Referer value |\n| --- | --- |\n| CSO | `{{baseUrl}}/cso` |\n| Dean | `{{baseUrl}}/dean` |\n| Verifier | `{{baseUrl}}/verifier` |\n| Requester | `{{baseUrl}}/requester` |\n\nThe `x-smartkey-namespace` header is set by the middleware and overwritten on every request, so sending it yourself does nothing.\n\n**3. CSO, Dean and Verifier require email OTP.** Login returns `mfa_required: true` and mails a 6-digit code; the session is not usable until `POST /api/auth/verify-otp` succeeds. Requester skips MFA and is signed in straight from login.\n\n**4. Response envelope.** Every route returns `{ data, error, status }`. On success `error` is null; on failure `data` is null and `error` is a user-facing string. 204 responses have no body.\n\nSee `docs/postman/README.md` for the full walkthrough and `docs/API.md` for the per-route reference.</div>",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
       "key": "baseUrl",
       "value": "http://localhost:3000",
-      "description": "Origin of the running Next.js app."
+      "description": "<div style=\"color:#111827;\">Origin of the running Next.js app.</div>"
     },
     {
       "key": "otp",
       "value": "",
-      "description": "6-digit code from the OTP email. Paste before running Verify OTP."
+      "description": "<div style=\"color:#111827;\">6-digit code from the OTP email. Paste before running Verify OTP.</div>"
     },
     {
       "key": "keyId",
       "value": "",
-      "description": "Auto-filled where possible; otherwise paste a keys.id UUID."
+      "description": "<div style=\"color:#111827;\">Auto-filled where possible; otherwise paste a keys.id UUID.</div>"
     },
     {
       "key": "unitId",
       "value": "",
-      "description": "Auto-filled by 'List units'."
+      "description": "<div style=\"color:#111827;\">Auto-filled by 'List units'.</div>"
     },
     {
       "key": "requestId",
       "value": "",
-      "description": "Auto-filled by requester/dean/verifier request calls."
+      "description": "<div style=\"color:#111827;\">Auto-filled by requester/dean/verifier request calls.</div>"
     },
     {
       "key": "userId",
       "value": "",
-      "description": "Auto-filled by 'List users' / 'Provision user'."
+      "description": "<div style=\"color:#111827;\">Auto-filled by 'List users' / 'Provision user'.</div>"
     },
     {
       "key": "shiftId",
       "value": "",
-      "description": "Auto-filled by 'Start shift' / 'Current shift'."
+      "description": "<div style=\"color:#111827;\">Auto-filled by 'Start shift' / 'Current shift'.</div>"
     },
     {
       "key": "reportId",
       "value": "",
-      "description": "Auto-filled by 'Generate shift report'."
+      "description": "<div style=\"color:#111827;\">Auto-filled by 'Generate shift report'.</div>"
     },
     {
       "key": "collectionCode",
       "value": "",
-      "description": "6-digit collection code; auto-filled on submit / weekend-code."
+      "description": "<div style=\"color:#111827;\">6-digit collection code; auto-filled on submit / weekend-code.</div>"
     },
     {
       "key": "returnCode",
       "value": "",
-      "description": "6-digit return code; auto-filled by 'Request return code'."
+      "description": "<div style=\"color:#111827;\">6-digit return code; auto-filled by 'Request return code'.</div>"
     },
     {
       "key": "guestToken",
       "value": "",
-      "description": "Guest access_token; auto-filled by the public weekend-request submit."
+      "description": "<div style=\"color:#111827;\">Guest access_token; auto-filled by the public weekend-request submit.</div>"
     },
     {
       "key": "cronSecret",
       "value": "",
-      "description": "CRON_SECRET from .env.local. System folder only."
+      "description": "<div style=\"color:#111827;\">CRON_SECRET from .env.local. System folder only.</div>"
     },
     {
       "key": "serviceRoleKey",
       "value": "",
-      "description": "SUPABASE_SERVICE_ROLE_KEY. System folder only — never ships to a browser."
+      "description": "<div style=\"color:#111827;\">SUPABASE_SERVICE_ROLE_KEY. System folder only — never ships to a browser.</div>"
     }
   ],
   "item": [
     {
       "name": "00 — Auth",
-      "description": "Start here. Run Login, then Verify OTP for CSO/Dean/Verifier. Postman stores the session cookie for you.",
+      "description": "<div style=\"color:#111827;\">Start here. Run Login, then Verify OTP for CSO/Dean/Verifier. Postman stores the session cookie for you.</div>",
       "item": [
         {
           "name": "Login (CSO)",
@@ -87,8 +87,14 @@
                 "exec": [
                   "const body = pm.response.json();",
                   "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "",
                   "if (body.data && body.data.mfa_required) {",
-                  "  console.log('MFA required — check the inbox, set {{otp}}, then run Verify OTP.');",
+                  "  if (body.data.email_delivery_failed) {",
+                  "    console.warn('Sign-in OK, but the OTP email could not be sent (SMTP unreachable?).');",
+                  "    console.warn('Run \"Resend OTP\" — the stored code is still valid.');",
+                  "  } else {",
+                  "    console.log('MFA required — check the inbox, set {{otp}}, then run Verify OTP.');",
+                  "  }",
                   "} else if (body.data) {",
                   "  console.log('Signed in without MFA as', body.data.role);",
                   "}"
@@ -113,7 +119,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "auth", "login"]
             },
-            "description": "Verifies credentials on a throwaway client, then writes the session into the cookie namespace for the account's role.\n\nReturns `{ session, role, mfa_required }`. For CSO / DEAN / VERIFIER `mfa_required` is true, `session` is null, and a 6-digit code is emailed — the session cookie exists but is only usable after Verify OTP. REQUESTER returns a live session and `mfa_required: false`.\n\nNo `Referer` needed: this route passes the namespace explicitly.\n\nErrors: 401 invalid credentials · 422 schema · 503 auth service unreachable (distinguished from 401 via `isAuthRetryableFetchError`, so a network blip never reads as a wrong password)."
+            "description": "<div style=\"color:#111827;\">Verifies credentials on a throwaway client, then writes the session into the cookie namespace for the account's role.\n\nReturns `{ session, role, mfa_required, email_delivery_failed }`. For CSO / DEAN / VERIFIER `mfa_required` is true, `session` is null, and a 6-digit code is emailed — the session cookie exists but is only usable after Verify OTP. REQUESTER returns a live session and `mfa_required: false`.\n\n**`email_delivery_failed`** (MFA roles only) is true when the credentials were accepted but the code email could not be sent — e.g. SMTP blocked on your network, which is common locally on port 587. This is **not** a login failure: the code hash is already stored, so run **Resend OTP** and the code it delivers is valid. Before 2026-08-02 this path returned a 500 and made the whole collection unusable when SMTP was unreachable.\n\nNo `Referer` needed: this route passes the namespace explicitly.\n\nErrors: 401 invalid credentials · 422 schema · 503 auth service unreachable (distinguished from 401 via `isAuthRetryableFetchError`, so a network blip never reads as a wrong password).</div>"
           },
           "response": [
             {
@@ -165,7 +171,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "auth", "login"]
             },
-            "description": "Same route as above. REQUESTER is the only role exempt from MFA, so this single call leaves you fully signed in — the fastest path to exercising the requester flow."
+            "description": "<div style=\"color:#111827;\">Same route as above. REQUESTER is the only role exempt from MFA, so this single call leaves you fully signed in — the fastest path to exercising the requester flow.</div>"
           },
           "response": [
             {
@@ -217,7 +223,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "auth", "verify-otp"]
             },
-            "description": "Completes MFA. `email` is required alongside `otp` — the route looks the profile up by `institutional_email` to know which cookie namespace login wrote to.\n\nThe stored code is a SHA-256 hash with a 10-minute expiry and is cleared on success, so a code cannot be replayed. Writes a `LOGIN_SUCCEEDED` audit entry with `method: 'OTP'`.\n\nErrors: 401 invalid or expired code · 422 schema."
+            "description": "<div style=\"color:#111827;\">Completes MFA. `email` is required alongside `otp` — the route looks the profile up by `institutional_email` to know which cookie namespace login wrote to.\n\nThe stored code is a SHA-256 hash with a 10-minute expiry and is cleared on success, so a code cannot be replayed. Writes a `LOGIN_SUCCEEDED` audit entry with `method: 'OTP'`.\n\nErrors: 401 invalid or expired code · 422 schema.</div>"
           },
           "response": [
             {
@@ -269,7 +275,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "auth", "resend-otp"]
             },
-            "description": "Mints a fresh 10-minute MFA code. Always returns 200 with `data: null` whether or not the email matches a profile — deliberate, to prevent account enumeration."
+            "description": "<div style=\"color:#111827;\">Mints a fresh 10-minute MFA code. Always returns 200 with `data: null` whether or not the email matches a profile — deliberate, to prevent account enumeration.</div>"
           },
           "response": [
             {
@@ -300,7 +306,7 @@
               {
                 "key": "Referer",
                 "value": "{{baseUrl}}/cso",
-                "description": "Required — selects the session cookie namespace."
+                "description": "<div style=\"color:#111827;\">Required — selects the session cookie namespace.</div>"
               }
             ],
             "body": {
@@ -312,7 +318,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "auth", "change-password"]
             },
-            "description": "Re-authenticates with `current_password` before applying the change, so a hijacked session alone cannot rotate the password. Writes a `PASSWORD_CHANGED` audit entry.\n\n`new_password` must satisfy `src/lib/validation/primitives.ts`: 12–64 chars with upper, lower, digit and symbol.\n\nErrors: 401 not authenticated or wrong current password · 422 policy failure."
+            "description": "<div style=\"color:#111827;\">Re-authenticates with `current_password` before applying the change, so a hijacked session alone cannot rotate the password. Writes a `PASSWORD_CHANGED` audit entry.\n\n`new_password` must satisfy `src/lib/validation/primitives.ts`: 12–64 chars with upper, lower, digit and symbol.\n\nErrors: 401 not authenticated or wrong current password · 422 policy failure.</div>"
           },
           "response": [
             {
@@ -364,7 +370,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "auth", "reset-password"]
             },
-            "description": "Triggers the Supabase password-reset email. Always 200 (no enumeration). The emailed link lands on `GET /api/auth/callback`."
+            "description": "<div style=\"color:#111827;\">Triggers the Supabase password-reset email. Always 200 (no enumeration). The emailed link lands on `GET /api/auth/callback`.</div>"
           },
           "response": [
             {
@@ -398,7 +404,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "auth", "logout"]
             },
-            "description": "Invalidates the current Supabase session. No body. The `Referer` decides which role's session is ended — omit it and you will clear the wrong namespace."
+            "description": "<div style=\"color:#111827;\">Invalidates the current Supabase session. No body. The `Referer` decides which role's session is ended — omit it and you will clear the wrong namespace.</div>"
           },
           "response": [
             {
@@ -434,13 +440,13 @@
                   "key": "password",
                   "value": "Test@123456!",
                   "type": "text",
-                  "description": "12–64 chars, upper + lower + digit + symbol."
+                  "description": "<div style=\"color:#111827;\">12–64 chars, upper + lower + digit + symbol.</div>"
                 },
                 {
                   "key": "passport_photo",
                   "type": "file",
                   "src": [],
-                  "description": "Required for REQUESTER. Max 5 MB."
+                  "description": "<div style=\"color:#111827;\">Required for REQUESTER. Max 5 MB.</div>"
                 }
               ]
             },
@@ -449,7 +455,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "auth", "register"]
             },
-            "description": "Multipart. **Not directly runnable in Postman** without first completing the invite link in a browser: there is no `token` field — the invite is a Supabase magic link that resolves through `GET /api/auth/callback` into a session in the `activate` namespace, and this route only reads that session.\n\nListed here so the contract is documented. Errors: 401 no activation session · 422 weak password or missing photo · 413 photo over 5 MB."
+            "description": "<div style=\"color:#111827;\">Multipart. **Not directly runnable in Postman** without first completing the invite link in a browser: there is no `token` field — the invite is a Supabase magic link that resolves through `GET /api/auth/callback` into a session in the `activate` namespace, and this route only reads that session.\n\nListed here so the contract is documented. Errors: 401 no activation session · 422 weak password or missing photo · 413 photo over 5 MB.</div>"
           },
           "response": [
             {
@@ -504,13 +510,13 @@
                   "key": "signature",
                   "type": "file",
                   "src": [],
-                  "description": "Reference signature image. Max 5 MB."
+                  "description": "<div style=\"color:#111827;\">Reference signature image. Max 5 MB.</div>"
                 },
                 {
                   "key": "stamp",
                   "type": "file",
                   "src": [],
-                  "description": "Departmental stamp image. Max 5 MB."
+                  "description": "<div style=\"color:#111827;\">Departmental stamp image. Max 5 MB.</div>"
                 }
               ]
             },
@@ -519,7 +525,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "auth", "activate-hod"]
             },
-            "description": "One-time Dean onboarding. Same activation-session precondition as Register — no `token` field.\n\nStores the two images in the `hod-signatures` bucket and writes their URLs to `profiles.signature_ref_url` / `stamp_ref_url`. The signature becomes the reference every later weekend approval is pixel-matched against.\n\nErrors: 401 no activation session · 403 profile is not DEAN · 422 validation · 413 image over 5 MB."
+            "description": "<div style=\"color:#111827;\">One-time Dean onboarding. Same activation-session precondition as Register — no `token` field.\n\nStores the two images in the `hod-signatures` bucket and writes their URLs to `profiles.signature_ref_url` / `stamp_ref_url`. The signature becomes the reference every later weekend approval is pixel-matched against.\n\nErrors: 401 no activation session · 403 profile is not DEAN · 422 validation · 413 image over 5 MB.</div>"
           },
           "response": [
             {
@@ -565,16 +571,16 @@
                 {
                   "key": "code",
                   "value": "PKCE_CODE",
-                  "description": "One-time PKCE code from the emailed link."
+                  "description": "<div style=\"color:#111827;\">One-time PKCE code from the emailed link.</div>"
                 },
                 {
                   "key": "next",
                   "value": "/dean/onboarding",
-                  "description": "Where to send the user afterwards. Defaults to /."
+                  "description": "<div style=\"color:#111827;\">Where to send the user afterwards. Defaults to /.</div>"
                 }
               ]
             },
-            "description": "Not a JSON API — a redirect handler. Exchanges the emailed one-time PKCE code for a session in the `activate` namespace, then 302s to `next`. On failure redirects to `/forgot-password?error=expired`.\n\nThis is the missing link that makes Register and Activate Dean work; documented so the flow reads end to end."
+            "description": "<div style=\"color:#111827;\">Not a JSON API — a redirect handler. Exchanges the emailed one-time PKCE code for a session in the `activate` namespace, then 302s to `next`. On failure redirects to `/forgot-password?error=expired`.\n\nThis is the missing link that makes Register and Activate Dean work; documented so the flow reads end to end.</div>"
           },
           "response": [
             {
@@ -611,7 +617,7 @@
     },
     {
       "name": "01 — Requester",
-      "description": "Sign in with 'Login (Requester)' first. No OTP step for this role.",
+      "description": "<div style=\"color:#111827;\">Sign in with 'Login (Requester)' first. No OTP step for this role.</div>",
       "item": [
         {
           "name": "Submit request (weekday)",
@@ -651,7 +657,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "requests", "submit"]
             },
-            "description": "Calls the `create_request` RPC, which checks authorisation, runs the rule-based risk engine, mints the code and writes the audit entry in one transaction.\n\nWEEKDAY returns a 6-digit code immediately (`CODE_ISSUED`, 10-minute expiry). WEEKEND returns **no code** and lands on `PENDING_HOD` awaiting a Dean/CSO decision — the code is minted on the day via 'Get weekend code'.\n\nOptional `letter_url` attaches a Dean-signed letter (uploaded client-side to `weekend-letters`) so signature verification can run at approval.\n\nErrors: 403 not authorised for this key · 409 an active request already exists for it · 422 outside operational hours."
+            "description": "<div style=\"color:#111827;\">Calls the `create_request` RPC, which checks authorisation, runs the rule-based risk engine, mints the code and writes the audit entry in one transaction.\n\nWEEKDAY returns a 6-digit code immediately (`CODE_ISSUED`, 10-minute expiry). WEEKEND returns **no code** and lands on `PENDING_HOD` awaiting a Dean/CSO decision — the code is minted on the day via 'Get weekend code'.\n\nOptional `letter_url` attaches a Dean-signed letter (uploaded client-side to `weekend-letters`) so signature verification can run at approval.\n\nErrors: 403 not authorised for this key · 409 an active request already exists for it · 422 outside operational hours.</div>"
           },
           "response": [
             {
@@ -719,7 +725,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "requests", "submit"]
             },
-            "description": "`weekend_date` must be a Saturday or Sunday. Response is `{ request_id, status: 'PENDING_HOD', risk_tier }` — deliberately no code. Next stop: the Dean's queue."
+            "description": "<div style=\"color:#111827;\">`weekend_date` must be a Saturday or Sunday. Response is `{ request_id, status: 'PENDING_HOD', risk_tier }` — deliberately no code. Next stop: the Dean's queue.</div>"
           },
           "response": [
             {
@@ -770,23 +776,23 @@
                 {
                   "key": "status",
                   "value": "CODE_ISSUED,KEY_ISSUED",
-                  "description": "Comma-separated request_status values.",
+                  "description": "<div style=\"color:#111827;\">Comma-separated request_status values.</div>",
                   "disabled": true
                 },
                 {
                   "key": "limit",
                   "value": "20",
-                  "description": "Max 50."
+                  "description": "<div style=\"color:#111827;\">Max 50.</div>"
                 },
                 {
                   "key": "cursor",
                   "value": "",
-                  "description": "Opaque cursor from next_cursor.",
+                  "description": "<div style=\"color:#111827;\">Opaque cursor from next_cursor.</div>",
                   "disabled": true
                 }
               ]
             },
-            "description": "Cursor-paginated history for the signed-in requester, newest first, with the key joined. Returns `{ requests, next_cursor }`."
+            "description": "<div style=\"color:#111827;\">Cursor-paginated history for the signed-in requester, newest first, with the key joined. Returns `{ requests, next_cursor }`.</div>"
           },
           "response": [
             {
@@ -840,7 +846,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "requests", "weekend-code"]
             },
-            "description": "Mints the 10-minute collection code for an `APPROVED` weekend request — **only on the requested date**. Moves it to `CODE_ISSUED`.\n\nThe code is deliberately never emailed at approval time; keeping it short-lived and same-day is the whole point of the weekend flow.\n\nErrors: 403 not your request · 409 not in APPROVED state · 422 TOO_EARLY (before the date)."
+            "description": "<div style=\"color:#111827;\">Mints the 10-minute collection code for an `APPROVED` weekend request — **only on the requested date**. Moves it to `CODE_ISSUED`.\n\nThe code is deliberately never emailed at approval time; keeping it short-lived and same-day is the whole point of the weekend flow.\n\nErrors: 403 not your request · 409 not in APPROVED state · 422 TOO_EARLY (before the date).</div>"
           },
           "response": [
             {
@@ -908,7 +914,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "requests", "request-return"]
             },
-            "description": "Generates a 6-digit **return** code (15-minute expiry) the requester reads out at the desk, so a verifier cannot log a phantom return alone. Status stays `KEY_ISSUED`; audit `RETURN_CODE_GENERATED`.\n\nErrors: 403 not your request · 409 key not currently issued · 404 not found."
+            "description": "<div style=\"color:#111827;\">Generates a 6-digit **return** code (15-minute expiry) the requester reads out at the desk, so a verifier cannot log a phantom return alone. Status stays `KEY_ISSUED`; audit `RETURN_CODE_GENERATED`.\n\nErrors: 403 not your request · 409 key not currently issued · 404 not found.</div>"
           },
           "response": [
             {
@@ -964,7 +970,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "requests", "expire"]
             },
-            "description": "Fired automatically by the UI when the countdown hits 0. Idempotent — returns the current status without erroring if the request already moved on.\n\nNote the branch: a WEEKEND code lapsing **on its own date** rolls back to `APPROVED` (audit `CODE_EXPIRED`) so the requester can mint a fresh one the same day. A weekday code, or a weekend code after the date has passed, terminates to `EXPIRED`.\n\nErrors: 403 not your request · 409 code has not expired yet."
+            "description": "<div style=\"color:#111827;\">Fired automatically by the UI when the countdown hits 0. Idempotent — returns the current status without erroring if the request already moved on.\n\nNote the branch: a WEEKEND code lapsing **on its own date** rolls back to `APPROVED` (audit `CODE_EXPIRED`) so the requester can mint a fresh one the same day. A weekday code, or a weekend code after the date has passed, terminates to `EXPIRED`.\n\nErrors: 403 not your request · 409 code has not expired yet.</div>"
           },
           "response": [
             {
@@ -1020,7 +1026,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "requests", "cancel"]
             },
-            "description": "Cancellable from any pre-collection state you own: `CODE_ISSUED`, or `PENDING_HOD` / `APPROVED` for a weekend request whose code has not been minted — the manual escape hatch before the nightly job expires it.\n\nErrors: 403 not your request · 409 not in a cancellable state."
+            "description": "<div style=\"color:#111827;\">Cancellable from any pre-collection state you own: `CODE_ISSUED`, or `PENDING_HOD` / `APPROVED` for a weekend request whose code has not been minted — the manual escape hatch before the nightly job expires it.\n\nErrors: 403 not your request · 409 not in a cancellable state.</div>"
           },
           "response": [
             {
@@ -1057,7 +1063,7 @@
     },
     {
       "name": "02 — Dean",
-      "description": "Sign in as a Dean (login + verify OTP). Scoped to the Dean's own unit by RLS.",
+      "description": "<div style=\"color:#111827;\">Sign in as a Dean (login + verify OTP). Scoped to the Dean's own unit by RLS.</div>",
       "item": [
         {
           "name": "Pending weekend requests",
@@ -1088,7 +1094,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "requests", "pending"]
             },
-            "description": "`status = 'PENDING_HOD'` for the Dean's unit, including external (guest) requests with the guest details, `letter_url` and `requested_unit_id` joined so the Dean can review and assign a key before approving.\n\nAlso callable by the **CSO**, who gets the Administration-routed requests (units with `authoriser = 'CSO'` have no Dean)."
+            "description": "<div style=\"color:#111827;\">`status = 'PENDING_HOD'` for the Dean's unit, including external (guest) requests with the guest details, `letter_url` and `requested_unit_id` joined so the Dean can review and assign a key before approving.\n\nAlso callable by the **CSO**, who gets the Administration-routed requests (units with `authoriser = 'CSO'` have no Dean).</div>"
           },
           "response": [
             {
@@ -1130,7 +1136,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "requests", "hod-decision"]
             },
-            "description": "Moves the request to `APPROVED` via the `approve_weekend` RPC. **No code is minted here** — the requester mints one on the day. So the success status is `\"APPROVED\"`, never `\"CODE_ISSUED\"`.\n\nIf you include `submitted_signature_url`, the letter's signature is pixel-matched (Sharp + Pixelmatch) against the Dean's onboarded reference first. Over the threshold (default 15%) the approval is **held**: the RPC is never called, a `SIGNATURE_MISMATCH` audit entry is written, and you get HTTP **200** with `{ status: 'HELD_SIGNATURE_MISMATCH', mismatch_pct }` — a held approval is not a route error, so check the status field, not just the HTTP code.\n\nThe RPC re-validates the actor against the unit's `authoriser`, so a Dean acting on an Administration key (or the CSO on a faculty key) is rejected with 403 regardless of what the route allowed."
+            "description": "<div style=\"color:#111827;\">Moves the request to `APPROVED` via the `approve_weekend` RPC. **No code is minted here** — the requester mints one on the day. So the success status is `\"APPROVED\"`, never `\"CODE_ISSUED\"`.\n\nIf you include `submitted_signature_url`, the letter's signature is pixel-matched (Sharp + Pixelmatch) against the Dean's onboarded reference first. Over the threshold (default 15%) the approval is **held**: the RPC is never called, a `SIGNATURE_MISMATCH` audit entry is written, and you get HTTP **200** with `{ status: 'HELD_SIGNATURE_MISMATCH', mismatch_pct }` — a held approval is not a route error, so check the status field, not just the HTTP code.\n\nThe RPC re-validates the actor against the unit's `authoriser`, so a Dean acting on an Administration key (or the CSO on a faculty key) is rejected with 403 regardless of what the route allowed.</div>"
           },
           "response": [
             {
@@ -1186,7 +1192,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "requests", "hod-decision"]
             },
-            "description": "Same endpoint, guest branch. When the request has a `guest_id`, `key_id` becomes **required** — a guest picks a unit, not a key, so the Dean assigns the actual key at approval. Routes to `approve_guest_weekend`.\n\nSignature verification is skipped: guests have no reference signature on file, so the Dean reviews the uploaded letter by eye (see 'Preview authorisation letter')."
+            "description": "<div style=\"color:#111827;\">Same endpoint, guest branch. When the request has a `guest_id`, `key_id` becomes **required** — a guest picks a unit, not a key, so the Dean assigns the actual key at approval. Routes to `approve_guest_weekend`.\n\nSignature verification is skipped: guests have no reference signature on file, so the Dean reviews the uploaded letter by eye (see 'Preview authorisation letter').</div>"
           },
           "response": [
             {
@@ -1242,7 +1248,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "requests", "hod-decision"]
             },
-            "description": "Routes to `decline_weekend`. Returns `{ status: 'DECLINED' }`. Works for guest and registered requests alike; no `key_id` needed."
+            "description": "<div style=\"color:#111827;\">Routes to `decline_weekend`. Returns `{ status: 'DECLINED' }`. Works for guest and registered requests alike; no `key_id` needed.</div>"
           },
           "response": [
             {
@@ -1290,7 +1296,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "requests", "{{requestId}}", "letter"]
             },
-            "description": "Returns a 5-minute signed URL for the guest's uploaded letter. The `weekend-letters` bucket is private; signing happens server-side with the admin client and is gated to the Dean whose unit owns the request (CSO also permitted).\n\nErrors: 403 not your unit · 404 request has no letter."
+            "description": "<div style=\"color:#111827;\">Returns a 5-minute signed URL for the guest's uploaded letter. The `weekend-letters` bucket is private; signing happens server-side with the admin client and is gated to the Dean whose unit owns the request (CSO also permitted).\n\nErrors: 403 not your unit · 404 request has no letter.</div>"
           },
           "response": [
             {
@@ -1351,7 +1357,7 @@
                 {
                   "key": "from",
                   "value": "2026-08-01",
-                  "description": "ISO date.",
+                  "description": "<div style=\"color:#111827;\">ISO date.</div>",
                   "disabled": true
                 },
                 {
@@ -1370,7 +1376,7 @@
                 }
               ]
             },
-            "description": "Shared with the CSO. A Dean automatically sees only their own unit's keys (enforced in-query and by RLS); the CSO sees everything. Backs the Dean dashboard's recent-activity feed."
+            "description": "<div style=\"color:#111827;\">Shared with the CSO. A Dean automatically sees only their own unit's keys (enforced in-query and by RLS); the CSO sees everything. Backs the Dean dashboard's recent-activity feed.</div>"
           },
           "response": [
             {
@@ -1388,12 +1394,64 @@
               "body": "{\n  \"data\": {\n    \"transactions\": [\n      {\n        \"id\": \"<uuid>\",\n        \"key\": {\n          \"code\": \"OS-112\",\n          \"room_name\": \"Dean's Office\"\n        },\n        \"collected_at\": \"<iso>\",\n        \"returned_at\": \"<iso>\"\n      }\n    ],\n    \"next_cursor\": null\n  },\n  \"error\": null,\n  \"status\": 200\n}"
             }
           ]
+        },
+        {
+          "name": "Dismiss a lapsed request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/dean",
+                "description": "<div style=\"color:#111827;\">Required. Resolves the role cookie namespace for /api/* paths — without it the request 401s even when signed in.</div>"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"request_id\": \"{{requestId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/requests/dismiss",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "requests", "dismiss"]
+            },
+            "description": "<div style=\"color:#111827;\">Clears a weekend request whose `requested_for` date has passed out of the pending queue.\n\nA lapsed request can no longer be approved or declined — both RPCs refuse a past date — so without this it sits in the Dean's (or CSO's) list until the nightly `expire_stale_weekend_requests()` sweep at 00:15 UTC.\n\nThis is housekeeping, not a decision on merits: no `hod_decisions` row is written. The request moves to `EXPIRED`, the same terminal state the cron produces, so it stays visible in requester history and the CSO audit log. The `REQUEST_EXPIRED` audit payload carries `reason: 'dismissed_by_authoriser'`, the previous status, and the dismissing actor.\n\n**Roles**: Dean (own faculty only) · CSO (any, including Administration). Swap the `Referer` to `{{baseUrl}}/cso` when calling as CSO.\n\n**Errors**: `403` not a Dean/CSO, or the request is not in your faculty · `404` not found · `409` the request is still live (approve or decline it instead) or is already terminal · `422` validation.</div>"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test('dismissal succeeded', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(res.error, 'error').to.be.null;",
+                  "});",
+                  "",
+                  "pm.test('request is now EXPIRED', () => {",
+                  "    pm.expect(res.data.status).to.eql('EXPIRED');",
+                  "});"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
     {
       "name": "03 — Verifier",
-      "description": "The security desk. Sign in as a Verifier (login + verify OTP), then start a shift.",
+      "description": "<div style=\"color:#111827;\">The security desk. Sign in as a Verifier (login + verify OTP), then start a shift.</div>",
       "item": [
         {
           "name": "Start shift",
@@ -1422,7 +1480,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "shifts", "start"]
             },
-            "description": "No body. Opens a shift for the signed-in officer and derives the next shift number (wraps 1→2→3→1).\n\nRejects with 409 if a shift is already open — the officer should run the handover instead. Returns 201."
+            "description": "<div style=\"color:#111827;\">No body. Opens a shift for the signed-in officer and derives the next shift number (wraps 1→2→3→1).\n\nRejects with 409 if a shift is already open — the officer should run the handover instead. Returns 201.</div>"
           },
           "response": [
             {
@@ -1482,7 +1540,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "shifts", "current"]
             },
-            "description": "The open shift with officer identities and elapsed time. Also readable by the CSO."
+            "description": "<div style=\"color:#111827;\">The open shift with officer identities and elapsed time. Also readable by the CSO.</div>"
           },
           "response": [
             {
@@ -1516,7 +1574,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "requests", "live-queue"]
             },
-            "description": "All `CODE_ISSUED` requests, oldest first. This is the **initial load only** — the dashboard keeps itself current over a Supabase Realtime subscription, so do not poll this."
+            "description": "<div style=\"color:#111827;\">All `CODE_ISSUED` requests, oldest first. This is the **initial load only** — the dashboard keeps itself current over a Supabase Realtime subscription, so do not poll this.</div>"
           },
           "response": [
             {
@@ -1558,7 +1616,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "requests", "collect"]
             },
-            "description": "The desk's highest-frequency call. `code` is the only field — the verifier is taken from the server-verified session, and any client-supplied `verifier_id` is deliberately ignored so a collection cannot be attributed to another officer.\n\nThe response carries `is_guest`. For a guest it is true and `requester` holds the declared ID document with a null `photo_url` (the officer checks the physical ID); for a registered requester you get the passport photo. The shape is additive, so registered-only consumers are unaffected.\n\nErrors: 404 code not found or expired · 409 key already issued."
+            "description": "<div style=\"color:#111827;\">The desk's highest-frequency call. `code` is the only field — the verifier is taken from the server-verified session, and any client-supplied `verifier_id` is deliberately ignored so a collection cannot be attributed to another officer.\n\nThe response carries `is_guest`. For a guest it is true and `requester` holds the declared ID document with a null `photo_url` (the officer checks the physical ID); for a registered requester you get the passport photo. The shape is additive, so registered-only consumers are unaffected.\n\nErrors: 404 code not found or expired · 409 key already issued.</div>"
           },
           "response": [
             {
@@ -1609,7 +1667,7 @@
                 {
                   "key": "zone",
                   "value": "NEW_SENATE",
-                  "description": "NEW_SENATE | OLD_SENATE",
+                  "description": "<div style=\"color:#111827;\">NEW_SENATE | OLD_SENATE</div>",
                   "disabled": true
                 },
                 {
@@ -1619,7 +1677,7 @@
                 }
               ]
             },
-            "description": "Everything currently out. Shared with the CSO.\n\nOverdue is **derived**, not just read: the hourly `mark_key_overdue` job flips the key's own status, but the route also compares `return_deadline` to now, so the badge is correct even between cron runs. Rows come back with `status: 'KEY_OVERDUE'` in that case."
+            "description": "<div style=\"color:#111827;\">Everything currently out. Shared with the CSO.\n\nOverdue is **derived**, not just read: the hourly `mark_key_overdue` job flips the key's own status, but the route also compares `return_deadline` to now, so the badge is correct even between cron runs. Rows come back with `status: 'KEY_OVERDUE'` in that case.</div>"
           },
           "response": [
             {
@@ -1661,7 +1719,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "keys", "return"]
             },
-            "description": "Exactly one of `code` or `override_reason` must be present — the schema refuses both-missing.\n\nThis is the verified path: the requester read out their return code, so the audit event is `KEY_RETURNED`. Add `returner_id` if someone other than the original requester is handing the key back."
+            "description": "<div style=\"color:#111827;\">Exactly one of `code` or `override_reason` must be present — the schema refuses both-missing.\n\nThis is the verified path: the requester read out their return code, so the audit event is `KEY_RETURNED`. Add `returner_id` if someone other than the original requester is handing the key back.</div>"
           },
           "response": [
             {
@@ -1717,7 +1775,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "keys", "return"]
             },
-            "description": "The escape hatch when the requester cannot produce a code. Completes the return but records it as `KEY_RETURNED_UNVERIFIED` **and** raises a `SUSPICIOUS_ACTIVITY` incident to the CSO when a shift is open — deliberately visible, never silent. `override_reason` must be at least 3 characters."
+            "description": "<div style=\"color:#111827;\">The escape hatch when the requester cannot produce a code. Completes the return but records it as `KEY_RETURNED_UNVERIFIED` **and** raises a `SUSPICIOUS_ACTIVITY` incident to the CSO when a shift is open — deliberately visible, never silent. `override_reason` must be at least 3 characters.</div>"
           },
           "response": [
             {
@@ -1773,7 +1831,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "shifts", "handover"]
             },
-            "description": "The incoming officer acknowledges every outstanding key. `key_ids` must match the actual outstanding set or you get 422 — this is chain-of-custody, so a partial list is rejected rather than quietly accepted. One audit entry is written per key.\n\nErrors: 409 handover already completed for this shift."
+            "description": "<div style=\"color:#111827;\">The incoming officer acknowledges every outstanding key. `key_ids` must match the actual outstanding set or you get 422 — this is chain-of-custody, so a partial list is rejected rather than quietly accepted. One audit entry is written per key.\n\nErrors: 409 handover already completed for this shift.</div>"
           },
           "response": [
             {
@@ -1829,7 +1887,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "incidents"]
             },
-            "description": "Append-only — there is no update or delete endpoint by design, mirroring a physical incident book.\n\n`type`: MISSING_KEY | SUSPICIOUS_ACTIVITY | EQUIPMENT_FAULT | PROCEDURAL | OTHER. `severity`: LOW | MEDIUM | HIGH. Optional `related_key_id`, `related_person_id`.\n\nHIGH severity additionally raises a realtime CSO alert. Returns a human-readable `reference` like `INC-2026-0042`."
+            "description": "<div style=\"color:#111827;\">Append-only — there is no update or delete endpoint by design, mirroring a physical incident book.\n\n`type`: MISSING_KEY | SUSPICIOUS_ACTIVITY | EQUIPMENT_FAULT | PROCEDURAL | OTHER. `severity`: LOW | MEDIUM | HIGH. Optional `related_key_id`, `related_person_id`.\n\nHIGH severity additionally raises a realtime CSO alert. Returns a human-readable `reference` like `INC-2026-0042`.</div>"
           },
           "response": [
             {
@@ -1852,7 +1910,7 @@
     },
     {
       "name": "04 — CSO · oversight",
-      "description": "Monitoring, incidents, reports and AI alert surfaces. Sign in as CSO (login + verify OTP).",
+      "description": "<div style=\"color:#111827;\">Monitoring, incidents, reports and AI alert surfaces. Sign in as CSO (login + verify OTP).</div>",
       "item": [
         {
           "name": "High-risk queue",
@@ -1869,7 +1927,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "requests", "cso-queue"]
             },
-            "description": "Requests with `risk_tier = 'HIGH'` and status `CODE_ISSUED` or `KEY_ISSUED`.\n\nWorth being precise about: there is **no `PENDING_CSO` status** in the schema. High risk does not hold a request for CSO sign-off — this is a review/intervention surface over requests that are already issuable or issued, not a gate in front of the Dean decision."
+            "description": "<div style=\"color:#111827;\">Requests with `risk_tier = 'HIGH'` and status `CODE_ISSUED` or `KEY_ISSUED`.\n\nWorth being precise about: there is **no `PENDING_CSO` status** in the schema. High risk does not hold a request for CSO sign-off — this is a review/intervention surface over requests that are already issuable or issued, not a gate in front of the Dean decision.</div>"
           },
           "response": [
             {
@@ -1911,7 +1969,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "requests", "cso-decision"]
             },
-            "description": "Intervention, not an approval gate. `DECLINED` cancels the request (`CODE_ISSUED` → `CANCELLED`, audit `REQUEST_DECLINED_CSO`). `APPROVED` changes no state at all — it is a recorded acknowledgement that the CSO reviewed it and let it stand (audit `REQUEST_APPROVED_CSO`).\n\n`note` is accepted by the schema but is not currently persisted anywhere."
+            "description": "<div style=\"color:#111827;\">Intervention, not an approval gate. `DECLINED` cancels the request (`CODE_ISSUED` → `CANCELLED`, audit `REQUEST_DECLINED_CSO`). `APPROVED` changes no state at all — it is a recorded acknowledgement that the CSO reviewed it and let it stand (audit `REQUEST_APPROVED_CSO`).\n\n`note` is accepted by the schema but is not currently persisted anywhere.</div>"
           },
           "response": [
             {
@@ -1959,7 +2017,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "ai", "risk-alerts"]
             },
-            "description": "Unresolved HIGH-tier requests from the last 24 hours. Read-only — the rule engine runs at submit time, not here, so this never recomputes a score."
+            "description": "<div style=\"color:#111827;\">Unresolved HIGH-tier requests from the last 24 hours. Read-only — the rule engine runs at submit time, not here, so this never recomputes a score.</div>"
           },
           "response": [
             {
@@ -1993,7 +2051,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "ai", "signature-alerts"]
             },
-            "description": "Weekend requests stuck on `PENDING_HOD` with an unresolved `SIGNATURE_MISMATCH` audit entry. Each alert carries both image URLs and the mismatch percentage so the CSO can compare side by side.\n\nA request drops off this list once resolved via `cso_override` on hod-decision (next request)."
+            "description": "<div style=\"color:#111827;\">Weekend requests stuck on `PENDING_HOD` with an unresolved `SIGNATURE_MISMATCH` audit entry. Each alert carries both image URLs and the mismatch percentage so the CSO can compare side by side.\n\nA request drops off this list once resolved via `cso_override` on hod-decision (next request).</div>"
           },
           "response": [
             {
@@ -2035,7 +2093,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "requests", "hod-decision"]
             },
-            "description": "Lets the CSO settle a faculty-key request that a Dean's approval attempt held on a signature mismatch.\n\nThis is **not** a general bypass of the Dean-authoriser gate: the RPC itself checks that a `SIGNATURE_MISMATCH` audit entry already exists for the request and returns 403 otherwise. Enforced in the function body, not just the route, so it holds even if something calls the RPC directly."
+            "description": "<div style=\"color:#111827;\">Lets the CSO settle a faculty-key request that a Dean's approval attempt held on a signature mismatch.\n\nThis is **not** a general bypass of the Dean-authoriser gate: the RPC itself checks that a `SIGNATURE_MISMATCH` audit entry already exists for the request and returns 403 otherwise. Enforced in the function body, not just the route, so it holds even if something calls the RPC directly.</div>"
           },
           "response": [
             {
@@ -2096,7 +2154,7 @@
                 {
                   "key": "status",
                   "value": "OPEN",
-                  "description": "OPEN | RESOLVED | ESCALATED",
+                  "description": "<div style=\"color:#111827;\">OPEN | RESOLVED | ESCALATED</div>",
                   "disabled": true
                 },
                 {
@@ -2120,7 +2178,7 @@
                 }
               ]
             },
-            "description": "Read-only, cursor-paginated. Append-only log — no update or delete endpoint exists."
+            "description": "<div style=\"color:#111827;\">Read-only, cursor-paginated. Append-only log — no update or delete endpoint exists.</div>"
           },
           "response": [
             {
@@ -2162,7 +2220,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "keys", "mark-lost"]
             },
-            "description": "Retires the key and opens a `MISSING_KEY` incident at HIGH severity in one go. Returns `{ key_id, incident_id }`. Writes an audit entry."
+            "description": "<div style=\"color:#111827;\">Retires the key and opens a `MISSING_KEY` incident at HIGH severity in one go. Returns `{ key_id, incident_id }`. Writes an audit entry.</div>"
           },
           "response": [
             {
@@ -2222,7 +2280,7 @@
                 }
               ]
             },
-            "description": "Cursor-paginated list of generated reports."
+            "description": "<div style=\"color:#111827;\">Cursor-paginated list of generated reports.</div>"
           },
           "response": [
             {
@@ -2276,7 +2334,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "reports", "generate"]
             },
-            "description": "Creates the immutable `shift_reports` row via RPC (uniqueness guard + audit entry), then calls Gemini with the shift's audit events and persists `{ markdown, timeline, metadata }` through the admin client — RLS blocks a direct UPDATE even for the CSO.\n\nFalls back to a deterministic template when Gemini is unavailable or the output will not parse, so generation always succeeds. Every report renders with a 'Generated by AI from shift event data' disclosure.\n\nErrors: 409 a report already exists for this shift."
+            "description": "<div style=\"color:#111827;\">Creates the immutable `shift_reports` row via RPC (uniqueness guard + audit entry), then calls Gemini with the shift's audit events and persists `{ markdown, timeline, metadata }` through the admin client — RLS blocks a direct UPDATE even for the CSO.\n\nFalls back to a deterministic template when Gemini is unavailable or the output will not parse, so generation always succeeds. Every report renders with a 'Generated by AI from shift event data' disclosure.\n\nErrors: 409 a report already exists for this shift.</div>"
           },
           "response": [
             {
@@ -2332,7 +2390,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "reports", "{{reportId}}", "comments"]
             },
-            "description": "The report body itself is immutable; comments are the sanctioned way to annotate it. Comments are themselves immutable after insert."
+            "description": "<div style=\"color:#111827;\">The report body itself is immutable; comments are the sanctioned way to annotate it. Comments are themselves immutable after insert.</div>"
           },
           "response": [
             {
@@ -2397,7 +2455,7 @@
                 }
               ]
             },
-            "description": "Same route the Dean calls, but unscoped — the CSO sees every unit."
+            "description": "<div style=\"color:#111827;\">Same route the Dean calls, but unscoped — the CSO sees every unit.</div>"
           },
           "response": [
             {
@@ -2420,7 +2478,7 @@
     },
     {
       "name": "05 — CSO · administration",
-      "description": "User provisioning, units, key inventory and collector authorisation slots.",
+      "description": "<div style=\"color:#111827;\">User provisioning, units, key inventory and collector authorisation slots.</div>",
       "item": [
         {
           "name": "List users",
@@ -2451,7 +2509,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "admin", "users"]
             },
-            "description": "Returns **every** non-deactivated profile in one shot with the unit joined. Deliberately takes no query params and does no pagination — filtering and paging happen client-side in the CSO users table. Do not expect `next_cursor` here."
+            "description": "<div style=\"color:#111827;\">Returns **every** non-deactivated profile in one shot with the unit joined. Deliberately takes no query params and does no pagination — filtering and paging happen client-side in the CSO users table. Do not expect `next_cursor` here.</div>"
           },
           "response": [
             {
@@ -2505,7 +2563,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "admin", "users"]
             },
-            "description": "Creates the profile, mints a 24-hour activation token, queues the invite email and writes the audit entry — all inside the `provision_user` RPC.\n\n`role` is DEAN | VERIFIER | REQUESTER (never CSO — that account is seeded). `unit_id` is required for DEAN and REQUESTER. Note the RPC parameter is still named `p_department_id` for historical reasons but writes to `profiles.unit_id`.\n\nErrors: 409 email already registered · 422 validation."
+            "description": "<div style=\"color:#111827;\">Creates the profile, mints a 24-hour activation token, queues the invite email and writes the audit entry — all inside the `provision_user` RPC.\n\n`role` is DEAN | VERIFIER | REQUESTER (never CSO — that account is seeded). `unit_id` is required for DEAN and REQUESTER. Note the RPC parameter is still named `p_department_id` for historical reasons but writes to `profiles.unit_id`.\n\nErrors: 409 email already registered · 422 validation.</div>"
           },
           "response": [
             {
@@ -2561,7 +2619,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "admin", "users", "{{userId}}"]
             },
-            "description": "Name and unit only. Email and role are intentionally **not** editable: the email is the auth login identity and the chain-of-trust anchor, and role changes are out of scope.\n\nMoving a Dean keeps the `units.hod_id` reverse link in sync. The `USER_UPDATED` audit entry records only fields that actually changed.\n\nErrors: 409 destination unit already has a Dean · 422 unit required / not found."
+            "description": "<div style=\"color:#111827;\">Name and unit only. Email and role are intentionally **not** editable: the email is the auth login identity and the chain-of-trust anchor, and role changes are out of scope.\n\nMoving a Dean keeps the `units.hod_id` reverse link in sync. The `USER_UPDATED` audit entry records only fields that actually changed.\n\nErrors: 409 destination unit already has a Dean · 422 unit required / not found.</div>"
           },
           "response": [
             {
@@ -2609,7 +2667,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "admin", "users", "{{userId}}", "revoke"]
             },
-            "description": "No body. Sets `status = 'DEACTIVATED'` and invalidates the Supabase session immediately. The profile row is kept so the audit trail stays intact — accounts are never deleted.\n\nErrors: 404 not found · 409 already deactivated."
+            "description": "<div style=\"color:#111827;\">No body. Sets `status = 'DEACTIVATED'` and invalidates the Supabase session immediately. The profile row is kept so the audit trail stays intact — accounts are never deleted.\n\nErrors: 404 not found · 409 already deactivated.</div>"
           },
           "response": [
             {
@@ -2657,7 +2715,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "admin", "users", "{{userId}}", "resend-invite"]
             },
-            "description": "No body. Sends a fresh activation link to a user still `PENDING_ACTIVATION` — for when the original 24-hour link lapsed unused.\n\nErrors: 409 user is already ACTIVE, or is DEACTIVATED (reinstate first)."
+            "description": "<div style=\"color:#111827;\">No body. Sends a fresh activation link to a user still `PENDING_ACTIVATION` — for when the original 24-hour link lapsed unused.\n\nErrors: 409 user is already ACTIVE, or is DEACTIVATED (reinstate first).</div>"
           },
           "response": [
             {
@@ -2719,7 +2777,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "admin", "units"]
             },
-            "description": "Every unit — a faculty, or the single Administration group. Each row carries its Dean, a `hasActiveHod` flag (used to grey the unit out in the Dean-role picker) and `hasAvailableKey`.\n\nRun this first: it populates `{{unitId}}` for the provisioning calls."
+            "description": "<div style=\"color:#111827;\">Every unit — a faculty, or the single Administration group. Each row carries its Dean, a `hasActiveHod` flag (used to grey the unit out in the Dean-role picker) and `hasAvailableKey`.\n\nRun this first: it populates `{{unitId}}` for the provisioning calls.</div>"
           },
           "response": [
             {
@@ -2753,7 +2811,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "admin", "departments"]
             },
-            "description": "Pre-rename duplicate of 'List units'. Identical behaviour; the only difference is the payload key — `{ departments: [...] }` instead of `{ units: [...] }`.\n\nPrefer `/api/admin/units` in new code. This one is a leftover from the `departments` → `units` rename and is a retirement candidate once nothing calls it."
+            "description": "<div style=\"color:#111827;\">Pre-rename duplicate of 'List units'. Identical behaviour; the only difference is the payload key — `{ departments: [...] }` instead of `{ units: [...] }`.\n\nPrefer `/api/admin/units` in new code. This one is a leftover from the `departments` → `units` rename and is a retirement candidate once nothing calls it.</div>"
           },
           "response": [
             {
@@ -2807,7 +2865,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "admin", "keys"]
             },
-            "description": "Adds a key to the inventory at status `AVAILABLE`. Returns 201 with `{ key_id }`.\n\n`code` must match `^[A-Z0-9]+-\\d+$` (e.g. `NS-304`). `key_count` (1–20, default 1) is how many physical keys are on the bunch — the verifier sees it at issue and return."
+            "description": "<div style=\"color:#111827;\">Adds a key to the inventory at status `AVAILABLE`. Returns 201 with `{ key_id }`.\n\n`code` must match `^[A-Z0-9]+-\\d+$` (e.g. `NS-304`). `key_count` (1–20, default 1) is how many physical keys are on the bunch — the verifier sees it at issue and return.</div>"
           },
           "response": [
             {
@@ -2863,7 +2921,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "admin", "authorisations"]
             },
-            "description": "Fills one of the three collector slots for a key. Called by the **Dean** for their own unit's keys, or the **CSO** for Administration keys — the route delegates entirely to the authoriser-aware `nominate_collector` RPC, which is why one endpoint serves both roles. Switch the `Referer` to `{{baseUrl}}/dean` when testing as a Dean.\n\nThe max-3 limit is a database trigger, not an application check, so it cannot be raced past.\n\nErrors: 403 key outside your scope · 409 three slots already filled · 409 already authorised."
+            "description": "<div style=\"color:#111827;\">Fills one of the three collector slots for a key. Called by the **Dean** for their own unit's keys, or the **CSO** for Administration keys — the route delegates entirely to the authoriser-aware `nominate_collector` RPC, which is why one endpoint serves both roles. Switch the `Referer` to `{{baseUrl}}/dean` when testing as a Dean.\n\nThe max-3 limit is a database trigger, not an application check, so it cannot be raced past.\n\nErrors: 403 key outside your scope · 409 three slots already filled · 409 already authorised.</div>"
           },
           "response": [
             {
@@ -2917,7 +2975,7 @@
                 "{{userId}}"
               ]
             },
-            "description": "Frees a slot. Same authoriser-aware rules as nomination. Returns **204 with no body** — `apiFetch` normalises that to `{ data: null, error: null, status: 204 }`.\n\nErrors: 403 key outside your scope · 404 authorisation not found."
+            "description": "<div style=\"color:#111827;\">Frees a slot. Same authoriser-aware rules as nomination. Returns **204 with no body** — `apiFetch` normalises that to `{ data: null, error: null, status: 204 }`.\n\nErrors: 403 key outside your scope · 404 authorisation not found.</div>"
           },
           "response": [
             {
@@ -2944,12 +3002,103 @@
               "body": "{\n  \"data\": null,\n  \"error\": \"Authorisation not found\",\n  \"status\": 404\n}"
             }
           ]
+        },
+        {
+          "name": "Get risk rule config",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/cso",
+                "description": "<div style=\"color:#111827;\">Required. Resolves the role cookie namespace for /api/* paths — without it the request 401s even when signed in.</div>"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/risk-rules",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "risk-rules"]
+            },
+            "description": "<div style=\"color:#111827;\">Returns the live risk-engine configuration that backs the `/cso/settings` \"Risk rules\" screen: one row per rule (`rule_key`, `weight`, `enabled`) plus the singleton tier boundaries (`medium_min`, `high_min`).\n\nThe engine reads this at request-submit time, so changes take effect on the next request without a deploy. If the read fails, `POST /api/requests/submit` falls back to the hardcoded `DEFAULT_RISK_CONFIG` rather than failing the key request.\n\n**Roles**: CSO only.</div>"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test('config loaded', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(res.error, 'error').to.be.null;",
+                  "});",
+                  "",
+                  "pm.test('all five rules present', () => {",
+                  "    pm.expect(res.data.rules).to.have.lengthOf(5);",
+                  "});",
+                  "",
+                  "pm.test('tier bounds are ordered', () => {",
+                  "    pm.expect(res.data.tier.high_min).to.be.above(res.data.tier.medium_min);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update risk rule config",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/cso",
+                "description": "<div style=\"color:#111827;\">Required. Resolves the role cookie namespace for /api/* paths — without it the request 401s even when signed in.</div>"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rules\": [\n    { \"rule_key\": \"outside_operational_hours\",    \"weight\": 3, \"enabled\": true },\n    { \"rule_key\": \"outstanding_key_not_returned\", \"weight\": 5, \"enabled\": true },\n    { \"rule_key\": \"weekend_without_memo\",         \"weight\": 4, \"enabled\": true },\n    { \"rule_key\": \"excess_request_frequency\",     \"weight\": 2, \"enabled\": true },\n    { \"rule_key\": \"collector_not_whitelisted\",    \"weight\": 5, \"enabled\": true }\n  ],\n  \"tier\": {\n    \"medium_min\": 4,\n    \"high_min\": 7\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/risk-rules",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "risk-rules"]
+            },
+            "description": "<div style=\"color:#111827;\">Replaces the whole risk configuration in one call. Writes go through the `update_risk_config` RPC — the tables have no write policy for any role — and produce a single `RISK_CONFIG_UPDATED` audit entry per save, not one per rule.\n\n**The `rules` array must contain all five rule keys exactly once.** Partial updates are rejected.\n\n`weight` is an integer 1–10 (enforced by a `CHECK` constraint, not just Zod). `high_min` must exceed `medium_min`, likewise enforced at the DB level.\n\nDisabled rules are skipped entirely by the engine — they never appear in a request’s `risk_factors`.\n\n**Roles**: CSO only.\n\n**Errors**: `403` not CSO · `422` missing/duplicate rule key, weight out of range, or `high_min <= medium_min`.</div>"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test('config saved', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(res.error, 'error').to.be.null;",
+                  "});"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
     {
       "name": "06 — Profile (any signed-in role)",
-      "description": "Self-service account settings. Change the Referer to match whichever role you are signed in as.",
+      "description": "<div style=\"color:#111827;\">Self-service account settings. Change the Referer to match whichever role you are signed in as.</div>",
       "item": [
         {
           "name": "Get my profile",
@@ -2966,7 +3115,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "profile", "me"]
             },
-            "description": "The caller's own profile including role-specific fields (`signature_ref_url` / `stamp_ref_url` for Deans) and the joined unit. Backs every role's settings page."
+            "description": "<div style=\"color:#111827;\">The caller's own profile including role-specific fields (`signature_ref_url` / `stamp_ref_url` for Deans) and the joined unit. Backs every role's settings page.</div>"
           },
           "response": [
             {
@@ -3008,7 +3157,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "profile", "me"]
             },
-            "description": "Only `full_name` is mutable here. Email belongs to Supabase Auth, the photo has its own route, and unit/role changes are CSO-only via `/api/admin/users/[id]`."
+            "description": "<div style=\"color:#111827;\">Only `full_name` is mutable here. Email belongs to Supabase Auth, the photo has its own route, and unit/role changes are CSO-only via `/api/admin/users/[id]`.</div>"
           },
           "response": [
             {
@@ -3058,7 +3207,7 @@
                   "key": "photo",
                   "type": "file",
                   "src": [],
-                  "description": "Image, max 5 MB."
+                  "description": "<div style=\"color:#111827;\">Image, max 5 MB.</div>"
                 }
               ]
             },
@@ -3067,7 +3216,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "profile", "photo"]
             },
-            "description": "Multipart. Replaces the caller's own photo in the `passport-photos` bucket — the storage path is keyed by user id, so one route serves every role.\n\nErrors: 422 missing file or non-image · 413 over 5 MB."
+            "description": "<div style=\"color:#111827;\">Multipart. Replaces the caller's own photo in the `passport-photos` bucket — the storage path is keyed by user id, so one route serves every role.\n\nErrors: 422 missing file or non-image · 413 over 5 MB.</div>"
           },
           "response": [
             {
@@ -3115,7 +3264,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "profile", "photo"]
             },
-            "description": "Removes the stored file(s) and clears `photo_url`. No body."
+            "description": "<div style=\"color:#111827;\">Removes the stored file(s) and clears `photo_url`. No body.</div>"
           },
           "response": [
             {
@@ -3165,13 +3314,13 @@
                   "key": "type",
                   "value": "signature",
                   "type": "text",
-                  "description": "signature | stamp"
+                  "description": "<div style=\"color:#111827;\">signature | stamp</div>"
                 },
                 {
                   "key": "image",
                   "type": "file",
                   "src": [],
-                  "description": "Replacement image, max 5 MB."
+                  "description": "<div style=\"color:#111827;\">Replacement image, max 5 MB.</div>"
                 }
               ]
             },
@@ -3180,7 +3329,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "profile", "signature"]
             },
-            "description": "Dean-only, post-onboarding replacement. If a reference already exists the upload is pixel-matched against it first — you cannot silently swap the specimen every later approval is checked against.\n\nOver threshold: the reference is **not** replaced, a `SIGNATURE_MISMATCH` audit entry (`context: 'reference_replacement'`) goes to the CSO, and you get HTTP 200 with `{ status: 'HELD_SIGNATURE_MISMATCH', mismatch_pct, message }`. Under threshold: `{ status: 'updated', new_url }` plus a `SIGNATURE_REFERENCE_UPDATED` entry.\n\nErrors: 403 not DEAN · 422 bad type or missing image · 413 over 5 MB."
+            "description": "<div style=\"color:#111827;\">Dean-only, post-onboarding replacement. If a reference already exists the upload is pixel-matched against it first — you cannot silently swap the specimen every later approval is checked against.\n\nOver threshold: the reference is **not** replaced, a `SIGNATURE_MISMATCH` audit entry (`context: 'reference_replacement'`) goes to the CSO, and you get HTTP 200 with `{ status: 'HELD_SIGNATURE_MISMATCH', mismatch_pct, message }`. Under threshold: `{ status: 'updated', new_url }` plus a `SIGNATURE_REFERENCE_UPDATED` entry.\n\nErrors: 403 not DEAN · 422 bad type or missing image · 413 over 5 MB.</div>"
           },
           "response": [
             {
@@ -3217,7 +3366,7 @@
     },
     {
       "name": "07 — Public · guest weekend access",
-      "description": "No authentication anywhere in this folder. An external person with no SmartKey account requests weekend access; a Dean approves and assigns a key; the guest mints a code on the day. Identified end to end by an unguessable access_token.",
+      "description": "<div style=\"color:#111827;\">No authentication anywhere in this folder. An external person with no SmartKey account requests weekend access; a Dean approves and assigns a key; the guest mints a code on the day. Identified end to end by an unguessable access_token.</div>",
       "item": [
         {
           "name": "Submit guest weekend request",
@@ -3256,7 +3405,7 @@
                   "key": "phone",
                   "value": "+2348012345678",
                   "type": "text",
-                  "description": "Optional."
+                  "description": "<div style=\"color:#111827;\">Optional.</div>"
                 },
                 {
                   "key": "id_document_type",
@@ -3272,31 +3421,31 @@
                   "key": "requested_room",
                   "value": "Senate Hall A",
                   "type": "text",
-                  "description": "Free text — the guest states what they need; the Dean assigns the actual key."
+                  "description": "<div style=\"color:#111827;\">Free text — the guest states what they need; the Dean assigns the actual key.</div>"
                 },
                 {
                   "key": "department_id",
                   "value": "{{unitId}}",
                   "type": "text",
-                  "description": "Field name is still department_id even though the table is now units."
+                  "description": "<div style=\"color:#111827;\">Field name is still department_id even though the table is now units.</div>"
                 },
                 {
                   "key": "weekend_date",
                   "value": "2026-08-08",
                   "type": "text",
-                  "description": "ISO date, must be Sat or Sun."
+                  "description": "<div style=\"color:#111827;\">ISO date, must be Sat or Sun.</div>"
                 },
                 {
                   "key": "return_deadline",
                   "value": "2026-08-08T17:00:00.000Z",
                   "type": "text",
-                  "description": "ISO datetime with offset."
+                  "description": "<div style=\"color:#111827;\">ISO datetime with offset.</div>"
                 },
                 {
                   "key": "letter",
                   "type": "file",
                   "src": [],
-                  "description": "Dean authorisation letter. PDF, JPG or PNG, max 5 MB."
+                  "description": "<div style=\"color:#111827;\">Dean authorisation letter. PDF, JPG or PNG, max 5 MB.</div>"
                 }
               ]
             },
@@ -3305,7 +3454,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "public", "weekend-request"]
             },
-            "description": "Multipart, unauthenticated, returns 201.\n\nGuests are modelled as their own `guest_requesters` entity — never a profile, because `profiles.id` references `auth.users` and a guest profile would require an auth user and break the `invited_by` chain of trust.\n\nUploads the letter to the private `weekend-letters` bucket, creates the request at `PENDING_HOD` with no code, and emails the status link. A failed email is logged but does not fail the request — hence the `access_token` in the response as a fallback.\n\nThe whole `/api/public/*` prefix bypasses session resolution in middleware, and the underlying guest RPCs have execute revoked from `anon`/`public` — they run only through this server route with the service-role client.\n\nErrors: 404 unit not found · 422 validation · 413 letter over 5 MB."
+            "description": "<div style=\"color:#111827;\">Multipart, unauthenticated, returns 201.\n\nGuests are modelled as their own `guest_requesters` entity — never a profile, because `profiles.id` references `auth.users` and a guest profile would require an auth user and break the `invited_by` chain of trust.\n\nUploads the letter to the private `weekend-letters` bucket, creates the request at `PENDING_HOD` with no code, and emails the status link. A failed email is logged but does not fail the request — hence the `access_token` in the response as a fallback.\n\nThe whole `/api/public/*` prefix bypasses session resolution in middleware, and the underlying guest RPCs have execute revoked from `anon`/`public` — they run only through this server route with the service-role client.\n\nErrors: 404 unit not found · 422 validation · 413 letter over 5 MB.</div>"
           },
           "response": [
             {
@@ -3360,7 +3509,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "public", "weekend-request", "{{guestToken}}"]
             },
-            "description": "The session-less status page payload, read by `access_token`. Returns only safe fields: status, requested date, the room they asked for, the assigned key once a Dean has picked one, and the code + expiry while `CODE_ISSUED`.\n\n`key` is null until approval; `code` / `code_expires_at` are non-null only while `CODE_ISSUED`."
+            "description": "<div style=\"color:#111827;\">The session-less status page payload, read by `access_token`. Returns only safe fields: status, requested date, the room they asked for, the assigned key once a Dean has picked one, and the code + expiry while `CODE_ISSUED`.\n\n`key` is null until approval; `code` / `code_expires_at` are non-null only while `CODE_ISSUED`.</div>"
           },
           "response": [
             {
@@ -3421,7 +3570,7 @@
                 "code"
               ]
             },
-            "description": "Guest analogue of the requester's weekend-code call. 10-minute code, on the requested date only, moving the request to `CODE_ISSUED`. No body.\n\nErrors: 409 not in APPROVED state · 422 TOO_EARLY · 404 token not found."
+            "description": "<div style=\"color:#111827;\">Guest analogue of the requester's weekend-code call. 10-minute code, on the requested date only, moving the request to `CODE_ISSUED`. No body.\n\nErrors: 409 not in APPROVED state · 422 TOO_EARLY · 404 token not found.</div>"
           },
           "response": [
             {
@@ -3482,7 +3631,7 @@
                 "return-code"
               ]
             },
-            "description": "Guest analogue of `POST /api/requests/request-return` — a 15-minute return code so the guest is in the loop on the handback just like a registered requester. No body; status stays `KEY_ISSUED`.\n\nThe verifier then enters it through the normal `POST /api/keys/return`, which validates a return code regardless of whether the holder is registered or a guest.\n\nErrors: 404 token not found · 409 key not currently issued."
+            "description": "<div style=\"color:#111827;\">Guest analogue of `POST /api/requests/request-return` — a 15-minute return code so the guest is in the loop on the handback just like a registered requester. No body; status stays `KEY_ISSUED`.\n\nThe verifier then enters it through the normal `POST /api/keys/return`, which validates a return code regardless of whether the holder is registered or a guest.\n\nErrors: 404 token not found · 409 key not currently issued.</div>"
           },
           "response": [
             {
@@ -3531,7 +3680,7 @@
                 "expire"
               ]
             },
-            "description": "Fired by the guest status page when the countdown hits 0. Idempotent. Same same-day rollback semantics as the registered path.\n\nErrors: 409 code has not expired yet · 404 token not found."
+            "description": "<div style=\"color:#111827;\">Fired by the guest status page when the countdown hits 0. Idempotent. Same same-day rollback semantics as the registered path.\n\nErrors: 409 code has not expired yet · 404 token not found.</div>"
           },
           "response": [
             {
@@ -3568,7 +3717,7 @@
     },
     {
       "name": "08 — System (secret-guarded)",
-      "description": "Not user-facing and not called from a browser. Both routes authenticate with a shared secret rather than a session. Populate {{cronSecret}} / {{serviceRoleKey}} from .env.local before running.",
+      "description": "<div style=\"color:#111827;\">Not user-facing and not called from a browser. Both routes authenticate with a shared secret rather than a session. Populate {{cronSecret}} / {{serviceRoleKey}} from .env.local before running.</div>",
       "item": [
         {
           "name": "Weekend reminders (cron)",
@@ -3578,7 +3727,7 @@
               {
                 "key": "Authorization",
                 "value": "Bearer {{cronSecret}}",
-                "description": "Shared CRON_SECRET — not a user session."
+                "description": "<div style=\"color:#111827;\">Shared CRON_SECRET — not a user session.</div>"
               }
             ],
             "url": {
@@ -3586,7 +3735,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "cron", "weekend-reminders"]
             },
-            "description": "Called by the `weekend-code-reminders` pg_cron job at 06:00 UTC on Sat/Sun. Emails every `APPROVED` weekend request due today (registered and guest) a nudge to mint their code, then stamps `reminder_sent_at` so a retry never double-sends.\n\nNo collection code is ever included — the code is always minted on the day. pg_cron reads the bearer secret from Supabase Vault (`weekend_cron_secret`), which must match `CRON_SECRET`.\n\nReturns `{ sent, failed }`. Errors: 401 wrong/missing secret · 500 CRON_SECRET not configured."
+            "description": "<div style=\"color:#111827;\">Called by the `weekend-code-reminders` pg_cron job at 06:00 UTC on Sat/Sun. Emails every `APPROVED` weekend request due today (registered and guest) a nudge to mint their code, then stamps `reminder_sent_at` so a retry never double-sends.\n\nNo collection code is ever included — the code is always minted on the day. pg_cron reads the bearer secret from Supabase Vault (`weekend_cron_secret`), which must match `CRON_SECRET`.\n\nReturns `{ sent, failed }`. Errors: 401 wrong/missing secret · 500 CRON_SECRET not configured.</div>"
           },
           "response": [
             {
@@ -3631,7 +3780,7 @@
               {
                 "key": "x-internal-secret",
                 "value": "{{serviceRoleKey}}",
-                "description": "SUPABASE_SERVICE_ROLE_KEY. Never reachable from a browser."
+                "description": "<div style=\"color:#111827;\">SUPABASE_SERVICE_ROLE_KEY. Never reachable from a browser.</div>"
               }
             ],
             "body": {
@@ -3643,7 +3792,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "ai", "verify-signature"]
             },
-            "description": "Exposes the Sharp + Pixelmatch pipeline directly: fetches the Dean's reference and the submitted image, greyscales both, normalises to 800×400, thresholds to binary, then diffs pixel by pixel.\n\nReturns `{ mismatch_ratio, passed }` against `SIGNATURE_DIFF_THRESHOLD` (default 0.15). Useful for calibrating the threshold against real signature samples.\n\nErrors: 403 wrong internal secret · 422 Dean has no reference signature on file."
+            "description": "<div style=\"color:#111827;\">Exposes the Sharp + Pixelmatch pipeline directly: fetches the Dean's reference and the submitted image, greyscales both, normalises to 800×400, thresholds to binary, then diffs pixel by pixel.\n\nReturns `{ mismatch_ratio, passed }` against `SIGNATURE_DIFF_THRESHOLD` (default 0.15). Useful for calibrating the threshold against real signature samples.\n\nErrors: 403 wrong internal secret · 422 Dean has no reference signature on file.</div>"
           },
           "response": [
             {

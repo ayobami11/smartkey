@@ -154,9 +154,30 @@ Drop the `-H 'Referer: ...'` from step 2 and you get a 401.
 
 ---
 
+## Updating the published collection (the link does not change)
+
+The collection is published to Postman as **SmartKey API** in _Firdous's Workspace_:
+
+```
+collection id  c7912f2c-fc39-46ce-aebb-6a396b2cd0ff
+uid            44971333-c7912f2c-fc39-46ce-aebb-6a396b2cd0ff
+```
+
+**Editing it in place keeps the same id, so the shared link stays valid.** You never need to re-import and hand out a new URL. Only _creating_ a collection mints a new id — importing this JSON as a fresh collection is what would break the link, so don't do that to apply an update.
+
+Two ways to edit in place, both preserving the link:
+
+- **In the Postman app** — edit the request, save. Done.
+- **Via the Postman MCP server** — `createCollectionRequest` to add one, `updateCollectionRequest` to change one, `putCollection` to replace the whole thing. All take the collection id above and update the existing collection.
+
+The JSON file in this folder is a **version-controlled snapshot**, not the source of truth for the published link. Keep it in step so code review can see API changes, but treat the published collection as the live artefact. After changing one, mirror it to the other:
+
+- Postman → repo: export the collection (v2.1 format) over `SmartKey.postman_collection.json`.
+- Repo → Postman: apply the same edit through the MCP or the app. Do **not** import the file as a new collection.
+
 ## Keeping this current
 
-The collection is hand-maintained, same as `docs/API.md`. When you add or change a route, update both.
+The collection is hand-maintained, same as `docs/API.md`. When you add or change a route, update the published collection, this JSON snapshot, and `docs/API.md`.
 
 To re-check coverage against the filesystem. The first command needs `jq`; if you don't have it, the same extraction is a few lines of `node -e` over the collection JSON (`CLAUDE.md` notes `node` as the project's JSON-parsing tool of choice). The second command is pure shell.
 

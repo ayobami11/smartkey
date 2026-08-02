@@ -20,7 +20,7 @@ import {
   InputOTP,
   InputOTPGroup,
   InputOTPSlot,
-} from '@/components/ui/input-otp';
+} from '@/components/smartkey/input-otp';
 import { apiFetch } from '@/lib/api';
 import { otpSchema, type OtpInput } from '@/lib/validation/schemas';
 

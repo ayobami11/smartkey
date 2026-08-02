@@ -8,6 +8,12 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-02 — OTP inputs now clear their deferred test timers before teardown
+
+- **Why**: the verifier return-key test run was passing all assertions but still ended with an unhandled `ReferenceError: window is not defined` from `input-otp` after Vitest tore the DOM down. The library schedules deferred selection-sync callbacks with `setTimeout` and does not clear them on unmount, so the callbacks could fire after the test environment was gone.
+- Added a SmartKey wrapper around the OTP primitive that, in `NODE_ENV=test`, temporarily patches `setTimeout`/`clearTimeout` for the mounted tree and clears every tracked timer on cleanup. That keeps the library behaviour unchanged in the app while preventing post-teardown callbacks in tests.
+- Repointed the login, verifier return-key, and verifier live-queue forms to the wrapper so they all share the same safe OTP behaviour.
+
 ### 2026-08-02 — Lapsed weekend requests can be dismissed; the auto-expiry cron had been failing silently for weeks
 
 - **Why**: the Dean/CSO weekend queue showed expired requests indefinitely with an "Expired" badge and both decision buttons permanently disabled — a dead row that could never be cleared. The obvious reading was a missing feature, but `expire_stale_weekend_requests()` already existed and was scheduled nightly to clear exactly these. Checking `cron.job_run_details` showed it had **failed on every single run** since at least 26 July.
