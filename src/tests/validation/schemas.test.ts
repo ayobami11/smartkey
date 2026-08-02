@@ -33,13 +33,13 @@ const MONDAY = '2026-06-29';
 
 describe('password primitive', () => {
   it('accepts a valid strong password', () => {
-    expect(password.safeParse('ValidPass1!').success).toBe(true);
+    expect(password.safeParse('ValidPass1!!').success).toBe(true); // 12 chars
   });
 
-  it('rejects a password under 8 characters', () => {
+  it('rejects a password under 12 characters', () => {
     const r = password.safeParse('Ab1!xyz'); // 7 chars
     expect(r.success).toBe(false);
-    expect(r.error?.issues[0].message).toMatch(/at least 8 characters/i);
+    expect(r.error?.issues[0].message).toMatch(/at least 12 characters/i);
   });
 
   it('rejects a password over 64 characters', () => {
@@ -49,25 +49,25 @@ describe('password primitive', () => {
   });
 
   it('rejects a password with no uppercase letter', () => {
-    const r = password.safeParse('str0ng!pass'); // no uppercase
+    const r = password.safeParse('str0ng!password'); // 15 chars, no uppercase
     expect(r.success).toBe(false);
     expect(r.error?.issues[0].message).toMatch(/uppercase/i);
   });
 
   it('rejects a password with no lowercase letter', () => {
-    const r = password.safeParse('STR0NG!PASS'); // no lowercase
+    const r = password.safeParse('STR0NG!PASSWORD'); // 15 chars, no lowercase
     expect(r.success).toBe(false);
     expect(r.error?.issues[0].message).toMatch(/lowercase/i);
   });
 
   it('rejects a password with no digit', () => {
-    const r = password.safeParse('Strong!Pass'); // no digit
+    const r = password.safeParse('Strong!Password'); // 15 chars, no digit
     expect(r.success).toBe(false);
     expect(r.error?.issues[0].message).toMatch(/number/i);
   });
 
   it('rejects a password with no special character', () => {
-    const r = password.safeParse('Str0ngPass'); // no special char
+    const r = password.safeParse('Str0ngPassword'); // 14 chars, no special char
     expect(r.success).toBe(false);
     expect(r.error?.issues[0].message).toMatch(/special character/i);
   });
