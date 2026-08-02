@@ -35,7 +35,7 @@ const isPublicPath = (pathname: string): boolean =>
 const redirectTo = (request: NextRequest, destination: string): NextResponse =>
   NextResponse.redirect(new URL(destination, request.url));
 
-export const middleware = async (
+export const proxy = async (
   request: NextRequest
 ): Promise<NextResponse> => {
   const { pathname } = request.nextUrl;

@@ -63,7 +63,7 @@ src/
 │   ├── auth/            # MFA flow, session helpers
 │   └── logger.ts        # structured logging
 ├── types/               # shared types and zod schemas
-└── middleware.ts        # auth + role gating
+└── proxy.ts             # auth + role gating (Next.js 16 `proxy` convention, formerly `middleware.ts`)
 
 supabase/
 ├── migrations/          # timestamped SQL files
@@ -93,7 +93,7 @@ Key decisions live in `docs/adr/` as numbered records. Read them when in doubt.
 
 ## Auth and role gating
 
-`middleware.ts` reads the Supabase session and the user's role, gates routes by role, and rewrites unauthorised access to a 403 page. The role is stored in a `profiles.role` column (`CSO`, `DEAN`, `VERIFIER`, `REQUESTER`) and joined into JWT claims via Supabase function. Internal identifiers (routes, RPCs, audit events — e.g. `hod_decisions`, `HOD_APPROVED`) retain the `hod` name for historical continuity, but the role enum value itself is `DEAN`.
+`src/proxy.ts` (the `proxy` file convention, renamed from `middleware.ts` in Next.js 16) reads the Supabase session and the user's role, gates routes by role, and rewrites unauthorised access to a 403 page. The role is stored in a `profiles.role` column (`CSO`, `DEAN`, `VERIFIER`, `REQUESTER`) and joined into JWT claims via Supabase function. Internal identifiers (routes, RPCs, audit events — e.g. `hod_decisions`, `HOD_APPROVED`) retain the `hod` name for historical continuity, but the role enum value itself is `DEAN`.
 
 ## Realtime subscriptions
 

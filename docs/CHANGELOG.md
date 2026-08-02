@@ -8,6 +8,12 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-02 — `middleware.ts` renamed to `proxy.ts` (Next.js 16 file convention)
+
+- **Why**: Next.js 16 deprecated the `middleware.ts` file convention in favour of `proxy.ts` — same request/response API, but the file and exported function are renamed to avoid confusion with Express-style middleware. Every `next build`/`next dev` run was printing a deprecation warning.
+- Migrated with the official codemod (`npx @next/codemod@canary middleware-to-proxy .`): `src/middleware.ts` → `src/proxy.ts`, `export const middleware` → `export const proxy`. No other change — same `PROTECTED_ROUTES`, `config.matcher`, and role-gating logic. `src/lib/supabase/middleware.ts` (the `updateSession()` helper) is unaffected; it's a differently-purposed file that happens to share the word "middleware."
+- `docs/ARCHITECTURE.md` updated to reference `proxy.ts`. Verified with `npm run typecheck` and `npm run lint` (both clean); a full `npm run build` in this environment hit an unrelated Google Fonts network fetch failure, not connected to this change.
+
 ### 2026-08-02 — Migration history has diverged from the repo; duplicate weekend-RPC overloads dropped
 
 - **Why**: while verifying the realtime publication (entry below) the live table list came back with `audit_log` missing despite a migration that adds it, and with `incidents` and `shifts` present despite no migration adding either. Pulling that thread exposed a far larger problem than the realtime gap, plus an active bug in the Dean approval path.
