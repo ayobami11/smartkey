@@ -87,6 +87,7 @@ The design system is in @design-system/DESIGN.md. **Do not invent colours, typog
 
 ## Workflow rules
 
+- **Every push to a branch must include a `docs/CHANGELOG.md` entry.** No exceptions — this applies to fixes, refactors, docs and config changes, not just features. Add the entry in the same commit as the change where practical, or as a follow-up commit before pushing. Each entry: dated heading, a **Why** line explaining the reason the change was needed (not just what changed), then the specifics. Newest entry goes at the top of `## Entries`.
 - **Use plan mode** for anything that touches more than one file. Show the plan before writing code.
 - After any change, run `npm run typecheck && npm run lint` before considering the task done.
 - For new screens, **read @docs/SCREEN_CHECKLIST.md** first — it covers states (empty, loading, error, offline, content) you must design for every async surface.
