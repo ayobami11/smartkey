@@ -43,7 +43,7 @@ export default async function LoginPage({
           Need help signing in?{' '}
           <Link
             href="/help"
-            className="text-primary underline-offset-4 hover:underline"
+            className="text-primary underline underline-offset-4"
           >
             Get help
           </Link>
@@ -53,7 +53,7 @@ export default async function LoginPage({
           No account?{' '}
           <Link
             href="/weekend-access"
-            className="text-primary underline-offset-4 hover:underline"
+            className="text-primary underline underline-offset-4"
           >
             Request weekend access
           </Link>

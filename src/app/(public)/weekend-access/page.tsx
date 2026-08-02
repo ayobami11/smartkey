@@ -74,7 +74,7 @@ export default async function WeekendAccessPage() {
           Already have a SmartKey account?{' '}
           <Link
             href="/login"
-            className="text-primary underline-offset-4 hover:underline"
+            className="text-primary underline underline-offset-4"
           >
             Sign in
           </Link>
