@@ -24,7 +24,11 @@ type Shift = {
   id: string;
   shift_number: number;
   started_at: string;
-  primary_officer: { full_name: string; institutional_email: string };
+  // Nullable: the API joins this from `profiles`, and a join can come back null
+  // (missing officer row, or an RLS-filtered embed). The CSO report views already
+  // model it this way — this one used to claim it was always present and crashed
+  // the page when it wasn't.
+  primary_officer: { full_name: string } | null;
 };
 
 type OutstandingKey = {
@@ -384,7 +388,7 @@ export const HandoverView = () => {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-foreground">
-                    {shift.primary_officer.full_name}
+                    {shift.primary_officer?.full_name ?? 'Officer unavailable'}
                   </p>
                   <p className="mt-0.5 font-mono text-xs text-muted-foreground">
                     Shift {shift.shift_number} · {formatDate(shift.started_at)}{' '}

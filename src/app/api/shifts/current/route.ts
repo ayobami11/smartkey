@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
 import { err, ok } from '@/types/api';
 
@@ -21,7 +22,15 @@ export const GET = async () => {
     return NextResponse.json(err('Forbidden', 403), { status: 403 });
   }
 
-  const { data: shift, error } = await supabase
+  // Use the admin client so the officer profile joins are not blocked by RLS.
+  // Auth + role check above is still done via the session client.
+  //
+  // The `profiles_select` policy lets a user read only their own row (plus CSO
+  // reads all, Dean reads their own unit) — there is no VERIFIER clause. Under
+  // the session client PostgREST therefore silently returns `primary_officer:
+  // null` whenever the shift belongs to a *different* officer, which is exactly
+  // the handover case. That null then crashed /verifier/handover.
+  const { data: shift, error } = await createAdminClient()
     .from('shifts')
     .select(
       `id, shift_number, started_at, ended_at,

@@ -742,6 +742,8 @@ Use them when creating issues via the GitHub web UI (they appear as options when
 
 Issue numbers below are the actual GitHub issue numbers for this repo (`ayobami11/smartkey`). ✅ = merged to main, 🔄 = PR open/in review, ⬜ = not started.
 
+> **Note**: this table was last updated well before `docs/BACKEND.md` §14's implementation-status table, which is meant to be updated after every merged PR and is the more current source. Statuses below were reconciled against §14 and against what actually exists in the repo (`src/lib/ai/reports/`, `src/lib/ai/signature/`, `supabase/functions/`, `.github/workflows/`) rather than re-verified live against GitHub — `gh` CLI isn't available in this environment. If the two tables disagree again in the future, trust §14 of `docs/BACKEND.md` and fix this one.
+
 ```
 Milestone 1 — Foundation (all ✅ done)
   #9 (Supabase setup) → #10 (schema) → #11 (RLS) → #12 (RPCs) → #13 (client utils) → #14 (middleware) → #15 (auth routes)
@@ -749,12 +751,12 @@ Milestone 1 — Foundation (all ✅ done)
 Milestone 2 — Request Workflow (all ✅ done)
   #16 (request routes) → #17 (key/admin routes) → #18 (realtime + offline guard)
 
-Milestone 3 — AI Risk Engine
-  #19 ✅ (risk engine + unit tests) → #20 🔄 (RiskTierBadge, RiskFactorPopover — PR #40 in review)
+Milestone 3 — AI Risk Engine (all ✅ done)
+  #19 ✅ (risk engine + unit tests) → #20 ✅ (RiskTierBadge, RiskFactorPopover)
 
-Milestone 4 — LLM + Signature
-  #21 ⬜ (Gemini shift reports) → #22 ⬜ (signature verification + Supabase Storage)
+Milestone 4 — LLM + Signature (all ✅ done)
+  #21 ✅ (Gemini shift reports) → #22 ✅ (signature verification + Supabase Storage)
 
-Milestone 5 — CSO Backend + Jobs
-  #23 ✅ (shift/incident/report routes) → #24 ⬜ (edge functions) → #25 ⬜ (CI/CD pipeline)
+Milestone 5 — CSO Backend + Jobs (all ✅ done)
+  #23 ✅ (shift/incident/report routes) → #24 ✅ (edge functions) → #25 ✅ (CI/CD pipeline)
 ```

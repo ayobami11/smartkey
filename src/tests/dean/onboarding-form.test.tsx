@@ -38,8 +38,8 @@ afterEach(() => {
 // Fills both password fields with a valid matching password and checks the
 // confirmation checkbox. Extracted here to avoid repetition in API-path tests.
 const fillValidForm = async (user: ReturnType<typeof userEvent.setup>) => {
-  await user.type(screen.getByLabelText(/^password$/i), 'ValidPass1!');
-  await user.type(screen.getByLabelText(/confirm password/i), 'ValidPass1!');
+  await user.type(screen.getByLabelText(/^password$/i), 'ValidPass1!!');
+  await user.type(screen.getByLabelText(/confirm password/i), 'ValidPass1!!');
   await user.click(screen.getByRole('checkbox'));
 };
 
@@ -91,7 +91,7 @@ describe('OnboardingForm', () => {
   it('shows "Passwords do not match." when passwords differ', async () => {
     const user = userEvent.setup();
     render(<OnboardingForm {...defaultProps} />);
-    await user.type(screen.getByLabelText(/^password$/i), 'ValidPass1!');
+    await user.type(screen.getByLabelText(/^password$/i), 'ValidPass1!!');
     await user.type(
       screen.getByLabelText(/confirm password/i),
       'DifferentPass1!'
@@ -105,8 +105,8 @@ describe('OnboardingForm', () => {
   it('shows "You must confirm..." when the checkbox is unchecked on submit', async () => {
     const user = userEvent.setup();
     render(<OnboardingForm {...defaultProps} />);
-    await user.type(screen.getByLabelText(/^password$/i), 'ValidPass1!');
-    await user.type(screen.getByLabelText(/confirm password/i), 'ValidPass1!');
+    await user.type(screen.getByLabelText(/^password$/i), 'ValidPass1!!');
+    await user.type(screen.getByLabelText(/confirm password/i), 'ValidPass1!!');
     // Intentionally do not check the confirmation checkbox
     await user.click(screen.getByRole('button', { name: /finish setup/i }));
     await waitFor(() => {

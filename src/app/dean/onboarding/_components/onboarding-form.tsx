@@ -99,6 +99,8 @@ export const OnboardingForm = ({
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Signature
           </p>
+          {/* Local blob: preview of an unsaved upload — next/image can't optimize it. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={URL.createObjectURL(sigFile)}
             alt="Signature reference"
@@ -109,6 +111,8 @@ export const OnboardingForm = ({
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Departmental stamp
           </p>
+          {/* Local blob: preview of an unsaved upload — next/image can't optimize it. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={URL.createObjectURL(stampFile)}
             alt="Stamp reference"

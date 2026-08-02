@@ -14,7 +14,7 @@ vi.mock('sonner', () => ({
 import { ChangePasswordForm } from '@/components/smartkey/change-password-form';
 
 // A password that satisfies all constraints in src/lib/validation/primitives.ts
-const VALID_PASSWORD = 'Test@1234!';
+const VALID_PASSWORD = 'Test@123456!';
 
 beforeEach(() => {
   vi.clearAllMocks();

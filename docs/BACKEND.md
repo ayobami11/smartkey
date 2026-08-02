@@ -53,8 +53,8 @@ The technology stack was selected to address the precise technical requirements 
 
 | **Component**         | **Technology**          | **Version / Tier**                      | **Justification**                                                                                    |
 | --------------------- | ----------------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Frontend & API Host   | Next.js (React)         | v14+                                    | Unified frontend + serverless API; server-side rendering; no separate backend server needed          |
-| Styling               | Tailwind CSS            | v3                                      | Utility-first; rapid responsive dashboard development without custom CSS files                       |
+| Frontend & API Host   | Next.js (React)         | 16                                      | Unified frontend + serverless API; server-side rendering; no separate backend server needed          |
+| Styling               | Tailwind CSS            | v4                                      | Utility-first; rapid responsive dashboard development without custom CSS files                       |
 | Database              | PostgreSQL via Supabase | Postgres 15                             | Relational model; ACID transactions; UNIQUE/CHECK constraints enforce business rules at DB level     |
 | Authentication & 2FA  | Supabase Auth           | Free tier                               | Built-in email OTP, invite links, JWT; integrates directly with RLS policies                         |
 | File Storage          | Supabase Storage        | Free tier                               | Passport photos, signatures, weekend letters; access controlled by same RLS policies                 |
@@ -414,6 +414,8 @@ This eliminates the need for polling (periodic HTTP requests) and the complexity
 # 9\. Background Jobs (Edge Functions)
 
 Two recurring backend jobs are implemented as Supabase Edge Functions running on the Deno runtime. These handle tasks that must execute on a schedule rather than in response to a user request.
+
+> **Update (2026-06-22, `20260622140052_cron_jobs_direct_sql.sql`)**: both jobs were originally scheduled to invoke their Edge Function via `http_post`, authenticated with a URL/secret read from `current_setting('app.*')`. Managed Supabase does not permit `ALTER DATABASE ... SET` for custom parameters, so those settings were never actually set and the jobs **silently never fired from launch until this fix**. `pg_cron` now calls the equivalent SQL directly — `mark_key_overdue()` for the hourly job, `schedule_pending_shift_report()` for the daily job — with no HTTP hop and no secret. The two Edge Functions below remain deployed and can still be invoked manually, but they are no longer the cron entry point; see `docs/DATABASE.md` for the current RPC signatures.
 
 ## 9.1 Overdue Key Check (Hourly)
 

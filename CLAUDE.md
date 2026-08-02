@@ -6,7 +6,7 @@
 
 SmartKey is a key management web application for the University of Lagos Senate Building. It replaces a paper logbook with role-specific dashboards, an immutable audit trail, and three AI components: rule-based risk scoring, Gemini-generated shift reports, and pixel-level signature verification.
 
-Four roles share the application: **CSO** (admin oversight), **Dean** (faculty key authoriser; system role `HOD`), **Verifier** (security personnel at the desk), **Requester** (university staff).
+Four roles share the application: **CSO** (admin oversight), **Dean** (faculty key authoriser; system role `DEAN`), **Verifier** (security personnel at the desk), **Requester** (university staff). Some internal identifiers (routes, RPCs, audit events — e.g. `hod_decisions`, `HOD_APPROVED`) retain the old `hod` name for historical continuity; the role enum itself does not.
 
 For a full domain overview see @docs/PRODUCT.md.
 For architectural decisions see @docs/ARCHITECTURE.md.
@@ -49,11 +49,11 @@ npm run format       # Format src/** with Prettier
 npm run format:check # Check formatting without writing
 npm run typecheck    # tsc --noEmit
 npm run db:migrate   # Apply Supabase migrations
-npm run design:lint  # Validate design-system/DESIGN.md
-npm run design:export # Re-export Tailwind config from DESIGN.md
 npm test             # Run unit tests
 npm run test:e2e     # Run Playwright E2E with axe-core checks
 ```
+
+`npm run design:lint` / `npm run design:export` are not real scripts — no `design:*` entry exists in `package.json`. To validate `design-system/DESIGN.md`, run `npx @google/design.md lint DESIGN.md` directly (see `design-system/prompts/README.md`); there is no equivalent export command wired up yet.
 
 ## Coding conventions
 
@@ -63,7 +63,7 @@ npm run test:e2e     # Run Playwright E2E with axe-core checks
 - Default to **Server Components**; add `"use client"` only when needed (state, effects, browser APIs).
 - Event handlers prefixed `handle`: `handleSubmit`, `handleClick`.
 - File names: PascalCase for components, kebab-case for utilities.
-- Co-locate tests: `KeyTile.tsx` → `KeyTile.test.tsx`.
+- Tests live in a parallel `src/tests/<area>/` tree, not co-located with the component (e.g. `src/components/smartkey/risk-tier-badge.tsx` → `src/tests/smartkey/risk-tier-badge.test.tsx`). Follow this convention for new tests rather than co-locating.
 - All API responses follow the shape `{ data, error, status }`.
 
 ## Design system rules (these matter)
@@ -87,6 +87,7 @@ The design system is in @design-system/DESIGN.md. **Do not invent colours, typog
 
 ## Workflow rules
 
+- **Every push to a branch must include a `docs/CHANGELOG.md` entry.** No exceptions — this applies to fixes, refactors, docs and config changes, not just features. Add the entry in the same commit as the change where practical, or as a follow-up commit before pushing. Each entry: dated heading, a **Why** line explaining the reason the change was needed (not just what changed), then the specifics. Newest entry goes at the top of `## Entries`.
 - **Use plan mode** for anything that touches more than one file. Show the plan before writing code.
 - After any change, run `npm run typecheck && npm run lint` before considering the task done.
 - For new screens, **read @docs/SCREEN_CHECKLIST.md** first — it covers states (empty, loading, error, offline, content) you must design for every async surface.
