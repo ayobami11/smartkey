@@ -88,7 +88,7 @@ An external (non-registered) person who may collect a key for a single weekend. 
 - `returned_at` timestamptz nullable
 - `created_at` timestamptz
 - Constraint `requests_one_requester_kind`: exactly one of `requester_id` / `guest_id` is set (`num_nonnulls(requester_id, guest_id) = 1`)
-- Constraint `requests_key_required_after_pending`: `key_id` may only be null while `status` is `'PENDING_HOD'` or `'DECLINED'` (`key_id is not null or status in ('PENDING_HOD', 'DECLINED')`) — widened from `PENDING_HOD` only so a guest request can be declined before a Dean ever assigns a key (`20260616120547_fix_guest_decline_constraint.sql`)
+- Constraint `requests_key_required_after_pending`: `key_id` may only be null while `status` is one of `'PENDING_HOD'` / `'DECLINED'` / `'EXPIRED'` / `'CANCELLED'` — the terminal states a guest request can reach before a Dean ever assigns a key. Widened twice: first from `PENDING_HOD` only to allow declines (`20260616120547_fix_guest_decline_constraint.sql`), then to allow expiry and cancellation (`20260802223014_widen_requests_key_required_for_terminal_states.sql`). The second widening fixed a live outage: `expire_stale_weekend_requests()` had been aborting on every run since a never-approved guest request first lapsed, so **no** stale weekend request expired and the Dean/CSO queues accumulated dead rows indefinitely
 
 ### hod_decisions (weekend approvals)
 
@@ -169,6 +169,24 @@ An external (non-registered) person who may collect a key for a single weekend. 
 - `occurred_at` timestamptz
 - IMMUTABLE — RLS denies UPDATE and DELETE for all roles including service.
 
+### risk_rule_config
+
+CSO-editable risk engine weights/enable flags, one row per rule. Backs the `/cso/settings` "Risk rules" screen. RLS: `SELECT` for `authenticated` (the risk engine reads this inside a REQUESTER's own session at request-submit time); no write policy for any role — writes go only through `update_risk_config`.
+
+- `rule_key` enum `risk_rule_key` PK: 'outside_operational_hours' | 'outstanding_key_not_returned' | 'weekend_without_memo' | 'excess_request_frequency' | 'collector_not_whitelisted' (matches the `rule` string each function in `src/lib/ai/risk/rules.ts` returns)
+- `weight` int, `CHECK (weight BETWEEN 1 AND 10)`
+- `enabled` boolean default true
+- `updated_at` timestamptz
+
+### risk_tier_config
+
+CSO-editable LOW/MEDIUM/HIGH tier boundaries. Singleton table — fixed PK `00000000-0000-0000-0000-000000000001` plus a `CHECK (id = '...')` makes a second row impossible. Same RLS shape as `risk_rule_config` (read-all-authenticated, write via RPC only).
+
+- `id` UUID PK, fixed value
+- `medium_min` int, `CHECK (medium_min >= 1)` — inclusive lower bound for MEDIUM
+- `high_min` int, `CHECK (high_min > medium_min)` — inclusive lower bound for HIGH
+- `updated_at` timestamptz
+
 ## RPCs (Postgres functions)
 
 These wrap multi-table mutations in transactions and enforce business rules.
@@ -176,6 +194,7 @@ These wrap multi-table mutations in transactions and enforce business rules.
 - `create_request(key_id, return_time, type, weekend_date)` — creates request + audit entry. WEEKDAY returns a code immediately (CODE_ISSUED); WEEKEND creates a PENDING_HOD request with no code.
 - `generate_weekend_code(request_id, requester_id)` — requester-initiated. On the requested weekend date only, mints a short-lived 6-digit code (10-min expiry) for an APPROVED weekend request → CODE_ISSUED. Audit `CODE_ISSUED`. Raises TOO_EARLY before the date.
 - `expire_request(request_id, requester_id)` — requester-initiated (fired automatically by the UI when a code lapses). Flips a genuinely-expired CODE_ISSUED request → EXPIRED, clears the code, audit `REQUEST_EXPIRED`. Idempotent (no-op if already moved on).
+- `dismiss_expired_request(request_id, actor_id)` — authoriser-initiated. Lets a Dean (own faculty) or the CSO (any) clear a lapsed WEEKEND request out of the pending queue without waiting for the nightly sweep. Only accepts `PENDING_HOD` / `APPROVED` / `CODE_ISSUED` requests whose `requested_for < current_date`; moves them → EXPIRED, clears the code, audit `REQUEST_EXPIRED` with `reason: 'dismissed_by_authoriser'` and the dismissing actor. No `hod_decisions` row — this is housekeeping, not a decision. Authoriser gate mirrors `decline_weekend`. Execute revoked from `public`/`anon`.
 - `expire_lapsed_codes()` — batch cleanup, cron-only (execute revoked from `public`/`anon`/`authenticated`). Expires any CODE_ISSUED request (weekday or weekend, registered or guest) whose `code_expires_at < now()` → EXPIRED, clears the code, writes a `REQUEST_EXPIRED` audit entry per row (guest-aware). Server-side backstop to the UI-fired `expire_request`: a closed browser tab no longer strands an unclaimed code, so the key frees up for another requester. Scheduled every 10 minutes via `pg_cron`. Idempotent.
 - `expire_stale_weekend_requests()` — batch cleanup, cron-only (execute revoked from `public`/`anon`/`authenticated`). Expires WEEKEND requests whose `requested_for < current_date` and status is `PENDING_HOD` / `APPROVED` / `CODE_ISSUED` → EXPIRED, clears the code, writes a `REQUEST_EXPIRED` audit entry per row (guest-aware via `_write_audit_guest`). Without this, a weekend request whose date passes before a code is minted has no lifecycle terminus and permanently blocks re-requesting its key (`generate_weekend_code` raises TOO_EARLY once the date is past; `create_request` treats any non-terminal status as active). Scheduled daily at 00:15 UTC via `pg_cron` calling the function directly. Idempotent.
 - `issue_key(request_id, verifier_id)` — flips request status, sets issued_at, audit entry.
@@ -190,6 +209,7 @@ These wrap multi-table mutations in transactions and enforce business rules.
 - `generate_shift_report(shift_id)` — server-side; calls Gemini, inserts shift_reports row, audit entry.
 - `add_report_comment(report_id, text)` — inserts immutable comment, audit entry.
 - `provision_user(name, email, role, department_id?)` — creates profile, generates activation token, queues email, audit entry.
+- `update_risk_config(rules, medium_min, high_min)` — CSO-only. `rules` is a JSON array of exactly 5 `{rule_key, weight, enabled}` objects, one per `risk_rule_key`. Updates `risk_rule_config` and the `risk_tier_config` singleton in one transaction, writes one `RISK_CONFIG_UPDATED` audit entry (not one per rule). Raises `INVALID_TIER_BOUNDS` if `high_min <= medium_min`, `INVALID_RULES` if `rules` isn't exactly 5 entries or contains an unknown `rule_key`.
 
 ### External (guest) weekend RPCs
 

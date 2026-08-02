@@ -444,6 +444,28 @@ Requester-initiated and fired automatically by the UI when a collection code's c
 
 ---
 
+### POST /api/requests/dismiss
+
+**File**: `src/app/api/requests/dismiss/route.ts`
+**Roles**: DEAN, CSO
+**RPC**: `dismiss_expired_request(request_id, actor_id)`
+
+Clears a lapsed weekend request out of the authoriser's pending queue. A request whose `requested_for` date has passed can no longer be approved or declined (both RPCs refuse a past date), so without this it sits in the Dean's or CSO's list until the nightly `expire_stale_weekend_requests()` sweep runs.
+
+This is housekeeping, not a decision on merits — no `hod_decisions` row is written. The request moves to `EXPIRED`, the same terminal state the cron produces, so it stays visible in the requester's history and the CSO audit log. The `REQUEST_EXPIRED` audit payload carries `reason: 'dismissed_by_authoriser'`, the previous status, and the dismissing actor.
+
+A Dean may dismiss requests routed to their own faculty; the CSO may dismiss any, including Administration ones. The RPC re-validates both the authoriser gate and that the date has genuinely passed, so the route-level role check is defence-in-depth only.
+
+| Field        | Type            | Required |
+| ------------ | --------------- | -------- |
+| `request_id` | `string` (uuid) | yes      |
+
+**Response `data`**: `{ "request_id": "<uuid>", "status": "EXPIRED" }`
+
+**Errors**: `403` not a Dean/CSO, or request not in your faculty · `404` request not found · `409` request still live (approve or decline it instead), or not in a dismissable state · `422` validation
+
+---
+
 ### Public (external/guest) weekend requests
 
 These routes let an external person with no SmartKey account submit a weekend key request and reach their session-less status/code page. They require **no authentication** and run server-side via the service-role admin client (`createAdminClient`); the guest RPCs are revoked from `anon`/`public`, so nothing new is exposed to the browser. The guest is identified throughout by the unguessable `access_token` returned at submit.
@@ -774,6 +796,51 @@ Removes a collector from a slot. Authoriser-aware via the `remove_collector` RPC
 
 ---
 
+### GET /api/admin/risk-rules
+
+**File**: `src/app/api/admin/risk-rules/route.ts`
+**Roles**: CSO
+
+Hydrates the `/cso/settings` "Risk rules" screen. Returns the 5 `risk_rule_config` rows and the `risk_tier_config` singleton, in the DB's native inclusive-lower-bound tier framing (`medium_min`/`high_min`) — the UI converts to its "Low ≤ / Medium ≤ / High >" display at the component boundary.
+
+**Response `data`**:
+
+```json
+{
+  "rules": [
+    { "rule_key": "outside_operational_hours", "weight": 3, "enabled": true }
+  ],
+  "tier": { "medium_min": 4, "high_min": 7 }
+}
+```
+
+**Errors**: `401` unauthenticated · `403` not CSO · `500` config read failure
+
+---
+
+### PATCH /api/admin/risk-rules
+
+**File**: `src/app/api/admin/risk-rules/route.ts`
+**Roles**: CSO
+**RPC**: `update_risk_config(rules, medium_min, high_min)`
+
+| Field              | Type                                                      | Required |
+| ------------------ | --------------------------------------------------------- | -------- |
+| `rules`            | array of exactly 5 `{rule_key, weight, enabled}`          | yes      |
+| `rules[].rule_key` | one of the 5 canonical rule keys (see `docs/DATABASE.md`) | yes      |
+| `rules[].weight`   | `number` (1–10)                                           | yes      |
+| `rules[].enabled`  | `boolean`                                                 | yes      |
+| `tier.medium_min`  | `number` (≥1)                                             | yes      |
+| `tier.high_min`    | `number` (> `tier.medium_min`)                            | yes      |
+
+Zod validates the shape (exactly 5 rules, no duplicate `rule_key`, every canonical key present, `high_min > medium_min`) before the RPC runs; the RPC re-validates the same invariants server-side. One save = one `RISK_CONFIG_UPDATED` audit entry, not one per rule. Takes effect on the next `POST /api/requests/submit` call — existing requests' stored `risk_tier`/`risk_factors` are not retroactively recomputed.
+
+**Response `data`**: echoes the saved `{ rules, tier }`.
+
+**Errors**: `401` unauthenticated · `403` not CSO · `422` validation (zod, or RPC `INVALID_TIER_BOUNDS`/`INVALID_RULES`) · `500` RPC failure
+
+---
+
 ## 5. Shifts and Handover
 
 ### POST /api/shifts/start
@@ -1081,6 +1148,7 @@ If `passed = false`, the caller raises a CSO alert and holds the approval.
 | `issue_key`                     | POST /api/requests/collect                           | yes                     |
 | `generate_weekend_code`         | POST /api/requests/weekend-code                      | yes                     |
 | `expire_request`                | POST /api/requests/expire                            | yes                     |
+| `dismiss_expired_request`       | POST /api/requests/dismiss                           | yes                     |
 | `request_return`                | POST /api/requests/request-return                    | yes                     |
 | `request_return_guest`          | POST /api/public/weekend-request/[token]/return-code | yes                     |
 | `return_key`                    | POST /api/keys/return                                | yes                     |
@@ -1096,6 +1164,7 @@ If `passed = false`, the caller raises a CSO alert and holds the approval.
 | `generate_shift_report`         | POST /api/reports/generate                           | yes                     |
 | `add_report_comment`            | POST /api/reports/[id]/comments                      | yes                     |
 | `provision_user`                | POST /api/admin/users                                | yes                     |
+| `update_risk_config`            | PATCH /api/admin/risk-rules                          | yes                     |
 | `mark_key_overdue`              | cron only (`pg_cron`, hourly) — no route caller      | yes — per key           |
 | `schedule_pending_shift_report` | cron only (`pg_cron`, daily 18:00) — no route caller | yes — when a CSO exists |
 

@@ -8,7 +8,7 @@ See `.claude/skills/ai-integration/SKILL.md` for the operational rules. This fil
 
 Located in `src/lib/ai/risk/`. Pure TypeScript. Deterministic. No external API.
 
-**Rules** (defined in `rules.ts`):
+**Rules** (defined in `rules.ts`; weight and enabled/disabled are CSO-editable, see below — the underlying condition each rule checks is not):
 
 - `outside_operational_hours` — request submitted outside the zone's hours. Default weight: 3.
 - `outstanding_key_not_returned` — requester is holding a key they are **not currently authorised for**. Suppressed when every key they hold is one they still have a slot on, so a legitimate bulk collector (e.g. a porter collecting several authorised keys) is not flagged. Default weight: 5.
@@ -16,15 +16,19 @@ Located in `src/lib/ai/risk/`. Pure TypeScript. Deterministic. No external API.
 - `excess_request_frequency` — more than N requests in a rolling 24h window. Default weight: 2.
 - `collector_not_whitelisted` — requester not in the key's authorisations. Default weight: 5.
 
-**Tiers** (defined in `thresholds.ts`, configurable from CSO settings):
+Per-rule env tunables (`OPERATING_HOURS_START`/`END`, `RISK_MAX_DAILY_REQUESTS`) remain env-var-only — only `weight` and `enabled` are CSO-configurable.
 
-- Low: total ≤ 3
-- Medium: total ≤ 6
-- High: total > 6
+**Config source**: `evaluateRisk(context, config)` takes a required `RiskEngineConfig` (`src/lib/ai/risk/types.ts`) as its second argument — weight/enabled per rule, plus the tier thresholds. `POST /api/requests/submit` reads the live config from the `risk_rule_config` / `risk_tier_config` tables (see `docs/DATABASE.md`) and falls back to `DEFAULT_RISK_CONFIG` (`src/lib/ai/risk/default-config.ts`, values identical to the rules above) on a read failure, logging a warning rather than failing the request. The CSO edits this config at `/cso/settings` → "Risk rules", via `GET`/`PATCH /api/admin/risk-rules` (see `docs/API.md`), which calls the `update_risk_config` RPC. A disabled rule is skipped entirely — it never appears in `risk_factors` regardless of whether its condition would otherwise fire.
+
+**Tiers** (boundaries stored in `risk_tier_config`, computed in `thresholds.ts`; env vars `RISK_TIER_MEDIUM_MIN`/`RISK_TIER_HIGH_MIN` are the fallback default, not the live source of truth):
+
+- Low: total < `medium_min` (default 4)
+- Medium: `medium_min` ≤ total < `high_min` (default 4–6)
+- High: total ≥ `high_min` (default 7+)
 
 **UI surface**: `<RiskTierBadge tier={tier} factors={factors} />`. The "View factors" popover shows each contributing rule in plain English with its weight.
 
-**Tests**: `src/lib/ai/risk/rules.test.ts` covers every rule with positive and negative cases. `src/lib/ai/risk/engine.test.ts` covers tier boundaries and combinations.
+**Tests**: `src/lib/ai/risk/rules.test.ts` covers every rule with positive and negative cases (unaffected by the config change — it never calls `evaluateRisk`). `src/lib/ai/risk/engine.test.ts` covers tier boundaries, combinations, disabled rules, custom weights, and custom tier thresholds.
 
 ### 2. Shift reports (Gemini)
 
@@ -58,17 +62,23 @@ Located in `src/lib/ai/signature/`. Server-side only.
 
 **Pipeline** (`verifier.ts`):
 
-1. Sharp: greyscale, normalise resolution to 800×400, threshold to binary.
-2. Pixelmatch: pixel-by-pixel diff between processed reference and processed submitted.
-3. Compute mismatch percentage.
+1. Sharp: greyscale, normalise, threshold to binary.
+2. Sharp `trim()`: crop to the ink bounding box. This registers the two images against each other — without it a genuine re-scan offset by 20px scores ~97% different, worse than an outright forgery, because thin strokes lose all overlap under a small translation.
+3. Sharp: resize the cropped ink to 800×400 so scale differences also normalise away.
+4. Pixelmatch: pixel-by-pixel diff between the two registered masks.
+5. Mismatch ratio = differing pixels ÷ pixels carrying ink in **either** image (a Jaccard distance over the ink region).
 
-**Threshold**: configurable in CSO settings, default 15% mismatch.
+**Threshold**: `SIGNATURE_DIFF_THRESHOLD`, default **0.55**.
+
+> **The denominator matters.** Until 2026-08-02 the ratio divided by the whole canvas (320,000 px) rather than the ink region. Signature strokes cover roughly 1.6% of an 800×400 page, so no two signatures could differ by more than about 3.3% of it — the 15% threshold was mathematically unreachable and `verifySignature` returned `passed: true` for every real input, including a completely different signature (3.2%) and a blank page (1.8%). The old unit tests missed this because they compared solid blocks covering 10–50% of the canvas, coverage no signature ever reaches. Any deployment still setting `SIGNATURE_DIFF_THRESHOLD=0.15` must be updated: under ink-region scoring that value rejects nearly every genuine signature.
+
+Measured separation on stroke fixtures: identical 0%, same signature re-positioned 0%, same signature at 0.85× scale 11%, same signature with a heavier pen 31%, different signature 100%, blank page 100%. The 0.55 default sits in the gap, but still wants calibration against real Dean samples during the pilot (BACKEND.md §13, Sprint 4). Treat a pass as "not obviously tampered", never as proof of authorship.
 
 **On match**: silent. Audit entry `signature_verified`. Approval proceeds.
 
 **On mismatch**: approval held. Audit entry `signature_mismatch`. CSO alert raised with reference + submitted + percentage shown side by side.
 
-**Tests**: `src/lib/ai/signature/verifier.test.ts` with fixture image pairs covering match, threshold-edge, mismatch.
+**Tests**: `src/lib/ai/signature/verifier.test.ts` — 9 tests over rendered stroke fixtures with realistic ink coverage: identical, re-positioned, heavier pen, rescaled, different signature, blank-vs-real in both directions, the genuine-vs-forgery separation margin, and a custom threshold.
 
 **How to trigger verification** (`POST /api/requests/hod-decision`):
 
@@ -101,7 +111,7 @@ The CSO resolves a held mismatch by calling the same route with `cso_override: t
 
 - **Risk scoring engine**: ✅ Done (PR #38). `src/lib/ai/risk/` contains `types.ts`, `rules.ts`, `thresholds.ts`, and `engine.ts`. 24 unit tests cover every rule and tier boundary. `POST /api/requests/submit` runs the engine and back-fills `risk_tier` + `risk_factors` on the request row via the admin client.
 - **Gemini shift reports**: ✅ Done (issue #21). `src/lib/ai/reports/` holds `types.ts`, `prompts.ts`, `parser.ts`, and `client.ts`. `POST /api/reports/generate` creates the placeholder row via the `generate_shift_report` RPC, then calls `generateShiftReport` (Gemini SDK with deterministic template fallback) and persists `{ markdown, timeline, metadata }` via the admin client (RLS blocks direct UPDATE). The report renders at `/cso/reports/[id]` with the `<ShiftTimeline>` component and the "Generated by AI from shift event data" disclosure; CSO comments post to `POST /api/reports/[id]/comments`. 12 unit tests cover the parser and prompt/template builders.
-- **Signature verification**: ✅ Done (PR #22). `src/lib/ai/signature/verifier.ts` preprocesses images with Sharp (greyscale, 800×400, binary threshold) and diffs them with Pixelmatch. 4 unit tests cover identical, threshold-edge, mismatch, and custom-threshold cases. `POST /api/ai/verify-signature` exposes the pipeline as an internal endpoint. `POST /api/requests/hod-decision` now gates approval on the HOD having a reference signature.
+- **Signature verification**: ✅ Done (PR #22), corrected 2026-08-02. `src/lib/ai/signature/verifier.ts` preprocesses images with Sharp (greyscale, binary threshold, `trim()` to the ink bounding box, resize to 800×400) and diffs them with Pixelmatch, scoring over the ink region rather than the whole canvas — see the callout above for why the original whole-canvas ratio passed every forgery. 9 unit tests over stroke fixtures with realistic ink coverage. `POST /api/ai/verify-signature` exposes the pipeline as an internal endpoint. `POST /api/requests/hod-decision` now gates approval on the HOD having a reference signature.
 
 ## Cross-cutting
 
