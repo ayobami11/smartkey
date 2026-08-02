@@ -76,23 +76,3 @@ from   pg_proc p
 join   pg_namespace n on n.oid = p.pronamespace
 where  n.nspname = 'public'
 and    p.proname = 'approve_weekend';
-
-
--- ---------------------------------------------------------------------------
--- WARNING: DO NOT RUN `supabase db push` / `npm run db:migrate` ON THIS PROJECT
---
--- The local migrations directory and this database's migration history have
--- diverged badly. Of 43 local migration files, only 6 are recorded in
--- supabase_migrations.schema_migrations; 22 recorded versions have no matching
--- local file. The same schema content was applied under different version
--- strings than the repo filenames carry.
---
--- Consequently `db push` would try to apply 37 "unapplied" migrations,
--- beginning with 20260525000001-20260525000009 — the original CREATE TYPE /
--- CREATE TABLE migrations — against a database where all of that already
--- exists. Expect hard failures and possible partial application.
---
--- Until the history is reconciled (e.g. with `supabase migration repair`),
--- schema changes on this project must be applied as targeted SQL like this
--- file, with a matching migration committed to supabase/migrations/ purely as
--- the record for fresh environments.
