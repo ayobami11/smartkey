@@ -461,6 +461,22 @@ Mints a short-lived 6-digit collection code (10-min expiry) for an `APPROVED` gu
 
 ---
 
+#### POST /api/public/weekend-request/[token]/return-code
+
+**File**: `src/app/api/public/weekend-request/[token]/return-code/route.ts`
+**Roles**: ALL (unauthenticated)
+**RPC**: `request_return_guest(access_token)`
+
+Guest analogue of `POST /api/requests/request-return`. Generates a 6-digit return code (15-minute expiry) for the guest's own `KEY_ISSUED` request so the verifier can confirm the handover. The request stays in `KEY_ISSUED`; the code is written to `requests.return_code` / `return_code_expires_at`. Writes a `RETURN_CODE_GENERATED` audit entry.
+
+No request body.
+
+**Response `data`**: `{ "return_code": "123456", "return_code_expires_at": "<iso>" }`
+
+**Errors**: `404` token not found · `409` key not currently issued
+
+---
+
 #### POST /api/public/weekend-request/[token]/expire
 
 **File**: `src/app/api/public/weekend-request/[token]/expire/route.ts`
@@ -866,6 +882,7 @@ If `passed = false`, the caller raises a CSO alert and holds the approval.
 | `generate_weekend_code`        | POST /api/requests/weekend-code                 | yes                     |
 | `expire_request`               | POST /api/requests/expire                       | yes                     |
 | `request_return`               | POST /api/requests/request-return               | yes                     |
+| `request_return_guest`         | POST /api/public/weekend-request/[token]/return-code | yes                |
 | `return_key`                   | POST /api/keys/return                           | yes                     |
 | `approve_weekend`              | POST /api/requests/hod-decision                 | yes                     |
 | `approve_guest_weekend`        | POST /api/requests/hod-decision                 | yes                     |

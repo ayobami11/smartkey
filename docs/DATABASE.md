@@ -57,7 +57,7 @@ An external (non-registered) person who may collect a key for a single weekend. 
 - Composite PK (key_id, profile_id)
 - `key_id` UUID FK keys
 - `profile_id` UUID FK profiles (must be REQUESTER role)
-- `authorised_by` UUID FK profiles (must be HOD role)
+- `authorised_by` UUID FK profiles (the Dean for faculty keys, or the CSO for `authoriser='CSO'` Administration keys — see `nominate_collector`)
 - `authorised_at` timestamptz
 - Constraint: max 3 authorisations per key (enforced via trigger)
 
@@ -88,7 +88,7 @@ An external (non-registered) person who may collect a key for a single weekend. 
 - `returned_at` timestamptz nullable
 - `created_at` timestamptz
 - Constraint `requests_one_requester_kind`: exactly one of `requester_id` / `guest_id` is set (`num_nonnulls(requester_id, guest_id) = 1`)
-- Constraint `requests_key_required_after_pending`: `key_id` may only be null while `status = 'PENDING_HOD'` (`key_id is not null or status = 'PENDING_HOD'`)
+- Constraint `requests_key_required_after_pending`: `key_id` may only be null while `status` is `'PENDING_HOD'` or `'DECLINED'` (`key_id is not null or status in ('PENDING_HOD', 'DECLINED')`) — widened from `PENDING_HOD` only so a guest request can be declined before a Dean ever assigns a key (`20260616120547_fix_guest_decline_constraint.sql`)
 
 ### hod_decisions (weekend approvals)
 
@@ -181,9 +181,11 @@ These wrap multi-table mutations in transactions and enforce business rules.
 - `issue_key(request_id, verifier_id)` — flips request status, sets issued_at, audit entry.
 - `request_return(request_id, requester_id)` — requester-initiated; generates a 6-digit return code (15-min expiry) for their own KEY_ISSUED request, audit entry (`RETURN_CODE_GENERATED`). Status stays KEY_ISSUED.
 - `return_key(request_id, verifier_id, code?, returner_id?, override_reason?)` — flips request status to KEY_RETURNED, sets returned_at, clears the return code. Requires either `code` (verified → `KEY_RETURNED`) or `override_reason` (unverified → `KEY_RETURNED_UNVERIFIED` + a `SUSPICIOUS_ACTIVITY` incident when an open shift exists).
-- `approve_weekend(request_id, hod_id, note?, signature_verified?, signature_mismatch_pct?, cso_override?)` — authoriser-aware: for an `authoriser='DEAN'` (faculty) key the actor must be that faculty's Dean; for an `authoriser='CSO'` (Administration) key the actor must be the CSO (no department match, signature verification skipped). Creates hod_decisions row, moves request to APPROVED (no code is issued here — the requester mints one on the day via `generate_weekend_code`), audit entry. (Signature verification for the HOD path runs in TypeScript before this is called.) `cso_override` lets the CSO approve a held faculty-key request in place of the Dean, but only when a `SIGNATURE_MISMATCH` audit entry already exists for that request — enforced in the function body, not just the route.
-- `decline_weekend(request_id, hod_id, note?, cso_override?)` — authoriser-aware actor gate (same HOD-vs-CSO branch on the request's effective department — key's for registered, `requested_department_id` for guests). Creates hod_decisions row, audit entry. `cso_override` mirrors `approve_weekend`'s.
-- `nominate_collector(key_id, requester_id)` / `remove_collector(key_id, requester_id)` — authoriser-aware: the Dean for faculty keys (department must match), CSO for `authoriser='CSO'` Administration keys. Enforce the max-3-slots and no-duplicate rules, audit entry.
+- `approve_weekend(request_id, hod_id, note?, signature_verified?, signature_mismatch_pct?, cso_override?)` — authoriser-aware: for an `authoriser='DEAN'` (faculty) key the actor must be that faculty's Dean; for an `authoriser='CSO'` (Administration) key the actor must be the CSO (no unit match, signature verification skipped). Creates hod_decisions row, moves request to APPROVED (no code is issued here — the requester mints one on the day via `generate_weekend_code`), audit entry. (Signature verification for the HOD path runs in TypeScript before this is called.) `cso_override` lets the CSO approve a held faculty-key request in place of the Dean, but only when a `SIGNATURE_MISMATCH` audit entry already exists for that request — enforced in the function body, not just the route.
+- `decline_weekend(request_id, hod_id, note?, cso_override?)` — authoriser-aware actor gate (same Dean-vs-CSO branch on the request's effective unit — key's for registered, `requested_unit_id` for guests). Creates hod_decisions row, audit entry. `cso_override` mirrors `approve_weekend`'s.
+- `nominate_collector(key_id, requester_id)` / `remove_collector(key_id, requester_id)` — authoriser-aware: the Dean for faculty keys (unit must match), CSO for `authoriser='CSO'` Administration keys. Enforce the max-3-slots and no-duplicate rules, audit entry.
+- `mark_key_overdue()` — batch cleanup, cron-only. Flips `keys.status` to `OVERDUE` for every key whose issued request is `KEY_ISSUED` with `return_deadline < now()`, writing a `KEY_OVERDUE` audit entry per key (actor: the earliest-created active CSO profile). Scheduled hourly via `pg_cron` calling the function directly (the `overdue-key-check` Supabase Edge Function in `supabase/functions/` wraps the same RPC but is not what's scheduled — `pg_cron` calls the RPC directly). Returns `updated_count`.
+- `schedule_pending_shift_report()` — batch cleanup, cron-only. Finds the most recently started shift with no `shift_reports` row, inserts a placeholder row (`markdown = 'PENDING_GENERATION'`), and writes a `SHIFT_REPORT_SCHEDULED` audit entry (actor: the earliest-created active CSO profile). No-ops if every shift already has a report. Scheduled daily at 18:00 UTC via `pg_cron` calling the function directly (`daily-shift-summary` job). The placeholder is distinct from `generate_shift_report`'s row — nothing currently fills in the placeholder's `markdown`/`timeline`/`metadata`, so this RPC alone does not complete report generation.
 - `acknowledge_shift_handover(outgoing_shift_id, key_ids, bulk)` — creates handover row, audit entry per key.
 - `generate_shift_report(shift_id)` — server-side; calls Gemini, inserts shift_reports row, audit entry.
 - `add_report_comment(report_id, text)` — inserts immutable comment, audit entry.
@@ -195,9 +197,10 @@ Guest analogues of the registered-user weekend flow. All are `SECURITY DEFINER`,
 
 - `_write_audit_guest(event, target_type, target_id, actor_name, payload)` — audit chokepoint for actions with no profile actor. Mirrors `_write_audit` but records `actor_id`/`actor_role` null and the plain guest `actor_name` (e.g. `'Jane Doe'`); callers set `payload->>'external' = true` as the discriminator.
 - `create_guest_weekend_request(full_name, email, phone, id_type, id_number, department_id, weekend_date, return_deadline, letter_url, requested_room)` — inserts a `guest_requesters` row + a WEEKEND request (`PENDING_HOD`, no code, `access_token` minted), audit `REQUEST_CREATED`. Returns `{request_id, access_token}`.
-- `approve_guest_weekend(request_id, hod_id, key_id, note?)` — authoriser-aware: validates the chosen key belongs to a group the actor authorises (HOD's own department, or any Administration key when the actor is the CSO), sets `key_id`, creates the `hod_decisions` row, moves the request → APPROVED, audit `HOD_APPROVED`. Granted to `authenticated`. (No signature verification — the approver reviews the uploaded letter manually.)
+- `approve_guest_weekend(request_id, hod_id, key_id, note?)` — authoriser-aware: validates the chosen key belongs to a group the actor authorises (the Dean's own unit, or any Administration key when the actor is the CSO), sets `key_id`, creates the `hod_decisions` row, moves the request → APPROVED, audit `HOD_APPROVED`. Granted to `authenticated`. (No signature verification — the approver reviews the uploaded letter manually.)
 - `generate_guest_weekend_code(access_token)` — on `requested_for = current_date` only, mints a 10-min code → CODE_ISSUED, audit `CODE_ISSUED`. Raises TOO_EARLY before the date.
 - `expire_guest_request(access_token)` — flips a genuinely-expired CODE_ISSUED request → EXPIRED, clears the code, audit `REQUEST_EXPIRED`. Idempotent.
+- `request_return_guest(access_token)` — guest analogue of `request_return`. For the guest's own `KEY_ISSUED` request (looked up by `access_token`, `FOR UPDATE` locked), generates a 6-digit return code (15-min expiry), writes it to `return_code`/`return_code_expires_at`, and writes a `RETURN_CODE_GENERATED` audit entry via `_write_audit_guest`. Status stays `KEY_ISSUED`. Raises `NOT_FOUND` if the token doesn't resolve to a request, `CONFLICT` if the request isn't `KEY_ISSUED`. Called by `POST /api/public/weekend-request/[token]/return-code`.
 
 ## Migrations workflow
 
