@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-import { verifySignature } from '@/lib/ai/signature/verifier';
+import {
+  DEFAULT_THRESHOLD,
+  verifySignature,
+} from '@/lib/ai/signature/verifier';
 import { writeAuditEntry } from '@/lib/audit';
 import {
   sendGuestWeekendApprovedEmail,
@@ -314,12 +317,7 @@ export const POST = async (request: NextRequest) => {
               ref_url: profile.signature_ref_url,
               submitted_url: submitted_signature_url,
               mismatch_pct,
-              threshold_pct: parseFloat(
-                (
-                  parseFloat(process.env.SIGNATURE_DIFF_THRESHOLD ?? '0.15') *
-                  100
-                ).toFixed(2)
-              ),
+              threshold_pct: parseFloat((DEFAULT_THRESHOLD * 100).toFixed(2)),
             },
           });
         } catch (auditErr) {

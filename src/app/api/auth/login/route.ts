@@ -87,18 +87,30 @@ export const POST = async (request: NextRequest) => {
       app_metadata: { mfa_code_hash: codeHash, mfa_code_expires_at: expiresAt },
     });
 
+    // Delivery failure must not fail the login. The credentials were already
+    // accepted and the code hash is persisted above, so the code that a later
+    // /api/auth/resend-otp sends is valid — returning 500 here would strand the
+    // user on a dead end and let a single SMTP outage lock out every MFA role.
+    // The client is told delivery failed so it can surface "resend" directly.
+    let emailDeliveryFailed = false;
     try {
       await sendOtpEmail({ to: email, code });
     } catch (emailErr) {
-      const detail = String(emailErr);
-      logger.error('OTP email failed', { email, err: detail });
-      return NextResponse.json(
-        err(`Failed to send verification code: ${detail}`, 500),
-        { status: 500 }
-      );
+      emailDeliveryFailed = true;
+      logger.error('OTP email failed', {
+        email,
+        err: emailErr instanceof Error ? emailErr.message : String(emailErr),
+      });
     }
 
-    return NextResponse.json(ok({ session: null, role, mfa_required: true }));
+    return NextResponse.json(
+      ok({
+        session: null,
+        role,
+        mfa_required: true,
+        email_delivery_failed: emailDeliveryFailed,
+      })
+    );
   }
 
   // Roles that skip MFA (REQUESTER) are fully signed in at this point, so this

@@ -1,4 +1,12 @@
+import { setDefaultResultOrder } from 'node:dns';
+
 import nodemailer from 'nodemailer';
+
+// Prefer IPv4 when resolving smtp.gmail.com. Node 18+ defaults to 'verbatim',
+// which hands back the AAAA record first; on a network with no IPv6 route that
+// fails with ENETUNREACH before the A record is ever tried. Nodemailer has no
+// per-transport `family` option, so the resolver order is the lever available.
+setDefaultResultOrder('ipv4first');
 
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
@@ -8,16 +16,13 @@ const transporter = nodemailer.createTransport({
     user: process.env.GMAIL_USER,
     pass: process.env.GMAIL_APP_PASSWORD,
   },
-  // Force IPv4. Node resolves smtp.gmail.com to an IPv6 address first on many
-  // networks; where there is no IPv6 route that fails with ENETUNREACH before
-  // the IPv4 address is ever tried.
-  family: 4,
   // Without these, a blocked or filtered port 587 hangs on the OS TCP timeout
-  // (~20s+ observed locally), which overruns the serverless function budget on
+  // (~20s observed locally), which overruns the serverless function budget on
   // Vercel and makes login appear to freeze rather than fail.
   connectionTimeout: 10_000,
   greetingTimeout: 10_000,
   socketTimeout: 15_000,
+  dnsTimeout: 5_000,
 });
 
 const emailHeader = `

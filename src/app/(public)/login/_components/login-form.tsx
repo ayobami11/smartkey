@@ -41,6 +41,10 @@ export const LoginForm = () => {
   const router = useRouter();
 
   const [step, setStep] = useState<'credentials' | 'otp'>('credentials');
+  // The sign-in itself succeeded but the OTP email could not be delivered. The
+  // stored code is still valid, so the OTP screen offers a resend rather than
+  // leaving the user waiting for mail that never arrives.
+  const [deliveryFailed, setDeliveryFailed] = useState(false);
   const [pendingEmail, setPendingEmail] = useState('');
   const [pendingRole, setPendingRole] = useState('');
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
@@ -53,18 +57,23 @@ export const LoginForm = () => {
   const handleTogglePassword = () => setIsPasswordVisible((prev) => !prev);
 
   const handleCredentialsSubmit = async (data: LoginInput) => {
-    const result = await apiFetch<{ role: string; mfa_required: boolean }>(
-      '/api/auth/login',
-      { method: 'POST', body: { email: data.email, password: data.password } }
-    );
+    const result = await apiFetch<{
+      role: string;
+      mfa_required: boolean;
+      email_delivery_failed?: boolean;
+    }>('/api/auth/login', {
+      method: 'POST',
+      body: { email: data.email, password: data.password },
+    });
     if (result.error || !result.data) {
       toast.error(result.error ?? 'Sign in failed. Please try again.');
       return;
     }
-    const { role, mfa_required } = result.data;
+    const { role, mfa_required, email_delivery_failed } = result.data;
     if (mfa_required) {
       setPendingEmail(data.email);
       setPendingRole(role);
+      setDeliveryFailed(Boolean(email_delivery_failed));
       setStep('otp');
       return;
     }
@@ -76,6 +85,7 @@ export const LoginForm = () => {
       <OtpForm
         pendingEmail={pendingEmail}
         pendingRole={pendingRole}
+        deliveryFailed={deliveryFailed}
         onBack={() => setStep('credentials')}
       />
     );

@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
+import { DEFAULT_RISK_CONFIG } from '@/lib/ai/risk/default-config';
 import { evaluateRisk } from '@/lib/ai/risk/engine';
-import type { RiskContext } from '@/lib/ai/risk/types';
+import type {
+  RiskContext,
+  RiskEngineConfig,
+  RiskRuleKey,
+} from '@/lib/ai/risk/types';
 import { logger } from '@/lib/logger';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
@@ -67,7 +72,14 @@ export const POST = async (request: NextRequest) => {
 
   // Fetch risk context data in parallel before calling the RPC.
   const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const [keyRes, outstandingRes, recentRes, authRes] = await Promise.all([
+  const [
+    keyRes,
+    outstandingRes,
+    recentRes,
+    authRes,
+    ruleConfigRes,
+    tierConfigRes,
+  ] = await Promise.all([
     supabase.from('keys').select('zone').eq('id', key_id).single(),
     supabase
       .from('requests')
@@ -80,7 +92,40 @@ export const POST = async (request: NextRequest) => {
       .eq('requester_id', user.id)
       .gte('created_at', since24h),
     supabase.from('authorisations').select('key_id').eq('profile_id', user.id),
+    supabase.from('risk_rule_config').select('rule_key, weight, enabled'),
+    supabase.from('risk_tier_config').select('medium_min, high_min').single(),
   ]);
+
+  // Risk config is CSO-editable (see /cso/settings → Risk rules); a read
+  // failure here should degrade to the safe hardcoded defaults rather than
+  // block key requests over a transient config-read hiccup.
+  let riskConfig: RiskEngineConfig = DEFAULT_RISK_CONFIG;
+  if (
+    !ruleConfigRes.error &&
+    !tierConfigRes.error &&
+    ruleConfigRes.data?.length === 5 &&
+    tierConfigRes.data
+  ) {
+    const rules = {} as RiskEngineConfig['rules'];
+    for (const row of ruleConfigRes.data) {
+      rules[row.rule_key as RiskRuleKey] = {
+        weight: row.weight,
+        enabled: row.enabled,
+      };
+    }
+    riskConfig = {
+      rules,
+      tier: {
+        mediumMin: tierConfigRes.data.medium_min,
+        highMin: tierConfigRes.data.high_min,
+      },
+    };
+  } else {
+    logger.warn('risk config read failed; falling back to defaults', {
+      ruleConfigError: ruleConfigRes.error?.message,
+      tierConfigError: tierConfigRes.error?.message,
+    });
+  }
 
   // Set of every key this requester is currently authorised for, used both to
   // decide whitelisting for the requested key and whether the keys they already
@@ -102,7 +147,7 @@ export const POST = async (request: NextRequest) => {
     recentRequestCount: recentRes.count ?? 0,
     isWhitelisted: authorisedKeyIds.has(key_id),
   };
-  const { tier, factors } = evaluateRisk(riskCtx);
+  const { tier, factors } = evaluateRisk(riskCtx, riskConfig);
 
   const { data, error } = await supabase.rpc('create_request', {
     p_key_id: key_id,

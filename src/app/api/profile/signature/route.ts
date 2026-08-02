@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { verifySignature } from '@/lib/ai/signature/verifier';
+import {
+  DEFAULT_THRESHOLD,
+  verifySignature,
+} from '@/lib/ai/signature/verifier';
 import { writeAuditEntry } from '@/lib/audit';
 import { logger } from '@/lib/logger';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -12,8 +15,9 @@ const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 // Replaces a Dean's signature or stamp reference image.
 //
 // If an existing reference is on file, the new upload is compared pixel-level
-// against it via Sharp + Pixelmatch. When the mismatch ratio exceeds the
-// configured threshold (SIGNATURE_DIFF_THRESHOLD, default 15%) the update is
+// against it via Sharp + Pixelmatch, scored over the ink region. When the
+// mismatch ratio exceeds the configured threshold (SIGNATURE_DIFF_THRESHOLD,
+// default 55% — see verifier.ts for why it is not the old 15%) the update is
 // held and a SIGNATURE_MISMATCH audit entry is written so the CSO can review.
 // Otherwise the reference is replaced and a SIGNATURE_REFERENCE_UPDATED entry
 // is written.
@@ -104,11 +108,7 @@ export const POST = async (request: NextRequest) => {
     const mismatch_pct = parseFloat(
       (verifyResult.mismatch_ratio * 100).toFixed(2)
     );
-    const threshold_pct = parseFloat(
-      (
-        parseFloat(process.env.SIGNATURE_DIFF_THRESHOLD ?? '0.15') * 100
-      ).toFixed(2)
-    );
+    const threshold_pct = parseFloat((DEFAULT_THRESHOLD * 100).toFixed(2));
 
     if (!verifyResult.passed) {
       try {

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ShieldIcon } from 'lucide-react';
+import { AlertTriangleIcon, ShieldIcon } from 'lucide-react';
 import { REGEXP_ONLY_DIGITS } from 'input-otp';
 import { Controller, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -46,6 +46,8 @@ const maskEmail = (email: string) => {
 type OtpFormProps = {
   pendingEmail: string;
   pendingRole: string;
+  /** Sign-in succeeded but the code email could not be delivered. */
+  deliveryFailed?: boolean;
   onBack: () => void;
 };
 
@@ -54,12 +56,15 @@ type OtpFormProps = {
 export const OtpForm = ({
   pendingEmail,
   pendingRole,
+  deliveryFailed = false,
   onBack,
 }: OtpFormProps) => {
   const router = useRouter();
 
   const [isVerifying, setIsVerifying] = useState(false);
-  const [resendCooldown, setResendCooldown] = useState(60);
+  // No point making the user wait out the cooldown when we already know the
+  // first send failed — let them retry immediately.
+  const [resendCooldown, setResendCooldown] = useState(deliveryFailed ? 0 : 60);
   const [isResending, setIsResending] = useState(false);
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isPasteRef = useRef(false);
@@ -129,15 +134,33 @@ export const OtpForm = ({
   return (
     <form onSubmit={otpForm.handleSubmit(handleOtpSubmit)} noValidate>
       <FieldGroup>
-        <div className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground">
-          <ShieldIcon className="size-4 shrink-0" aria-hidden="true" />
-          <span>
-            Enter the verification code we sent to your email address:{' '}
-            <strong className="text-foreground">
-              {maskEmail(pendingEmail)}
-            </strong>
-          </span>
-        </div>
+        {deliveryFailed ? (
+          <div
+            className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
+            role="alert"
+          >
+            <AlertTriangleIcon
+              className="mt-0.5 size-4 shrink-0"
+              aria-hidden="true"
+            />
+            <span>
+              We could not send your code to{' '}
+              <strong>{maskEmail(pendingEmail)}</strong> just now. Your sign-in
+              was accepted — choose <strong>Resend code</strong> below to try
+              again.
+            </span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground">
+            <ShieldIcon className="size-4 shrink-0" aria-hidden="true" />
+            <span>
+              Enter the verification code we sent to your email address:{' '}
+              <strong className="text-foreground">
+                {maskEmail(pendingEmail)}
+              </strong>
+            </span>
+          </div>
+        )}
 
         <Controller
           name="otp"
