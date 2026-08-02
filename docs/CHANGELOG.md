@@ -8,6 +8,13 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-02 — Register/activate-hod: enforce the real password policy
+
+- **Why**: `POST /api/auth/register` and `POST /api/auth/activate-hod` each hand-rolled `password.length < 8` with no composition check, while `POST /api/auth/change-password` and the activate-hod client form already used the shared `password` zod primitive (`src/lib/validation/primitives.ts`, min 8 + upper/lower/digit/symbol) — found while reconciling `docs/API.md` against the actual code, which showed the min-8 rule was weaker than the min-12/mixed/symbol policy stated in `screens.md` §5.1, `PRODUCT.md`, and `supabase/config.toml`'s `minimum_password_length`/`password_requirements`.
+- `src/lib/validation/primitives.ts`: `password`'s `.min(8, ...)` bumped to `.min(12, ...)` to match the stated policy. This also strengthens `change-password` and `reset-password` for free, since both already import the same primitive.
+- `src/app/api/auth/register/route.ts` and `src/app/api/auth/activate-hod/route.ts`: replaced the ad-hoc length check with `passwordSchema.safeParse(formData.get('password'))`, returning the specific validation failure message (422) instead of a generic length error.
+- `docs/API.md`: the two routes' documented password rule updated from "min 8" to "min 12, mixed case, number, symbol" to match.
+
 ### 2026-08-02 — Docs sync: reference docs vs live schema
 
 - **Why**: `docs/DATABASE.md`, `docs/API.md`, `docs/ARCHITECTURE.md`, `docs/PRODUCT.md`, and `CLAUDE.md` had drifted from the live `smartkey` Supabase project. Two structural migrations were never back-ported into the docs: the 2026-06-26 `HOD` → `DEAN` role-enum rename (see that entry below) and the 2026-06-27 `departments` → `units` table/column rename (`20260627111159_rename_departments_to_units.sql`, not previously logged here). Verified directly against the live project via the Supabase MCP server (`list_tables`, function/enum introspection queries).

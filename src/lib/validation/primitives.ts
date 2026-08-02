@@ -6,8 +6,8 @@ export const uuid = z.uuid();
 
 export const password = z
   .string()
-  .min(8, {
-    message: 'Password must contain at least 8 characters.',
+  .min(12, {
+    message: 'Password must contain at least 12 characters.',
   })
   .max(64, {
     message: 'Password cannot exceed 64 characters.',

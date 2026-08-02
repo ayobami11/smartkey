@@ -118,6 +118,10 @@ const SignatureCard = ({
       {loading ? (
         <Skeleton className="h-28 w-full rounded-md" />
       ) : displayUrl ? (
+        // displayUrl is a local blob: URL while previewing a new upload, or the
+        // persisted Supabase Storage URL once saved — next/image can't handle
+        // the blob: case, so a plain <img> is used for both to keep one path.
+        // eslint-disable-next-line @next/next/no-img-element
         <img
           src={displayUrl}
           alt={

@@ -108,6 +108,8 @@ export const StampUploadStep = ({
             ) : (
               <div className="flex flex-col gap-4">
                 <div className="flex h-32 items-center justify-center overflow-hidden rounded-lg border border-border bg-white">
+                  {/* Local blob: preview of an unsaved upload — next/image can't optimize it. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={URL.createObjectURL(field.value)}
                     alt="Stamp preview"

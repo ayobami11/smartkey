@@ -72,10 +72,10 @@ If `mfa_required` is `true`, the client must complete `/api/auth/verify-otp` bef
 **File**: `src/app/api/auth/verify-otp/route.ts`
 **Roles**: DEAN, VERIFIER, REQUESTER (new device)
 
-| Field | Type                | Required |
-| ----- | ------------------- | -------- |
-| `email` | `string` (email)  | yes      |
-| `otp` | `string` (6 digits) | yes      |
+| Field   | Type                | Required |
+| ------- | ------------------- | -------- |
+| `email` | `string` (email)    | yes      |
+| `otp`   | `string` (6 digits) | yes      |
 
 **Response `data`**: `{ "session": "<jwt>" }` — full session after MFA.
 
@@ -90,16 +90,14 @@ If `mfa_required` is `true`, the client must complete `/api/auth/verify-otp` bef
 
 Completes requester registration. There is no `token` field — the invite link is a Supabase magic link that resolves through `GET /api/auth/callback` (below) into a short-lived session in the transient `activate` cookie namespace **before** the browser ever reaches this route; this route just reads that session.
 
-| Field            | Type                    | Required |
-| ---------------- | ----------------------- | -------- |
-| `password`       | `string` (min 8)        | yes      |
-| `passport_photo` | `File` (image, max 5MB) | yes      |
+| Field            | Type                                          | Required |
+| ---------------- | --------------------------------------------- | -------- |
+| `password`       | `string` (min 12, mixed case, number, symbol) | yes      |
+| `passport_photo` | `File` (image, max 5MB)                       | yes      |
 
 **Response `data`**: `{ "profile_id": "<uuid>" }`
 
-**Errors**: `401` no valid activation session · `422` password under 8 chars or missing photo · `413` photo over 5MB
-
-**Note**: the password rule here (min 8, no composition requirement) is weaker than the "min 12, mixed case, number, symbol" rule stated in `design-system/screens.md` §5.1 and `docs/PRODUCT.md` — the code has not caught up to the product spec. Worth a follow-up ticket rather than a doc fix, since relaxing the spec further would be the wrong direction.
+**Errors**: `401` no valid activation session · `422` password fails the `src/lib/validation/primitives.ts` rule, or missing photo · `413` photo over 5MB
 
 ---
 
@@ -110,11 +108,11 @@ Completes requester registration. There is no `token` field — the invite link 
 
 One-time Dean onboarding. There is no `token` field — as with `/api/auth/register`, the invite link resolves through `GET /api/auth/callback` into a session in the `activate` namespace before this route runs. Sets password, stores signature and stamp references, enables MFA.
 
-| Field       | Type           | Required |
-| ----------- | -------------- | -------- |
-| `password`  | `string` (min 8) | yes    |
-| `signature` | `File` (image) | yes      |
-| `stamp`     | `File` (image) | yes      |
+| Field       | Type                                          | Required |
+| ----------- | --------------------------------------------- | -------- |
+| `password`  | `string` (min 12, mixed case, number, symbol) | yes      |
+| `signature` | `File` (image)                                | yes      |
+| `stamp`     | `File` (image)                                | yes      |
 
 **Response `data`**: `{ "profile_id": "<uuid>", "redirect": "/hod" }`
 
@@ -200,12 +198,12 @@ Verifies `current_password` by re-authenticating (`signInWithPassword`) before a
 **Roles**: REQUESTER
 **RPC**: `create_request(key_id, return_time, type, weekend_date?)`
 
-| Field             | Type                       | Required     |
-| ----------------- | -------------------------- | ------------ |
-| `key_id`          | `string` (uuid)            | yes          |
-| `type`            | `'WEEKDAY' \| 'WEEKEND'`   | yes          |
-| `return_deadline` | `string` (ISO timestamptz) | yes          |
-| `weekend_date`    | `string` (ISO date)        | WEEKEND only |
+| Field             | Type                       | Required                                                                                                                                                                   |
+| ----------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `key_id`          | `string` (uuid)            | yes                                                                                                                                                                        |
+| `type`            | `'WEEKDAY' \| 'WEEKEND'`   | yes                                                                                                                                                                        |
+| `return_deadline` | `string` (ISO timestamptz) | yes                                                                                                                                                                        |
+| `weekend_date`    | `string` (ISO date)        | WEEKEND only                                                                                                                                                               |
 | `letter_url`      | `string`                   | no — optional Dean-signature image the requester uploaded client-side to `weekend-letters`; persisted on the request row for later signature verification at Dean approval |
 
 The RPC runs the risk engine, generates the code, and writes the audit entry atomically.
@@ -303,10 +301,10 @@ Returns requests with `risk_tier = 'HIGH'` and `status` in `('CODE_ISSUED', 'KEY
 
 CSO intervention on a high-risk `CODE_ISSUED` request surfaced by `cso-queue` above — not an approval gate every request passes through. `decision: 'DECLINED'` cancels the request (`CODE_ISSUED` → `CANCELLED`, admin client, audit `REQUEST_DECLINED_CSO`); `decision: 'APPROVED'` makes no state change (a no-op acknowledgement that the CSO has reviewed and is letting it proceed), audit `REQUEST_APPROVED_CSO`.
 
-| Field        | Type                       | Required |
-| ------------ | -------------------------- | -------- |
-| `request_id` | `string` (uuid)            | yes      |
-| `decision`   | `'APPROVED' \| 'DECLINED'` | yes      |
+| Field        | Type                       | Required                                                         |
+| ------------ | -------------------------- | ---------------------------------------------------------------- |
+| `request_id` | `string` (uuid)            | yes                                                              |
+| `decision`   | `'APPROVED' \| 'DECLINED'` | yes                                                              |
 | `note`       | `string`                   | no — accepted by the schema but not currently persisted anywhere |
 
 **Response `data`**: `{ "request_id": "<uuid>", "status": "CANCELLED" | "CODE_ISSUED" }` (`CANCELLED` on decline, unchanged `CODE_ISSUED` on approve)
@@ -640,11 +638,11 @@ Sets key `status = 'RETIRED'`, creates an incident log entry of type `MISSING_KE
 **RPC**: `provision_user(name, email, role, department_id?)` — the RPC parameter keeps its historical `p_department_id` name but writes to `profiles.unit_id`
 
 | Field                 | Type                                  | Required           |
-| --------------------- | -------------------------------------- | ------------------ |
-| `full_name`           | `string`                              | yes                 |
-| `institutional_email` | `string` (email)                      | yes                 |
-| `role`                | `'DEAN' \| 'VERIFIER' \| 'REQUESTER'` | yes                 |
-| `unit_id`             | `string` (uuid)                       | DEAN and REQUESTER  |
+| --------------------- | ------------------------------------- | ------------------ |
+| `full_name`           | `string`                              | yes                |
+| `institutional_email` | `string` (email)                      | yes                |
+| `role`                | `'DEAN' \| 'VERIFIER' \| 'REQUESTER'` | yes                |
+| `unit_id`             | `string` (uuid)                       | DEAN and REQUESTER |
 
 Creates the profile, generates a 24-hour activation token, queues the invite email via Nodemailer (Gmail SMTP), and writes the audit entry — all inside the RPC.
 
@@ -698,10 +696,10 @@ No request body. Re-sends a fresh activation link for a user still `PENDING_ACTI
 
 Edits an existing user's `full_name` and — for departmental roles (Dean, REQUESTER) — `unit_id`. Email and role are intentionally **not** editable here: the email is the auth login identity and chain-of-trust anchor, and role changes are out of scope. Writes a `USER_UPDATED` audit entry recording only the fields that actually changed. When a Dean moves faculty, the `units.hod_id` reverse link is kept in sync.
 
-| Field     | Type            | Required                       |
-| --------- | --------------- | ------------------------------- |
-| `full_name` | `string`      | yes                              |
-| `unit_id`   | `string` (uuid) | Dean and REQUESTER targets     |
+| Field       | Type            | Required                   |
+| ----------- | --------------- | -------------------------- |
+| `full_name` | `string`        | yes                        |
+| `unit_id`   | `string` (uuid) | Dean and REQUESTER targets |
 
 **Response `data`**: `{ "profile_id": "<uuid>", "full_name": "<name>", "unit_id": "<uuid|null>" }`
 
@@ -727,13 +725,13 @@ No query params. Returns every unit (faculty or Administration) with its Dean, a
 **File**: `src/app/api/admin/keys/route.ts`
 **Roles**: CSO
 
-| Field       | Type                            | Required |
-| ----------- | -------------------------------- | -------- |
-| `code`      | `string` (matches `^[A-Z0-9]+-\d+$`) | yes  |
-| `zone`      | `'NEW_SENATE' \| 'OLD_SENATE'`  | yes      |
-| `room_name` | `string`                         | yes      |
-| `unit_id`   | `string` (uuid)                  | yes      |
-| `key_count` | `integer` (1–20, default 1)      | no       |
+| Field       | Type                                 | Required |
+| ----------- | ------------------------------------ | -------- |
+| `code`      | `string` (matches `^[A-Z0-9]+-\d+$`) | yes      |
+| `zone`      | `'NEW_SENATE' \| 'OLD_SENATE'`       | yes      |
+| `room_name` | `string`                             | yes      |
+| `unit_id`   | `string` (uuid)                      | yes      |
+| `key_count` | `integer` (1–20, default 1)          | no       |
 
 Creates a new key record (status `AVAILABLE`). Returns `201`.
 
@@ -844,9 +842,9 @@ Returns the caller's own profile, including role-specific fields (`signature_ref
 
 Only `full_name` is mutable here — email is managed by Supabase Auth, photo by `POST /api/profile/photo`, and a Dean's signature/stamp by `POST /api/profile/signature`.
 
-| Field       | Type   | Required |
-| ----------- | ------ | -------- |
-| `full_name` | `string` | yes    |
+| Field       | Type     | Required |
+| ----------- | -------- | -------- |
+| `full_name` | `string` | yes      |
 
 **Response `data`**: `{ "full_name": "<name>" }`
 
@@ -862,7 +860,7 @@ Only `full_name` is mutable here — email is managed by Supabase Auth, photo by
 Multipart form; replaces the caller's own profile photo in the `passport-photos` bucket. One route serves every role's settings screen (the storage folder is keyed by user id, not a role namespace).
 
 | Field   | Type                    | Required |
-| ------- | ------------------------ | -------- |
+| ------- | ----------------------- | -------- |
 | `photo` | `File` (image, max 5MB) | yes      |
 
 **Response `data`**: `{ "photo_url": "<url>" }`
@@ -891,10 +889,10 @@ No request body. Removes the caller's own photo file(s) from storage and clears 
 
 Replaces a Dean's signature or stamp reference image (post-onboarding). If a reference is already on file, the new upload is compared pixel-level against it via the same Sharp + Pixelmatch pipeline as `POST /api/ai/verify-signature` before the replacement is allowed.
 
-| Field   | Type                    | Required                        |
-| ------- | ------------------------ | -------------------------------- |
-| `type`  | `'signature' \| 'stamp'` | yes                              |
-| `image` | `File` (image, max 5MB) | yes                               |
+| Field   | Type                     | Required |
+| ------- | ------------------------ | -------- |
+| `type`  | `'signature' \| 'stamp'` | yes      |
+| `image` | `File` (image, max 5MB)  | yes      |
 
 If the mismatch exceeds `SIGNATURE_DIFF_THRESHOLD` (default 15%), the reference is **not** replaced — a `SIGNATURE_MISMATCH` audit entry is written (`context: 'reference_replacement'`) and the response reports the held state (still HTTP 200). Otherwise the reference is replaced and a `SIGNATURE_REFERENCE_UPDATED` entry is written.
 
@@ -1077,29 +1075,29 @@ If `passed = false`, the caller raises a CSO alert and holds the approval.
 
 ## RPC cross-reference
 
-| RPC                            | Called by route                                 | Also writes audit entry |
-| ------------------------------ | ----------------------------------------------- | ----------------------- |
-| `create_request`               | POST /api/requests/submit                       | yes                     |
-| `issue_key`                    | POST /api/requests/collect                      | yes                     |
-| `generate_weekend_code`        | POST /api/requests/weekend-code                 | yes                     |
-| `expire_request`               | POST /api/requests/expire                       | yes                     |
-| `request_return`               | POST /api/requests/request-return               | yes                     |
-| `request_return_guest`         | POST /api/public/weekend-request/[token]/return-code | yes                |
-| `return_key`                   | POST /api/keys/return                           | yes                     |
-| `approve_weekend`              | POST /api/requests/hod-decision                 | yes                     |
-| `approve_guest_weekend`        | POST /api/requests/hod-decision                 | yes                     |
-| `decline_weekend`              | POST /api/requests/hod-decision                 | yes                     |
-| `nominate_collector`           | POST /api/admin/authorisations                  | yes                     |
-| `remove_collector`             | DELETE /api/admin/authorisations/[k]/[r]        | yes                     |
-| `create_guest_weekend_request` | POST /api/public/weekend-request                | yes                     |
-| `generate_guest_weekend_code`  | POST /api/public/weekend-request/[token]/code   | yes                     |
-| `expire_guest_request`         | POST /api/public/weekend-request/[token]/expire | yes                     |
-| `acknowledge_shift_handover`   | POST /api/shifts/handover                       | yes — per key           |
-| `generate_shift_report`        | POST /api/reports/generate                      | yes                     |
-| `add_report_comment`           | POST /api/reports/[id]/comments                 | yes                     |
-| `provision_user`               | POST /api/admin/users                           | yes                     |
-| `mark_key_overdue`             | cron only (`pg_cron`, hourly) — no route caller | yes — per key           |
-| `schedule_pending_shift_report`| cron only (`pg_cron`, daily 18:00) — no route caller | yes — when a CSO exists |
+| RPC                             | Called by route                                      | Also writes audit entry |
+| ------------------------------- | ---------------------------------------------------- | ----------------------- |
+| `create_request`                | POST /api/requests/submit                            | yes                     |
+| `issue_key`                     | POST /api/requests/collect                           | yes                     |
+| `generate_weekend_code`         | POST /api/requests/weekend-code                      | yes                     |
+| `expire_request`                | POST /api/requests/expire                            | yes                     |
+| `request_return`                | POST /api/requests/request-return                    | yes                     |
+| `request_return_guest`          | POST /api/public/weekend-request/[token]/return-code | yes                     |
+| `return_key`                    | POST /api/keys/return                                | yes                     |
+| `approve_weekend`               | POST /api/requests/hod-decision                      | yes                     |
+| `approve_guest_weekend`         | POST /api/requests/hod-decision                      | yes                     |
+| `decline_weekend`               | POST /api/requests/hod-decision                      | yes                     |
+| `nominate_collector`            | POST /api/admin/authorisations                       | yes                     |
+| `remove_collector`              | DELETE /api/admin/authorisations/[k]/[r]             | yes                     |
+| `create_guest_weekend_request`  | POST /api/public/weekend-request                     | yes                     |
+| `generate_guest_weekend_code`   | POST /api/public/weekend-request/[token]/code        | yes                     |
+| `expire_guest_request`          | POST /api/public/weekend-request/[token]/expire      | yes                     |
+| `acknowledge_shift_handover`    | POST /api/shifts/handover                            | yes — per key           |
+| `generate_shift_report`         | POST /api/reports/generate                           | yes                     |
+| `add_report_comment`            | POST /api/reports/[id]/comments                      | yes                     |
+| `provision_user`                | POST /api/admin/users                                | yes                     |
+| `mark_key_overdue`              | cron only (`pg_cron`, hourly) — no route caller      | yes — per key           |
+| `schedule_pending_shift_report` | cron only (`pg_cron`, daily 18:00) — no route caller | yes — when a CSO exists |
 
 All RPCs are defined in `supabase/migrations/`. See `docs/DATABASE.md` for parameter signatures.
 

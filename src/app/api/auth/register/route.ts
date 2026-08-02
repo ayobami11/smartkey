@@ -4,6 +4,7 @@ import { logger } from '@/lib/logger';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { DEFAULT_NAMESPACE, namespaceForRole } from '@/lib/supabase/cookies';
 import { createServerClient } from '@/lib/supabase/server';
+import { password as passwordSchema } from '@/lib/validation/primitives';
 import { err, ok } from '@/types/api';
 
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -20,15 +21,16 @@ export const POST = async (request: NextRequest) => {
     return NextResponse.json(err('Invalid form data', 422), { status: 422 });
   }
 
-  const password = formData.get('password');
   const photo = formData.get('passport_photo');
 
-  if (!password || typeof password !== 'string' || password.length < 8) {
+  const parsedPassword = passwordSchema.safeParse(formData.get('password'));
+  if (!parsedPassword.success) {
     return NextResponse.json(
-      err('Password must be at least 8 characters', 422),
+      err(parsedPassword.error.issues[0]?.message ?? 'Invalid password', 422),
       { status: 422 }
     );
   }
+  const password = parsedPassword.data;
   if (photo instanceof File && photo.size > MAX_PHOTO_BYTES) {
     return NextResponse.json(err('Photo must be under 5 MB', 413), {
       status: 413,

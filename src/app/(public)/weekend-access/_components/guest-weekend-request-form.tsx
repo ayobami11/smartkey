@@ -2,7 +2,6 @@
 
 import { useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { CheckCircleIcon, CheckIcon, CopyIcon } from 'lucide-react';
@@ -40,8 +39,6 @@ type GuestWeekendRequestFormProps = {
 export const GuestWeekendRequestForm = ({
   departments,
 }: GuestWeekendRequestFormProps) => {
-  const router = useRouter();
-
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);

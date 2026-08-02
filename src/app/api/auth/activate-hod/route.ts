@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
+import { password as passwordSchema } from '@/lib/validation/primitives';
 import { err, ok } from '@/types/api';
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -19,16 +20,17 @@ export const POST = async (request: NextRequest) => {
     return NextResponse.json(err('Invalid form data', 422), { status: 422 });
   }
 
-  const password = formData.get('password');
   const signature = formData.get('signature');
   const stamp = formData.get('stamp');
 
-  if (!password || typeof password !== 'string' || password.length < 8) {
+  const parsedPassword = passwordSchema.safeParse(formData.get('password'));
+  if (!parsedPassword.success) {
     return NextResponse.json(
-      err('Password must be at least 8 characters', 422),
+      err(parsedPassword.error.issues[0]?.message ?? 'Invalid password', 422),
       { status: 422 }
     );
   }
+  const password = parsedPassword.data;
   if (!signature || !(signature instanceof File)) {
     return NextResponse.json(err('Signature image is required', 422), {
       status: 422,
