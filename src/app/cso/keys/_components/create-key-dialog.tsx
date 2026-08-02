@@ -31,6 +31,7 @@ import {
   FieldLabel,
 } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Select,
   SelectContent,
@@ -98,9 +99,9 @@ export const CreateKeyDialog = ({ onCreated }: Props) => {
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="grid max-h-[85vh] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 sm:max-w-md">
         {success ? (
-          <>
+          <div className="p-6">
             <div
               role="status"
               className="flex flex-col items-center gap-3 py-4 text-center"
@@ -122,10 +123,10 @@ export const CreateKeyDialog = ({ onCreated }: Props) => {
             <DialogFooter>
               <Button onClick={() => handleOpenChange(false)}>Done</Button>
             </DialogFooter>
-          </>
+          </div>
         ) : (
           <>
-            <DialogHeader>
+            <DialogHeader className="border-b border-border p-6">
               <DialogTitle>Add key</DialogTitle>
               <DialogDescription>
                 Add a new key to the inventory. The key code must be unique
@@ -133,152 +134,154 @@ export const CreateKeyDialog = ({ onCreated }: Props) => {
               </DialogDescription>
             </DialogHeader>
 
-            <form onSubmit={form.handleSubmit(onSubmit)}>
-              <FieldGroup className="py-2">
-                <Controller
-                  name="code"
-                  control={form.control}
-                  render={({ field, fieldState }) => (
-                    <Field data-invalid={fieldState.invalid}>
-                      <FieldLabel htmlFor="key-code">Key code</FieldLabel>
-                      <Input
-                        id="key-code"
-                        placeholder="NS-304"
-                        aria-invalid={fieldState.invalid}
-                        className="font-mono uppercase"
-                        {...field}
-                        onChange={(e) =>
-                          field.onChange(e.target.value.toUpperCase())
-                        }
-                      />
-                      {fieldState.invalid && (
-                        <FieldError errors={[fieldState.error]} />
-                      )}
-                    </Field>
-                  )}
-                />
-
-                <Controller
-                  name="zone"
-                  control={form.control}
-                  render={({ field, fieldState }) => (
-                    <Field data-invalid={fieldState.invalid}>
-                      <FieldLabel htmlFor="zone-select">Zone</FieldLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        value={field.value}
-                      >
-                        <SelectTrigger
-                          id="zone-select"
+            <form onSubmit={form.handleSubmit(onSubmit)} className="contents">
+              <ScrollArea type="always" className="min-h-0">
+                <FieldGroup className="p-6">
+                  <Controller
+                    name="code"
+                    control={form.control}
+                    render={({ field, fieldState }) => (
+                      <Field data-invalid={fieldState.invalid}>
+                        <FieldLabel htmlFor="key-code">Key code</FieldLabel>
+                        <Input
+                          id="key-code"
+                          placeholder="NS-304"
                           aria-invalid={fieldState.invalid}
+                          className="font-mono uppercase"
+                          {...field}
+                          onChange={(e) =>
+                            field.onChange(e.target.value.toUpperCase())
+                          }
+                        />
+                        {fieldState.invalid && (
+                          <FieldError errors={[fieldState.error]} />
+                        )}
+                      </Field>
+                    )}
+                  />
+
+                  <Controller
+                    name="zone"
+                    control={form.control}
+                    render={({ field, fieldState }) => (
+                      <Field data-invalid={fieldState.invalid}>
+                        <FieldLabel htmlFor="zone-select">Zone</FieldLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value}
                         >
-                          <SelectValue placeholder="Select a zone" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {(
-                            Object.keys(ZONE_LABELS) as Array<
-                              keyof typeof ZONE_LABELS
-                            >
-                          ).map((z) => (
-                            <SelectItem key={z} value={z}>
-                              {ZONE_LABELS[z]}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {fieldState.invalid && (
-                        <FieldError errors={[fieldState.error]} />
-                      )}
-                    </Field>
-                  )}
-                />
+                          <SelectTrigger
+                            id="zone-select"
+                            aria-invalid={fieldState.invalid}
+                          >
+                            <SelectValue placeholder="Select a zone" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(
+                              Object.keys(ZONE_LABELS) as Array<
+                                keyof typeof ZONE_LABELS
+                              >
+                            ).map((z) => (
+                              <SelectItem key={z} value={z}>
+                                {ZONE_LABELS[z]}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {fieldState.invalid && (
+                          <FieldError errors={[fieldState.error]} />
+                        )}
+                      </Field>
+                    )}
+                  />
 
-                <Controller
-                  name="room_name"
-                  control={form.control}
-                  render={({ field, fieldState }) => (
-                    <Field data-invalid={fieldState.invalid}>
-                      <FieldLabel htmlFor="room-name">Room name</FieldLabel>
-                      <Input
-                        id="room-name"
-                        placeholder="Dean's Office"
-                        aria-invalid={fieldState.invalid}
-                        {...field}
-                      />
-                      {fieldState.invalid && (
-                        <FieldError errors={[fieldState.error]} />
-                      )}
-                    </Field>
-                  )}
-                />
-
-                <Controller
-                  name="unit_id"
-                  control={form.control}
-                  render={({ field, fieldState }) => (
-                    <Field data-invalid={fieldState.invalid}>
-                      <FieldLabel htmlFor="unit-select">Unit</FieldLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        value={field.value}
-                      >
-                        <SelectTrigger
-                          id="unit-select"
+                  <Controller
+                    name="room_name"
+                    control={form.control}
+                    render={({ field, fieldState }) => (
+                      <Field data-invalid={fieldState.invalid}>
+                        <FieldLabel htmlFor="room-name">Room name</FieldLabel>
+                        <Input
+                          id="room-name"
+                          placeholder="Dean's Office"
                           aria-invalid={fieldState.invalid}
+                          {...field}
+                        />
+                        {fieldState.invalid && (
+                          <FieldError errors={[fieldState.error]} />
+                        )}
+                      </Field>
+                    )}
+                  />
+
+                  <Controller
+                    name="unit_id"
+                    control={form.control}
+                    render={({ field, fieldState }) => (
+                      <Field data-invalid={fieldState.invalid}>
+                        <FieldLabel htmlFor="unit-select">Unit</FieldLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value}
                         >
-                          <SelectValue placeholder="Select a unit" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {units.map((u) => (
-                            <SelectItem key={u.id} value={u.id}>
-                              {u.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {fieldState.invalid && (
-                        <FieldError errors={[fieldState.error]} />
-                      )}
-                    </Field>
-                  )}
-                />
+                          <SelectTrigger
+                            id="unit-select"
+                            aria-invalid={fieldState.invalid}
+                          >
+                            <SelectValue placeholder="Select a unit" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {units.map((u) => (
+                              <SelectItem key={u.id} value={u.id}>
+                                {u.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {fieldState.invalid && (
+                          <FieldError errors={[fieldState.error]} />
+                        )}
+                      </Field>
+                    )}
+                  />
 
-                <Controller
-                  name="key_count"
-                  control={form.control}
-                  render={({ field, fieldState }) => (
-                    <Field data-invalid={fieldState.invalid}>
-                      <FieldLabel htmlFor="key-count">
-                        Keys on bunch{' '}
-                        <span className="text-muted-foreground">
-                          (optional)
-                        </span>
-                      </FieldLabel>
-                      <Input
-                        id="key-count"
-                        type="number"
-                        min={1}
-                        max={20}
-                        aria-invalid={fieldState.invalid}
-                        value={field.value}
-                        onBlur={field.onBlur}
-                        name={field.name}
-                        ref={field.ref}
-                        onChange={(e) =>
-                          field.onChange(
-                            e.target.value === '' ? 1 : Number(e.target.value)
-                          )
-                        }
-                      />
-                      {fieldState.invalid && (
-                        <FieldError errors={[fieldState.error]} />
-                      )}
-                    </Field>
-                  )}
-                />
-              </FieldGroup>
+                  <Controller
+                    name="key_count"
+                    control={form.control}
+                    render={({ field, fieldState }) => (
+                      <Field data-invalid={fieldState.invalid}>
+                        <FieldLabel htmlFor="key-count">
+                          Keys on bunch{' '}
+                          <span className="text-muted-foreground">
+                            (optional)
+                          </span>
+                        </FieldLabel>
+                        <Input
+                          id="key-count"
+                          type="number"
+                          min={1}
+                          max={20}
+                          aria-invalid={fieldState.invalid}
+                          value={field.value}
+                          onBlur={field.onBlur}
+                          name={field.name}
+                          ref={field.ref}
+                          onChange={(e) =>
+                            field.onChange(
+                              e.target.value === '' ? 1 : Number(e.target.value)
+                            )
+                          }
+                        />
+                        {fieldState.invalid && (
+                          <FieldError errors={[fieldState.error]} />
+                        )}
+                      </Field>
+                    )}
+                  />
+                </FieldGroup>
+              </ScrollArea>
 
-              <DialogFooter className="mt-4">
+              <DialogFooter className="border-t border-border p-6">
                 <Button
                   type="button"
                   variant="outline"
