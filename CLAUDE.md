@@ -6,7 +6,7 @@
 
 SmartKey is a key management web application for the University of Lagos Senate Building. It replaces a paper logbook with role-specific dashboards, an immutable audit trail, and three AI components: rule-based risk scoring, Gemini-generated shift reports, and pixel-level signature verification.
 
-Four roles share the application: **CSO** (admin oversight), **Dean** (faculty key authoriser; system role `HOD`), **Verifier** (security personnel at the desk), **Requester** (university staff).
+Four roles share the application: **CSO** (admin oversight), **Dean** (faculty key authoriser; system role `DEAN`), **Verifier** (security personnel at the desk), **Requester** (university staff). Some internal identifiers (routes, RPCs, audit events — e.g. `hod_decisions`, `HOD_APPROVED`) retain the old `hod` name for historical continuity; the role enum itself does not.
 
 For a full domain overview see @docs/PRODUCT.md.
 For architectural decisions see @docs/ARCHITECTURE.md.

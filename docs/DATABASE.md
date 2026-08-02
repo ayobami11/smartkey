@@ -7,30 +7,31 @@ Authoritative schema lives in `supabase/migrations/`. This document is a human-r
 ### profiles
 
 - `id` UUID PK (= auth.users.id)
-- `role` enum: 'CSO' | 'HOD' | 'VERIFIER' | 'REQUESTER'
+- `role` enum `user_role`: 'CSO' | 'DEAN' | 'VERIFIER' | 'REQUESTER' — internal identifiers elsewhere (routes, RPCs, audit events, e.g. `hod_decisions`, `HOD_APPROVED`) retain the old `hod` name for historical continuity, but the enum value itself is `DEAN`
 - `full_name` text
 - `institutional_email` text unique
-- `department_id` UUID FK (HODs and Requesters only)
+- `unit_id` UUID FK units (Deans and Requesters only)
 - `photo_url` text nullable
-- `signature_ref_url` text nullable (HODs only; Supabase Storage URL)
-- `stamp_ref_url` text nullable (HODs only)
+- `signature_ref_url` text nullable (Deans only; Supabase Storage URL)
+- `stamp_ref_url` text nullable (Deans only)
 - `status` enum: 'PENDING_ACTIVATION' | 'ACTIVE' | 'DEACTIVATED'
+- `activation_token` text nullable — single-use token minted by `provision_user`; consumed by `/api/auth/register` or `/api/auth/activate-hod`
 - `created_at` timestamptz
 - `updated_at` timestamptz
 
-### departments
+### units
 
-The grouping unit for keys. Each row is a **faculty** (e.g. 'Faculty of Engineering') or the single non-faculty **'Administration'** group (central Senate-Building offices: VC, DVCs, Registrar, Bursary, Librarian). Keys hang off a department via `keys.department_id`; a faculty owns a Dean's Office + Porter's Lodge key.
+The grouping unit for keys (formerly named `departments`; the table was renamed but the enum type `department_authoriser` and several FK/column names below kept their original names). Each row is a **faculty** (e.g. 'Faculty of Engineering') or the single non-faculty **'Administration'** group (central Senate-Building offices: VC, DVCs, Registrar, Bursary, Librarian). Keys hang off a unit via `keys.unit_id`; a faculty owns a Dean's Office + Porter's Lodge key.
 
 - `id` UUID PK
 - `name` text unique
 - `faculty` text not null default '' — kept equal to `name` for now; redundant since the row name is the group. Slated to be dropped once the UI stops reading it.
 - `authoriser` enum `department_authoriser`: 'DEAN' | 'CSO' (default 'DEAN') — who may authorise collectors and approve/decline weekend requests for this group's keys. Faculties are 'DEAN'; 'Administration' is 'CSO' (no Dean exists for it).
-- `hod_id` UUID FK profiles (nullable, set when HOD/Dean assigned)
+- `hod_id` UUID FK profiles (nullable, set when the Dean is assigned)
 
 ### guest_requesters
 
-An external (non-registered) person who may collect a key for a single weekend. Guests are never a `profiles`/`auth.users` row (that would require an auth user and break the `invited_by` chain-of-trust); they are modelled as their own entity. RLS: CSO reads all. HOD reads guests whose request is routed to their department (`requested_department_id` or key's `department_id`). VERIFIER reads guests where a `CODE_ISSUED` or `KEY_ISSUED` request exists (operational need only).
+An external (non-registered) person who may collect a key for a single weekend. Guests are never a `profiles`/`auth.users` row (that would require an auth user and break the `invited_by` chain-of-trust); they are modelled as their own entity. RLS: CSO reads all. Dean reads guests whose request is routed to their unit (`requested_unit_id` or key's `unit_id`). VERIFIER reads guests where a `CODE_ISSUED` or `KEY_ISSUED` request exists (operational need only).
 
 - `id` UUID PK
 - `full_name` text
@@ -46,9 +47,10 @@ An external (non-registered) person who may collect a key for a single weekend. 
 - `code` text unique (e.g., 'NS-304')
 - `zone` enum: 'NEW_SENATE' | 'OLD_SENATE'
 - `room_name` text
-- `department_id` UUID FK departments
+- `unit_id` UUID FK units
 - `status` enum: 'AVAILABLE' | 'ISSUED' | 'OVERDUE' | 'RETIRED'
 - `retired_at` timestamptz nullable
+- `key_count` int not null default 1, `CHECK (key_count >= 1)` — number of physical keys in the bunch this record represents
 
 ### authorisations
 
@@ -65,7 +67,7 @@ An external (non-registered) person who may collect a key for a single weekend. 
 - `requester_id` UUID FK profiles nullable (null for external/guest requests)
 - `key_id` UUID FK keys nullable (null until the HOD assigns a key on a guest approval)
 - `guest_id` UUID FK guest_requesters nullable (set for external requests; null for registered-user requests)
-- `requested_department_id` UUID FK departments nullable (department a guest requests access within; drives HOD routing while `key_id` is null; null for registered-user requests)
+- `requested_unit_id` UUID FK units nullable (unit a guest requests access within; drives Dean routing while `key_id` is null; null for registered-user requests)
 - `access_token` uuid nullable (unguessable token a guest uses to reach their session-less status/code page; present only for guest requests)
 - `letter_url` text nullable (path in the `weekend-letters` bucket to the HOD authorisation letter a guest uploaded at submit)
 - `requested_room` text nullable (free-text room/area a guest states they need access to; shown to the HOD before key assignment; null for registered-user requests)

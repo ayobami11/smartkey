@@ -32,7 +32,7 @@ Senior administrator. Desktop-primary. One per institution.
 
 **Routes**: /cso, /cso/reports, /cso/audit, /cso/users, /cso/keys, /cso/settings.
 
-### Dean (system role: HOD)
+### Dean (system role: DEAN)
 
 Faculty Dean, mixed device usage. One per faculty (2 pilot faculties at launch, scaling). The Administration group's keys are authorised by the CSO (no Dean exists for it).
 

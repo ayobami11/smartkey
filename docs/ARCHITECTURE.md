@@ -93,7 +93,7 @@ Key decisions live in `docs/adr/` as numbered records. Read them when in doubt.
 
 ## Auth and role gating
 
-`middleware.ts` reads the Supabase session and the user's role, gates routes by role, and rewrites unauthorised access to a 403 page. The role is stored in a `profiles.role` column (`CSO`, `HOD`, `VERIFIER`, `REQUESTER`) and joined into JWT claims via Supabase function. The `HOD` role corresponds to the **Dean** in domain language; internal identifiers (routes, RPCs, audit events) retain the `hod` name for historical continuity.
+`middleware.ts` reads the Supabase session and the user's role, gates routes by role, and rewrites unauthorised access to a 403 page. The role is stored in a `profiles.role` column (`CSO`, `DEAN`, `VERIFIER`, `REQUESTER`) and joined into JWT claims via Supabase function. Internal identifiers (routes, RPCs, audit events — e.g. `hod_decisions`, `HOD_APPROVED`) retain the `hod` name for historical continuity, but the role enum value itself is `DEAN`.
 
 ## Realtime subscriptions
 
