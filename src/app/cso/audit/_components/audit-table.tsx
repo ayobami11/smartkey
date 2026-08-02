@@ -189,7 +189,7 @@ const ROLE_OPTIONS: { value: RoleFilterValue; label: string }[] = [
 
 // Helpers
 
-function mapRow(e: Record<string, unknown>): AuditEntry {
+export function mapRow(e: Record<string, unknown>): AuditEntry {
   const payload =
     typeof e.payload === 'object' && e.payload !== null
       ? (e.payload as Record<string, unknown>)
@@ -243,7 +243,7 @@ function mapRow(e: Record<string, unknown>): AuditEntry {
   };
 }
 
-function buildPageNumbers(
+export function buildPageNumbers(
   current: number,
   total: number
 ): (number | 'ellipsis')[] {
