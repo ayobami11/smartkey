@@ -324,95 +324,97 @@ export const AuditView = () => {
       {activeTab === 'incidents' && (
         <>
           {/* Filters */}
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="pl-2 text-sm font-semibold text-foreground">
-              Filter by:
-            </span>
-            {/* Incident type multi-filter */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5 border-dashed"
-                >
-                  <CirclePlusIcon className="size-3.5" aria-hidden="true" />
-                  Type
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="pl-2 text-sm font-semibold text-foreground">
+                Filter by:
+              </span>
+              {/* Incident type multi-filter */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 border-dashed"
+                  >
+                    <CirclePlusIcon className="size-3.5" aria-hidden="true" />
+                    Type
+                    {incidentTypeFilter.length > 0 && (
+                      <span className="flex size-5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                        {incidentTypeFilter.length}
+                      </span>
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-52">
+                  <DropdownMenuLabel>Filter by type</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {INCIDENT_TYPES.map((opt) => (
+                    <DropdownMenuCheckboxItem
+                      key={opt.value}
+                      checked={incidentTypeFilter.includes(opt.value)}
+                      onCheckedChange={() => toggleTypeFilter(opt.value)}
+                    >
+                      {opt.label}
+                    </DropdownMenuCheckboxItem>
+                  ))}
                   {incidentTypeFilter.length > 0 && (
-                    <span className="flex size-5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-                      {incidentTypeFilter.length}
-                    </span>
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => setIncidentTypeFilter([])}
+                        className="text-muted-foreground"
+                      >
+                        Clear filter
+                      </DropdownMenuItem>
+                    </>
                   )}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-52">
-                <DropdownMenuLabel>Filter by type</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {INCIDENT_TYPES.map((opt) => (
-                  <DropdownMenuCheckboxItem
-                    key={opt.value}
-                    checked={incidentTypeFilter.includes(opt.value)}
-                    onCheckedChange={() => toggleTypeFilter(opt.value)}
-                  >
-                    {opt.label}
-                  </DropdownMenuCheckboxItem>
-                ))}
-                {incidentTypeFilter.length > 0 && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={() => setIncidentTypeFilter([])}
-                      className="text-muted-foreground"
-                    >
-                      Clear filter
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
-            {/* Severity multi-filter */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5 border-dashed"
-                >
-                  <CirclePlusIcon className="size-3.5" aria-hidden="true" />
-                  Severity
-                  {incidentSeverityFilter.length > 0 && (
-                    <span className="flex size-5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-                      {incidentSeverityFilter.length}
-                    </span>
-                  )}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-40">
-                <DropdownMenuLabel>Filter by severity</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {INCIDENT_SEVERITIES.map((opt) => (
-                  <DropdownMenuCheckboxItem
-                    key={opt.value}
-                    checked={incidentSeverityFilter.includes(opt.value)}
-                    onCheckedChange={() => toggleSeverityFilter(opt.value)}
+              {/* Severity multi-filter */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 border-dashed"
                   >
-                    {opt.label}
-                  </DropdownMenuCheckboxItem>
-                ))}
-                {incidentSeverityFilter.length > 0 && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={() => setIncidentSeverityFilter([])}
-                      className="text-muted-foreground"
+                    <CirclePlusIcon className="size-3.5" aria-hidden="true" />
+                    Severity
+                    {incidentSeverityFilter.length > 0 && (
+                      <span className="flex size-5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                        {incidentSeverityFilter.length}
+                      </span>
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-40">
+                  <DropdownMenuLabel>Filter by severity</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {INCIDENT_SEVERITIES.map((opt) => (
+                    <DropdownMenuCheckboxItem
+                      key={opt.value}
+                      checked={incidentSeverityFilter.includes(opt.value)}
+                      onCheckedChange={() => toggleSeverityFilter(opt.value)}
                     >
-                      Clear filter
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                      {opt.label}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                  {incidentSeverityFilter.length > 0 && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => setIncidentSeverityFilter([])}
+                        className="text-muted-foreground"
+                      >
+                        Clear filter
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
             <TimeRangeFilter
               value={incidentRange}
               onChange={setIncidentRange}

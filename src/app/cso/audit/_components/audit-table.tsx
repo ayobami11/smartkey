@@ -593,110 +593,114 @@ export const AuditTable = ({
       {/* Filter bar */}
       {!isLoading && !isError && (
         <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <InputGroup className="min-w-56 flex-1">
-              <InputGroupInput
-                type="search"
-                placeholder="Search by name"
-                aria-label="Search audit log by actor name"
-                value={search}
-                onChange={(e) => handleSearch(e.target.value)}
-              />
-              <InputGroupAddon align="inline-start">
-                <SearchIcon
-                  className="size-4 text-muted-foreground"
-                  aria-hidden="true"
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <InputGroup className="min-w-72 flex-1">
+                <InputGroupInput
+                  type="search"
+                  placeholder="Search by name"
+                  aria-label="Search audit log by actor name"
+                  value={search}
+                  onChange={(e) => handleSearch(e.target.value)}
                 />
-              </InputGroupAddon>
-            </InputGroup>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5 border-dashed"
-                >
-                  <CirclePlusIcon className="size-3.5" aria-hidden="true" />
-                  Role
+                <InputGroupAddon align="inline-start">
+                  <SearchIcon
+                    className="size-4 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                </InputGroupAddon>
+              </InputGroup>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 border-dashed"
+                  >
+                    <CirclePlusIcon className="size-3.5" aria-hidden="true" />
+                    Role
+                    {roleFilter.length > 0 && (
+                      <span className="flex size-5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                        {roleFilter.length}
+                      </span>
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-44">
+                  <DropdownMenuLabel>Filter by role</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {ROLE_OPTIONS.map((opt) => (
+                    <DropdownMenuCheckboxItem
+                      key={opt.value}
+                      checked={roleFilter.includes(opt.value)}
+                      onCheckedChange={() => handleRoleToggle(opt.value)}
+                    >
+                      {opt.label}
+                    </DropdownMenuCheckboxItem>
+                  ))}
                   {roleFilter.length > 0 && (
-                    <span className="flex size-5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-                      {roleFilter.length}
-                    </span>
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setRoleFilter([]);
+                          table.setPageIndex(0);
+                        }}
+                        className="text-muted-foreground"
+                      >
+                        Clear filter
+                      </DropdownMenuItem>
+                    </>
                   )}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-44">
-                <DropdownMenuLabel>Filter by role</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {ROLE_OPTIONS.map((opt) => (
-                  <DropdownMenuCheckboxItem
-                    key={opt.value}
-                    checked={roleFilter.includes(opt.value)}
-                    onCheckedChange={() => handleRoleToggle(opt.value)}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 border-dashed"
                   >
-                    {opt.label}
-                  </DropdownMenuCheckboxItem>
-                ))}
-                {roleFilter.length > 0 && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={() => {
-                        setRoleFilter([]);
-                        table.setPageIndex(0);
-                      }}
-                      className="text-muted-foreground"
-                    >
-                      Clear filter
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5 border-dashed"
-                >
-                  <CirclePlusIcon className="size-3.5" aria-hidden="true" />
-                  Event
+                    <CirclePlusIcon className="size-3.5" aria-hidden="true" />
+                    Event
+                    {typeFilter.length > 0 && (
+                      <span className="flex size-5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                        {typeFilter.length}
+                      </span>
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-48">
+                  <DropdownMenuLabel>Filter by event type</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {TYPE_CHIPS.filter((c) => c.type !== undefined).map(
+                    (chip) => (
+                      <DropdownMenuCheckboxItem
+                        key={chip.label}
+                        checked={typeFilter.includes(chip.type!)}
+                        onCheckedChange={() => handleTypeToggle(chip.type!)}
+                      >
+                        {chip.label}
+                      </DropdownMenuCheckboxItem>
+                    )
+                  )}
                   {typeFilter.length > 0 && (
-                    <span className="flex size-5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-                      {typeFilter.length}
-                    </span>
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setTypeFilter([]);
+                          table.setPageIndex(0);
+                        }}
+                        className="text-muted-foreground"
+                      >
+                        Clear filter
+                      </DropdownMenuItem>
+                    </>
                   )}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-48">
-                <DropdownMenuLabel>Filter by event type</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {TYPE_CHIPS.filter((c) => c.type !== undefined).map((chip) => (
-                  <DropdownMenuCheckboxItem
-                    key={chip.label}
-                    checked={typeFilter.includes(chip.type!)}
-                    onCheckedChange={() => handleTypeToggle(chip.type!)}
-                  >
-                    {chip.label}
-                  </DropdownMenuCheckboxItem>
-                ))}
-                {typeFilter.length > 0 && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={() => {
-                        setTypeFilter([]);
-                        table.setPageIndex(0);
-                      }}
-                      className="text-muted-foreground"
-                    >
-                      Clear filter
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
             <TimeRangeFilter
               value={range}
               onChange={handleRangeChange}
