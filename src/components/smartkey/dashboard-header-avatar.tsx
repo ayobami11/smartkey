@@ -118,7 +118,7 @@ export const DashboardHeaderAvatar = ({
         <DropdownMenuItem
           onClick={handleLogout}
           disabled={isLoggingOut}
-          className="text-destructive focus:text-destructive"
+          variant="destructive"
         >
           <LogOutIcon className="size-4" aria-hidden="true" />
           {isLoggingOut ? 'Signing out...' : 'Sign out'}
