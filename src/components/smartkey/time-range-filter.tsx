@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 
+import { zodResolver } from '@hookform/resolvers/zod';
 import { CalendarIcon } from 'lucide-react';
-import type { DateRange as DayPickerRange } from 'react-day-picker';
+import { Controller, useForm } from 'react-hook-form';
 
 import {
   RANGE_PRESET_OPTIONS,
@@ -13,15 +14,28 @@ import {
   type RangePreset,
 } from '@/lib/date-range';
 import { formatDateNumeric } from '@/lib/dates';
+import {
+  customDateRangeSchema,
+  type CustomDateRangeInput,
+} from '@/lib/validation/schemas';
 
 import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
+import { Field, FieldError, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+
+// Zod already guarantees YYYY-MM-DD by the time this runs (form won't submit
+// otherwise), so a plain split is enough — same technique already used for
+// weekendRequestFormSchema's Saturday/Sunday refine.
+const parseDateInput = (v: string): Date => {
+  const [y, m, d] = v.split('-').map(Number);
+  return new Date(y, m - 1, d);
+};
 
 type TimeRangeFilterProps = {
   value: OptionalTimeRangeValue;
@@ -38,7 +52,11 @@ export const TimeRangeFilter = ({
   allowAllTime,
 }: TimeRangeFilterProps) => {
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<DayPickerRange | undefined>();
+
+  const form = useForm<CustomDateRangeInput>({
+    resolver: zodResolver(customDateRangeSchema),
+    defaultValues: { from: '', to: '' },
+  });
 
   const handlePresetChange = (preset: string) => {
     if (!preset) return;
@@ -52,14 +70,15 @@ export const TimeRangeFilter = ({
 
   const handleOpenChange = (next: boolean) => {
     setOpen(next);
-    if (next) setDraft(undefined);
+    if (next) form.reset({ from: '', to: '' });
   };
 
-  const handleApply = () => {
-    if (!draft?.from || !draft?.to) return;
-    onChange({ preset: 'custom', range: rangeFromDates(draft.from, draft.to) });
+  const onSubmit = form.handleSubmit((data) => {
+    const from = parseDateInput(data.from);
+    const to = parseDateInput(data.to);
+    onChange({ preset: 'custom', range: rangeFromDates(from, to) });
     setOpen(false);
-  };
+  });
 
   const customLabel =
     value.preset === 'custom'
@@ -96,30 +115,57 @@ export const TimeRangeFilter = ({
         <PopoverTrigger asChild>
           <Button
             variant={value.preset === 'custom' ? 'default' : 'outline'}
-            size="sm"
+            size="default"
             aria-label="Choose a custom date range"
           >
             <CalendarIcon aria-hidden="true" />
             {customLabel}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-3" align="end">
-          <Calendar
-            mode="range"
-            numberOfMonths={2}
-            selected={draft}
-            onSelect={setDraft}
-            disabled={{ after: new Date() }}
-          />
-          <div className="mt-3 flex justify-end">
-            <Button
-              size="sm"
-              onClick={handleApply}
-              disabled={!draft?.from || !draft?.to}
-            >
-              Apply
-            </Button>
-          </div>
+        <PopoverContent className="w-72 p-3" align="end">
+          <form onSubmit={onSubmit} className="flex flex-col gap-3">
+            <Controller
+              name="from"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="range-from">Start date</FieldLabel>
+                  <Input
+                    id="range-from"
+                    type="date"
+                    aria-invalid={fieldState.invalid}
+                    {...field}
+                  />
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
+                </Field>
+              )}
+            />
+            <Controller
+              name="to"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="range-to">End date</FieldLabel>
+                  <Input
+                    id="range-to"
+                    type="date"
+                    aria-invalid={fieldState.invalid}
+                    {...field}
+                  />
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
+                </Field>
+              )}
+            />
+            <div className="flex justify-end">
+              <Button type="submit" size="sm">
+                Apply
+              </Button>
+            </div>
+          </form>
         </PopoverContent>
       </Popover>
     </div>

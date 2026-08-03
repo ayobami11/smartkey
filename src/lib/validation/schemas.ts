@@ -14,6 +14,7 @@
 
 import { z } from 'zod';
 
+import { todayDateISO } from '@/lib/dates';
 import { password } from '@/lib/validation/primitives';
 
 // Auth
@@ -403,6 +404,34 @@ export const createImageUploadSchema = (requiredMessage: string) =>
     }),
   });
 
+// Custom date range (TimeRangeFilter widget) — client-side only, no route
+// handler counterpart; validates the two typed date inputs in the popover.
+export const customDateRangeSchema = z
+  .object({
+    from: z
+      .string()
+      .min(1, 'Start date is required.')
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD')
+      .refine(
+        (v) => v <= todayDateISO(),
+        'Start date cannot be in the future.'
+      ),
+    to: z
+      .string()
+      .min(1, 'End date is required.')
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD')
+      .refine((v) => v <= todayDateISO(), 'End date cannot be in the future.'),
+  })
+  .superRefine((data, ctx) => {
+    if (data.to < data.from) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'End date must be on or after the start date.',
+        path: ['to'],
+      });
+    }
+  });
+
 // Profile
 
 export const updateProfileSchema = z.object({
@@ -447,4 +476,5 @@ export type ReturnKeyOverrideFormInput = z.infer<
 >;
 export type IncidentFormInput = z.infer<typeof incidentFormSchema>;
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
+export type CustomDateRangeInput = z.infer<typeof customDateRangeSchema>;
 export type ImageUploadInput = { file: File | undefined };

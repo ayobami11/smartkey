@@ -1,3 +1,4 @@
+import { format } from 'date-fns';
 import userEvent from '@testing-library/user-event';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
@@ -16,6 +17,14 @@ const customValue: OptionalTimeRangeValue = {
 };
 
 const allTimeValue: OptionalTimeRangeValue = { preset: 'all', range: null };
+
+const toDateInput = (d: Date) => format(d, 'yyyy-MM-dd');
+
+const openCustomPopover = async (user: ReturnType<typeof userEvent.setup>) => {
+  await user.click(
+    screen.getByRole('button', { name: /choose a custom date range/i })
+  );
+};
 
 describe('TimeRangeFilter', () => {
   it('renders the four preset options and no "All time" option by default', () => {
@@ -50,7 +59,6 @@ describe('TimeRangeFilter', () => {
     expect(new Date(arg.range.to).getTime()).toBeGreaterThan(
       new Date(arg.range.from).getTime()
     );
-    // '1d' preset: from and to should be roughly 24h apart.
     const spanMs =
       new Date(arg.range.to).getTime() - new Date(arg.range.from).getTime();
     expect(spanMs).toBeCloseTo(24 * 60 * 60 * 1000, -3);
@@ -80,12 +88,94 @@ describe('TimeRangeFilter', () => {
     ).toHaveTextContent('1 Jun 2026 - 7 Jun 2026');
   });
 
-  it('opens the popover with the Apply button disabled until a full range is drafted', async () => {
+  it('opens the popover with empty Start/End date fields', async () => {
     const user = userEvent.setup();
     render(<TimeRangeFilter value={weekValue} onChange={() => {}} />);
-    await user.click(
-      screen.getByRole('button', { name: /choose a custom date range/i })
-    );
-    expect(screen.getByRole('button', { name: /^apply$/i })).toBeDisabled();
+    await openCustomPopover(user);
+
+    expect(screen.getByLabelText(/start date/i)).toHaveValue('');
+    expect(screen.getByLabelText(/end date/i)).toHaveValue('');
+  });
+
+  it('shows a validation error under each field on submit when both are empty', async () => {
+    const user = userEvent.setup();
+    render(<TimeRangeFilter value={weekValue} onChange={() => {}} />);
+    await openCustomPopover(user);
+
+    await user.click(screen.getByRole('button', { name: /^apply$/i }));
+
+    expect(
+      await screen.findByText(/start date is required/i)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/end date is required/i)).toBeInTheDocument();
+  });
+
+  it('shows a validation error under End date when it is before Start date', async () => {
+    const user = userEvent.setup();
+    render(<TimeRangeFilter value={weekValue} onChange={() => {}} />);
+    await openCustomPopover(user);
+
+    await user.type(screen.getByLabelText(/start date/i), '2026-01-05');
+    await user.type(screen.getByLabelText(/end date/i), '2026-01-01');
+    await user.click(screen.getByRole('button', { name: /^apply$/i }));
+
+    expect(
+      await screen.findByText(/end date must be on or after the start date/i)
+    ).toBeInTheDocument();
+  });
+
+  it('shows a validation error when a date is in the future', async () => {
+    const user = userEvent.setup();
+    render(<TimeRangeFilter value={weekValue} onChange={() => {}} />);
+    await openCustomPopover(user);
+
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    await user.type(screen.getByLabelText(/start date/i), '2026-01-01');
+    await user.type(screen.getByLabelText(/end date/i), toDateInput(tomorrow));
+    await user.click(screen.getByRole('button', { name: /^apply$/i }));
+
+    expect(
+      await screen.findByText(/end date cannot be in the future/i)
+    ).toBeInTheDocument();
+  });
+
+  it('the Apply button is never disabled', async () => {
+    const user = userEvent.setup();
+    render(<TimeRangeFilter value={weekValue} onChange={() => {}} />);
+    await openCustomPopover(user);
+
+    expect(screen.getByRole('button', { name: /^apply$/i })).toBeEnabled();
+  });
+
+  it('submits a valid range and calls onChange with the computed dates', async () => {
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    render(<TimeRangeFilter value={weekValue} onChange={onChange} />);
+    await openCustomPopover(user);
+
+    await user.type(screen.getByLabelText(/start date/i), '2026-01-01');
+    await user.type(screen.getByLabelText(/end date/i), '2026-01-05');
+    await user.click(screen.getByRole('button', { name: /^apply$/i }));
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    const [arg] = onChange.mock.calls[0];
+    expect(arg.preset).toBe('custom');
+    expect(new Date(arg.range.from).getDate()).toBe(1);
+    expect(new Date(arg.range.to).getDate()).toBe(5);
+  });
+
+  it('resets the form fields each time the popover is reopened', async () => {
+    const user = userEvent.setup();
+    render(<TimeRangeFilter value={weekValue} onChange={() => {}} />);
+    await openCustomPopover(user);
+
+    await user.type(screen.getByLabelText(/start date/i), '2026-01-01');
+    // Close without applying.
+    await user.keyboard('{Escape}');
+
+    await openCustomPopover(user);
+    expect(screen.getByLabelText(/start date/i)).toHaveValue('');
   });
 });
