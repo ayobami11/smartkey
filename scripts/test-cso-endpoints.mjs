@@ -5,16 +5,36 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = 'https://ocpsklbbksuymjdbfpja.supabase.co';
-const SERVICE_ROLE_KEY =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9jcHNrbGJia3N1eW1qZGJmcGphIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3OTcwODkzNCwiZXhwIjoyMDk1Mjg0OTM0fQ.ZaSYk2EN4g1PWi6oIzM2jAAEsY31nbZcB2UX2WsN-30';
-const CSO_EMAIL = 'mohammedfirdous682@gmail.com';
-const BASE = 'https://smartkey-ochre.vercel.app';
-const PROJECT_REF = 'ocpsklbbksuymjdbfpja';
+// Every value below comes from the environment. Nothing here is a literal.
+//
+// This file previously hardcoded the project's service_role JWT, the CSO's email
+// and the CSO's password, and was committed and pushed in that state. Credentials
+// belong in the environment, never in tracked source — a literal in a repository is
+// public the moment the repository is, and stays in git history after it is edited out.
+//
+// Run with:
+//   SUPABASE_SERVICE_ROLE_KEY=... CSO_EMAIL=... CSO_PASSWORD=... \
+//     node scripts/test-cso-endpoints.mjs
+
+const required = (name) => {
+  const value = process.env[name];
+  if (!value) {
+    console.error(`Missing required environment variable: ${name}`);
+    process.exit(2);
+  }
+  return value;
+};
+
+const PROJECT_REF = required('SUPABASE_PROJECT_REF');
+const SUPABASE_URL =
+  process.env.NEXT_PUBLIC_SUPABASE_URL ?? `https://${PROJECT_REF}.supabase.co`;
+const SERVICE_ROLE_KEY = required('SUPABASE_SERVICE_ROLE_KEY');
+const CSO_EMAIL = required('CSO_EMAIL');
+const CSO_PASSWORD = required('CSO_PASSWORD');
+const BASE = process.env.SMOKE_BASE_URL ?? 'http://localhost:3000';
 const COOKIE_NAME = `sb-${PROJECT_REF}-auth-token`;
 
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
-const CSO_PASSWORD = 'SmartKey2026!';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 

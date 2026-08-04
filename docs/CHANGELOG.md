@@ -8,6 +8,18 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-04 — The service_role key and the CSO password are hardcoded in a tracked script, already pushed to GitHub
+
+- **Why**: found by a pre-push secret scan, seconds before pushing. This is materially worse than the migration-history exposure recorded further down, and it changes the urgency of that entry's outstanding rotation from "schedule a window" to "do it now".
+- `scripts/test-cso-endpoints.mjs` hardcoded three secrets as string literals: the project's **`service_role` JWT** (bypasses RLS entirely, `exp` 2036), the **CSO account password**, and the CSO's email. The CSO is the highest-privilege application role.
+- **These are already on `origin/main`**, introduced in `0047369` and public since. The earlier scrub of `supabase_migrations.schema_migrations` removed one copy of the key; this is a second, more accessible copy that the scrub never touched. Anyone who has read the repository has had full RLS-bypassing database access and a working CSO login.
+- The script now reads every value from the environment (`SUPABASE_PROJECT_REF`, `SUPABASE_SERVICE_ROLE_KEY`, `CSO_EMAIL`, `CSO_PASSWORD`) and exits 2 if any is missing. No literal remains.
+- **Editing the file does not undo the exposure.** The values stay in git history at `0047369` and every commit after it. The only remediations that actually work are to invalidate the credentials themselves:
+  1. Rotate the `service_role` key (or complete the migration to `sb_secret_...` keys and disable the legacy JWTs).
+  2. Change the CSO account password.
+  3. Optionally rewrite history (`git filter-repo` / BFG) — but that is cosmetic once 1 and 2 are done, and rewriting shared history has its own cost.
+- Lesson worth keeping: the pre-push scan cost seconds and caught what a full day of security work had walked past. `scripts/` also sits outside the directories `CLAUDE.md` permits code in, which is part of why it escaped scrutiny.
+
 ### 2026-08-04 — Merge note: the report provenance badge now has more to show than it surfaces
 
 - **Why**: the backend provenance work and the frontend badge were built in parallel on separate branches and met at this merge. Each was correct in isolation; together they leave one loose end worth naming rather than discovering later.
