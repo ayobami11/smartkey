@@ -27,6 +27,7 @@ import {
 } from '@/lib/date-range';
 import { createBrowserClient } from '@/lib/supabase/client';
 import { useConnectionStatus } from '@/hooks/use-connection-status';
+import { useDebouncedCallback } from '@/hooks/use-debounce';
 import { useRealtime } from '@/hooks/use-realtime';
 
 import { Button } from '@/components/ui/button';
@@ -138,9 +139,20 @@ export const EventsChart = ({ range }: EventsChartProps) => {
   const [selectedType, setSelectedType] = useState<EventTypeFilter>('ALL');
   const unit = bucketUnitForRange(range);
 
+  // This chart genuinely wants every audit event, so it cannot narrow with a
+  // server-side filter the way the signature-mismatch panel does. Debounce
+  // instead: `audit_log` records one row per consequential action, and bursts are
+  // routine (a bulk shift handover writes one row per outstanding key). Without
+  // this, publishing `audit_log` to Realtime would refetch the whole aggregate
+  // once per row. Trailing edge, so a burst costs exactly one refetch.
+  const invalidateEvents = useDebouncedCallback(
+    () => queryClient.invalidateQueries({ queryKey: QUERY_KEY_BASE }),
+    1500
+  );
+
   useRealtime({
     table: 'audit_log',
-    onInsert: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY_BASE }),
+    onInsert: invalidateEvents,
   });
 
   const {

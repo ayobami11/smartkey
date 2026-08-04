@@ -47,13 +47,15 @@ export const SignatureMismatchAlerts = () => {
   const [selectedAlert, setSelectedAlert] =
     useState<SignatureMismatchAlert | null>(null);
 
+  // Filter server-side rather than in the callback. `event` is a single-column
+  // equality filter with one fixed value, so it costs exactly one extra channel
+  // (the filter is part of the registry's channel key) and the Realtime server
+  // stops sending every unrelated audit row down the socket just to have it
+  // discarded on arrival. Mismatches are rare, so this channel is near-silent.
   useRealtime({
     table: 'audit_log',
-    onInsert: (payload) => {
-      const row = payload.new as { event?: string };
-      if (row.event === 'SIGNATURE_MISMATCH')
-        queryClient.invalidateQueries({ queryKey: QUERY_KEY });
-    },
+    filter: { column: 'event', value: 'SIGNATURE_MISMATCH' },
+    onInsert: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
   });
 
   const {

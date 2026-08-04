@@ -8,6 +8,17 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-04 — The CSO signature-mismatch alert can now actually fire
+
+- **Why**: review item 10, and a live defect rather than cleanup. `audit_log` was absent from the `supabase_realtime` publication, so both CSO dashboard surfaces subscribing to it were silently dead. On a signature mismatch the approval was correctly held and the `SIGNATURE_MISMATCH` entry correctly written — the CSO was simply never told. A held approval nobody is told about is indistinguishable from a lost one.
+- The frontend and backend halves turned out to be a single change set, so they were done together rather than handed across the split.
+- `src/hooks/use-debounce.ts` — added `useDebouncedCallback`, a trailing-edge debounce for an _action_. The existing `useDebounce` debounces a value and could not be reused. Stable callback identity, so it passes straight to `useRealtime` without causing a resubscribe.
+- `events-chart.tsx` — invalidation debounced at 1500ms. This chart wants every audit event, so it cannot narrow with a server-side filter. Bursts are routine: a bulk shift handover writes one audit row per outstanding key, which previously would have meant one full aggregate refetch per key. Now one refetch per burst.
+- `signature-mismatch-alerts.tsx` — moved from filtering inside the callback to a server-side `filter: { column: 'event', value: 'SIGNATURE_MISMATCH' }`. One fixed value, so it costs exactly one extra channel in the registry and the Realtime server stops pushing every unrelated audit row down the socket just to have it discarded on arrival. Mismatches are rare, so the channel is near-silent.
+- `supabase/migrations/20260804223000_publish_audit_log_to_realtime.sql` — guarded and idempotent. Replica identity deliberately left at the default: both subscribers listen for INSERT only, and INSERT payloads carry the full new row regardless. `replica identity full` only matters for old-row data on UPDATE/DELETE, which `audit_log` forbids.
+- Worth recording: `20260701120000_cso_signature_override.sql` already contained an `alter publication supabase_realtime add table public.audit_log`. It never took effect — the guard around it evidently no-opped, and the table was verifiably unpublished months later. The presence of a migration is not evidence that its effect landed.
+- **The migration is intentionally NOT applied.** The debounce must be live in production first, or the currently-deployed dashboard begins refetching its whole aggregate once per audit row — exactly the failure mode the review warned about. Order: deploy frontend → apply migration → verify a mismatch surfaces without a refresh.
+
 ### 2026-08-04 — The service_role key and the CSO password are hardcoded in a tracked script, already pushed to GitHub
 
 - **Why**: found by a pre-push secret scan, seconds before pushing. This is materially worse than the migration-history exposure recorded further down, and it changes the urgency of that entry's outstanding rotation from "schedule a window" to "do it now".
