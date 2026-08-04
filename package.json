@@ -15,6 +15,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
+    "test:db": "supabase test db",
     "db:migrate": "supabase db push",
     "db:types": "supabase gen types typescript --local > src/types/database.ts",
     "prepare": "husky"
