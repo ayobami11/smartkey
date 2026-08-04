@@ -6,12 +6,16 @@
 -- Missed by the first backfill pass earlier the same day, which matched local
 -- files to remote rows by name and never enumerated the remote-only remainder.
 --
--- This one is not cosmetic: the immediately preceding local file
--- (20260627111159_rename_departments_to_units.sql) renames departments -> units
--- and department_id -> unit_id, but 20260627111250_nominate_collector_active_check.sql
--- still defines nominate_collector against the OLD names. Without this file a fresh
--- replay leaves collector nomination raising "column does not exist" at runtime for
--- both CSO and Dean.
+-- What this file is for. 20260627111159_rename_departments_to_units.sql renames
+-- departments -> units and department_id -> unit_id. The version of
+-- nominate_collector_active_check that ACTUALLY RAN against production still
+-- referenced the old names, which is why this hotfix was applied an hour later.
+--
+-- The local copy of 20260627111250_nominate_collector_active_check.sql was
+-- subsequently corrected in place to use unit_id, so replaying the local directory
+-- would already produce a working function without this file. It is committed for
+-- history fidelity, not as a functional rescue: it records what production actually
+-- executed, and re-running it is a no-op (create or replace, same final definition).
 
 -- Fix nominate_collector to use renamed columns (department_id -> unit_id, departments -> units).
 -- The previous migration (20260627111250) still referenced the old names, causing runtime
