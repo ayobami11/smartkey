@@ -8,6 +8,14 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-04 — Handover note for arming the smoke test
+
+- **Why**: the smoke gate is deployed but unconfigured, and the work to finish it is entirely dashboard and shell actions that cannot be done from the repo. Written down rather than left in a chat log so it survives to tomorrow.
+- `docs/SMOKE_TEST_SETUP.md` — which secrets are required (only the requester pair; the CSO pair is optional and skips cleanly), which account to use and which to avoid, how to set a password for a temp-mail account that cannot receive a reset link, and the `gh secret set` form that keeps values out of shell history.
+- Records the reason the smoke test has no test-only auth bypass: the requester role is the one login exempt from email OTP, so it is the only one completable unattended. A test-only MFA bypass in production code would be a permanent hole traded for a convenience.
+- Flags that the CSO account whose password leaked in `0047369` must have that password changed _before_ it is stored as an Actions secret. Storing a known-compromised credential in CI is worse than leaving the optional check skipped.
+- No `continue-on-error` was added to keep CI green in the meantime. The exit-2-is-a-skip handling already achieves that, and `continue-on-error` would additionally swallow genuine failures once the secrets are set — the opposite of the point.
+
 ### 2026-08-04 — The post-deploy smoke gate no longer fails a deploy just for being unconfigured
 
 - **Why**: the first real run of `post-deploy-smoke.yml` failed with exit 2 and `Error: Process completed with exit code 2`. That was the script working exactly as designed — `smoke.mjs` exits 2 for "credentials not configured" specifically so it is distinguishable from exit 1, "a check failed" — but the workflow collapsed both into a red run.
