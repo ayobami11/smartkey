@@ -50,6 +50,9 @@ CLAUDE.local.md
 # vercel
 .vercel
 
+# generated review artifacts (not project documentation)
+docs/SmartKey_Examiner_Review.pdf
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
