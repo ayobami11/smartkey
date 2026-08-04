@@ -97,14 +97,29 @@ Key decisions live in `docs/adr/` as numbered records. Read them when in doubt.
 
 ## Realtime subscriptions
 
-Every dashboard subscribes on mount to its relevant tables:
+Dashboards subscribe on mount to the tables their live surfaces depend on. Four tables are published to `supabase_realtime` and carry every realtime surface in the app:
 
-- Verifier: `requests` (status='pending'), `outstanding_keys`, `current_shift`.
-- CSO: `anomalies`, `zone_counts` (materialised view), `recent_events`.
-- Requester: own `requests` row.
-- Dean: `weekend_requests` (faculty-scoped), faculty `keys`.
+- **`requests`** — verifier queue and outstanding keys, requester active-request banner and code view, Dean/CSO weekend-request panels (the weekend panels subscribe with `filter: type=eq.WEEKEND`).
+- **`keys`** — verifier outstanding keys, CSO zone/key counters.
+- **`authorisations`** — Dean collectors table.
+- **`audit_log`** — CSO events chart and signature-mismatch alerts.
 
-Connection state is exposed via `useConnectionStatus()` and rendered as the green/amber/red dot in the app bar.
+Connection state is exposed via `useConnectionStatus()` and rendered as the green/amber/red dot in the app bar. It is backed by a module-level emitter in `src/hooks/use-connection-status.ts` written to by the subscription layer below, so every consumer reads one shared status rather than a per-component one.
+
+### Channel multiplexing — read this before adding a subscription
+
+`src/hooks/use-realtime.ts` holds a **module-level channel registry** keyed by `realtime:<table>[:<column>=eq.<value>]`. Every `useRealtime()` call resolves to that key: the first caller opens the websocket channel, later callers with the same key attach to it as additional subscribers. The registry ref-counts — when the last subscriber for a key unmounts, the channel is removed and the entry deleted.
+
+This is why ~18 subscription call sites across the app cost four or five websocket channels rather than eighteen. Concurrent channels are a Realtime quota, and the server re-evaluates RLS per channel on every change, so the count is worth keeping low. This goes beyond what `docs/BACKEND.md` §8 specifies; it is deliberate.
+
+Rules:
+
+- **Never call `supabase.channel()` in a component.** `use-realtime.ts` is the only place a channel is created. A per-component channel silently multiplies the connection count.
+- A channel subscribes with `event: '*'` and fans payloads out to subscribers by `eventType`. Narrow with `onInsert` / `onUpdate` / `onDelete`, not with separate channels.
+- Only single-column equality filters are supported (`filter: { column, value }`), and the filter is part of the channel key. A filter that varies per user creates one channel per user — filter inside the callback instead unless the cardinality is genuinely small.
+- Callbacks are read through a ref, so inline closures do not cause a resubscribe. Only `table` and the filter column/value are effect dependencies.
+- The registry calls `realtime.setAuth()` with the session token **before** creating the channel. The Realtime server locks its RLS check at join time, so a channel joined before `setAuth` connects as `anon` and then silently delivers nothing — calling `setAuth` afterwards does not fix it.
+- Reconnect lives in the registry, not the component: exponential backoff 1s → 30s on `CHANNEL_ERROR` / `TIMED_OUT`, status `reconnecting` while retrying, `offline` once backoff is exhausted.
 
 ## RLS overview
 
@@ -113,7 +128,7 @@ Every table has RLS. The patterns:
 - **profiles**: read your own + same-faculty staff (Dean); CSO reads all.
 - **keys**: read all (everyone needs to see keys they may interact with); write CSO only.
 - **requests**: read your own (requester) + verifier-on-shift + Dean for their faculty + CSO; write requester (own) + verifier (status transitions) + system (RPCs).
-- **audit_log**: read CSO only; INSERT via RPC only; UPDATE/DELETE denied for everyone.
+- **audit_log**: read CSO only; INSERT via RPC only; UPDATE/DELETE denied for every RLS-governed role, including service. RLS is bypassed for Postgres superusers, so a direct superuser connection sits outside the guarantee — see `docs/DATABASE.md`.
 - **shift_reports**: read CSO; INSERT via RPC only; UPDATE/DELETE denied.
 - **comments on reports**: read CSO; INSERT CSO; UPDATE/DELETE denied.
 

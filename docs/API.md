@@ -738,8 +738,6 @@ No query params. Returns every unit (faculty or Administration) with its Dean, a
 
 **Response `data`**: `{ "units": [...] }`
 
-**Note**: `GET /api/admin/departments` (`src/app/api/admin/departments/route.ts`) is an undocumented near-duplicate of this route, differing only in returning `{ "departments": [...] }` instead of `{ "units": [...] }` — appears to be a pre-rename leftover kept for some caller that hasn't migrated. Worth confirming whether anything still calls it and retiring it if not.
-
 ---
 
 ### POST /api/admin/keys
