@@ -103,15 +103,12 @@ enabled = true
 policy = "oneshot"
 inspector_port = 8083
 
-[functions.overdue-key-check]
-enabled = true
-# Called by pg_cron every hour — no user JWT present.
-verify_jwt = false
-
-[functions.daily-shift-summary]
-enabled = true
-# Called by pg_cron at 18:00 daily — no user JWT present.
-verify_jwt = false
+# The overdue-key-check and daily-shift-summary functions were removed on 2026-08-04.
+# 20260622140052_cron_jobs_direct_sql.sql moved both jobs to call their RPCs
+# (mark_key_overdue, schedule_pending_shift_report) directly in SQL, leaving the
+# functions unreferenced — while their `verify_jwt = false` exception outlived the
+# reason for it and left an unauthenticated route to service-role writes.
+# Do not reintroduce a function here without re-justifying verify_jwt.
 
 [analytics]
 enabled = true

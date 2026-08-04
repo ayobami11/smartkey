@@ -8,6 +8,16 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-04 — Removed two Edge Functions that were an unauthenticated route to service-role writes
+
+- **Why**: `overdue-key-check` and `daily-shift-summary` were configured `verify_jwt = false`, so **anyone with the URL could invoke them, with no credential of any kind**, and both write with service-role privileges — `daily-shift-summary` inserts into `shift_reports` and `audit_log`. Verified rather than assumed: an unauthenticated `POST` from a dev container returned `HTTP 200 {"updated_count":0}`.
+- The `verify_jwt = false` exception was **correct when it was written** — `config.toml` states the reason as "Called by pg_cron every hour — no user JWT present", and back then `pg_cron` did reach them over `http_post`. `20260622140052_cron_jobs_direct_sql.sql` moved both jobs to call their RPCs directly in SQL, which dissolved the reason but left the exception in place. An exception that outlives its justification is the shape this kind of hole usually takes.
+- Deleting rather than setting `verify_jwt = true`: nothing invoked them. Every remaining reference in the repo was either the function source or a superseded migration; no app code, no CI, no cron job. Keeping them would have meant two unused deploy artifacts duplicating RPCs they would then drift from.
+- Nothing is lost. `mark_key_overdue()` and `schedule_pending_shift_report()` hold the whole behaviour, are what `pg_cron` actually calls, and are callable from the SQL editor for manual runs.
+- Removed `supabase/functions/` and both `[functions.*]` blocks from `supabase/config.toml`, leaving a comment so nobody reintroduces the setting without re-justifying it.
+- **Found while checking**: the RPC grants are asymmetric. `schedule_pending_shift_report` has execute revoked from `anon` and `authenticated` — genuinely cron-only. `mark_key_overdue` is executable by any `authenticated` user, including a REQUESTER, despite `docs/DATABASE.md` describing it as cron-only. Low impact (idempotent, acts only on genuinely-overdue keys) but the grant does not match the documentation; `DATABASE.md` now says so rather than pretending otherwise.
+- **Still to do, outside the repo**: the functions are removed from version control but remain **deployed**. Run `supabase functions delete overdue-key-check daily-shift-summary`, or delete them in the dashboard. Until then the unauthenticated endpoint is still live.
+
 ### 2026-08-04 — Handover note for arming the smoke test
 
 - **Why**: the smoke gate is deployed but unconfigured, and the work to finish it is entirely dashboard and shell actions that cannot be done from the repo. Written down rather than left in a chat log so it survives to tomorrow.
