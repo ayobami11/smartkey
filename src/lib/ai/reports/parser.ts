@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { ReportEvent, TimelineEntry } from './types';
+import type { ReportCounts, ReportEvent, TimelineEntry } from './types';
 
 const timelineEntrySchema = z.object({
   time: z.string(),
@@ -41,9 +41,7 @@ export const parseGeminiOutput = (
 // Derive the summary counts shown on the reports list card from the shift's
 // audit events. Without this the list cards always render zero, because the RPC
 // only stores a placeholder metadata object.
-export const computeMetadataCounts = (
-  events: ReportEvent[]
-): { issued_count: number; returned_count: number; flagged_count: number } => {
+export const computeMetadataCounts = (events: ReportEvent[]): ReportCounts => {
   let issued = 0;
   let returned = 0;
   let flagged = 0;
