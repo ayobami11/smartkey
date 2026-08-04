@@ -114,7 +114,6 @@ The weekend variant differs in an important way: approval does **not** mint a co
 - **`GET /api/admin/users` takes no query params and doesn't paginate.** It returns every non-deactivated profile; the CSO table filters client-side. `docs/API.md` used to promise cursor pagination here — it doesn't exist.
 - **`POST /api/requests/collect` ignores any client-supplied `verifier_id`.** The verifier comes from the session, so a collection can't be attributed to another officer.
 - **`register` and `activate-hod` have no `token` field.** The invite link resolves through `GET /api/auth/callback` into an `activate`-namespace session first; those routes only read it. They aren't directly runnable from Postman without doing the browser step.
-- **`/api/admin/departments` is a legacy duplicate of `/api/admin/units`**, differing only in the response key. Left over from the `departments` → `units` rename; prefer `units`.
 - **`DELETE /api/admin/authorisations/...` returns 204 with no body.** `apiFetch` normalises that to `{ data: null, error: null, status: 204 }`.
 
 ---

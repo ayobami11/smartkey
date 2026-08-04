@@ -167,7 +167,7 @@ An external (non-registered) person who may collect a key for a single weekend. 
 - `target_id` UUID
 - `payload` jsonb (validated by zod schema in TS before write)
 - `occurred_at` timestamptz
-- IMMUTABLE — RLS denies UPDATE and DELETE for all roles including service.
+- IMMUTABLE — RLS denies UPDATE and DELETE for every RLS-governed role, including service. The guarantee is bounded by RLS, which Postgres does not enforce for superusers: a direct superuser connection (SQL editor, `postgres` role, admin console) can still update or delete rows, and a row deletion via that path was confirmed during the 2026-08 review. Every path the application can take is covered; superuser access to the production database is the trust boundary.
 
 ### risk_rule_config
 
@@ -221,6 +221,12 @@ Guest analogues of the registered-user weekend flow. All are `SECURITY DEFINER`,
 - `generate_guest_weekend_code(access_token)` — on `requested_for = current_date` only, mints a 10-min code → CODE_ISSUED, audit `CODE_ISSUED`. Raises TOO_EARLY before the date.
 - `expire_guest_request(access_token)` — flips a genuinely-expired CODE_ISSUED request → EXPIRED, clears the code, audit `REQUEST_EXPIRED`. Idempotent.
 - `request_return_guest(access_token)` — guest analogue of `request_return`. For the guest's own `KEY_ISSUED` request (looked up by `access_token`, `FOR UPDATE` locked), generates a 6-digit return code (15-min expiry), writes it to `return_code`/`return_code_expires_at`, and writes a `RETURN_CODE_GENERATED` audit entry via `_write_audit_guest`. Status stays `KEY_ISSUED`. Raises `NOT_FOUND` if the token doesn't resolve to a request, `CONFLICT` if the request isn't `KEY_ISSUED`. Called by `POST /api/public/weekend-request/[token]/return-code`.
+
+## Backup and retention — known gap
+
+Supabase's managed backups are currently the only copy of `audit_log`. Nothing is exported outside the project, so the evidentiary record shares a failure domain with the database it documents: project deletion, a bad restore, or corruption takes the audit trail with it. RLS protects the log from application roles; it does nothing for this.
+
+Recommended direction, not implemented and not yet decided: a lightweight periodic export of `audit_log` (and `shift_reports`) to storage outside the Supabase project — a scheduled job appending newline-delimited JSON to a versioned or object-locked bucket, partitioned by date so exports accumulate rather than overwrite. Recorded here so the decision is visible, not to prescribe the design.
 
 ## Migrations workflow
 

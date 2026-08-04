@@ -2797,40 +2797,6 @@
           ]
         },
         {
-          "name": "List units (legacy alias)",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Referer",
-                "value": "{{baseUrl}}/cso"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/admin/departments",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "departments"]
-            },
-            "description": "<div style=\"color:#111827;\">Pre-rename duplicate of 'List units'. Identical behaviour; the only difference is the payload key — `{ departments: [...] }` instead of `{ units: [...] }`.\n\nPrefer `/api/admin/units` in new code. This one is a leftover from the `departments` → `units` rename and is a retirement candidate once nothing calls it.</div>"
-          },
-          "response": [
-            {
-              "name": "Success",
-              "status": "OK",
-              "code": 200,
-              "_postman_previewlanguage": "json",
-              "header": [
-                {
-                  "key": "Content-Type",
-                  "value": "application/json"
-                }
-              ],
-              "cookie": [],
-              "body": "{\n  \"data\": {\n    \"departments\": [\n      {\n        \"id\": \"<uuid>\",\n        \"name\": \"Faculty of Engineering\",\n        \"authoriser\": \"DEAN\",\n        \"hasActiveHod\": true,\n        \"hasAvailableKey\": true\n      }\n    ]\n  },\n  \"error\": null,\n  \"status\": 200\n}"
-            }
-          ]
-        },
-        {
           "name": "Create key",
           "event": [
             {
