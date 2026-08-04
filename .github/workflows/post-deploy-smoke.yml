@@ -99,7 +99,23 @@ jobs:
           SMOKE_CSO_EMAIL: ${{ secrets.SMOKE_CSO_EMAIL }}
           SMOKE_CSO_PASSWORD: ${{ secrets.SMOKE_CSO_PASSWORD }}
           SMOKE_TIMEOUT_MS: '20000'
-        run: node tests/smoke/smoke.mjs | tee smoke-output.txt
+        # smoke.mjs distinguishes its exit codes deliberately:
+        #   0 — all checks passed
+        #   1 — a check failed (a real signal; fail the run)
+        #   2 — credentials not configured (nothing was tested)
+        # Treat 2 as a skip rather than a failure. A repo without the SMOKE_*
+        # secrets would otherwise fail on every single deploy, and a gate that is
+        # always red is a gate everybody learns to ignore.
+        run: |
+          set +e
+          node tests/smoke/smoke.mjs | tee smoke-output.txt
+          code=${PIPESTATUS[0]}
+          set -e
+          if [ "$code" -eq 2 ]; then
+            echo "::warning::Smoke test skipped — SMOKE_* secrets are not configured, so nothing was verified."
+            exit 0
+          fi
+          exit "$code"
 
       - name: Summarise
         if: always()

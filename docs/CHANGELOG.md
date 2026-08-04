@@ -8,6 +8,13 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-04 — The post-deploy smoke gate no longer fails a deploy just for being unconfigured
+
+- **Why**: the first real run of `post-deploy-smoke.yml` failed with exit 2 and `Error: Process completed with exit code 2`. That was the script working exactly as designed — `smoke.mjs` exits 2 for "credentials not configured" specifically so it is distinguishable from exit 1, "a check failed" — but the workflow collapsed both into a red run.
+- A deploy gate that is red on every deploy because nothing is configured is worse than no gate: it trains everyone to ignore it, and then a genuine failure looks identical to the noise.
+- The step now inspects `${PIPESTATUS[0]}` (preserving the pipefail-through-`tee` behaviour the step was already careful about) and treats exit 2 as a skip, emitting a GitHub `::warning::` that says plainly that nothing was verified. Exit 1 still fails the run.
+- To actually arm the gate, set four repository secrets: `SMOKE_REQUESTER_EMAIL`, `SMOKE_REQUESTER_PASSWORD`, `SMOKE_CSO_EMAIL`, `SMOKE_CSO_PASSWORD`. The requester account is the only MFA-exempt role, which is why it is required rather than optional.
+
 ### 2026-08-04 — The CSO signature-mismatch alert can now actually fire
 
 - **Why**: review item 10, and a live defect rather than cleanup. `audit_log` was absent from the `supabase_realtime` publication, so both CSO dashboard surfaces subscribing to it were silently dead. On a signature mismatch the approval was correctly held and the `SIGNATURE_MISMATCH` entry correctly written — the CSO was simply never told. A held approval nobody is told about is indistinguishable from a lost one.
