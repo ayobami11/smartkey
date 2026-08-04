@@ -1,0 +1,166 @@
+name: Post-deploy smoke
+
+# Runs the critical-path smoke test against a deployment as soon as Vercel
+# reports it ready, and gates promotion to production on the result.
+
+# Required repository secrets
+#   SMOKE_REQUESTER_EMAIL     Institutional email of a dedicated, low-privilege
+#   SMOKE_REQUESTER_PASSWORD  REQUESTER account that exists in every environment
+#                             this workflow targets. REQUESTER is the only
+#                             MFA-exempt role, so it is the only account a
+#                             non-interactive runner can actually sign in as.
+#                             It should be authorised for no keys — the smoke
+#                             test never issues or returns one.
+#
+# Optional repository secrets
+#   SMOKE_CSO_EMAIL           A CSO account. Used only to assert that the MFA
+#   SMOKE_CSO_PASSWORD        challenge still fires (HTTP 200, mfa_required
+#                             true, session null). The login is never completed,
+#                             so no OTP inbox access is needed. Omit both and
+#                             that single check is skipped, not failed.
+
+on:
+  # Fired by the Vercel GitHub integration once a deployment finishes.
+  deployment_status:
+  # Manual re-run against any URL, e.g. to re-check production after an incident.
+  workflow_dispatch:
+    inputs:
+      url:
+        description: Base URL to smoke test (no trailing slash)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  deployments: read
+
+concurrency:
+  group: post-deploy-smoke-${{ github.event.deployment_status.environment || inputs.url || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: Critical-path smoke test
+    runs-on: ubuntu-latest
+    # deployment_status fires for pending/error/failure too — only test a
+    # deployment that Vercel says is actually serving traffic.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.deployment_status.state == 'success'
+
+    outputs:
+      environment: ${{ steps.target.outputs.environment }}
+
+    steps:
+      - name: Resolve target URL
+        id: target
+        env:
+          DISPATCH_URL: ${{ inputs.url }}
+          ENVIRONMENT_URL: ${{ github.event.deployment_status.environment_url }}
+          TARGET_URL: ${{ github.event.deployment_status.target_url }}
+          ENVIRONMENT: ${{ github.event.deployment_status.environment }}
+        run: |
+          set -euo pipefail
+          if [ -n "${DISPATCH_URL:-}" ]; then
+            url="$DISPATCH_URL"
+            environment="manual"
+          else
+            url="${ENVIRONMENT_URL:-$TARGET_URL}"
+            environment="${ENVIRONMENT:-unknown}"
+          fi
+          url="${url%/}"
+          if [ -z "$url" ]; then
+            echo "::error::Could not resolve a deployment URL to smoke test."
+            exit 1
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "environment=$environment" >> "$GITHUB_OUTPUT"
+          echo "Smoke testing $environment at $url"
+
+      - uses: actions/checkout@v4
+        with:
+          # Test the code that was actually deployed, not the branch tip.
+          ref: ${{ github.event.deployment.sha || github.sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # No `npm ci`: tests/smoke/smoke.mjs has zero dependencies by design, so
+      # the smoke test cannot be broken by an unrelated dependency problem.
+      - name: Run smoke test
+        # Explicit `bash` (not the default `bash -e {0}`) so that pipefail is
+        # set and `| tee` cannot swallow a non-zero exit from the smoke test.
+        shell: bash
+        env:
+          SMOKE_BASE_URL: ${{ steps.target.outputs.url }}
+          SMOKE_REQUESTER_EMAIL: ${{ secrets.SMOKE_REQUESTER_EMAIL }}
+          SMOKE_REQUESTER_PASSWORD: ${{ secrets.SMOKE_REQUESTER_PASSWORD }}
+          SMOKE_CSO_EMAIL: ${{ secrets.SMOKE_CSO_EMAIL }}
+          SMOKE_CSO_PASSWORD: ${{ secrets.SMOKE_CSO_PASSWORD }}
+          SMOKE_TIMEOUT_MS: '20000'
+        run: node tests/smoke/smoke.mjs | tee smoke-output.txt
+
+      - name: Summarise
+        if: always()
+        run: |
+          {
+            echo "### Post-deploy smoke — ${{ steps.target.outputs.environment }}"
+            echo ""
+            echo "\`${{ steps.target.outputs.url }}\`"
+            echo ""
+            echo '```'
+            cat smoke-output.txt 2>/dev/null || echo "(no output captured)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  promote:
+    name: Promote to production
+    needs: smoke
+    runs-on: ubuntu-latest
+    # Opt-in. Without SMOKE_AUTO_PROMOTE=true this job never runs and the smoke
+    # test is purely a signal — which is the safe default for a pilot.
+    if: >-
+      success() &&
+      vars.SMOKE_AUTO_PROMOTE == 'true' &&
+      needs.smoke.outputs.environment == 'Preview'
+
+    steps:
+      - name: Promote the verified preview deployment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          DEPLOYMENT_URL: ${{ github.event.deployment_status.environment_url }}
+        run: |
+          set -euo pipefail
+          if [ -z "${VERCEL_TOKEN:-}" ]; then
+            echo "::error::SMOKE_AUTO_PROMOTE is on but VERCEL_TOKEN is not configured."
+            exit 1
+          fi
+          npx --yes vercel@latest promote "$DEPLOYMENT_URL" --token "$VERCEL_TOKEN" --yes
+
+  rollback:
+    name: Roll production back
+    needs: smoke
+    runs-on: ubuntu-latest
+    # Opt-in, and only for production: rolling back a preview achieves nothing.
+    if: >-
+      failure() &&
+      vars.SMOKE_AUTO_ROLLBACK == 'true' &&
+      github.event.deployment_status.environment == 'Production'
+
+    steps:
+      - name: Roll back to the previous production deployment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "${VERCEL_TOKEN:-}" ]; then
+            echo "::error::SMOKE_AUTO_ROLLBACK is on but VERCEL_TOKEN is not configured."
+            exit 1
+          fi
+          npx --yes vercel@latest rollback --token "$VERCEL_TOKEN" --yes
+          echo "::warning::Production was rolled back because the post-deploy smoke test failed."

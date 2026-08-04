@@ -1,0 +1,99 @@
+name: Changelog
+
+# CLAUDE.md: "Every push to a branch must include a docs/CHANGELOG.md entry.
+# No exceptions — this applies to fixes, refactors, docs and config changes, not
+# just features."
+
+# `docs/` must also touch `docs/CHANGELOG.md`.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: changelog-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  changelog:
+    name: Changelog entry present
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check for a docs/CHANGELOG.md entry
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const CHANGELOG = 'docs/CHANGELOG.md';
+            const SKIP_LABEL = 'skip-changelog';
+
+            const labels = (context.payload.pull_request.labels ?? []).map(
+              (l) => l.name
+            );
+            if (labels.includes(SKIP_LABEL)) {
+              core.notice(
+                `The \`${SKIP_LABEL}\` label is present — skipping the changelog check.`
+              );
+              return;
+            }
+
+            // paginate: the PR files endpoint caps at 100 per page.
+            const files = await github.paginate(
+              github.rest.pulls.listFiles,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.payload.pull_request.number,
+                per_page: 100,
+              }
+            );
+
+            const paths = files.map((f) => f.filename);
+            const touchesChangelog = paths.includes(CHANGELOG);
+            const nonDocs = paths.filter((p) => !p.startsWith('docs/'));
+
+            core.info(`${paths.length} changed file(s), ${nonDocs.length} outside docs/.`);
+
+            if (nonDocs.length === 0) {
+              core.notice(
+                'This PR only touches docs/ — no changelog entry required.'
+              );
+              return;
+            }
+
+            if (touchesChangelog) {
+              core.notice(`${CHANGELOG} is updated.`);
+              return;
+            }
+
+            const sample = nonDocs.slice(0, 10).map((p) => `  - ${p}`).join('\n');
+            const more =
+              nonDocs.length > 10 ? `\n  …and ${nonDocs.length - 10} more` : '';
+
+            core.setFailed(
+              [
+                `This PR changes ${nonDocs.length} file(s) outside docs/ but does not update ${CHANGELOG}.`,
+                '',
+                'CLAUDE.md, workflow rules:',
+                '  "Every push to a branch must include a docs/CHANGELOG.md entry.',
+                '   No exceptions — this applies to fixes, refactors, docs and config',
+                '   changes, not just features."',
+                '',
+                'An entry needs, in this order:',
+                '  1. A dated heading (newest entry at the TOP of `## Entries`).',
+                '  2. A **Why** line — the reason the change was needed, not just',
+                '     what changed. This is the part that makes the log worth reading',
+                '     six months from now.',
+                '  3. The specifics of what changed.',
+                '',
+                'Changed files outside docs/:',
+                sample + more,
+                '',
+                `If this PR genuinely does not warrant an entry, add the \`${SKIP_LABEL}\` label`,
+                'to the PR — a deliberate, visible bypass rather than a silent one.',
+              ].join('\n')
+            );
