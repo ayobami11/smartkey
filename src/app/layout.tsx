@@ -4,6 +4,9 @@ import './globals.css';
 import { cn } from '@/lib/utils';
 import { QueryProvider } from '../providers/query-provider';
 
+import { Analytics } from '@vercel/analytics/next';
+import { SpeedInsights } from '@vercel/speed-insights/next';
+
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ThemeProvider } from '@/components/theme-provider';
@@ -61,6 +64,8 @@ export default function RootLayout({
           </TooltipProvider>
           <Toaster />
         </ThemeProvider>
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
