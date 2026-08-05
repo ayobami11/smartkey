@@ -1,3 +1,5 @@
+-- Publish audit_log to Realtime so the CSO signature-mismatch alert actually fires.
+--
 
 do $$
 begin

@@ -8,6 +8,33 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-05 — Renamed 32 migrations to their applied versions, fixing a replay that could not have worked
+
+- **Why**: 32 files in `supabase/migrations/` carried a filename timestamp different from the `version` actually recorded in `supabase_migrations.schema_migrations`. This looked like untidiness. It was not.
+- **The ordering bug this was hiding**: migrations replay in filename order. `edge_function_schedules` was named `20260612000002` locally but applied as `20260612101927`; `enable_pg_cron_pg_net` — one of the orphans recovered on 2026-08-04 — is `20260612101921`. Under the old local names the schedules file sorted **first**, so a fresh `supabase db reset` would have run three `cron.schedule` calls before `create extension pg_cron`, and failed. Production ran them in the opposite order. The directory did not reproduce production, and the first person to trust it would have discovered that mid-replay.
+- **The second hazard**: `supabase db push` decides what to apply by comparing local filename versions against `schema_migrations.version`. With 32 versions unknown to production, a push would have attempted to **re-apply 32 already-applied migrations to the live database**. This is the concrete reason behind the standing "do not run `db push`" rule; the rename removes the hazard rather than continuing to route around it.
+- Renamed with `git mv` so history follows. Content untouched — only filenames changed. Four ordering pairs shift as a result, each one toward what production actually did.
+- **Matching detail worth keeping**: the nine oldest rows store the _entire original filename_ in `name` (`20260525000001_enums_profiles_departments`) rather than the suffix every later row uses. Matching on the suffix alone silently drops them, which is why an earlier pass counted 23 drifted files instead of 32. Match against both forms.
+- **Six local migrations have no production row at all** and were left alone, since there is no applied version to reconcile them to: `20260605000001_storage_buckets_and_policies`, `20260613000002_requests_realtime_replica_identity`, `20260613000004_requests_add_to_realtime_publication`, `20260627111159_rename_departments_to_units`, `20260701120000_cso_signature_override`, `20260802103000_authorisations_add_to_realtime_publication`. Some are plainly superseded — `storage_buckets_and_policies` covers the same ground as the applied `create_storage_buckets` + `storage_rls_policies` pair and now sorts immediately before them, so a replay runs both versions of that work. These need resolving individually before the replay is trusted.
+- **Not yet verified**: the replay itself. Docker and the Supabase CLI are both unavailable in the dev container, so `supabase start && supabase db reset && npm run test:db` remains the outstanding step. The rename is a necessary precondition for it, not a substitute.
+
+### 2026-08-05 — Signature threshold calibration harness
+
+- **Why**: `SIGNATURE_DIFF_THRESHOLD` is 0.55, a number read off six synthetic stroke fixtures. That is enough to prove the pipeline separates "same signature" from "different signature"; it is not evidence about real Dean signatures, whose day-to-day variation is the actual question. Pilot data cannot be manufactured, so this builds the thing that consumes it.
+- `src/lib/ai/signature/calibrate.ts` — scores each labelled pair once through the real `verifySignature`, then sweeps thresholds over the recorded ratios arithmetically. Scoring is the expensive part and does not depend on the threshold, so a 200-sample sweep costs 200 comparisons rather than 20,000.
+- The recommendation is deliberately **not** the equal-error point. The two errors are not equally costly here: a false accept approves a forged Dean authorisation with nobody told, while a false reject merely holds the request for CSO override. So it minimises FAR within an FRR budget. EER is still reported, labelled as reference only.
+- **A test caught a real defect during development**: with inverted scores, every threshold meeting the FRR budget admitted 100% of forgeries, and the function returned one anyway with a rationale that read like a sound result. A calibration tool that recommends a fail-open threshold is worse than no tool, because it looks like an answer. There is now a FAR ceiling that reports `DO NOT SHIP IT` instead.
+- `calibrate.test.ts` — 10 unit tests on the sweep maths run on every `npm test`; the real-sample runner is skipped unless `SIGNATURE_CALIBRATION_DIR` is set. Expected sample layout is documented in the file.
+- **Still needed**: labelled genuine/forged pairs from the pilot, collected across different days, pens and scanners. A set gathered in one sitting understates the variation the threshold exists to absorb and will recommend something too tight.
+
+### 2026-08-05 — Published `audit_log` to Realtime
+
+- **Why**: the CSO signature-mismatch alert and events chart both subscribe to `audit_log`, which was absent from the `supabase_realtime` publication — so a held approval was written correctly and the CSO was never told. Held silently is indistinguishable from lost.
+- Applied `publish_audit_log_to_realtime` to production. Deliberately held back until the debouncing frontend (`b84e9d5`) was deployed: the previous bundle invalidated the whole events aggregate on every audit insert, so publishing early would have made every key issue and return refetch the CSO dashboard.
+- MCP `apply_migration` stamps its own timestamp, recording this as `20260805095723` while the local file was named `20260804223000`. Renamed the file to match rather than adding a 33rd case of the drift the same session was fixing.
+- Replica identity left at default: both subscribers listen for INSERT only, and INSERT payloads carry the full row. `replica identity full` matters for old-row data on UPDATE/DELETE, which `audit_log` forbids anyway.
+- **Not yet verified end to end**: publication membership proves the plumbing exists, not that the alert fires. Trigger a `SIGNATURE_MISMATCH` on a disposable request and watch the panel populate — a real held approval blocks somebody's weekend access.
+
 ### 2026-08-04 — Removed two Edge Functions that were an unauthenticated route to service-role writes
 
 - **Why**: `overdue-key-check` and `daily-shift-summary` were configured `verify_jwt = false`, so **anyone with the URL could invoke them, with no credential of any kind**, and both write with service-role privileges — `daily-shift-summary` inserts into `shift_reports` and `audit_log`. Verified rather than assumed: an unauthenticated `POST` from a dev container returned `HTTP 200 {"updated_count":0}`.
