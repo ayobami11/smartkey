@@ -8,6 +8,11 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-06 — Provision-user dialog body now scrolls independently
+
+- **Why**: the "Provision new user" dialog grows a fourth field (Unit) whenever a Dean or Requester role is selected, and had no `max-height`, so on shorter viewports the footer buttons could be pushed below the fold with no way to reach them.
+- `src/app/cso/users/_components/provision-user-dialog.tsx`: adopted the same scrollable-dialog shape already used by `create-key-dialog.tsx` — `DialogContent` becomes a `grid-rows-[auto_minmax(0,1fr)_auto]` shell capped at `85vh`, with a sticky bordered header, a `ScrollArea`-wrapped form body, and a sticky bordered footer, so only the field list scrolls once content exceeds the available height.
+
 ### 2026-08-05 — Added Vercel Analytics and Speed Insights
 
 - **Why**: `docs/SmartKey_Examiner_Review.pdf` flagged that the report's maintenance-phase behaviour-monitoring commitment (Google Analytics, per report Table 3.3) was silently dropped — no analytics of any kind existed anywhere in the codebase. Vercel Analytics was chosen over Google Analytics: the app already deploys on Vercel, so it's a single component with no measurement ID or script wiring; it's cookieless, so it needs no consent-banner UI; and it's free at this project's scale, matching the free-tier-conscious choices made everywhere else (Gemini, Supabase). Speed Insights was added alongside it to get real-user Web Vitals in production — more useful than the review's separate Lighthouse CI gap (still open) for confirming the report's LCP/CLS targets against actual usage rather than one synthetic run.
