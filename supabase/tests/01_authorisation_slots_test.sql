@@ -102,6 +102,15 @@ select is(
   'second nomination fills slot 2'
 );
 
+select throws_ok(
+  $$ select * from public.nominate_collector(
+       '11111111-1111-4111-8111-000000000030',
+       '11111111-1111-4111-8111-000000000021') $$,
+  'P0009',
+  'CONFLICT: requester is already authorised for this key',
+  'nominate_collector refuses a duplicate collector'
+);
+
 select is(
   (select slot_number from public.nominate_collector(
      '11111111-1111-4111-8111-000000000030',
@@ -117,9 +126,6 @@ select is(
   'exactly three authorisations exist for the key'
 );
 
--- ---------------------------------------------------------------------------
--- The fourth is refused — by the RPC, and by the trigger if the RPC is bypassed
--- ---------------------------------------------------------------------------
 
 select throws_ok(
   $$ select * from public.nominate_collector(
@@ -130,15 +136,6 @@ select throws_ok(
   'nominate_collector refuses a fourth collector'
 );
 
-select throws_ok(
-  $$ select * from public.nominate_collector(
-       '11111111-1111-4111-8111-000000000030',
-       '11111111-1111-4111-8111-000000000021') $$,
-  'P0009',
-  'CONFLICT: requester is already authorised for this key',
-  'nominate_collector refuses a duplicate collector'
-);
-
 -- Bypass the RPC entirely: the row trigger is the last line of defence.
 select throws_ok(
   $$ insert into public.authorisations (key_id, profile_id, authorised_by)
@@ -146,12 +143,10 @@ select throws_ok(
              '11111111-1111-4111-8111-000000000024',
              '11111111-1111-4111-8111-000000000001') $$,
   '23514',
+  'Maximum of 3 authorisations already exist for key_id 11111111-1111-4111-8111-000000000030. No further collectors can be added.',
   'the max-3 trigger rejects a direct fourth INSERT that bypasses the RPC'
 );
 
--- ---------------------------------------------------------------------------
--- remove_collector frees a slot
--- ---------------------------------------------------------------------------
 
 select lives_ok(
   $$ select public.remove_collector(
@@ -184,9 +179,6 @@ select throws_ok(
   'remove_collector rejects a collector who holds no slot'
 );
 
--- ---------------------------------------------------------------------------
--- Guard rails around who may be nominated, and for what
--- ---------------------------------------------------------------------------
 
 select throws_ok(
   $$ select * from public.nominate_collector(
@@ -206,9 +198,6 @@ select throws_ok(
   'nominate_collector refuses an unknown key'
 );
 
--- ---------------------------------------------------------------------------
--- Every successful mutation left an audit entry
--- ---------------------------------------------------------------------------
 
 select is(
   (select count(*)::int from public.audit_log
