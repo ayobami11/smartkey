@@ -25,7 +25,7 @@ const ACTIVATION_PATHS = ['/dean/onboarding'];
 // Fully public, session-less surfaces. The external (non-registered) weekend
 // request flow and its supporting API live here. They must never be redirected
 // to /login and need no Supabase session resolution.
-const PUBLIC_PREFIXES = ['/weekend-access', '/api/public'];
+const PUBLIC_PREFIXES = ['/weekend-access', '/api/public', '/api/health'];
 
 const isPublicPath = (pathname: string): boolean =>
   PUBLIC_PREFIXES.some(
@@ -35,9 +35,7 @@ const isPublicPath = (pathname: string): boolean =>
 const redirectTo = (request: NextRequest, destination: string): NextResponse =>
   NextResponse.redirect(new URL(destination, request.url));
 
-export const proxy = async (
-  request: NextRequest
-): Promise<NextResponse> => {
+export const proxy = async (request: NextRequest): Promise<NextResponse> => {
   const { pathname } = request.nextUrl;
 
   // Public, session-less routes (e.g. the external weekend-request flow) bypass
