@@ -9,12 +9,12 @@
   "build": {
     "context": ".",
     "dockerfile": "Dockerfile"
+  },
+  // Docker is needed to run the local Supabase stack (`supabase start`), which
+  // is what the migration replay and the pgTAP suites depend on. Neither has
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "moby": true
+    }
   }
-  // Features add additional features to your environment. See https://containers.dev/features
-  // Beware: features are not supported on all platforms and may have unintended side-effects.
-  // "features": {
-  //   "ghcr.io/devcontainers/features/docker-in-docker": {
-  //     "moby": false
-  //   }
-  // }
 }
