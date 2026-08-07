@@ -8,6 +8,14 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-07 — Confirmed the CSO signature-mismatch Realtime alert fires end to end
+
+- **Why**: `docs/REVIEW_ACTIONS_BACKEND.md` item 3 — the migration publishing `audit_log` to the `supabase_realtime` publication (2026-08-05) had never had the actual delivery path observed. Publication membership proves the plumbing exists, not that a subscribed client receives anything; RLS could still filter every row away for a real CSO session in a way a service-role test would never reveal.
+- **Method**: authenticated as the real CSO account via Supabase Auth's password grant (not a service-role stand-in), used that session's access token to open a raw `postgres_changes` subscription on `public.audit_log` — the same RLS-gated path the dashboard's `useRealtime` hook uses — then wrote a `SIGNATURE_MISMATCH` entry matching `src/lib/audit/index.ts`'s `writeAuditEntry` shape exactly, against a throwaway weekend request (a real Dean with a reference signature, a real key, one of the existing disposable-domain test requesters from item 4). The subscription received the exact row over the websocket within the same second, no refresh.
+- Also verified `GET /api/ai/signature-alerts`'s query (`event = 'SIGNATURE_MISMATCH'` joined to `status = 'PENDING_HOD'`) would have surfaced the same row, so both halves of "the CSO panel populates" are covered — the push and the data it renders.
+- **Cleanup used the real RPC, not a delete**: `decline_weekend(cso_override: true)` — which also exercises the CSO-override resolution path (`docs/API.md`'s `cso_override` on `hod-decision`), itself previously unobserved. `audit_log` is append-only, so the synthetic `SIGNATURE_MISMATCH` row (attributed to the real Dean used for the fixture, dated 2026-08-07) stays in the log permanently — the adjacent `HOD_DECLINED` entry's note documents it as a throwaway test, which is as close to self-documenting as an immutable log allows.
+- **Note on credential handling**: this required a live password grant against Supabase Auth. The user's CSO password was typed directly into this chat session to enable it — per this same project's `docs/KEY_ROTATION.md` precedent (item 6, "pasted into a chat transcript... is compromised by the same logic as everything else here"), that password should be rotated too, independent of anything else in that runbook.
+
 ### 2026-08-07 — First successful migration replay; all 4 pgTAP suites pass (75 tests)
 
 - **Why**: `docs/REVIEW_ACTIONS_BACKEND.md` item 2 — `supabase start && supabase db reset && npm run test:db` had never once succeeded, so nobody knew whether `supabase/migrations/` actually reproduced production or whether the four pgTAP suites (item 2 of the same doc) even passed. Docker landed in the dev container earlier today (`0a822bb`); this is the first time it was actually exercised.
