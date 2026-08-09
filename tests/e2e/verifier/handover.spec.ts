@@ -1,6 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
+import { loginAs } from '../utils/auth';
+
 // `/verifier/handover` is a plain, independently-navigable route — there is
 // no dashboard lock/redirect enforcing the documented "handover before
 // dashboard access" rule (confirmed by reading layout.tsx, page.tsx, and
@@ -13,13 +15,7 @@ import { expect, test } from '@playwright/test';
 
 test.describe('Verifier shift handover', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/login');
-    await page.getByLabel(/email/i).fill(process.env.TEST_VERIFIER_EMAIL ?? '');
-    await page
-      .locator('input[type="password"]')
-      .fill(process.env.TEST_VERIFIER_PASSWORD ?? '');
-    await page.getByRole('button', { name: /sign in/i }).click();
-    await page.waitForURL('/verifier/dashboard');
+    await loginAs(page, 'VERIFIER');
 
     await page.goto('/verifier/handover');
     // Wait for the loading skeleton to resolve into one of the real states.

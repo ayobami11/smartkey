@@ -1,15 +1,11 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
+import { loginAs } from '../utils/auth';
+
 test.describe('Verifier dashboard', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/login');
-    await page.getByLabel(/email/i).fill(process.env.TEST_VERIFIER_EMAIL ?? '');
-    await page
-      .locator('input[type="password"]')
-      .fill(process.env.TEST_VERIFIER_PASSWORD ?? '');
-    await page.getByRole('button', { name: /sign in/i }).click();
-    await page.waitForURL('/verifier/dashboard');
+    await loginAs(page, 'VERIFIER');
   });
 
   test('loads and passes axe', async ({ page }) => {

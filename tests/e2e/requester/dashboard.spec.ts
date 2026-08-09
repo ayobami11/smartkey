@@ -1,17 +1,11 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
+import { loginAs } from '../utils/auth';
+
 test.describe('Requester dashboard', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/login');
-    await page
-      .getByLabel(/email/i)
-      .fill(process.env.TEST_REQUESTER_EMAIL ?? '');
-    await page
-      .locator('input[type="password"]')
-      .fill(process.env.TEST_REQUESTER_PASSWORD ?? '');
-    await page.getByRole('button', { name: /sign in/i }).click();
-    await page.waitForURL('/requester/dashboard');
+    await loginAs(page, 'REQUESTER');
   });
 
   test('loads and passes axe', async ({ page }) => {
