@@ -230,7 +230,7 @@ export default function LandingPage() {
                 <h2 className="font-display text-3xl font-semibold text-foreground sm:text-4xl">
                   Ready to get started?
                 </h2>
-                <p className="mt-3 text-base text-muted-foreground">
+                <p className="mt-3 text-base text-secondary-foreground">
                   Sign in with the credentials provisioned by your Chief
                   Security Officer. Visitors and contractors can submit a
                   weekend access request without an account.

@@ -45,9 +45,11 @@ test.describe('Public forgot-password page', () => {
       .fill('e2e-test-nonexistent@unilag.edu.ng');
     await page.getByRole('button', { name: /send reset link/i }).click();
 
+    // Generous timeout: this round-trips through the Supabase admin client
+    // and (on a cold server start) a real Gmail SMTP send before responding.
     await expect(
       page.getByRole('heading', { name: /check your email/i })
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 15000 });
     await expect(
       page.getByText(/if that email address is registered/i)
     ).toBeVisible();

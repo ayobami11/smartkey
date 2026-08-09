@@ -10,13 +10,13 @@ test.describe('CSO signature mismatch alerts', () => {
       .locator('input[type="password"]')
       .fill(process.env.TEST_CSO_PASSWORD ?? '');
     await page.getByRole('button', { name: /sign in/i }).click();
-    await page.waitForURL('/cso');
+    await page.waitForURL('/cso/dashboard');
   });
 
   test('shows the signature mismatches section and passes axe', async ({
     page,
   }) => {
-    await expect(page).toHaveURL('/cso');
+    await expect(page).toHaveURL('/cso/dashboard');
     await expect(
       page.getByRole('heading', { name: /signature mismatches/i })
     ).toBeVisible();

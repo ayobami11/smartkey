@@ -9,11 +9,11 @@ test.describe('Verifier dashboard', () => {
       .locator('input[type="password"]')
       .fill(process.env.TEST_VERIFIER_PASSWORD ?? '');
     await page.getByRole('button', { name: /sign in/i }).click();
-    await page.waitForURL('/verifier');
+    await page.waitForURL('/verifier/dashboard');
   });
 
   test('loads and passes axe', async ({ page }) => {
-    await expect(page).toHaveURL('/verifier');
+    await expect(page).toHaveURL('/verifier/dashboard');
     const results = await new AxeBuilder({ page }).analyze();
     expect(results.violations).toHaveLength(0);
   });

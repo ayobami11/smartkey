@@ -10,11 +10,11 @@ test.describe('CSO dashboard', () => {
       .locator('input[type="password"]')
       .fill(process.env.TEST_CSO_PASSWORD ?? '');
     await page.getByRole('button', { name: /sign in/i }).click();
-    await page.waitForURL('/cso');
+    await page.waitForURL('/cso/dashboard');
   });
 
   test('loads and passes axe', async ({ page }) => {
-    await expect(page).toHaveURL('/cso');
+    await expect(page).toHaveURL('/cso/dashboard');
     const results = await new AxeBuilder({ page }).analyze();
     expect(results.violations).toHaveLength(0);
   });

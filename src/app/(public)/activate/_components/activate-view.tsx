@@ -229,8 +229,8 @@ export const ActivateView = () => {
                     </InputGroupAddon>
                   </InputGroup>
                   <FieldDescription>
-                    At least 8 characters with uppercase, lowercase, number, and
-                    special character.
+                    At least 12 characters with uppercase, lowercase, number,
+                    and special character.
                   </FieldDescription>
                   {fieldState.invalid && (
                     <FieldError errors={[fieldState.error]} />

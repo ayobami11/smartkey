@@ -58,7 +58,7 @@ test.describe('Public reset-password page', () => {
     await page.goto('/reset-password');
 
     await page.getByLabel(/^new password$/i).fill('Sup3rSecret!');
-    await page.getByLabel(/confirm new password/i).fill('Different1!');
+    await page.getByLabel(/confirm new password/i).fill('DifferentPass1!');
     await page.getByRole('button', { name: /update password/i }).click();
 
     await expect(page.getByText(/passwords do not match/i)).toBeVisible();
@@ -79,7 +79,7 @@ test.describe('Public reset-password page', () => {
     await page.getByRole('button', { name: /update password/i }).click();
 
     await expect(
-      page.getByText(/password must contain at least 8 characters/i).first()
+      page.getByText(/password must contain at least 12 characters/i).first()
     ).toBeVisible();
   });
 });

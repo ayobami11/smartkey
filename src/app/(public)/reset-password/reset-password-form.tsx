@@ -161,7 +161,7 @@ export const ResetPasswordForm = () => {
                   </InputGroupAddon>
                 </InputGroup>
                 <FieldDescription>
-                  At least 8 characters with uppercase, lowercase, number, and
+                  At least 12 characters with uppercase, lowercase, number, and
                   special character.
                 </FieldDescription>
                 {fieldState.invalid && (
