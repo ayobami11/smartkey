@@ -1,6 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
+import { loginAs } from '../utils/auth';
+
 // Non-mutation policy, same as the rest of this suite: never completes a
 // real provision/edit/revoke submission — each mutates a real profile
 // (creating a real Supabase Auth account + sending a real activation email,
@@ -12,13 +14,7 @@ import { expect, test } from '@playwright/test';
 
 test.describe('CSO user administration', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/login');
-    await page.getByLabel(/email/i).fill(process.env.TEST_CSO_EMAIL ?? '');
-    await page
-      .locator('input[type="password"]')
-      .fill(process.env.TEST_CSO_PASSWORD ?? '');
-    await page.getByRole('button', { name: /sign in/i }).click();
-    await page.waitForURL('/cso/dashboard');
+    await loginAs(page, 'CSO');
 
     await page.goto('/cso/users');
     await expect(page.getByRole('heading', { name: /^users$/i })).toBeVisible();

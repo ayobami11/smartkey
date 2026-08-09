@@ -1,16 +1,11 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
+import { loginAs } from '../utils/auth';
+
 test.describe('CSO signature mismatch alerts', () => {
   test.beforeEach(async ({ page }) => {
-    // Sign in as CSO before each test.
-    await page.goto('/login');
-    await page.getByLabel(/email/i).fill(process.env.TEST_CSO_EMAIL ?? '');
-    await page
-      .locator('input[type="password"]')
-      .fill(process.env.TEST_CSO_PASSWORD ?? '');
-    await page.getByRole('button', { name: /sign in/i }).click();
-    await page.waitForURL('/cso/dashboard');
+    await loginAs(page, 'CSO');
   });
 
   test('shows the signature mismatches section and passes axe', async ({

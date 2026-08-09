@@ -61,41 +61,46 @@ For each screen:
 - [ ] **Theme toggle** — light → dark, verify state is preserved
 
 ```typescript
-import { test, expect } from '@playwright/test'
-import AxeBuilder from '@axe-core/playwright'
+import { test, expect } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+import { loginAs } from '../utils/auth';
 
 test.describe('Verifier: issue-key flow', () => {
   test.beforeEach(async ({ page }) => {
-    // Sign in as a verifier — use the shared auth fixture
-    await page.goto('/login')
-    await page.fill('[data-testid="email"]', process.env.TEST_VERIFIER_EMAIL!)
-    await page.fill('[data-testid="password"]', process.env.TEST_VERIFIER_PASSWORD!)
-    await page.click('[data-testid="submit"]')
-    await page.waitForURL('/verifier')
-  })
+    // Signs in for real, OTP included — VERIFIER is MFA-gated
+    // (src/app/api/auth/login/route.ts's MFA_ROLES), and there is no
+    // test-mode bypass. loginAs() reads the emailed code back out of the
+    // shared IMAP test mailbox. See docs/E2E_OTP_SETUP.md before wiring up a
+    // new MFA-gated spec — filling in TEST_VERIFIER_EMAIL/PASSWORD alone is
+    // NOT enough; the mailbox also has to be armed, or this times out on the
+    // OTP screen exactly like the specs that shipped without this fixture did.
+    await loginAs(page, 'VERIFIER');
+  });
 
   test('happy path: issue key with valid code', async ({ page }) => {
-    await page.fill('[data-testid="code-input"]', '123456')
-    await expect(page.locator('[data-testid="requester-name"]')).toBeVisible()
-    await page.click('[data-testid="issue-key-btn"]')
-    await expect(page.locator('[data-testid="issue-confirmation"]')).toBeVisible()
+    await page.fill('[data-testid="code-input"]', '123456');
+    await expect(page.locator('[data-testid="requester-name"]')).toBeVisible();
+    await page.click('[data-testid="issue-key-btn"]');
+    await expect(
+      page.locator('[data-testid="issue-confirmation"]')
+    ).toBeVisible();
 
     // axe scan after the confirmation state
-    const results = await new AxeBuilder({ page }).analyze()
-    expect(results.violations).toHaveLength(0)
-  })
+    const results = await new AxeBuilder({ page }).analyze();
+    expect(results.violations).toHaveLength(0);
+  });
 
   test('error path: invalid code shows error message', async ({ page }) => {
-    await page.fill('[data-testid="code-input"]', '000000')
-    await expect(page.locator('[data-testid="code-error"]')).toBeVisible()
+    await page.fill('[data-testid="code-input"]', '000000');
+    await expect(page.locator('[data-testid="code-error"]')).toBeVisible();
     await expect(page.locator('[data-testid="code-error"]')).toContainText(
-      'Code not recognised',
-    )
+      'Code not recognised'
+    );
 
-    const results = await new AxeBuilder({ page }).analyze()
-    expect(results.violations).toHaveLength(0)
-  })
-})
+    const results = await new AxeBuilder({ page }).analyze();
+    expect(results.violations).toHaveLength(0);
+  });
+});
 ```
 
 ## Page Object Model
@@ -104,51 +109,53 @@ Encapsulate locators and common interactions in Page Objects under `tests/pages/
 
 ```typescript
 // tests/pages/VerifierDashboardPage.ts
-import { type Page, type Locator } from '@playwright/test'
+import { type Page, type Locator } from '@playwright/test';
 
 export class VerifierDashboardPage {
-  readonly page: Page
-  readonly codeInput: Locator
-  readonly issueKeyBtn: Locator
-  readonly confirmationCard: Locator
-  readonly queue: Locator
+  readonly page: Page;
+  readonly codeInput: Locator;
+  readonly issueKeyBtn: Locator;
+  readonly confirmationCard: Locator;
+  readonly queue: Locator;
 
   constructor(page: Page) {
-    this.page = page
-    this.codeInput = page.locator('[data-testid="code-input"]')
-    this.issueKeyBtn = page.locator('[data-testid="issue-key-btn"]')
-    this.confirmationCard = page.locator('[data-testid="issue-confirmation"]')
-    this.queue = page.locator('[data-testid="request-queue"]')
+    this.page = page;
+    this.codeInput = page.locator('[data-testid="code-input"]');
+    this.issueKeyBtn = page.locator('[data-testid="issue-key-btn"]');
+    this.confirmationCard = page.locator('[data-testid="issue-confirmation"]');
+    this.queue = page.locator('[data-testid="request-queue"]');
   }
 
   async goto() {
-    await this.page.goto('/verifier')
-    await this.page.waitForLoadState('networkidle')
+    await this.page.goto('/verifier');
+    await this.page.waitForLoadState('networkidle');
   }
 
   async enterCode(code: string) {
-    await this.codeInput.fill(code)
-    await this.page.waitForResponse((r) => r.url().includes('/api/requests/lookup'))
+    await this.codeInput.fill(code);
+    await this.page.waitForResponse((r) =>
+      r.url().includes('/api/requests/lookup')
+    );
   }
 
   async issueKey() {
-    await this.issueKeyBtn.click()
-    await this.confirmationCard.waitFor({ state: 'visible' })
+    await this.issueKeyBtn.click();
+    await this.confirmationCard.waitFor({ state: 'visible' });
   }
 }
 ```
 
 ```typescript
 // In the test
-import { VerifierDashboardPage } from '../pages/VerifierDashboardPage'
+import { VerifierDashboardPage } from '../pages/VerifierDashboardPage';
 
 test('issue key', async ({ page }) => {
-  const dashboard = new VerifierDashboardPage(page)
-  await dashboard.goto()
-  await dashboard.enterCode('123456')
-  await dashboard.issueKey()
-  await expect(dashboard.confirmationCard).toBeVisible()
-})
+  const dashboard = new VerifierDashboardPage(page);
+  await dashboard.goto();
+  await dashboard.enterCode('123456');
+  await dashboard.issueKey();
+  await expect(dashboard.confirmationCard).toBeVisible();
+});
 ```
 
 ## axe-core scan pattern
@@ -156,66 +163,71 @@ test('issue key', async ({ page }) => {
 Run the scan at the end of every logical state (loaded, error shown, success confirmed). Do not run only once at the end of the test — intermediate states may have violations.
 
 ```typescript
-import AxeBuilder from '@axe-core/playwright'
+import AxeBuilder from '@axe-core/playwright';
 
 // Scan helper to reduce repetition
 const scanAccessibility = async (page: Page) => {
   const results = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
-    .analyze()
-  expect(results.violations).toHaveLength(0)
-}
+    .analyze();
+  expect(results.violations).toHaveLength(0);
+};
 
 // Use it at each major state transition
-await scanAccessibility(page) // after page loads
-await page.click('[data-testid="submit"]')
-await scanAccessibility(page) // after form submission
+await scanAccessibility(page); // after page loads
+await page.click('[data-testid="submit"]');
+await scanAccessibility(page); // after form submission
 ```
 
 ## Keyboard navigation test
 
 ```typescript
-test('keyboard navigation reaches all interactive elements', async ({ page }) => {
-  await page.goto('/verifier')
+test('keyboard navigation reaches all interactive elements', async ({
+  page,
+}) => {
+  await page.goto('/verifier');
 
   // Tab through all focusable elements
-  const focusableCount = await page.evaluate(() =>
-    document.querySelectorAll(
-      'a, button, input, select, textarea, [tabindex]:not([tabindex="-1"])',
-    ).length,
-  )
+  const focusableCount = await page.evaluate(
+    () =>
+      document.querySelectorAll(
+        'a, button, input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      ).length
+  );
 
   for (let i = 0; i < focusableCount; i++) {
-    await page.keyboard.press('Tab')
+    await page.keyboard.press('Tab');
   }
 
   // Verify focus ring is visible (no outline:none without replacement)
-  const focusedElement = await page.evaluate(() => document.activeElement?.tagName)
-  expect(focusedElement).not.toBeNull()
-})
+  const focusedElement = await page.evaluate(
+    () => document.activeElement?.tagName
+  );
+  expect(focusedElement).not.toBeNull();
+});
 ```
 
 ## Theme toggle test
 
 ```typescript
 test('dark mode toggle preserves page state', async ({ page }) => {
-  const dashboard = new VerifierDashboardPage(page)
-  await dashboard.goto()
-  await dashboard.enterCode('123456')
+  const dashboard = new VerifierDashboardPage(page);
+  await dashboard.goto();
+  await dashboard.enterCode('123456');
 
   // State is present: requester name visible
-  await expect(page.locator('[data-testid="requester-name"]')).toBeVisible()
+  await expect(page.locator('[data-testid="requester-name"]')).toBeVisible();
 
   // Toggle to dark
-  await page.click('[data-testid="theme-toggle"]')
-  await expect(page.locator('html')).toHaveClass(/dark/)
+  await page.click('[data-testid="theme-toggle"]');
+  await expect(page.locator('html')).toHaveClass(/dark/);
 
   // State is still present
-  await expect(page.locator('[data-testid="requester-name"]')).toBeVisible()
+  await expect(page.locator('[data-testid="requester-name"]')).toBeVisible();
 
-  const results = await new AxeBuilder({ page }).analyze()
-  expect(results.violations).toHaveLength(0)
-})
+  const results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations).toHaveLength(0);
+});
 ```
 
 ## Flaky test patterns
@@ -224,18 +236,20 @@ test('dark mode toggle preserves page state', async ({ page }) => {
 
 ```typescript
 // BAD: arbitrary sleep
-await page.waitForTimeout(3000)
+await page.waitForTimeout(3000);
 
 // GOOD: wait for a specific condition
-await page.waitForResponse((r) => r.url().includes('/api/requests') && r.status() === 200)
-await page.locator('[data-testid="queue-item"]').waitFor({ state: 'visible' })
+await page.waitForResponse(
+  (r) => r.url().includes('/api/requests') && r.status() === 200
+);
+await page.locator('[data-testid="queue-item"]').waitFor({ state: 'visible' });
 ```
 
 ### Wait for network idle on navigation
 
 ```typescript
-await page.goto('/verifier')
-await page.waitForLoadState('networkidle') // wait for Realtime subscription + initial fetch
+await page.goto('/verifier');
+await page.waitForLoadState('networkidle'); // wait for Realtime subscription + initial fetch
 ```
 
 ### Realtime-dependent elements
@@ -244,30 +258,32 @@ The verifier and CSO dashboards subscribe to Supabase Realtime on mount. In test
 
 ```typescript
 // Seed a pending request in the test DB before navigating
-await seedPendingRequest({ keyId: TEST_KEY_ID, requesterId: TEST_STAFF_ID })
+await seedPendingRequest({ keyId: TEST_KEY_ID, requesterId: TEST_STAFF_ID });
 
-await dashboard.goto()
+await dashboard.goto();
 // Wait for the seeded request to appear in the queue
-await page.locator(`[data-testid="queue-item"][data-request-id="${requestId}"]`).waitFor({
-  state: 'visible',
-  timeout: 10_000,
-})
+await page
+  .locator(`[data-testid="queue-item"][data-request-id="${requestId}"]`)
+  .waitFor({
+    state: 'visible',
+    timeout: 10_000,
+  });
 ```
 
 ### Quarantine flaky tests
 
 ```typescript
 test('flaky: signature mismatch alert appears', async ({ page }) => {
-  test.fixme(true, 'Flaky under slow CI — tracked at #87')
+  test.fixme(true, 'Flaky under slow CI — tracked at #87');
   // ...
-})
+});
 ```
 
 ## Playwright configuration
 
 ```typescript
 // playwright.config.ts
-import { defineConfig, devices } from '@playwright/test'
+import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -297,7 +313,7 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },
-})
+});
 ```
 
 ## CI configuration

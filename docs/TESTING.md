@@ -2,12 +2,12 @@
 
 ## Layers
 
-| Layer     | Tool                           | Coverage target                                                |
-| --------- | ------------------------------ | -------------------------------------------------------------- |
-| Unit      | Vitest                         | Pure logic, especially `src/lib/ai/risk/` and `src/lib/audit/` |
-| Component | Vitest + React Testing Library | Most components in `src/components/smartkey/`                  |
-| E2E       | Playwright + axe-core          | Every primary user flow per role                               |
-| Database  | *Not yet implemented*          | pgTAP is the intended tool for RPCs/RLS; no `supabase/tests/` directory or `test:db` script exists yet — RPCs and RLS policies currently have no automated test coverage |
+| Layer     | Tool                           | Coverage target                                                                                                                                                          |
+| --------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Unit      | Vitest                         | Pure logic, especially `src/lib/ai/risk/` and `src/lib/audit/`                                                                                                           |
+| Component | Vitest + React Testing Library | Most components in `src/components/smartkey/`                                                                                                                            |
+| E2E       | Playwright + axe-core          | Every primary user flow per role                                                                                                                                         |
+| Database  | _Not yet implemented_          | pgTAP is the intended tool for RPCs/RLS; no `supabase/tests/` directory or `test:db` script exists yet — RPCs and RLS policies currently have no automated test coverage |
 
 Tests live in `src/tests/<role-or-area>/*.test.tsx` (e.g. `src/tests/smartkey/risk-tier-badge.test.tsx`, `src/tests/dean/onboarding-form.test.tsx`), not co-located next to the component they cover — despite what `CLAUDE.md`'s "co-locate tests" convention says. Follow the existing `src/tests/` tree for new component tests rather than the co-located pattern.
 
@@ -28,6 +28,16 @@ Tests live in `src/tests/<role-or-area>/*.test.tsx` (e.g. `src/tests/smartkey/ri
 - axe-core scan with no violations.
 - Theme toggle (light → dark) preserves state.
 - Tab through, every focusable element reachable.
+
+**MFA-gated logins**: CSO, Dean, and Verifier require a real emailed OTP on
+every login (`src/app/api/auth/login/route.ts`'s `MFA_ROLES`) — there is no
+test-mode bypass, and there will not be one. Every spec's `beforeEach` must
+sign in via `tests/e2e/utils/auth.ts`'s `loginAs(page, role)`, never a bare
+email/password fill — that helper reads the OTP back out of a shared IMAP test
+mailbox for the three MFA roles (REQUESTER skips MFA and needs no mailbox).
+See `docs/E2E_OTP_SETUP.md` for arming that mailbox; without it, CSO/Dean/
+Verifier specs time out on the OTP screen exactly as documented in
+`docs/CHANGELOG.md`'s 2026-08-09 entry.
 
 ### For an audit-writing operation
 
