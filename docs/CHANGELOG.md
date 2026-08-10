@@ -6,6 +6,8 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+## Entries
+
 ### 2026-08-10 — Fixed the smoke test's first automatic run: Vercel Deployment Protection, not a real failure
 
 - **Why**: the changelog entry below documents the first manual smoke-test pass (11/0/1
@@ -22,10 +24,11 @@ Each entry: date, brief title, what changed, why.
 - `.github/workflows/post-deploy-smoke.yml`: passes the new `VERCEL_PROTECTION_BYPASS_SECRET`
   GitHub secret through. Value comes from Vercel Project Settings → Deployment Protection →
   Protection Bypass for Automation.
-- **Not yet verified**: no automatic run has happened since the fix. This failure is exactly
-  the risk that's the whole reason `SMOKE_AUTO_ROLLBACK` stays off — a test failing for a
-  reason that has nothing to do with the deployed code would have triggered a rollback of a
-  perfectly good deploy.
+- **Verified**: the next real `deployment_status`-triggered run (#22) passed — smoke job
+  green in 16s, `promote`/`rollback` both correctly skipped (gate still off). This whole
+  episode is exactly the risk that's the reason `SMOKE_AUTO_ROLLBACK` stays off — a test
+  failing for a reason that has nothing to do with the deployed code would have triggered a
+  rollback of a perfectly good deploy.
 
 ### 2026-08-10 — Smoke test armed and passing; auto-promote/rollback left off on purpose
 
