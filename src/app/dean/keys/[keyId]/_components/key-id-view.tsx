@@ -339,14 +339,12 @@ export const KeyIdView = () => {
             <KeyRoundIcon className="size-5 text-primary" aria-hidden="true" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <code className="font-mono text-lg font-semibold text-foreground">
-                {keyData?.code}
-              </code>
+            <h1 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+              <code className="font-mono">{keyData?.code}</code>
               <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
                 {zoneLabel}
               </span>
-            </div>
+            </h1>
             <p className="text-sm text-muted-foreground">
               {keyData?.room_name}
               {dept?.name ? ` · ${dept.name}` : ''}

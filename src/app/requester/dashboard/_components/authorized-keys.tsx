@@ -201,6 +201,7 @@ export const AuthorizedKeys = () => {
       {isLoading && (
         <div
           className="flex flex-col gap-3"
+          role="status"
           aria-busy="true"
           aria-label="Loading your keys"
         >

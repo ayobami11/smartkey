@@ -300,6 +300,7 @@ export const OutstandingKeys = () => {
       {loading && (
         <div
           className="flex flex-col gap-3"
+          role="status"
           aria-busy="true"
           aria-label="Loading outstanding keys"
         >
@@ -363,7 +364,7 @@ export const OutstandingKeys = () => {
                       </span>
                       {overdue && (
                         <span
-                          className="rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive"
+                          className="rounded-full bg-destructive/1 px-2 py-0.5 text-xs font-medium text-destructive dark:bg-destructive/5"
                           aria-label="Key is overdue"
                         >
                           Overdue

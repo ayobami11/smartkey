@@ -195,6 +195,7 @@ export const HandoverView = () => {
       {step === 'loading' && (
         <div
           className="flex flex-col gap-4"
+          role="status"
           aria-busy="true"
           aria-label="Loading handover information"
         >
@@ -279,7 +280,7 @@ export const HandoverView = () => {
                           </span>
                           {isOverdue && (
                             <span
-                              className="rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive"
+                              className="rounded-full bg-destructive/1 px-2 py-0.5 text-xs font-medium text-destructive dark:bg-destructive/5"
                               aria-label="Key is overdue"
                             >
                               Overdue
@@ -490,7 +491,7 @@ export const HandoverView = () => {
                             </span>
                             {isOverdue && (
                               <span
-                                className="rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive"
+                                className="rounded-full bg-destructive/1 px-2 py-0.5 text-xs font-medium text-destructive dark:bg-destructive/5"
                                 aria-label="Key is overdue"
                               >
                                 Overdue
