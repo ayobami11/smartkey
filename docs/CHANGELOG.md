@@ -8,6 +8,32 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-10 — Added a drop folder for real signature calibration samples
+
+- **Why**: two real signature images were saved into tracked repo paths by
+  accident twice during the test run below (`docs/`, then `src/lib/`) — this
+  repo auto-commits and pushes tracked changes, so a real signature could
+  have ended up on GitHub. Added a fixed, safe location instead of relying on
+  remembering not to do that again.
+- `tests/signature-calibration-samples/{reference,genuine,forged}/` — empty
+  skeleton, one `.gitkeep` each, plus a README with the exact layout
+  `calibrate.test.ts` expects.
+- `.gitignore`: added `tests/signature-calibration-samples/**/*.{png,jpg,jpeg,webp}`
+  — image files dropped here can never be committed; the README/`.gitkeep`
+  files still are, so the folder structure itself stays in the repo.
+
+### 2026-08-10 — Ran the signature calibration tool once, to check it works
+
+- **Why**: before asking any Dean for real signature samples, check the tool
+  (`src/lib/ai/signature/calibrate.ts`) actually runs. Used two personal
+  signatures instead (one person's signature twice, plus a colleague's) as a
+  test, not real data.
+- Result: ran with no errors, and correctly refused to give a threshold
+  because one sample per group isn't enough to conclude anything — this is
+  the intended behaviour. Full account in `docs/SIGNATURE_CALIBRATION_TEST_RUN.md`.
+- Test images were kept out of the repo (temporary local folder, deleted
+  after) — signatures are personal, so nothing here got saved or committed.
+
 ### 2026-08-10 — Password-reset email now says 30 minutes, not 1 hour
 
 - **Why**: user feedback that a 1-hour password-reset window is too long for a credential-recovery link. `src/lib/email/otp.ts`'s `sendPasswordResetEmail` copy changed to 30 minutes — long enough to realistically check email, short enough to meaningfully cut the exposure window (SmartKey's other short-lived tokens — OTP, collection, return codes — are 10–15 min, but those are entered live in an open session; a reset link has more real-world lag before it's clicked).
