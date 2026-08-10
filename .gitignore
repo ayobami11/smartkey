@@ -14,6 +14,8 @@
 /coverage
 /playwright-report
 /test-results
+# Playwright storageState files (tests/e2e/auth.setup.ts) — live session cookies
+/playwright/.auth
 
 # next.js
 /.next/
@@ -52,6 +54,13 @@ CLAUDE.local.md
 
 # generated review artifacts (not project documentation)
 docs/SmartKey_Examiner_Review.pdf
+
+# internal/operational notes — not for shared git history. E2E_OTP_SETUP
+# documents the test-mailbox +tag naming scheme (operational infra detail);
+# SIGNATURE_CALIBRATION_TEST_RUN names real colleagues in a forgery-testing
+# context. Neither belongs in tracked source.
+docs/E2E_OTP_SETUP.md
+docs/SIGNATURE_CALIBRATION_TEST_RUN.md
 
 # typescript
 *.tsbuildinfo
