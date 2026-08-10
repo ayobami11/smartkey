@@ -285,7 +285,7 @@ export const sendPasswordResetEmail = async ({
             Reset your password
           </p>
           <p style="margin:0 0 24px;color:#475569;font-size:14px;">
-            Click the button below to set a new password. This link expires in 1&nbsp;hour.
+            Click the button below to set a new password. This link expires in 30&nbsp;minutes.
           </p>
           <a href="${link}"
             style="display:inline-block;background:#7B1F2D;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">

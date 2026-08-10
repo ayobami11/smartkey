@@ -8,6 +8,11 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-10 — Password-reset email now says 30 minutes, not 1 hour
+
+- **Why**: user feedback that a 1-hour password-reset window is too long for a credential-recovery link. `src/lib/email/otp.ts`'s `sendPasswordResetEmail` copy changed to 30 minutes — long enough to realistically check email, short enough to meaningfully cut the exposure window (SmartKey's other short-lived tokens — OTP, collection, return codes — are 10–15 min, but those are entered live in an open session; a reset link has more real-world lag before it's clicked).
+- **Not done, and needs a Dashboard check**: the email's copy does not control the link's actual validity — that's enforced by Supabase Auth's own token expiry (`generateLink({type:'recovery'})`), separate from anything in this codebase. If Authentication → Providers → Email → "Email OTP Expiration" isn't also changed to 1800s, the email now understates or overstates the real window — the same class of bug as the "8 vs 12 character password" copy mismatch found on 2026-08-09. That setting likely also governs invite/activation links, which need to stay at 24 hours (`docs/API.md`) — worth confirming it's actually shared before changing it, not assumed.
+
 ### 2026-08-09 — Real OTP completion for CSO/Dean/Verifier E2E logins (IMAP mailbox, not a bypass)
 
 - **Why**: the same-day entry below found 47 of 63 Playwright specs fail in `beforeEach` — CSO, Dean, and Verifier all require a real emailed OTP on every login (`MFA_ROLES` in `src/app/api/auth/login/route.ts`), and nothing in the suite completed that step. `tests/smoke/smoke.mjs` already made the right call for the _smoke test_ version of this problem — no IMAP integration, because it's an unattended job on every production deploy and a flaky mailbox read would page someone at 3am. E2E is different: it only runs on PRs, nothing pages anyone, a flake just fails a re-runnable check. Same tradeoff, different answer.
