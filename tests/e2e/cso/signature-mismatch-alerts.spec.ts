@@ -1,11 +1,11 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
-import { loginAs } from '../utils/auth';
-
 test.describe('CSO signature mismatch alerts', () => {
+  test.use({ storageState: 'playwright/.auth/cso.json' });
+
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'CSO');
+    await page.goto('/cso/dashboard');
   });
 
   test('shows the signature mismatches section and passes axe', async ({

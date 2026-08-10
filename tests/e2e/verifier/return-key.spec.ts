@@ -1,8 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 
-import { loginAs } from '../utils/auth';
-
 // Same non-mutation policy as issue-key.spec.ts: no assertion here ever
 // completes a real return (valid code or override reason), since that
 // marks a real key returned and writes a real audit_log entry against
@@ -27,8 +25,10 @@ const openReturnSheetFromFirstRow = async (page: Page) => {
 };
 
 test.describe('Verifier return-key flow', () => {
+  test.use({ storageState: 'playwright/.auth/verifier.json' });
+
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'VERIFIER');
+    await page.goto('/verifier/dashboard');
   });
 
   test('opening the sheet shows the code entry step and passes axe', async ({

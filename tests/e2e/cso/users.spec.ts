@@ -1,8 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
-import { loginAs } from '../utils/auth';
-
 // Non-mutation policy, same as the rest of this suite: never completes a
 // real provision/edit/revoke submission — each mutates a real profile
 // (creating a real Supabase Auth account + sending a real activation email,
@@ -13,9 +11,9 @@ import { loginAs } from '../utils/auth';
 // spec only checks the dialogs actually open and wire up in the real page.
 
 test.describe('CSO user administration', () => {
-  test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'CSO');
+  test.use({ storageState: 'playwright/.auth/cso.json' });
 
+  test.beforeEach(async ({ page }) => {
     await page.goto('/cso/users');
     await expect(page.getByRole('heading', { name: /^users$/i })).toBeVisible();
   });

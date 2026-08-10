@@ -1,8 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
-import { loginAs } from '../utils/auth';
-
 // `/verifier/handover` is a plain, independently-navigable route — there is
 // no dashboard lock/redirect enforcing the documented "handover before
 // dashboard access" rule (confirmed by reading layout.tsx, page.tsx, and
@@ -14,14 +12,18 @@ import { loginAs } from '../utils/auth';
 // backend BASE_URL points at.
 
 test.describe('Verifier shift handover', () => {
-  test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'VERIFIER');
+  test.use({ storageState: 'playwright/.auth/verifier.json' });
 
+  test.beforeEach(async ({ page }) => {
     await page.goto('/verifier/handover');
-    // Wait for the loading skeleton to resolve into one of the real states.
+    // Wait for the loading skeleton to disappear, not the page heading — the
+    // <h1> reads "Shift handover" for every step except 'no-shift', including
+    // the transient 'loading' step itself (handover-view.tsx:184-186), so
+    // waiting on it resolves on the very first paint and never actually waits
+    // for the shift/outstanding-keys fetch to finish.
     await expect(
-      page.getByRole('heading', { name: /start shift|shift handover/i })
-    ).toBeVisible();
+      page.getByRole('status', { name: /loading handover information/i })
+    ).toBeHidden();
   });
 
   test('renders whichever state is current and passes axe', async ({

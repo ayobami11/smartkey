@@ -1,8 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 
-import { loginAs } from '../utils/auth';
-
 // Non-mutation policy, same as the verifier specs: this spec never clicks
 // Approve/Decline to completion. Unlike the CSO signature-mismatch spec
 // (which loads an *existing* held alert from seed data), there is no way to
@@ -29,9 +27,9 @@ const openReviewSheetFromFirstRow = async (page: Page) => {
 };
 
 test.describe('Dean weekend-request review', () => {
-  test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'DEAN');
+  test.use({ storageState: 'playwright/.auth/dean.json' });
 
+  test.beforeEach(async ({ page }) => {
     await page.goto('/dean/weekend-requests');
     await expect(
       page.getByRole('heading', { name: /^weekend requests$/i })

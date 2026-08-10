@@ -1,11 +1,11 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
-import { loginAs } from '../utils/auth';
-
 test.describe('Dean dashboard', () => {
+  test.use({ storageState: 'playwright/.auth/dean.json' });
+
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'DEAN');
+    await page.goto('/dean/dashboard');
   });
 
   test('loads and passes axe', async ({ page }) => {

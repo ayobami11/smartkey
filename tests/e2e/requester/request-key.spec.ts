@@ -1,8 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 
-import { loginAs } from '../utils/auth';
-
 // Non-mutation policy, same as the other specs in this suite: never
 // completes a real "Request key" submission — that creates a real request
 // row and consumes a real key slot against whatever backend BASE_URL points
@@ -27,8 +25,10 @@ const openRequestSheetFromFirstKey = async (page: Page) => {
 };
 
 test.describe('Requester request-key flow', () => {
+  test.use({ storageState: 'playwright/.auth/requester.json' });
+
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'REQUESTER');
+    await page.goto('/requester/dashboard');
   });
 
   test('opening the sheet shows the return-deadline field and passes axe', async ({

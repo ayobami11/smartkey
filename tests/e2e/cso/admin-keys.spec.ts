@@ -1,8 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
-import { loginAs } from '../utils/auth';
-
 // Non-mutation policy, same as the rest of this suite: never completes a
 // real "Add"/"Remove" collector action — both mutate real `authorisations`
 // rows against whatever backend BASE_URL points at. This is the max-3-slot
@@ -10,9 +8,9 @@ import { loginAs } from '../utils/auth';
 // open/cancel, candidate list) is still meaningful without submitting.
 
 test.describe('CSO admin-keys collector management', () => {
-  test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'CSO');
+  test.use({ storageState: 'playwright/.auth/cso.json' });
 
+  test.beforeEach(async ({ page }) => {
     await page.goto('/cso/admin-keys');
     await expect(
       page.getByRole('heading', { name: /^administration keys$/i })

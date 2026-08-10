@@ -1,8 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 
-import { loginAs } from '../utils/auth';
-
 // This spec deliberately never completes a real "Issue key" submission —
 // doing so would mark a real request KEY_ISSUED and write a real audit_log
 // entry against whatever backend BASE_URL points at. Every assertion below
@@ -29,8 +27,10 @@ const openIssueSheetFromFirstQueueRow = async (page: Page) => {
 };
 
 test.describe('Verifier issue-key flow', () => {
+  test.use({ storageState: 'playwright/.auth/verifier.json' });
+
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'VERIFIER');
+    await page.goto('/verifier/dashboard');
   });
 
   test('opening the sheet shows the code entry step and passes axe', async ({
