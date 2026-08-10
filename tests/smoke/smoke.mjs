@@ -61,6 +61,7 @@ const REQUESTER_PASSWORD = process.env.SMOKE_REQUESTER_PASSWORD ?? '';
 const CSO_EMAIL = process.env.SMOKE_CSO_EMAIL ?? '';
 const CSO_PASSWORD = process.env.SMOKE_CSO_PASSWORD ?? '';
 const TIMEOUT_MS = Number(process.env.SMOKE_TIMEOUT_MS ?? 20000);
+const VERCEL_BYPASS_SECRET = process.env.VERCEL_PROTECTION_BYPASS_SECRET ?? '';
 
 const REFERER = {
   cso: `${BASE_URL}/cso`,
@@ -111,6 +112,8 @@ const call = async (method, path, { body, referer, jar } = {}) => {
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (referer) headers.Referer = referer;
   if (jar && jar.size() > 0) headers.Cookie = jar.header();
+  if (VERCEL_BYPASS_SECRET)
+    headers['x-vercel-protection-bypass'] = VERCEL_BYPASS_SECRET;
 
   const response = await fetch(`${BASE_URL}${path}`, {
     method,

@@ -50,6 +50,72 @@ Each entry: date, brief title, what changed, why.
 - Verified against a rebuilt app (`npm run build`; the e2e webServer runs `npm run start`, so edits don't take effect until rebuilt) — `tests/e2e/requester` now passes 3/3 runnable specs (4 skipped, unrelated to this fix). Full unit suite (`npm test`) still green at 351/352 (1 pre-existing skip).
 - **Not fixed, needs a human**: the OTP-mailbox gap blocking Dean/Verifier (and CSO) E2E specs. `docs/E2E_OTP_SETUP.md` documents what's needed; nothing in this pass changed that.
 
+### 2026-08-10 — Fixed the smoke test's first automatic run: Vercel Deployment Protection, not a real failure
+
+- **Why**: the changelog entry below documents the first manual smoke-test pass (11/0/1
+  against the custom domain). The next commit's automatic run — the actual first-ever
+  `deployment_status`-triggered run — failed 10 of 11 checks. Every failure had the same
+  shape: "response body was not JSON", "not the { data, error, status } envelope", one
+  explicit "expected 401, got 302. Body: Redirecting...". That's Vercel's own SSO wall
+  intercepting the request before it reaches the app, not the app responding wrong — raw
+  per-deployment `*.vercel.app` URLs sit behind Vercel's Deployment Protection by default;
+  only the custom domain (what the manual run used) is exempt.
+- `tests/smoke/smoke.mjs`: sends `x-vercel-protection-bypass: $VERCEL_PROTECTION_BYPASS_SECRET`
+  on every request when that env var is set; omitted entirely otherwise, so testing the
+  custom domain directly is unaffected.
+- `.github/workflows/post-deploy-smoke.yml`: passes the new `VERCEL_PROTECTION_BYPASS_SECRET`
+  GitHub secret through. Value comes from Vercel Project Settings → Deployment Protection →
+  Protection Bypass for Automation.
+- **Verified**: the next real `deployment_status`-triggered run (#22) passed — smoke job
+  green in 16s, `promote`/`rollback` both correctly skipped (gate still off). This whole
+  episode is exactly the risk that's the reason `SMOKE_AUTO_ROLLBACK` stays off — a test
+  failing for a reason that has nothing to do with the deployed code would have triggered a
+  rollback of a perfectly good deploy.
+
+### 2026-08-10 — Smoke test armed and passing; auto-promote/rollback left off on purpose
+
+- **Why**:
+  `https://smartkey-ochre.vercel.app`: **11 passed, 0 failed, 1 skipped** (the skip is the
+  optional CSO MFA-shape check — its secrets aren't added to GitHub yet, not required).
+- **`SMOKE_AUTO_PROMOTE`/`SMOKE_AUTO_ROLLBACK` stay off.** Both jobs are already gated behind
+  these repo variables and default to skipped — confirmed working as designed. One manually
+  triggered pass isn't a track record: auto-promote risks shipping a real regression the test
+  happens to miss, and auto-rollback risks reverting a good deploy over a flake (a disposable
+  test account, a network blip) that has nothing to do with the deploy itself. Leaving both off
+  until the smoke test has run automatically, unattended, across several real deploys — this
+  changelog commit's own deploy is the first one to watch.
+
+### 2026-08-10 — Added a drop folder for real signature calibration samples
+
+- **Why**: two real signature images were saved into tracked repo paths by
+  accident twice during the test run below (`docs/`, then `src/lib/`) — this
+  repo auto-commits and pushes tracked changes, so a real signature could
+  have ended up on GitHub. Added a fixed, safe location instead of relying on
+  remembering not to do that again.
+- `tests/signature-calibration-samples/{reference,genuine,forged}/` — empty
+  skeleton, one `.gitkeep` each, plus a README with the exact layout
+  `calibrate.test.ts` expects.
+- `.gitignore`: added `tests/signature-calibration-samples/**/*.{png,jpg,jpeg,webp}`
+  — image files dropped here can never be committed; the README/`.gitkeep`
+  files still are, so the folder structure itself stays in the repo.
+
+### 2026-08-10 — Ran the signature calibration tool once, to check it works
+
+- **Why**: before asking any Dean for real signature samples, check the tool
+  (`src/lib/ai/signature/calibrate.ts`) actually runs. Used two personal
+  signatures instead (one person's signature twice, plus a colleague's) as a
+  test, not real data.
+- Result: ran with no errors, and correctly refused to give a threshold
+  because one sample per group isn't enough to conclude anything — this is
+  the intended behaviour. Full account in `docs/SIGNATURE_CALIBRATION_TEST_RUN.md`.
+- Test images were kept out of the repo (temporary local folder, deleted
+  after) — signatures are personal, so nothing here got saved or committed.
+
+### 2026-08-10 — Password-reset email now says 30 minutes, not 1 hour
+
+- **Why**: user feedback that a 1-hour password-reset window is too long for a credential-recovery link. `src/lib/email/otp.ts`'s `sendPasswordResetEmail` copy changed to 30 minutes — long enough to realistically check email, short enough to meaningfully cut the exposure window (SmartKey's other short-lived tokens — OTP, collection, return codes — are 10–15 min, but those are entered live in an open session; a reset link has more real-world lag before it's clicked).
+- **Not done, and needs a Dashboard check**: the email's copy does not control the link's actual validity — that's enforced by Supabase Auth's own token expiry (`generateLink({type:'recovery'})`), separate from anything in this codebase. If Authentication → Providers → Email → "Email OTP Expiration" isn't also changed to 1800s, the email now understates or overstates the real window — the same class of bug as the "8 vs 12 character password" copy mismatch found on 2026-08-09. That setting likely also governs invite/activation links, which need to stay at 24 hours (`docs/API.md`) — worth confirming it's actually shared before changing it, not assumed.
+
 ### 2026-08-09 — Real OTP completion for CSO/Dean/Verifier E2E logins (IMAP mailbox, not a bypass)
 
 - **Why**: the same-day entry below found 47 of 63 Playwright specs fail in `beforeEach` — CSO, Dean, and Verifier all require a real emailed OTP on every login (`MFA_ROLES` in `src/app/api/auth/login/route.ts`), and nothing in the suite completed that step. `tests/smoke/smoke.mjs` already made the right call for the _smoke test_ version of this problem — no IMAP integration, because it's an unattended job on every production deploy and a flaky mailbox read would page someone at 3am. E2E is different: it only runs on PRs, nothing pages anyone, a flake just fails a re-runnable check. Same tradeoff, different answer.

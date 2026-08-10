@@ -66,3 +66,9 @@ docs/SIGNATURE_CALIBRATION_TEST_RUN.md
 *.tsbuildinfo
 next-env.d.ts
 .claude/worktrees/
+
+# real signature images for calibration — never commit these (personal, sensitive)
+tests/signature-calibration-samples/**/*.png
+tests/signature-calibration-samples/**/*.jpg
+tests/signature-calibration-samples/**/*.jpeg
+tests/signature-calibration-samples/**/*.webp

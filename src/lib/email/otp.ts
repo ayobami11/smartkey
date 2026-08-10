@@ -2,10 +2,7 @@ import { setDefaultResultOrder } from 'node:dns';
 
 import nodemailer from 'nodemailer';
 
-// Prefer IPv4 when resolving smtp.gmail.com. Node 18+ defaults to 'verbatim',
-// which hands back the AAAA record first; on a network with no IPv6 route that
-// fails with ENETUNREACH before the A record is ever tried. Nodemailer has no
-// per-transport `family` option, so the resolver order is the lever available.
+
 setDefaultResultOrder('ipv4first');
 
 const transporter = nodemailer.createTransport({
@@ -95,10 +92,6 @@ export const sendActivationEmail = async ({
     `,
   });
 
-// Morning-of reminder for an approved weekend request. No code is emailed for
-// the weekend flow — the requester (or guest) mints a short-lived collection
-// code from the linked page on the requested day. This nudge closes the gap
-// where an approved request would otherwise be forgotten until the day passed.
 export const sendWeekendReminderEmail = async ({
   to,
   link,
@@ -216,9 +209,6 @@ export const sendWeekendDeclinedEmail = async ({
     `,
   });
 
-// Approval notification for an external (guest) weekend request. Reuses the
-// same status-page link the guest received at submission so they can navigate
-// to it on the day and mint their collection code.
 export const sendGuestWeekendApprovedEmail = async ({
   to,
   fullName,
@@ -285,7 +275,7 @@ export const sendPasswordResetEmail = async ({
             Reset your password
           </p>
           <p style="margin:0 0 24px;color:#475569;font-size:14px;">
-            Click the button below to set a new password. This link expires in 1&nbsp;hour.
+            Click the button below to set a new password. This link expires in 30&nbsp;minutes.
           </p>
           <a href="${link}"
             style="display:inline-block;background:#7B1F2D;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">
@@ -299,9 +289,6 @@ export const sendPasswordResetEmail = async ({
     `,
   });
 
-// Status-link email for an external (non-registered) weekend key request.
-// The link carries the unguessable access_token so the guest can track their
-// request, mint a collection code on the day, and present it at the desk.
 export const sendGuestWeekendEmail = async ({
   to,
   link,
