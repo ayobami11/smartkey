@@ -17,12 +17,20 @@ signs in over HTTP exactly as a user would — there is no test-only bypass, and
 deliberately so: a test-only MFA bypass in production code would be a permanent hole
 traded for a convenience.
 
-| Secret                     | Required? | What it is                     |
-| -------------------------- | --------- | ------------------------------ |
-| `SMOKE_REQUESTER_EMAIL`    | **yes**   | Email of an ACTIVE `REQUESTER` |
-| `SMOKE_REQUESTER_PASSWORD` | **yes**   | That account's password        |
-| `SMOKE_CSO_EMAIL`          | optional  | Email of an ACTIVE `CSO`       |
-| `SMOKE_CSO_PASSWORD`       | optional  | That account's password        |
+| Secret                            | Required? | What it is                                                     |
+| --------------------------------- | --------- | -------------------------------------------------------------- |
+| `SMOKE_REQUESTER_EMAIL`           | **yes**   | Email of an ACTIVE `REQUESTER`                                 |
+| `SMOKE_REQUESTER_PASSWORD`        | **yes**   | That account's password                                        |
+| `SMOKE_CSO_EMAIL`                 | optional  | Email of an ACTIVE `CSO`                                       |
+| `SMOKE_CSO_PASSWORD`              | optional  | That account's password                                        |
+| `VERCEL_PROTECTION_BYPASS_SECRET` | **yes**\* | See below — needed for any deployment except the custom domain |
+
+\* Not needed if you only ever test the custom domain (e.g. `smartkey-ochre.vercel.app`).
+Needed for the automatic `deployment_status`-triggered runs, since those test the raw
+per-deployment `*.vercel.app` URL, which sits behind Vercel's Deployment Protection.
+Generate it in Vercel: Project Settings → Deployment Protection → Protection Bypass for
+Automation → Add Secret. Without it, every automatic run fails with responses that look
+like "not JSON" / "not the envelope" — that's Vercel's own auth wall, not the app.
 
 **Only the requester pair is required.** Requester is the one role exempt from email
 OTP, so it is the only login completable unattended. Without it the script exits 2

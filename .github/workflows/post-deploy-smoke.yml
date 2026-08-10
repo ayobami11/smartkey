@@ -99,6 +99,8 @@ jobs:
           SMOKE_CSO_EMAIL: ${{ secrets.SMOKE_CSO_EMAIL }}
           SMOKE_CSO_PASSWORD: ${{ secrets.SMOKE_CSO_PASSWORD }}
           SMOKE_TIMEOUT_MS: '20000'
+          # "Protection Bypass for Automation".
+          VERCEL_PROTECTION_BYPASS_SECRET: ${{ secrets.VERCEL_PROTECTION_BYPASS_SECRET }}
         # smoke.mjs distinguishes its exit codes deliberately:
         #   0 — all checks passed
         #   1 — a check failed (a real signal; fail the run)
