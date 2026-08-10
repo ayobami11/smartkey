@@ -111,7 +111,14 @@ const tryFetchOnce = async ({
         if (receivedAt && receivedAt.getTime() < sentAfter.getTime()) continue;
 
         const parsed = await simpleParser(message.source);
-        const body = parsed.html || parsed.text || '';
+        // .text first, not .html: the email template (src/lib/email/otp.ts)
+        // sets the "Your sign-in verification code:" label to color:#475569
+        // (slate-600) ahead of the code <div> in source order. That hex value
+        // is 6 pure digits, so a naive \d{6} match against raw HTML always
+        // grabs "475569" instead of the real code — deterministically, not a
+        // flake. mailparser synthesizes .text by stripping tags/attributes
+        // from .html when no text/plain part exists, so it's clean.
+        const body = parsed.text || parsed.html || '';
         const match = body.match(/(\d{6})/);
         if (match) return match[1];
       }
