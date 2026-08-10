@@ -8,6 +8,19 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-10 — Smoke test armed and passing; auto-promote/rollback left off on purpose
+
+- **Why**:
+  `https://smartkey-ochre.vercel.app`: **11 passed, 0 failed, 1 skipped** (the skip is the
+  optional CSO MFA-shape check — its secrets aren't added to GitHub yet, not required).
+- **`SMOKE_AUTO_PROMOTE`/`SMOKE_AUTO_ROLLBACK` stay off.** Both jobs are already gated behind
+  these repo variables and default to skipped — confirmed working as designed. One manually
+  triggered pass isn't a track record: auto-promote risks shipping a real regression the test
+  happens to miss, and auto-rollback risks reverting a good deploy over a flake (a disposable
+  test account, a network blip) that has nothing to do with the deploy itself. Leaving both off
+  until the smoke test has run automatically, unattended, across several real deploys — this
+  changelog commit's own deploy is the first one to watch.
+
 ### 2026-08-10 — Added a drop folder for real signature calibration samples
 
 - **Why**: two real signature images were saved into tracked repo paths by
