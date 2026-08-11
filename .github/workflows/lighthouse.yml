@@ -12,7 +12,7 @@ on:
 
 jobs:
   lighthouse:
-    name: Public pages + Requester (blocking) + Verifier (best-effort)
+    name: Public pages (blocking) + Requester/Verifier (best-effort)
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -35,6 +35,12 @@ jobs:
       - name: Build
         run: npm run build
 
+      # Runs first and needs no login, so a problem anywhere in the
+      # auth steps below (missing secrets, a flaky OTP mailbox) can never
+      # block the one signal that doesn't depend on either.
+      - name: Lighthouse — public pages
+        run: npx lhci autorun --config=lighthouserc.js
+
       - name: Cache Playwright browsers
         id: playwright-cache
         uses: actions/cache@v4
@@ -50,10 +56,17 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
 
-      # REQUESTER has no MFA step at all (tests/e2e/utils/auth.ts's
-      # MFA_ROLES doesn't include it), so this has no external dependency
-      # and is safe to block the PR on.
-      - name: Authenticate as REQUESTER
+      # TEMPORARY continue-on-error: TEST_REQUESTER_EMAIL/PASSWORD (and the
+      # NEXT_PUBLIC_SUPABASE_* pair above) aren't actually set as repo
+      # secrets yet — `gh secret list` confirms only SMOKE_REQUESTER_*/
+      # VERCEL_PROTECTION_BYPASS_SECRET exist, so this step and e2e.yml's
+      # equivalent have been failing on every PR since at least 2026-06-22.
+      # REQUESTER itself has no MFA step (tests/e2e/utils/auth.ts's
+      # MFA_ROLES doesn't include it), so once the secrets exist this can
+      # go back to being a hard blocker alongside public pages.
+      - name: Authenticate as REQUESTER (best-effort — pending secrets)
+        id: requester_auth
+        continue-on-error: true
         run: npx playwright test --project=setup -g "authenticate as REQUESTER"
         env:
           TEST_REQUESTER_EMAIL: ${{ secrets.TEST_REQUESTER_EMAIL }}
@@ -62,6 +75,7 @@ jobs:
       # VERIFIER requires a real OTP read from the shared IMAP test mailbox
       # (docs/E2E_OTP_SETUP.md documents this as occasionally flaky) —
       # continue-on-error so a mailbox hiccup can't fail a performance check.
+      # Also currently blocked by the same missing-secrets gap as REQUESTER.
       - name: Authenticate as VERIFIER (best-effort)
         id: verifier_auth
         continue-on-error: true
@@ -74,6 +88,7 @@ jobs:
 
       - name: Extract Requester session cookie
         id: requester_cookie
+        if: steps.requester_auth.outcome == 'success'
         run: |
           COOKIE=$(node scripts/lighthouse-auth-cookie.mjs playwright/.auth/requester.json)
           echo "::add-mask::$COOKIE"
@@ -87,10 +102,9 @@ jobs:
           echo "::add-mask::$COOKIE"
           echo "cookie=$COOKIE" >> "$GITHUB_OUTPUT"
 
-      - name: Lighthouse — public pages
-        run: npx lhci autorun --config=lighthouserc.js
-
-      - name: Lighthouse — Requester dashboard
+      - name: Lighthouse — Requester dashboard (best-effort — pending secrets)
+        if: steps.requester_auth.outcome == 'success'
+        continue-on-error: true
         run: npx lhci autorun --config=lighthouse/requester.config.js
         env:
           LHCI_COOKIE: ${{ steps.requester_cookie.outputs.cookie }}
