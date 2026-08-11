@@ -31,8 +31,17 @@ export const loginAs = async (page: Page, role: TestRole): Promise<void> => {
   const password = process.env[`TEST_${role}_PASSWORD`] ?? '';
 
   await page.goto('/login');
-  await page.getByLabel(/email/i).fill(email);
-  await page.locator('input[type="password"]').fill(password);
+  // pressSequentially, not fill: a bulk .fill() on the very first interaction
+  // with a freshly-loaded page has been observed to silently no-op in
+  // WebKit — the field reads back empty immediately after — while the same
+  // call on a field that's already been interacted with once works fine.
+  // Looks like a hydration-timing race rather than anything email-specific.
+  // Real keystroke-by-keystroke input doesn't hit it. This is the one login
+  // path every MFA-gated spec depends on via the shared storageState setup,
+  // so it's worth the (here, negligible — this only runs 4 times per suite
+  // run) extra cost over fill().
+  await page.getByLabel(/email/i).pressSequentially(email);
+  await page.locator('input[type="password"]').pressSequentially(password);
 
   // Captured before submit, not after — the OTP email can land in the
   // couple hundred ms it takes the page to redraw the OTP screen, and a
