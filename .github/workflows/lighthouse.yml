@@ -1,0 +1,111 @@
+name: Lighthouse CI
+
+on:
+  pull_request:
+    branches: [main]
+    # Same rationale as e2e.yml: nothing here exercises docs/supabase-only
+    # changes. A PR that also touches app code still runs.
+    paths-ignore:
+      - 'docs/**'
+      - 'supabase/**'
+      - '**/*.md'
+
+jobs:
+  lighthouse:
+    name: Public pages + Requester (blocking) + Verifier (best-effort)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      BASE_URL: http://localhost:3000
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Install Playwright system dependencies (cached browser)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      # REQUESTER has no MFA step at all (tests/e2e/utils/auth.ts's
+      # MFA_ROLES doesn't include it), so this has no external dependency
+      # and is safe to block the PR on.
+      - name: Authenticate as REQUESTER
+        run: npx playwright test --project=setup -g "authenticate as REQUESTER"
+        env:
+          TEST_REQUESTER_EMAIL: ${{ secrets.TEST_REQUESTER_EMAIL }}
+          TEST_REQUESTER_PASSWORD: ${{ secrets.TEST_REQUESTER_PASSWORD }}
+
+      # VERIFIER requires a real OTP read from the shared IMAP test mailbox
+      # (docs/E2E_OTP_SETUP.md documents this as occasionally flaky) —
+      # continue-on-error so a mailbox hiccup can't fail a performance check.
+      - name: Authenticate as VERIFIER (best-effort)
+        id: verifier_auth
+        continue-on-error: true
+        run: npx playwright test --project=setup -g "authenticate as VERIFIER"
+        env:
+          TEST_VERIFIER_EMAIL: ${{ secrets.TEST_VERIFIER_EMAIL }}
+          TEST_VERIFIER_PASSWORD: ${{ secrets.TEST_VERIFIER_PASSWORD }}
+          E2E_OTP_IMAP_USER: ${{ secrets.E2E_OTP_IMAP_USER }}
+          E2E_OTP_IMAP_APP_PASSWORD: ${{ secrets.E2E_OTP_IMAP_APP_PASSWORD }}
+
+      - name: Extract Requester session cookie
+        id: requester_cookie
+        run: |
+          COOKIE=$(node scripts/lighthouse-auth-cookie.mjs playwright/.auth/requester.json)
+          echo "::add-mask::$COOKIE"
+          echo "cookie=$COOKIE" >> "$GITHUB_OUTPUT"
+
+      - name: Extract Verifier session cookie
+        id: verifier_cookie
+        if: steps.verifier_auth.outcome == 'success'
+        run: |
+          COOKIE=$(node scripts/lighthouse-auth-cookie.mjs playwright/.auth/verifier.json)
+          echo "::add-mask::$COOKIE"
+          echo "cookie=$COOKIE" >> "$GITHUB_OUTPUT"
+
+      - name: Lighthouse — public pages
+        run: npx lhci autorun --config=lighthouserc.js
+
+      - name: Lighthouse — Requester dashboard
+        run: npx lhci autorun --config=lighthouse/requester.config.js
+        env:
+          LHCI_COOKIE: ${{ steps.requester_cookie.outputs.cookie }}
+
+      - name: Lighthouse — Verifier dashboard (best-effort)
+        if: steps.verifier_auth.outcome == 'success'
+        continue-on-error: true
+        run: npx lhci autorun --config=lighthouse/verifier.config.js
+        env:
+          LHCI_COOKIE: ${{ steps.verifier_cookie.outputs.cookie }}
+
+      - name: Upload Lighthouse reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-reports
+          path: .lighthouseci/
+          retention-days: 7

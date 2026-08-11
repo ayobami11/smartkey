@@ -11,7 +11,10 @@ const eslintConfig = defineConfig([
     rules: {
       // Allow `const { unwanted, ...rest } = obj` to discard a property
       // without triggering no-unused-vars on the discarded binding.
-      '@typescript-eslint/no-unused-vars': ['warn', { ignoreRestSiblings: true }],
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { ignoreRestSiblings: true },
+      ],
     },
   },
   // Override default ignores of eslint-config-next.
@@ -25,6 +28,10 @@ const eslintConfig = defineConfig([
     '.claude/worktrees/**',
     // Dev-only test/utility scripts — not held to production lint rules
     'scripts/**',
+    // Lighthouse CI config — CommonJS (require/module.exports) is what
+    // @lhci/cli's config loader expects; not application source.
+    'lighthouse/**',
+    'lighthouserc.js',
   ]),
 ]);
 
