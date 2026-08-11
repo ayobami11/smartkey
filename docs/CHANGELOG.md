@@ -8,6 +8,14 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-11 — Settings tabs are now deep-linkable via a `?tab=` query param
+
+- **Why**: CSO/Dean/Requester settings pages tracked the active tab with local `useState`, so a shared link or a page refresh always landed back on the first tab — no way to link someone directly to, say, the Dean's signature tab.
+- New `src/hooks/use-tab-query-state.ts`: a generic `useTabQueryState(defaultTab, validTabs)` hook backing the active tab with a `?tab=` URL param instead of local state (`router.replace` with `scroll: false`), falling back to `defaultTab` for a missing or invalid value.
+- All three settings views (`cso`, `dean`, `requester`) swapped their `useState<Section>` for this hook, passing their own valid-tab list (CSO: 4 tabs, Dean: 3, Requester: 2).
+- `useSearchParams()` (used inside the new hook) requires a `Suspense` boundary in the App Router, so each `settings/page.tsx` now wraps `SettingsView` in `<Suspense fallback={<SettingsSkeleton />}>`. New `src/components/smartkey/settings-skeleton.tsx` provides that fallback, matching the loading-region a11y pattern (`role="status"`, `aria-busy`, `aria-label`) already established elsewhere.
+- Verified with `npm run build` — all three settings routes still prerender as static (`○`), confirming the Suspense boundary satisfies Next.js's build-time requirement rather than only working at runtime.
+
 ### 2026-08-11 — Isolated and fixed real firefox/webkit E2E failures (chromium-only CI had never caught them)
 
 - **Why**: `docs/TESTING.md` notes CI only runs the `chromium` project — `firefox`/`webkit`/`mobile` are configured but never exercised. Ran the full suite against all three manually; a combined run hung for over an hour (Windows resource contention across three simultaneous browser engines, not a code issue — confirmed by isolating each project, which all completed normally on their own). Isolating them surfaced three real, previously-uncaught bugs.
