@@ -1,8 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-
 import { useMediaQuery } from '@/hooks/use-media-query';
+import { useTabQueryState } from '@/hooks/use-tab-query-state';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 import { AccountSettings } from '@/app/cso/settings/_components/account-settings';
@@ -21,7 +20,12 @@ const navSections: { id: Section; label: string }[] = [
 ];
 
 export const SettingsView = () => {
-  const [active, setActive] = useState<Section>('operational');
+  const [active, setActive] = useTabQueryState<Section>('operational', [
+    'operational',
+    'risk',
+    'notifications',
+    'account',
+  ]);
   const isDesktop = useMediaQuery('(min-width: 1024px)');
 
   return (
