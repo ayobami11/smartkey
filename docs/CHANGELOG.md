@@ -8,6 +8,13 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-11 — Settings tabs were fully broken; the previous "fix" masked it — replaced with nuqs
+
+- **Why**: reported as "breaks when the tab value is wrong and I try to navigate to a valid value." Reproducing it with direct browser automation (`playwright/.auth/cso.json` storageState, real navigation) showed the bug was much bigger than the report: clicking **any** tab did nothing, from a valid starting URL too — not just after an invalid `?tab=`. `useTabQueryState`'s `setActive` was calling `router.replace(...)` correctly (confirmed via a temporary `console.log` inside the callback: right target string, called every time), but neither `router.replace` nor `router.push` actually updated the URL or triggered a re-render — the active tab and the address bar both stayed frozen. A raw `window.history.pushState` + manually dispatched `popstate` event, by contrast, updated the UI correctly on the first try — proving the component logic itself was fine and isolating the fault to `next/navigation`'s router specifically failing on query-string-only navigations for these routes.
+- **Fix**: replaced the hand-rolled hook with [`nuqs`](https://nuqs.dev) (`useQueryState` + `parseAsStringLiteral(...).withDefault(...)`), a library purpose-built for exactly this "sync a piece of state with a URL search param under the Next.js App Router" problem, rather than continuing to debug or work around the router's behavior ourselves. Added `<NuqsAdapter>` to `src/app/layout.tsx` (required at the root). Deleted `src/hooks/use-tab-query-state.ts` — nothing else used it.
+- **Verified**: re-ran the exact reproduction script that first caught the bug (invalid tab → click a valid one; valid tab → click a different valid one; several switches in a row) against all three roles (CSO 4 tabs, Dean 3, Requester 2) — every case now updates both the active tab and the URL correctly. Full `chromium` E2E suite still green (two failures hit during verification — a different CSO OTP-mailbox timeout and one unrelated SSL blip — both cleared on retry with zero code-path overlap with this change).
+- **Not investigated further**: _why_ `next/navigation`'s router silently no-ops on these specific routes. Worth a closer look if the same symptom turns up elsewhere, but out of scope now that the dependency on it is gone for this feature.
+
 ### 2026-08-11 — Settings tabs are now deep-linkable via a `?tab=` query param
 
 - **Why**: CSO/Dean/Requester settings pages tracked the active tab with local `useState`, so a shared link or a page refresh always landed back on the first tab — no way to link someone directly to, say, the Dean's signature tab.
