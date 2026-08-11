@@ -25,6 +25,32 @@ Each entry: date, brief title, what changed, why.
 - **Result**: `firefox`, `webkit`, and `mobile` projects each run clean in isolation — 42 passed, 25 skipped (expected, data-dependent — same skips documented in the 2026-08-10 entries), 0 failed, on all three. `mobile` needed no fixes at all; it only ever failed as part of the resource-contended combined run.
 - **Known remaining flake, not fixed**: an intermittent `worker process did not exit within 300000ms after stop` warning during WebKit runs — pure post-test cleanup on Windows, self-recovers within a few minutes, confirmed zero impact on actual test results across every run it appeared in.
 
+### 2026-08-11 — Verified the CSO signature-mismatch review flow end-to-end; added a reusable local test harness
+
+- **Why**: a question about whether the CSO "review" on a signature mismatch is real or just
+  an audit-log notice had no verified answer — the mechanism is described in `docs/API.md`
+  and `docs/AI.md` but had never actually been exercised against a real held request.
+- **What was verified**, against the local Docker Supabase stack (never production): a Dean
+  submitting a genuinely mismatching signature via `POST /api/requests/hod-decision` produces
+  a real `HELD_SIGNATURE_MISMATCH` (request stays `PENDING_HOD`, a `SIGNATURE_MISMATCH` audit
+  row is written); `/cso/dashboard`'s "Signature mismatches" card and review dialog are real,
+  working UI (side-by-side reference/submitted images, an acknowledgement gate before
+  Decline/Approve enable, a persistent resolution confirmation); resolving it writes a second
+  real audit row and flips the request to a terminal state (`DECLINED` in this run).
+- **Method**: seeded a throwaway Dean/CSO/Requester and a pending weekend request locally,
+  used synthetic code-drawn signature images (not anyone's real signature), minted real
+  sessions via the admin `generateLink` + `verifyOtp` pattern (no email round trip needed),
+  and drove an actual headless browser against the real `/cso/dashboard` page.
+- **New**: `tests/manual/signature-mismatch-review/` — three reusable scripts
+  (`seed.mjs`, `trigger-mismatch.mjs`, `view-review-dialog.mjs`) plus a short `README.md` so
+  this can be re-run without rebuilding it from scratch. `seed.mjs` upserts rather than
+  deletes-and-recreates its test users — once one is referenced by an `audit_log` row, the
+  append-only FK permanently blocks deleting it, which is the immutability guarantee working
+  as designed, not a bug.
+- **Side effect**: neither Playwright's Chromium binary nor its OS-level deps were installed
+  in this environment; both now are (`npx playwright install chromium`,
+  `sudo npx playwright install-deps chromium`).
+
 ### 2026-08-10 — Fixed the last E2E failure: a broken wait condition that was silently skipping the axe scan, plus the real contrast bug it had been hiding
 
 - **Why**: `verifier/handover.spec.ts`'s "ready state: select-all…" test failed intermittently — traced to `beforeEach` waiting on the wrong signal. The page's `<h1>` (`handover-view.tsx:184-186`) reads `step === 'no-shift' ? 'Start shift' : 'Shift handover'`, so it shows "Shift handover" for **every** step except `'no-shift'` — including the transient `'loading'` step itself. `beforeEach` waited for that heading to be visible, which is true on the very first paint, so it never actually waited for the shift/outstanding-keys fetch to resolve. The "ready state" test's own `selectAll.isVisible().catch(() => false)` check (a non-retrying, point-in-time call — see [Playwright docs](https://playwright.dev/docs/api/class-locator#locator-is-visible)) then sometimes ran before the real content had rendered, took the wrong branch, and failed asserting on empty-state copy against a page that actually had an outstanding key.
