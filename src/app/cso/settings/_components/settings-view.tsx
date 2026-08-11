@@ -1,7 +1,8 @@
 'use client';
 
+import { parseAsStringLiteral, useQueryState } from 'nuqs';
+
 import { useMediaQuery } from '@/hooks/use-media-query';
-import { useTabQueryState } from '@/hooks/use-tab-query-state';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 import { AccountSettings } from '@/app/cso/settings/_components/account-settings';
@@ -20,12 +21,12 @@ const navSections: { id: Section; label: string }[] = [
 ];
 
 export const SettingsView = () => {
-  const [active, setActive] = useTabQueryState<Section>('operational', [
-    'operational',
-    'risk',
-    'notifications',
-    'account',
-  ]);
+  const [active, setActive] = useQueryState(
+    'tab',
+    parseAsStringLiteral(navSections.map((s) => s.id)).withDefault(
+      'operational'
+    )
+  );
   const isDesktop = useMediaQuery('(min-width: 1024px)');
 
   return (
