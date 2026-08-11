@@ -25,7 +25,13 @@ test.describe('Public forgot-password page', () => {
     page,
   }) => {
     const emailField = page.getByLabel(/institutional email/i);
-    await emailField.fill('not-an-email');
+    // pressSequentially, not fill: WebKit applies input[type=email]'s native
+    // value-sanitization algorithm on a bulk .fill() value assignment and
+    // silently clears anything that doesn't look like an email, which made
+    // this test check an empty (spuriously "valid") field instead of the
+    // intended invalid one. Real keystroke-by-keystroke input (what a user
+    // actually does) doesn't trigger that sanitization in any engine.
+    await emailField.pressSequentially('not-an-email');
     await page.getByRole('button', { name: /send reset link/i }).click();
 
     // The native type="email" input blocks submission before either React
@@ -40,9 +46,13 @@ test.describe('Public forgot-password page', () => {
   test('submitting a well-formed email always shows the success state', async ({
     page,
   }) => {
+    // pressSequentially, not fill: see the note in the test above — a bulk
+    // .fill() on this field's first interaction with a freshly-loaded page
+    // has been observed to silently no-op in WebKit, which meant the form
+    // submitted an empty email and never reached the success state.
     await page
       .getByLabel(/institutional email/i)
-      .fill('e2e-test-nonexistent@unilag.edu.ng');
+      .pressSequentially('e2e-test-nonexistent@unilag.edu.ng');
     await page.getByRole('button', { name: /send reset link/i }).click();
 
     // Generous timeout: this round-trips through the Supabase admin client
