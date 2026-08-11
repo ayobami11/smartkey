@@ -30,9 +30,14 @@ test.describe('CSO admin-keys collector management', () => {
     }
 
     await firstKeyCard.click();
+    // Default 5s timeout: this page runs a key-details fetch followed by a
+    // separate collector-slots/candidates fetch, and can take longer than
+    // that under parallel worker load — observed timing out in firefox runs
+    // (4 workers) while passing cleanly in isolation. 15s matches the
+    // precedent already used for forgot-password's similarly slow flow.
     await expect(
       page.getByRole('heading', { name: /authorised collectors/i })
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/of 3 slots filled/i)).toBeVisible();
 
     const results = await new AxeBuilder({ page }).analyze();
@@ -50,9 +55,14 @@ test.describe('CSO admin-keys collector management', () => {
       return;
     }
     await firstKeyCard.click();
+    // Default 5s timeout: this page runs a key-details fetch followed by a
+    // separate collector-slots/candidates fetch, and can take longer than
+    // that under parallel worker load — observed timing out in firefox runs
+    // (4 workers) while passing cleanly in isolation. 15s matches the
+    // precedent already used for forgot-password's similarly slow flow.
     await expect(
       page.getByRole('heading', { name: /authorised collectors/i })
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 15_000 });
 
     const addButton = page.getByRole('button', { name: /add collector/i });
     if (!(await addButton.isVisible().catch(() => false))) {
@@ -84,9 +94,14 @@ test.describe('CSO admin-keys collector management', () => {
       return;
     }
     await firstKeyCard.click();
+    // Default 5s timeout: this page runs a key-details fetch followed by a
+    // separate collector-slots/candidates fetch, and can take longer than
+    // that under parallel worker load — observed timing out in firefox runs
+    // (4 workers) while passing cleanly in isolation. 15s matches the
+    // precedent already used for forgot-password's similarly slow flow.
     await expect(
       page.getByRole('heading', { name: /authorised collectors/i })
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 15_000 });
 
     const removeButton = page
       .getByRole('button', { name: /^remove /i })
