@@ -839,6 +839,62 @@ Zod validates the shape (exactly 5 rules, no duplicate `rule_key`, every canonic
 
 ---
 
+### GET /api/admin/operational-config
+
+**File**: `src/app/api/admin/operational-config/route.ts`
+**Roles**: CSO
+
+Hydrates the `/cso/settings` "Operational" screen (previously a static mockup — see `docs/REVIEW_ACTIONS_BACKEND.md`). Returns the 2 `zone_hours` rows and the `operational_config` singleton, all times as `"HH:MM"`.
+
+**Response `data`**:
+
+```json
+{
+  "zones": [
+    {
+      "zone": "NEW_SENATE",
+      "weekday_open": "06:00",
+      "weekday_close": "22:00",
+      "weekend_closed": true,
+      "weekend_open": "08:00",
+      "weekend_close": "18:00"
+    }
+  ],
+  "return_deadline_time": "17:00",
+  "code_expiry_minutes": 10
+}
+```
+
+**Errors**: `401` unauthenticated · `403` not CSO · `500` config read failure
+
+---
+
+### PATCH /api/admin/operational-config
+
+**File**: `src/app/api/admin/operational-config/route.ts`
+**Roles**: CSO
+**RPC**: `update_operational_config(zone_hours, return_deadline_time, code_expiry_minutes)`
+
+| Field                        | Type                                          | Required |
+| ---------------------------- | --------------------------------------------- | -------- |
+| `zones`                      | array of exactly 2 zone-hours objects (below) | yes      |
+| `zones[].zone`               | `'NEW_SENATE' \| 'OLD_SENATE'`                | yes      |
+| `zones[].weekday_open/close` | `"HH:MM"`                                     | yes      |
+| `zones[].weekend_closed`     | `boolean`                                     | yes      |
+| `zones[].weekend_open/close` | `"HH:MM"`, required unless `weekend_closed`   | no       |
+| `return_deadline_time`       | `"HH:MM"`                                     | yes      |
+| `code_expiry_minutes`        | `number` (5–60)                               | yes      |
+
+Zod validates the shape (exactly 2 zones covering both enum values, `HH:MM` format, weekend hours present when not closed) before the RPC runs; the RPC re-validates the same invariants server-side, plus that each zone's open time precedes its close time. One save = one `OPERATIONAL_CONFIG_UPDATED` audit entry. Takes effect on the next `POST /api/requests/submit` / code-generation call — requests already in progress keep their original deadline and code expiry.
+
+Only the **collection**-code expiry is affected — the separate return-code expiry (`request_return`/`request_return_guest`, 15 minutes) is untouched.
+
+**Response `data`**: echoes the saved `{ zones, return_deadline_time, code_expiry_minutes }`.
+
+**Errors**: `401` unauthenticated · `403` not CSO · `422` validation (zod, or RPC `INVALID_ZONE_HOURS`/`INVALID_CONFIG`) · `500` RPC failure
+
+---
+
 ## 5. Shifts and Handover
 
 ### POST /api/shifts/start
@@ -1163,6 +1219,7 @@ If `passed = false`, the caller raises a CSO alert and holds the approval.
 | `add_report_comment`            | POST /api/reports/[id]/comments                      | yes                     |
 | `provision_user`                | POST /api/admin/users                                | yes                     |
 | `update_risk_config`            | PATCH /api/admin/risk-rules                          | yes                     |
+| `update_operational_config`     | PATCH /api/admin/operational-config                  | yes                     |
 | `mark_key_overdue`              | cron only (`pg_cron`, hourly) — no route caller      | yes — per key           |
 | `schedule_pending_shift_report` | cron only (`pg_cron`, daily 18:00) — no route caller | yes — when a CSO exists |
 

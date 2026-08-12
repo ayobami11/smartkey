@@ -15,9 +15,7 @@ type Props = {
 export const CodeCountdown = ({ countdown, codeExpiresAt }: Props) => {
   const [now, setNow] = useState(() => Date.now());
   const [lifetimeMs] = useState(() =>
-    codeExpiresAt
-      ? Math.max(0, new Date(codeExpiresAt).getTime() - Date.now())
-      : 0
+    codeExpiresAt ? new Date(codeExpiresAt).getTime() - Date.now() : 0
   );
 
   useEffect(() => {
@@ -25,15 +23,18 @@ export const CodeCountdown = ({ countdown, codeExpiresAt }: Props) => {
     return () => clearInterval(id);
   }, []);
 
-  if (!codeExpiresAt || lifetimeMs === 0) return null;
+  if (!codeExpiresAt) return null;
 
-  const progressValue = Math.max(
-    0,
-    Math.min(
-      100,
-      ((new Date(codeExpiresAt).getTime() - now) / lifetimeMs) * 100
-    )
-  );
+  const progressValue =
+    lifetimeMs <= 0
+      ? 0
+      : Math.max(
+          0,
+          Math.min(
+            100,
+            ((new Date(codeExpiresAt).getTime() - now) / lifetimeMs) * 100
+          )
+        );
 
   return (
     <>

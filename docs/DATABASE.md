@@ -187,6 +187,25 @@ CSO-editable LOW/MEDIUM/HIGH tier boundaries. Singleton table — fixed PK `0000
 - `high_min` int, `CHECK (high_min > medium_min)` — inclusive lower bound for HIGH
 - `updated_at` timestamptz
 
+### zone_hours
+
+Per-zone access hours, backing the `/cso/settings` "Operational" tab (previously a static mockup. One row per `zone` value, seeded for both. RLS: `SELECT` for **both `anon` and `authenticated`** — deliberately wider than `risk_rule_config`, since the unauthenticated guest weekend form (`/weekend-access`) needs the same return-deadline default the requester dashboard uses, and operational hours aren't sensitive the way risk weights are. No write policy for any role; writes go through `update_operational_config` only.
+
+- `zone` `public.zone` PK
+- `weekday_open` / `weekday_close` time, not null
+- `weekend_closed` boolean, default true
+- `weekend_open` / `weekend_close` time, nullable (null while `weekend_closed`)
+- `updated_at` timestamptz
+
+### operational_config
+
+CSO-editable return deadline and code-expiry minutes. Singleton table — fixed PK `00000000-0000-0000-0000-000000000002` plus a `CHECK (id = '...')`, same trick as `risk_tier_config` but a distinct fixed UUID. Same RLS shape as `zone_hours` (read for `anon` and `authenticated`; write via RPC only).
+
+- `id` UUID PK, fixed value
+- `return_deadline_time` time, not null, default `17:00`
+- `code_expiry_minutes` int, `CHECK (code_expiry_minutes BETWEEN 5 AND 60)`, default 10 — governs the 6-digit **collection** code only. The separate **return**-code expiry (`request_return`/`request_return_guest`, 15 minutes) is untouched by this setting.
+- `updated_at` timestamptz
+
 ## RPCs (Postgres functions)
 
 These wrap multi-table mutations in transactions and enforce business rules.
@@ -210,6 +229,7 @@ These wrap multi-table mutations in transactions and enforce business rules.
 - `add_report_comment(report_id, text)` — inserts immutable comment, audit entry.
 - `provision_user(name, email, role, department_id?)` — creates profile, generates activation token, queues email, audit entry.
 - `update_risk_config(rules, medium_min, high_min)` — CSO-only. `rules` is a JSON array of exactly 5 `{rule_key, weight, enabled}` objects, one per `risk_rule_key`. Updates `risk_rule_config` and the `risk_tier_config` singleton in one transaction, writes one `RISK_CONFIG_UPDATED` audit entry (not one per rule). Raises `INVALID_TIER_BOUNDS` if `high_min <= medium_min`, `INVALID_RULES` if `rules` isn't exactly 5 entries or contains an unknown `rule_key`.
+- `update_operational_config(zone_hours, return_deadline_time, code_expiry_minutes)` — CSO-only. `zone_hours` is a JSON array of exactly 2 `{zone, weekday_open, weekday_close, weekend_closed, weekend_open, weekend_close}` objects, one per `public.zone` value. Updates `zone_hours` and the `operational_config` singleton in one transaction, writes one `OPERATIONAL_CONFIG_UPDATED` audit entry. Raises `INVALID_ZONE_HOURS` for a bad/incomplete zone entry (open ≥ close, or missing weekend hours while not closed) and `INVALID_CONFIG` for an out-of-range `code_expiry_minutes` or a null `return_deadline_time`. `create_request`, `generate_weekend_code`, and `generate_guest_weekend_code` all read `code_expiry_minutes` from here instead of each hardcoding their own expiry.
 
 ### External (guest) weekend RPCs
 
