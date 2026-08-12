@@ -8,6 +8,39 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-12 — CSO settings: risk rules polish, tab-list layout-shift fix, small UX fixes
+
+- **Why**: a pass over `/cso/settings` surfaced several small correctness and layout bugs while
+  making UI-only adjustments to the Risk rules screen (frontend scope; no `src/app/api/` or
+  database changes).
+- **Risk rules table**: a rule's Weight input now disables when its Enabled switch is off, and the
+  switch itself disables when its weight is out of range (1–10), so an invalid weight can't be
+  saved while enabled. Weight and both tier-threshold inputs (`Low ≤` / `Medium ≤`) switched from
+  `type="number"` to `type="text"` + `inputMode="numeric"`: number inputs don't support
+  `setSelectionRange`, so React can't restore cursor position after each controlled re-render,
+  which made a cleared field (stored as `0`) unreliably concatenate with the next typed digit
+  instead of being replaced. Both tier inputs now also validate to 0–10, matching the weight
+  range, with inline errors and a shared `parseDigitInput` helper (extracted from the original
+  per-field duplicate logic). Table cells are vertically centered via flexbox (`vertical-align`
+  centered the whole cell content block, not the input itself, once the reserved-space error text
+  added asymmetric height); the loading skeleton's structure now matches the real rows so there's
+  no shift when data arrives.
+- **Settings tab list**: fixed a real layout-shift bug — the tab list rendered on top of the page
+  and then jumped to the left sidebar shortly after load. Cause: the `<Tabs>` root's flex-direction
+  depends on `orientation`, which depends on a `useMediaQuery` result that's only known after
+  hydration (defaults to the mobile/horizontal layout on first render regardless of actual viewport
+  width). Fixed by rendering a CSS-breakpoint-only skeleton (`flex-col lg:flex-row`, resolved by
+  the browser with no JS timing dependency) until mount, then swapping to the real `<Tabs>`. Mount
+  detection uses `useSyncExternalStore`, not `useState`+`useEffect` — the latter tripped the
+  `react-hooks/set-state-in-effect` lint rule (a real cascading-render smell), and
+  `useSyncExternalStore` is the React-recommended pattern for a server/client snapshot split like
+  this.
+- **Small fixes**: the "Update password" button (`change-password-form.tsx`) now stays disabled
+  until all three password fields are filled. The avatar dropdown menu items
+  (`dashboard-header-avatar.tsx`) now show `cursor-pointer` on hover — shadcn's `DropdownMenuItem`
+  primitive defaults to `cursor-default`, overridden per-item here rather than editing the
+  primitive directly.
+
 ### 2026-08-12 — Fixed every pg_net cron job: weekend reminders have never actually sent
 
 - **Why**: while manually triggering the new `daily-digest` webhook to test it end-to-end, the

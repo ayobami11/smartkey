@@ -108,7 +108,7 @@ export const DashboardHeaderAvatar = ({
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
+        <DropdownMenuItem asChild className="cursor-pointer">
           <a href={settingsHref}>
             <SettingsIcon className="size-4" aria-hidden="true" />
             Settings
@@ -119,6 +119,7 @@ export const DashboardHeaderAvatar = ({
           onClick={handleLogout}
           disabled={isLoggingOut}
           variant="destructive"
+          className="cursor-pointer"
         >
           <LogOutIcon className="size-4" aria-hidden="true" />
           {isLoggingOut ? 'Signing out...' : 'Sign out'}

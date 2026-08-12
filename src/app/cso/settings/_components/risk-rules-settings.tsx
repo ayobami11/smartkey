@@ -112,11 +112,30 @@ export const RiskRulesSettings = () => {
     }
   };
 
+  // The field displays a literal "0" once cleared, so the next keystroke
+  // lands next to it as "05" or "50" depending on which side the browser
+  // puts the cursor after a programmatic value update. Whenever the raw
+  // value or the previously stored number was empty or 0, drop exactly one
+  // leftover "0" so the typed digit replaces it instead of extending it
+  // into a two-digit number.
+  const parseDigitInput = (value: string, previousValue: number): number => {
+    const digitsOnly = value.replace(/\D/g, '');
+    if (digitsOnly === '') return 0;
+    const wasEmptyOrZero = value === '' || value === '0' || previousValue === 0;
+    const digits =
+      wasEmptyOrZero && digitsOnly.length > 1
+        ? digitsOnly.replace('0', '')
+        : digitsOnly;
+    return Number(digits.replace(/^0+(?=\d)/, ''));
+  };
+
   const handleWeightChange = (ruleKey: RuleKey, value: string) => {
-    const parsed = Number(value);
-    if (Number.isNaN(parsed)) return;
     setRules((prev) =>
-      prev.map((r) => (r.rule_key === ruleKey ? { ...r, weight: parsed } : r))
+      prev.map((r) => {
+        if (r.rule_key !== ruleKey) return r;
+        const parsed = parseDigitInput(value, r.weight);
+        return Number.isNaN(parsed) ? r : { ...r, weight: parsed };
+      })
     );
     markEdited();
   };
@@ -135,20 +154,25 @@ export const RiskRulesSettings = () => {
   const mediumMax = tier.high_min - 1;
 
   const handleLowMaxChange = (value: string) => {
-    const parsed = Number(value);
+    const parsed = parseDigitInput(value, lowMax);
     if (Number.isNaN(parsed)) return;
     setTier((prev) => ({ ...prev, medium_min: parsed + 1 }));
     markEdited();
   };
 
   const handleMediumMaxChange = (value: string) => {
-    const parsed = Number(value);
+    const parsed = parseDigitInput(value, mediumMax);
     if (Number.isNaN(parsed)) return;
     setTier((prev) => ({ ...prev, high_min: parsed + 1 }));
     markEdited();
   };
 
-  const isTierValid = tier.medium_min >= 1 && tier.high_min > tier.medium_min;
+  const isLowInRange = lowMax >= 0 && lowMax <= 10;
+  const isMediumInRange = mediumMax >= 0 && mediumMax <= 10;
+  const isTierRelationValid =
+    tier.medium_min >= 1 && tier.high_min > tier.medium_min;
+  const isTierValid = isTierRelationValid && isLowInRange && isMediumInRange;
+  const areWeightsValid = rules.every((r) => r.weight >= 1 && r.weight <= 10);
   const isDirty =
     JSON.stringify(rules) !== JSON.stringify(savedRules) ||
     JSON.stringify(tier) !== JSON.stringify(savedTier);
@@ -252,56 +276,77 @@ export const RiskRulesSettings = () => {
                     }
                   >
                     <td className="px-4 py-3">
-                      <Skeleton className="h-4 w-40" />
-                      <Skeleton className="mt-1.5 h-3 w-56" />
+                      <div className="flex h-full flex-col justify-center">
+                        <Skeleton className="h-4 w-40" />
+                        <Skeleton className="mt-1.5 h-3 w-56" />
+                      </div>
                     </td>
                     <td className="px-4 py-3">
-                      <Skeleton className="h-9 w-20 rounded-md" />
+                      <div className="flex h-full flex-col justify-center">
+                        <Skeleton className="h-9 w-20 rounded-md" />
+                      </div>
                     </td>
                     <td className="px-4 py-3">
-                      <Skeleton className="h-5 w-9 rounded-full" />
+                      <div className="flex h-full items-center">
+                        <Skeleton className="h-5 w-9 rounded-full" />
+                      </div>
                     </td>
                   </tr>
                 ))
               : rules.map((rule, idx) => {
                   const meta = RULE_META[rule.rule_key];
+                  const weightInvalid = rule.weight < 1 || rule.weight > 10;
+                  const isLast = idx === rules.length - 1;
                   return (
                     <tr
                       key={rule.rule_key}
-                      className={
-                        idx !== rules.length - 1 ? 'border-b border-border' : ''
-                      }
+                      className={isLast ? '' : 'border-b border-border'}
                     >
                       <td className="px-4 py-3">
-                        <p className="font-medium text-foreground">
-                          {meta.name}
-                        </p>
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                          {meta.description}
-                        </p>
+                        <div className="flex h-full flex-col justify-center">
+                          <p className="font-medium text-foreground">
+                            {meta.name}
+                          </p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {meta.description}
+                          </p>
+                        </div>
                       </td>
                       <td className="px-4 py-3">
-                        <Input
-                          type="number"
-                          value={rule.weight}
-                          min={1}
-                          max={10}
-                          className="w-20"
-                          aria-label={`Weight for ${meta.name}`}
-                          onChange={(e) =>
-                            handleWeightChange(rule.rule_key, e.target.value)
-                          }
-                        />
+                        <div className="flex h-full flex-col justify-center">
+                          <Input
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            maxLength={2}
+                            value={rule.weight}
+                            className="w-20"
+                            aria-label={`Weight for ${meta.name}`}
+                            aria-invalid={weightInvalid}
+                            disabled={!rule.enabled}
+                            onChange={(e) =>
+                              handleWeightChange(rule.rule_key, e.target.value)
+                            }
+                          />
+                          {weightInvalid && (
+                            <p className="mt-1 text-xs text-destructive">
+                              1 - 10 only
+                            </p>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3">
-                        <Switch
-                          id={rule.rule_key}
-                          checked={rule.enabled}
-                          aria-label={`Enable ${meta.name}`}
-                          onCheckedChange={(checked) =>
-                            handleEnabledChange(rule.rule_key, checked)
-                          }
-                        />
+                        <div className="flex h-full items-center">
+                          <Switch
+                            id={rule.rule_key}
+                            checked={rule.enabled}
+                            aria-label={`Enable ${meta.name}`}
+                            disabled={weightInvalid}
+                            onCheckedChange={(checked) =>
+                              handleEnabledChange(rule.rule_key, checked)
+                            }
+                          />
+                        </div>
                       </td>
                     </tr>
                   );
@@ -328,11 +373,13 @@ export const RiskRulesSettings = () => {
               </Label>
               <Input
                 id="tier-low"
-                type="number"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={2}
                 value={lowMax}
-                min={0}
                 className="w-20"
-                aria-invalid={!isTierValid}
+                aria-invalid={!isLowInRange || !isTierRelationValid}
                 onChange={(e) => handleLowMaxChange(e.target.value)}
               />
             </div>
@@ -342,11 +389,13 @@ export const RiskRulesSettings = () => {
               </Label>
               <Input
                 id="tier-medium"
-                type="number"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={2}
                 value={mediumMax}
-                min={lowMax + 1}
                 className="w-20"
-                aria-invalid={!isTierValid}
+                aria-invalid={!isMediumInRange || !isTierRelationValid}
                 onChange={(e) => handleMediumMaxChange(e.target.value)}
               />
             </div>
@@ -360,7 +409,9 @@ export const RiskRulesSettings = () => {
         )}
         {!isTierValid && (
           <p className="text-xs text-destructive">
-            &quot;Medium ≤&quot; must be greater than &quot;Low ≤&quot;.
+            {!isLowInRange || !isMediumInRange
+              ? 'Tier values must be between 0 and 10.'
+              : '"Medium ≤" must be greater than "Low ≤".'}
           </p>
         )}
         <p className="text-xs text-muted-foreground">
@@ -404,6 +455,7 @@ export const RiskRulesSettings = () => {
             loadState !== 'ready' ||
             !isDirty ||
             !isTierValid ||
+            !areWeightsValid ||
             saveState === 'submitting'
           }
           aria-busy={saveState === 'submitting'}
