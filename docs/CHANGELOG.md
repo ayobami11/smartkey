@@ -8,6 +8,11 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-12 — Disabled the post-deploy auto-rollback job
+
+- **Why**: the first real production smoke-test failure since this gate was armed tripped the rollback job (`vars.SMOKE_AUTO_ROLLBACK == 'true'`), which then itself failed with `VERCEL_TOKEN is not configured` — a hard CI error instead of the intended skip, on top of the underlying smoke-test failure (a requester test-account credential mismatch, tracked in `docs/REVIEW_ACTIONS_BACKEND.md`, unrelated to any code change).
+- Hard-disabled `.github/workflows/post-deploy-smoke.yml`'s `rollback` job (`if: false && ...`) rather than relying on the `SMOKE_AUTO_ROLLBACK` repository variable — that variable isn't visible or changeable from this codebase, so the code-level guard is the only reviewable way to actually turn it off. The `promote` job already fails the same way if `VERCEL_TOKEN` is ever missing while `SMOKE_AUTO_PROMOTE` is on; not touched here since it hasn't misfired.
+
 ### 2026-08-12 — CSO Operational settings tab: real backend (was a static mockup)
 
 - **Why**: a settings-tab audit found the CSO "Operational" tab — zone hours, return deadline, code expiry — was pure UI: hardcoded `defaultValue`s, a "Save" button with no handler, no backing table anywhere.

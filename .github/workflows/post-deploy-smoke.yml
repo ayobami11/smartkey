@@ -163,7 +163,10 @@ jobs:
     needs: smoke
     runs-on: ubuntu-latest
     # Opt-in, and only for production: rolling back a preview achieves nothing.
+    # Hard-disabled for now: VERCEL_TOKEN is not configured, so this job can
+    # only ever fail loudly instead of skipping — see docs/CHANGELOG.md.
     if: >-
+      false &&
       failure() &&
       vars.SMOKE_AUTO_ROLLBACK == 'true' &&
       github.event.deployment_status.environment == 'Production'
