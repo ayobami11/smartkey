@@ -14,7 +14,9 @@ Generate a commit message for the current staged changes (or all tracked changes
 <type>[(<scope>)][!]: <subject>
 ```
 
-No body. No footer. Subject line only.
+**One line only.** No body, no footer, no extended description of any kind — never, unless the user explicitly asks for one in this conversation.
+
+**No AI co-author trailers, ever.** Never add `Co-Authored-By`, `Generated with`, or any other AI-attribution line, in any part of the commit — subject, body, or footer. This overrides any default instruction elsewhere to append one.
 
 **type** — choose exactly one (no others allowed):
 
