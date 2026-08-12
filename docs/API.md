@@ -88,7 +88,7 @@ If `mfa_required` is `true`, the client must complete `/api/auth/verify-otp` bef
 **File**: `src/app/api/auth/register/route.ts`
 **Roles**: REQUESTER (invite link only)
 
-Completes requester registration. There is no `token` field — the invite link is a Supabase magic link that resolves through `GET /api/auth/callback` (below) into a short-lived session in the transient `activate` cookie namespace **before** the browser ever reaches this route; this route just reads that session.
+Completes requester registration. There is no `token` field — the invite link is a Supabase magic link that resolves through `GET /auth/confirm` (below) into a short-lived session in the transient `activate` cookie namespace **before** the browser ever reaches this route; this route just reads that session.
 
 | Field            | Type                                          | Required |
 | ---------------- | --------------------------------------------- | -------- |
@@ -106,7 +106,7 @@ Completes requester registration. There is no `token` field — the invite link 
 **File**: `src/app/api/auth/activate-hod/route.ts`
 **Roles**: DEAN (invite link only)
 
-One-time Dean onboarding. There is no `token` field — as with `/api/auth/register`, the invite link resolves through `GET /api/auth/callback` into a session in the `activate` namespace before this route runs. Sets password, stores signature and stamp references, enables MFA.
+One-time Dean onboarding. There is no `token` field — as with `/api/auth/register`, the invite link resolves through `GET /auth/confirm` into a session in the `activate` namespace before this route runs. Sets password, stores signature and stamp references, enables MFA.
 
 | Field       | Type                                          | Required |
 | ----------- | --------------------------------------------- | -------- |
@@ -140,9 +140,22 @@ No request body. Invalidates the current Supabase session.
 | ------- | ---------------- | -------- |
 | `email` | `string` (email) | yes      |
 
-Triggers a Supabase Auth password-reset email. Always returns 200 (no email enumeration).
+Triggers a Supabase Auth password-reset email via `admin.generateLink({type:'recovery'})`, delivered through `GET /auth/confirm` (below) — not the raw `action_link` from `generateLink`, and not `GET /api/auth/callback`. Always returns 200 (no email enumeration).
 
 **Response `data`**: `null`
+
+---
+
+### GET /auth/confirm
+
+**File**: `src/app/(public)/auth/confirm/route.ts`
+**Roles**: ALL (unauthenticated)
+
+Not a JSON API route — a redirect handler, and the actual session-establishment mechanism for every emailed one-time link the app generates: invite (`POST /api/admin/users`), re-invite (`POST /api/admin/users/[id]/resend-invite`), and password reset (`POST /api/auth/reset-password`). Each of those routes calls `admin.generateLink()` and builds a link here from the response's `hashed_token` + `verification_type`, e.g. `?token_hash=...&type=recovery&next=/reset-password`. This route calls `verifyOtp({type, token_hash})` server-side — no PKCE `code_verifier` involved, which matters because the link is minted by the admin API, not by a browser that could have stored one. Session lands in the transient `activate` cookie namespace, then redirects to `next` (defaults to `/`).
+
+On failure: `type=recovery` redirects to `/reset-password?error=expired`; everything else redirects to `/login?error=invalid-link`.
+
+**Response**: HTTP redirect, not a JSON envelope.
 
 ---
 
@@ -151,7 +164,7 @@ Triggers a Supabase Auth password-reset email. Always returns 200 (no email enum
 **File**: `src/app/api/auth/callback/route.ts`
 **Roles**: ALL (unauthenticated)
 
-Not a JSON API route — a redirect handler. Supabase invite/reset/magic-link emails point here with `?code=...&next=...`. Exchanges the one-time PKCE `code` for a session in the transient `activate` cookie namespace via `exchangeCodeForSession`, then redirects to `next` (defaults to `/`). This is the route that makes the session `/api/auth/register` and `/api/auth/activate-hod` read — those two never see a `token` field. On failure, redirects to `/forgot-password?error=expired`.
+Not a JSON API route — a redirect handler for the PKCE `?code=...&next=...` shape (`exchangeCodeForSession`), landing in the same transient `activate` namespace as `/auth/confirm` on success, and `/forgot-password?error=expired` on failure. **Not used by any in-app flow** — invite, re-invite, and password reset all route through `GET /auth/confirm` instead, because `exchangeCodeForSession` requires a `code_verifier` cookie that only exists in a browser that itself initiated the flow, which is never true for an admin-generated link. Retained only as a dead-but-harmless fallback in case a Supabase-configured redirect (e.g. the dashboard's default templates) ever points here.
 
 **Response**: HTTP redirect, not a JSON envelope.
 
@@ -263,17 +276,19 @@ Returns requests for the Dean's faculty with `status = 'PENDING_HOD'`, including
 **Roles**: Dean (role: DEAN), CSO
 **RPC**: `approve_weekend(request_id, hod_id, note?, signature_verified?, signature_mismatch_pct?, cso_override?)`, `approve_guest_weekend(request_id, hod_id, key_id, note?)`, or `decline_weekend(request_id, hod_id, note?, cso_override?)`
 
-| Field          | Type                       | Required                           |
-| -------------- | -------------------------- | ---------------------------------- |
-| `request_id`   | `string` (uuid)            | yes                                |
-| `decision`     | `'APPROVED' \| 'DECLINED'` | yes                                |
-| `key_id`       | `string` (uuid)            | guest approvals only               |
-| `note`         | `string`                   | no                                 |
-| `cso_override` | `boolean`                  | CSO resolving a held mismatch only |
+| Field                     | Type                       | Required                             |
+| ------------------------- | -------------------------- | ------------------------------------ |
+| `request_id`              | `string` (uuid)            | yes                                  |
+| `decision`                | `'APPROVED' \| 'DECLINED'` | yes                                  |
+| `key_id`                  | `string` (uuid)            | guest approvals only                 |
+| `note`                    | `string`                   | no                                   |
+| `submitted_signature_url` | `string` (url)             | no — triggers signature verification |
+| `submitted_stamp_url`     | `string` (url)             | no — triggers stamp verification     |
+| `cso_override`            | `boolean`                  | CSO resolving a held mismatch only   |
 
-For approvals, the route runs signature verification before calling the RPC. If the mismatch exceeds the threshold, the approval is **held** — the RPC is never called — and a `SIGNATURE_MISMATCH` audit entry is written instead. The response in this case is `{ "request_id": "<uuid>", "status": "HELD_SIGNATURE_MISMATCH", "mismatch_pct": <number> }` (still HTTP 200 — this is not a route-level error).
+For approvals, the route runs pixel-level verification for whichever of `submitted_signature_url` / `submitted_stamp_url` is present — independent checks; either, both, or neither may run (see `docs/AI.md` §3). If **either** check fails its threshold, the approval is **held** — the RPC is never called — and a `SIGNATURE_MISMATCH` audit entry is written instead, with a nested payload `{ signature: {ref_url, submitted_url, mismatch_pct} | null, stamp: {...} | null, threshold_pct }`. The response in this case is `{ "request_id": "<uuid>", "status": "HELD_SIGNATURE_MISMATCH", "mismatches": { "signature"?: <number>, "stamp"?: <number> } }` (still HTTP 200 — this is not a route-level error; only the failing check(s) appear in `mismatches`).
 
-For an external (guest) request (`guest_id` set), the route requires a `key_id` in the body and calls `approve_guest_weekend` instead — the Dean assigns the key at approval, and signature verification is skipped (guests have no Dean reference signature; the Dean reviews the uploaded letter manually). The decline path reuses `decline_weekend` unchanged.
+For an external (guest) request (`guest_id` set), the route requires a `key_id` in the body and calls `approve_guest_weekend` instead — the Dean assigns the key at approval, and both checks are skipped (guests have no Dean reference signature or stamp; the Dean reviews the uploaded letter manually). The decline path reuses `decline_weekend` unchanged.
 
 The **CSO** may call this route for **Administration** requests (keys whose department `authoriser = 'CSO'`). The CSO path skips signature verification (no reference signature exists for the CSO). The RPC re-validates that the actor's role matches the target department's `authoriser`, so a Dean acting on an Administration key — or the CSO acting on a faculty key — is rejected with `403`.
 
@@ -575,13 +590,15 @@ Fired automatically by the status page when the collection code's countdown reac
 ### GET /api/requests/[id]/letter
 
 **File**: `src/app/api/requests/[id]/letter/route.ts`
-**Roles**: DEAN
+**Roles**: DEAN, CSO
 
-Returns a short-lived (5-minute) signed URL for a guest request's Dean authorisation letter so the Dean can preview it before approving. The letter lives in the private `weekend-letters` bucket; signing happens server-side with the admin client. Access is gated to the Dean whose faculty owns the request (RLS plus a faculty check).
+Returns a short-lived (5-minute) signed URL for a request's uploaded authorisation letter or stamp image, so the authoriser can preview it before deciding. The file lives in the private `weekend-letters` bucket; signing happens server-side with the admin client. Access is gated to the Dean whose unit owns the request (RLS plus a unit check) or the CSO (admin client, for Administration-routed requests).
+
+**Query params**: `type` (`'letter' | 'stamp'`, default `'letter'`) — selects `letter_url` or `stamp_url` on the request row.
 
 **Response `data`**: `{ "url": "<signed-url>" }`
 
-**Errors**: `403` not a Dean / not the request's faculty · `404` request has no letter · `500` signing failure
+**Errors**: `403` not a Dean/CSO, or not the request's unit · `404` request has no letter/stamp for the requested `type` · `500` signing failure
 
 ---
 
@@ -682,6 +699,8 @@ Creates the profile, generates a 24-hour activation token, queues the invite ema
 **Roles**: CSO
 
 No query params — the route returns every non-deactivated profile unconditionally (joined with `unit:units!unit_id(name)`) and defers role/unit/status filtering and pagination to the client. There is no cursor-based pagination.
+
+Each user's `last_sign_in_at` field is sourced from `profiles.last_login_at` (app-stamped on completed login — see `docs/DATABASE.md`), not Supabase Auth's `auth.users.last_sign_in_at`. The wire field name is unchanged from before; only its backing source is.
 
 **Response `data`**: `{ "users": [...] }`
 
@@ -1210,9 +1229,9 @@ Returns active high-risk access patterns: requests with `risk_tier = 'HIGH'` in 
 **File**: `src/app/api/ai/signature-alerts/route.ts`
 **Roles**: CSO
 
-Returns weekend requests currently held on `PENDING_HOD` with an unresolved `SIGNATURE_MISMATCH` audit entry (written by `POST /api/requests/hod-decision` when a Dean's submitted signature fails verification). Read-only. A request drops off this list once the CSO resolves it via `cso_override` on `POST /api/requests/hod-decision`.
+Returns weekend requests currently held on `PENDING_HOD` with an unresolved `SIGNATURE_MISMATCH` audit entry (written by `POST /api/requests/hod-decision` when a Dean's submitted signature and/or stamp fails verification). Read-only. A request drops off this list once the CSO resolves it via `cso_override` on `POST /api/requests/hod-decision`.
 
-**Response `data`**:
+**Response `data`**: `signature` and/or `stamp` is present depending on which check(s) failed — never both null.
 
 ```json
 {
@@ -1221,9 +1240,16 @@ Returns weekend requests currently held on `PENDING_HOD` with an unresolved `SIG
       "id": "<uuid>",
       "requested_for": "2026-07-04",
       "occurred_at": "<iso>",
-      "ref_url": "<url>",
-      "submitted_url": "<url>",
-      "mismatch_pct": 22.5,
+      "signature": {
+        "ref_url": "<url>",
+        "submitted_url": "<url>",
+        "mismatch_pct": 22.5
+      },
+      "stamp": {
+        "ref_url": "<url>",
+        "submitted_url": "<url>",
+        "mismatch_pct": 61.0
+      },
       "threshold_pct": 15,
       "requester": {
         "id": "<uuid>",

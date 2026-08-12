@@ -16,6 +16,7 @@ Authoritative schema lives in `supabase/migrations/`. This document is a human-r
 - `stamp_ref_url` text nullable (Deans only)
 - `status` enum: 'PENDING_ACTIVATION' | 'ACTIVE' | 'DEACTIVATED'
 - `activation_token` text nullable — single-use token minted by `provision_user`; consumed by `/api/auth/register` or `/api/auth/activate-hod`
+- `last_login_at` timestamptz nullable — app-stamped the moment a role actually finishes logging in: on OTP success in `verify-otp` for MFA roles (CSO, DEAN, VERIFIER), or on password success in `login` for REQUESTER (no MFA). Deliberately not Supabase Auth's own `auth.users.last_sign_in_at`, which GoTrue stamps at `signInWithPassword` — for MFA roles that's the OTP-request step, before the user has actually completed login, so a requested-but-never-entered OTP would otherwise show as a sign-in. Read by `GET /api/admin/users` for the `/cso/users` "Last sign-in" column.
 - `created_at` timestamptz
 - `updated_at` timestamptz
 
@@ -69,7 +70,8 @@ An external (non-registered) person who may collect a key for a single weekend. 
 - `guest_id` UUID FK guest_requesters nullable (set for external requests; null for registered-user requests)
 - `requested_unit_id` UUID FK units nullable (unit a guest requests access within; drives Dean routing while `key_id` is null; null for registered-user requests)
 - `access_token` uuid nullable (unguessable token a guest uses to reach their session-less status/code page; present only for guest requests)
-- `letter_url` text nullable (path in the `weekend-letters` bucket to the HOD authorisation letter a guest uploaded at submit)
+- `letter_url` text nullable (path in the `weekend-letters` bucket to the HOD authorisation letter uploaded at submit — by a guest, or optionally by a registered requester whose submission is compared against the Dean's reference signature at approval)
+- `stamp_url` text nullable (path in the `weekend-letters` bucket to a close-up of the departmental stamp, optionally uploaded alongside `letter_url` by a registered requester; compared pixel-level against the Dean's `stamp_ref_url` at approval, independently of the signature check — see `docs/AI.md` §3)
 - `requested_room` text nullable (free-text room/area a guest states they need access to; shown to the HOD before key assignment; null for registered-user requests)
 - `type` enum: 'WEEKDAY' | 'WEEKEND'
 - `requested_for` date (weekday: today; weekend: future Sat/Sun)

@@ -254,16 +254,13 @@ export const GET = async () => {
 
   // Fetch all profiles in one shot — filtering, sorting, and pagination happen
   // client-side via TanStack Table. At pilot scale (≤500 users) this is fine.
-  const [{ data, error }, { data: authData }] = await Promise.all([
-    supabase
-      .from('profiles')
-      .select(
-        'id, full_name, institutional_email, role, status, photo_url, created_at, department:units!unit_id(name)'
-      )
-      .neq('status', 'DEACTIVATED')
-      .order('created_at', { ascending: false }),
-    createAdminClient().auth.admin.listUsers({ perPage: 1000 }),
-  ]);
+  const { data, error } = await supabase
+    .from('profiles')
+    .select(
+      'id, full_name, institutional_email, role, status, photo_url, created_at, last_login_at, department:units!unit_id(name)'
+    )
+    .neq('status', 'DEACTIVATED')
+    .order('created_at', { ascending: false });
 
   if (error) {
     const ref = crypto.randomUUID();
@@ -273,13 +270,9 @@ export const GET = async () => {
     });
   }
 
-  const lastSignInById = new Map(
-    (authData?.users ?? []).map((u) => [u.id, u.last_sign_in_at ?? null])
-  );
-
-  const users = (data ?? []).map((u) => ({
+  const users = (data ?? []).map(({ last_login_at, ...u }) => ({
     ...u,
-    last_sign_in_at: lastSignInById.get(u.id) ?? null,
+    last_sign_in_at: last_login_at,
   }));
 
   return NextResponse.json(ok({ users }), { status: 200 });

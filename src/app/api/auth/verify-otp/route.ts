@@ -93,11 +93,31 @@ export const POST = async (request: NextRequest) => {
     });
   });
 
+  // Best-effort, mirrors the audit write: this is the moment the role's login
+  // is actually complete, not the earlier password/OTP-request step.
+  const lastLoginPromise = supabase
+    .from('profiles')
+    .update({ last_login_at: new Date().toISOString() })
+    .eq('id', profile.id)
+    .then(({ error: lastLoginError }) => {
+      if (lastLoginError) {
+        logger.error('Failed to update last_login_at', {
+          userId: profile.id,
+          err: lastLoginError.message,
+        });
+      }
+    });
+
   // Run all independent Supabase calls in parallel to maximize response speed
-  const [{ data: { session } }] = await Promise.all([
+  const [
+    {
+      data: { session },
+    },
+  ] = await Promise.all([
     getSessionPromise,
     clearOtpPromise,
     auditPromise,
+    lastLoginPromise,
   ]);
 
   return NextResponse.json(ok({ session }));

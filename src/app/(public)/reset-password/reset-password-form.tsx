@@ -45,9 +45,6 @@ type FormValues = z.infer<typeof schema>;
 
 export const ResetPasswordForm = () => {
   const searchParams = useSearchParams();
-  // The callback route (/api/auth/callback) exchanges the Supabase PKCE code
-  // for a session before redirecting here, so the user is authenticated by the
-  // time this form renders. The `error` param is set if the link expired.
   const linkError = searchParams.get('error');
 
   const [showPassword, setShowPassword] = useState(false);

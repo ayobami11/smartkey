@@ -389,6 +389,7 @@ export type Database = {
           full_name: string;
           id: string;
           institutional_email: string;
+          last_login_at: string | null;
           photo_url: string | null;
           role: Database['public']['Enums']['user_role'];
           signature_ref_url: string | null;
@@ -403,6 +404,7 @@ export type Database = {
           full_name: string;
           id: string;
           institutional_email: string;
+          last_login_at?: string | null;
           photo_url?: string | null;
           role: Database['public']['Enums']['user_role'];
           signature_ref_url?: string | null;
@@ -417,6 +419,7 @@ export type Database = {
           full_name?: string;
           id?: string;
           institutional_email?: string;
+          last_login_at?: string | null;
           photo_url?: string | null;
           role?: Database['public']['Enums']['user_role'];
           signature_ref_url?: string | null;

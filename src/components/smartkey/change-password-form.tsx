@@ -43,13 +43,6 @@ export const ChangePasswordForm = () => {
 
   const { isSubmitting } = form.formState;
 
-  const [currentPassword, newPassword, confirmPassword] = form.watch([
-    'currentPassword',
-    'newPassword',
-    'confirmPassword',
-  ]);
-  const isAnyFieldEmpty = !currentPassword || !newPassword || !confirmPassword;
-
   const onSubmit = async (data: ChangePasswordInput) => {
     try {
       const res = await fetch('/api/auth/change-password', {
@@ -208,7 +201,7 @@ export const ChangePasswordForm = () => {
         <Button
           type="submit"
           className="w-fit"
-          disabled={isSubmitting || isAnyFieldEmpty}
+          disabled={isSubmitting}
           aria-busy={isSubmitting}
         >
           {isSubmitting ? 'Updating...' : 'Update password'}

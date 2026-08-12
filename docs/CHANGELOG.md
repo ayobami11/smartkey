@@ -8,6 +8,67 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-12 — Fix password-reset links always reporting "expired"; fix Last sign-in showing OTP-request time
+
+- **Why (reset)**: reported by a user as "every reset link says expired, even when I use it
+  immediately." `POST /api/auth/reset-password` emailed the raw `action_link` from
+  `admin.generateLink({type:'recovery'})`, which routes through `GET /api/auth/callback` and calls
+  `exchangeCodeForSession(code)` — a PKCE exchange. PKCE requires a `code_verifier` cookie stored by
+  the same browser that initiated the flow; since the link is minted server-side via the admin API,
+  no browser ever initiated anything, so the exchange failed on every attempt, not just stale ones.
+  The callback route mapped every failure to `?error=expired`, which is what made a permanent bug
+  read as a timing issue. Confirmed by finding the sibling fix already in the codebase: invite and
+  re-invite emails (`POST /api/admin/users`, `POST /api/admin/users/[id]/resend-invite`) don't use
+  `action_link` — they build a link to `GET /auth/confirm?token_hash=...&type=...`, which does a
+  server-side `verifyOtp` (no PKCE, no verifier needed). Password reset was the last caller of the
+  broken path.
+- **What changed (reset)**: `reset-password/route.ts` now builds the same `/auth/confirm` link as
+  the invite flow instead of emailing `action_link`. `GET /auth/confirm` gained a
+  `type === 'recovery'` branch so a failed/expired reset link still lands on
+  `/reset-password?error=expired` with its existing "Link expired" card, instead of falling through
+  to the generic `/login?error=invalid-link` used by invite/activation links (that redirect target is
+  unchanged for those flows). `GET /api/auth/callback` is no longer used by any in-app flow — left in
+  place as a dead-but-harmless fallback rather than deleted.
+- **Why (last sign-in)**: reported by the same user — `/cso/users`' "Last sign-in" column reflected
+  when a user last _requested_ an OTP, not when they last actually logged in. `GET
+/api/admin/users` read `auth.users.last_sign_in_at` from Supabase Auth's `admin.listUsers()`, which
+  GoTrue stamps the moment `signInWithPassword` succeeds in `login/route.ts` — for MFA roles (CSO,
+  DEAN, VERIFIER) that's the pre-OTP step. A user who requested a code and never entered it was shown
+  as having signed in.
+- **What changed (last sign-in)**: added `profiles.last_login_at`
+  (`20260812160000_profiles_last_login_at.sql`), stamped by the app itself only at the moment a role
+  actually completes login — in `verify-otp/route.ts` on OTP success (MFA roles) and in
+  `login/route.ts`'s existing no-MFA branch (REQUESTER), both alongside the `LOGIN_SUCCEEDED` audit
+  write already at that point. `GET /api/admin/users` now reads this column instead of calling
+  `admin.listUsers()` (that call, and the map built from it, are gone — nothing else in the route used
+  it). The response's wire field name (`last_sign_in_at`) is unchanged, so no frontend changes were
+  needed.
+
+### 2026-08-12 — Extend weekend-approval mismatch verification to the Dean's stamp
+
+- **Why**: signature verification at weekend-request approval only ever checked the submitted
+  signature against the Dean's onboarded reference; there was no way to catch a forged or
+  mismatched departmental stamp on the same authorisation letter. Deliberately scoped to the
+  registered, Dean-approved weekend flow only — guest approvals have no Dean reference to compare
+  against, and the CSO's own approval path (Administration keys) has no CSO reference either, so
+  neither gains a stamp check for the same reason neither already runs a signature check.
+- **What changed**: `requests` gains a nullable `stamp_url` column (mirrors `letter_url`). The
+  weekend-access request sheet gained an optional second upload field for a close-up of the
+  departmental stamp, sent as `stamp_url` alongside `letter_url` on submit. `POST
+/api/requests/hod-decision` now runs the existing Sharp+Pixelmatch pipeline independently for
+  signature and stamp — either, both, or neither may be checked — and holds approval if **either**
+  fails its threshold. This is a breaking response-shape change on that endpoint: the held-approval
+  response's flat `mismatch_pct` field is replaced by `mismatches: { signature?, stamp? }`, and the
+  `SIGNATURE_MISMATCH` audit payload moved from flat `ref_url`/`submitted_url`/`mismatch_pct` to
+  nested `signature`/`stamp` objects. `GET /api/ai/signature-alerts` and the CSO's
+  signature-mismatch review dialog were updated to match, now rendering both comparisons
+  side-by-side when both were submitted. The Dean's weekend-requests review sheet gained a second
+  "View Dean stamp" button next to the existing signature one, reusing `GET
+/api/requests/[id]/letter`'s now-generalised `?type=stamp` query param.
+- **Not yet applied to production** — the `stamp_url` migration
+  (`20260812150000_stamp_mismatch.sql`) has only been applied to the local Docker stack; it needs
+  to be applied to the production Supabase project before this ships.
+
 ### 2026-08-12 — CSO settings: risk rules polish, tab-list layout-shift fix, small UX fixes
 
 - **Why**: a pass over `/cso/settings` surfaced several small correctness and layout bugs while

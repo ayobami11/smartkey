@@ -24,15 +24,17 @@ export const POST = async (request: NextRequest) => {
     const { data, error } = await admin.auth.admin.generateLink({
       type: 'recovery',
       email: parsed.data.email,
-      options: {
-        redirectTo: `${siteUrl}/api/auth/callback?next=/reset-password`,
-      },
     });
 
-    if (!error && data.properties?.action_link) {
+    if (!error && data.properties?.hashed_token) {
+      const confirmParams = new URLSearchParams({
+        token_hash: data.properties.hashed_token,
+        type: data.properties.verification_type,
+        next: '/reset-password',
+      });
       await sendPasswordResetEmail({
         to: parsed.data.email,
-        link: data.properties.action_link,
+        link: `${siteUrl}/auth/confirm?${confirmParams.toString()}`,
       });
     }
   } catch (e) {

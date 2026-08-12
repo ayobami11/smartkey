@@ -138,9 +138,11 @@ export const WeekendRequestsView = () => {
   const [dismissingId, setDismissingId] = useState<string | null>(null);
   const [listError, setListError] = useState<string | null>(null);
 
-  // Letter preview
+  // Letter / stamp preview
   const [letterUrl, setLetterUrl] = useState<string | null>(null);
   const [letterLoading, setLetterLoading] = useState(false);
+  const [stampUrl, setStampUrl] = useState<string | null>(null);
+  const [stampLoading, setStampLoading] = useState(false);
 
   // The HOD's department keys, for assigning a key to a guest request.
   const [deptKeys, setDeptKeys] = useState<DeptKey[]>([]);
@@ -205,6 +207,7 @@ export const WeekendRequestsView = () => {
     setSelected(req);
     form.reset({ note: '', key_id: '', is_guest: !!req.guest });
     setLetterUrl(null);
+    setStampUrl(null);
   };
 
   const handleClose = () => {
@@ -214,19 +217,28 @@ export const WeekendRequestsView = () => {
     setSubmitError(null);
     setSubmitting(false);
     setLetterUrl(null);
+    setStampUrl(null);
   };
 
-  const handleViewLetter = async (requestId: string) => {
-    setLetterLoading(true);
+  const handleViewLetter = async (
+    requestId: string,
+    type: 'letter' | 'stamp' = 'letter'
+  ) => {
+    const setLoading = type === 'stamp' ? setStampLoading : setLetterLoading;
+    const setUrl = type === 'stamp' ? setStampUrl : setLetterUrl;
+    setLoading(true);
     const result = await apiFetch<{ url: string }>(
-      `/api/requests/${requestId}/letter`
+      `/api/requests/${requestId}/letter?type=${type}`
     );
-    setLetterLoading(false);
+    setLoading(false);
     if (result.error || !result.data) {
-      setSubmitError(result.error ?? 'Could not open the letter.');
+      setSubmitError(
+        result.error ??
+          `Could not open the ${type === 'stamp' ? 'stamp' : 'letter'}.`
+      );
       return;
     }
-    setLetterUrl(result.data.url);
+    setUrl(result.data.url);
     window.open(result.data.url, '_blank', 'noopener,noreferrer');
   };
 
@@ -242,7 +254,7 @@ export const WeekendRequestsView = () => {
     const result = await apiFetch<{
       request_id: string;
       status: string;
-      mismatch_pct?: number;
+      mismatches?: { signature?: number; stamp?: number };
     }>('/api/requests/hod-decision', {
       method: 'POST',
       body: {
@@ -250,10 +262,13 @@ export const WeekendRequestsView = () => {
         decision: choice,
         note: values.note?.trim() || undefined,
         ...(choice === 'APPROVED' && isGuest ? { key_id: values.key_id } : {}),
-        // For registered requests with an uploaded signature, trigger pixel-level
-        // verification against the Dean's onboarded reference.
+        // For registered requests with an uploaded signature/stamp, trigger
+        // pixel-level verification against the Dean's onboarded references.
         ...(choice === 'APPROVED' && !isGuest && selected.letter_url
           ? { submitted_signature_url: selected.letter_url }
+          : {}),
+        ...(choice === 'APPROVED' && !isGuest && selected.stamp_url
+          ? { submitted_stamp_url: selected.stamp_url }
           : {}),
       },
     });
@@ -616,28 +631,64 @@ export const WeekendRequestsView = () => {
                     </div>
                   )}
 
-                  {/* Authorisation letter / signature — shown for any request
-                      that has a letter_url (guest letter or registered
-                      requester's Dean signature upload). */}
-                  {selected.letter_url && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-fit"
-                      onClick={() => handleViewLetter(selected.id)}
-                      disabled={letterLoading}
-                      aria-busy={letterLoading}
-                    >
-                      <FileTextIcon className="size-3.5" aria-hidden="true" />
-                      {letterLoading
-                        ? 'Opening...'
-                        : letterUrl
-                          ? 'Signature opened'
-                          : selected.guest
-                            ? 'View authorisation letter'
-                            : 'View Dean signature'}
-                      <ExternalLinkIcon className="size-3" aria-hidden="true" />
-                    </Button>
+                  {/* Authorisation letter / signature / stamp — shown for any
+                      request that has a letter_url (guest letter or
+                      registered requester's Dean signature/stamp upload). */}
+                  {(selected.letter_url || selected.stamp_url) && (
+                    <div className="flex flex-wrap gap-2">
+                      {selected.letter_url && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-fit"
+                          onClick={() =>
+                            handleViewLetter(selected.id, 'letter')
+                          }
+                          disabled={letterLoading}
+                          aria-busy={letterLoading}
+                        >
+                          <FileTextIcon
+                            className="size-3.5"
+                            aria-hidden="true"
+                          />
+                          {letterLoading
+                            ? 'Opening...'
+                            : letterUrl
+                              ? 'Signature opened'
+                              : selected.guest
+                                ? 'View authorisation letter'
+                                : 'View Dean signature'}
+                          <ExternalLinkIcon
+                            className="size-3"
+                            aria-hidden="true"
+                          />
+                        </Button>
+                      )}
+                      {!selected.guest && selected.stamp_url && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-fit"
+                          onClick={() => handleViewLetter(selected.id, 'stamp')}
+                          disabled={stampLoading}
+                          aria-busy={stampLoading}
+                        >
+                          <FileTextIcon
+                            className="size-3.5"
+                            aria-hidden="true"
+                          />
+                          {stampLoading
+                            ? 'Opening...'
+                            : stampUrl
+                              ? 'Stamp opened'
+                              : 'View Dean stamp'}
+                          <ExternalLinkIcon
+                            className="size-3"
+                            aria-hidden="true"
+                          />
+                        </Button>
+                      )}
+                    </div>
                   )}
 
                   {/* Request details */}

@@ -115,7 +115,7 @@ export const POST = async (request: NextRequest) => {
 
   // Roles that skip MFA (REQUESTER) are fully signed in at this point, so this
   // is the completed-login moment for them. Best-effort: never block sign-in on
-  // an audit failure.
+  // an audit or last_login_at write failure.
   if (role) {
     try {
       await writeAuditEntry({
@@ -130,6 +130,17 @@ export const POST = async (request: NextRequest) => {
       logger.error('Failed to write LOGIN_SUCCEEDED audit entry', {
         userId: authData.user.id,
         err: String(auditErr),
+      });
+    }
+
+    const { error: lastLoginError } = await supabase
+      .from('profiles')
+      .update({ last_login_at: new Date().toISOString() })
+      .eq('id', authData.user.id);
+    if (lastLoginError) {
+      logger.error('Failed to update last_login_at', {
+        userId: authData.user.id,
+        err: lastLoginError.message,
       });
     }
   }
