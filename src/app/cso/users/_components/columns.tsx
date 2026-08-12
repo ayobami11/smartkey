@@ -6,7 +6,11 @@ import {
   ArrowUpIcon,
   MoreHorizontalIcon,
 } from 'lucide-react';
-import { type ColumnDef, type FilterFn, type Row } from '@tanstack/react-table';
+import {
+  type ColumnDef,
+  type FilterFn,
+  type SortingFn,
+} from '@tanstack/react-table';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -59,18 +63,15 @@ const multiValueFilter: FilterFn<UserRow> = (
 ) => !filterValue?.length || filterValue.includes(row.getValue(columnId));
 multiValueFilter.autoRemove = (val: string[]) => !val?.length;
 
-// Custom sort: null values always sort to the bottom regardless of direction
-const nullsLastSort = (
-  rowA: Row<UserRow>,
-  rowB: Row<UserRow>,
-  columnId: string
-): number => {
-  const a = rowA.getValue<string | null>(columnId);
-  const b = rowB.getValue<string | null>(columnId);
-  if (a === null && b === null) return 0;
-  if (a === null) return 1;
-  if (b === null) return -1;
-  return a < b ? -1 : a > b ? 1 : 0;
+// Sort by elapsed time ("Xm/Xh/Xd ago"), not the raw timestamp. Elapsed
+// time is inversely related to the timestamp — a smaller elapsed time
+// means a larger (more recent) timestamp — so this mirrors the standard
+// ascending timestamp comparison. sortUndefined: 'last' on the column
+// handles "Never" separately and is unaffected by this sign flip.
+const sortByElapsedTime: SortingFn<UserRow> = (rowA, rowB, columnId) => {
+  const a = rowA.getValue<string>(columnId);
+  const b = rowB.getValue<string>(columnId);
+  return a > b ? -1 : a < b ? 1 : 0;
 };
 
 // Sortable header button
@@ -179,15 +180,21 @@ export const createColumns = (
     },
   },
   {
-    accessorKey: 'last_sign_in_at',
+    id: 'last_sign_in_at',
+    // Map null ("never signed in") to undefined so TanStack's built-in
+    // sortUndefined handling applies — unlike a custom sortingFn, it's
+    // checked before the asc/desc direction flip, so "Never" stays last
+    // regardless of which way the column is toggled.
+    accessorFn: (row) => row.last_sign_in_at ?? undefined,
     enableSorting: true,
     enableGlobalFilter: false,
-    sortingFn: nullsLastSort,
+    sortingFn: sortByElapsedTime,
+    sortUndefined: 'last',
     header: ({ column }) => (
       <SortableHeader column={column} label="Last sign-in" />
     ),
     cell: ({ row }) => {
-      const iso = row.getValue<string | null>('last_sign_in_at');
+      const iso = row.getValue<string | undefined>('last_sign_in_at') ?? null;
       return (
         <span
           className="text-muted-foreground"

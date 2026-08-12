@@ -6,6 +6,7 @@ import { AlertCircleIcon, CheckCircleIcon } from 'lucide-react';
 
 import type { RiskRuleKey } from '@/lib/ai/risk/types';
 import { apiFetch } from '@/lib/api';
+import { parseDigitInput } from '@/lib/utils';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -110,23 +111,6 @@ export const RiskRulesSettings = () => {
     if (saveState === 'success' || saveState === 'error') {
       setSaveState('idle');
     }
-  };
-
-  // The field displays a literal "0" once cleared, so the next keystroke
-  // lands next to it as "05" or "50" depending on which side the browser
-  // puts the cursor after a programmatic value update. Whenever the raw
-  // value or the previously stored number was empty or 0, drop exactly one
-  // leftover "0" so the typed digit replaces it instead of extending it
-  // into a two-digit number.
-  const parseDigitInput = (value: string, previousValue: number): number => {
-    const digitsOnly = value.replace(/\D/g, '');
-    if (digitsOnly === '') return 0;
-    const wasEmptyOrZero = value === '' || value === '0' || previousValue === 0;
-    const digits =
-      wasEmptyOrZero && digitsOnly.length > 1
-        ? digitsOnly.replace('0', '')
-        : digitsOnly;
-    return Number(digits.replace(/^0+(?=\d)/, ''));
   };
 
   const handleWeightChange = (ruleKey: RuleKey, value: string) => {

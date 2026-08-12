@@ -8,6 +8,31 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-13 — Collector-picker email overflow, last-sign-in sort, code-expiry input
+
+- **Why**: follow-up polish pass across `/cso/keys`, `/dean/keys`, `/cso/users`, and
+  `/cso/settings` surfaced a few more UI-only bugs (frontend scope; no `src/app/api/` or
+  database changes).
+- **Collector picker email overflow** (`dean/keys/[keyId]` and `cso/admin-keys/[keyId]`): the
+  selected-collector email wasn't truncating despite already having a `truncate` class — the
+  actual cause was shadcn's `SelectTrigger` defaulting to `w-fit`, so nothing ever constrained
+  the trigger's width for the inner flex item to shrink against. Added `w-full` on the trigger
+  (via `cn`'s tailwind-merge) plus `min-w-0`/`truncate` on the inner name/email spans, in both
+  the trigger display and the dropdown list items.
+- **CSO users "Last sign-in" sort**: switched from sorting by raw timestamp to sorting by elapsed
+  time (`sortByElapsedTime`), per direct request — ascending now means smallest elapsed time
+  ("Just now") first, mirroring the standard ascending timestamp comparator with signs flipped,
+  since elapsed time and timestamp move in opposite directions. `sortUndefined: 'last'` is
+  untouched, so "Never" (no sign-in) stays at the bottom in both directions.
+- **Code expiry field** (`/cso/settings` → Operational): applied the same `type="text"` +
+  `inputMode="numeric"` fix already used on the risk-rules weight/tier inputs, replacing the
+  `type="number"` field that let a cleared value concatenate with the next typed digit. Extracted
+  `parseDigitInput` into `src/lib/utils.ts` since it's now shared by two files, rather than
+  duplicating it a second time.
+- **Update password button**: re-added the disabled-when-any-field-empty check to
+  `change-password-form.tsx` after a collaborator's commit had removed it; re-requested directly
+  by the user, so not treated as re-litigating their change.
+
 ### 2026-08-12 — Fix password-reset links always reporting "expired"; fix Last sign-in showing OTP-request time
 
 - **Why (reset)**: reported by a user as "every reset link says expired, even when I use it

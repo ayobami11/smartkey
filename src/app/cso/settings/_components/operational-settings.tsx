@@ -6,6 +6,7 @@ import { AlertCircleIcon, CheckCircleIcon } from 'lucide-react';
 
 import { ZONES, ZONE_LABELS, type Zone } from '@/lib/constants';
 import { apiFetch } from '@/lib/api';
+import { parseDigitInput } from '@/lib/utils';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -107,7 +108,7 @@ export const OperationalSettings = () => {
   };
 
   const handleCodeExpiryChange = (value: string) => {
-    const parsed = Number(value);
+    const parsed = parseDigitInput(value, config.code_expiry_minutes);
     if (Number.isNaN(parsed)) return;
     setConfig((prev) => ({ ...prev, code_expiry_minutes: parsed }));
     markEdited();
@@ -373,10 +374,11 @@ export const OperationalSettings = () => {
           ) : (
             <Input
               id="code-expiry"
-              type="number"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={2}
               value={config.code_expiry_minutes}
-              min={5}
-              max={60}
               className="w-full"
               aria-invalid={!isCodeExpiryValid}
               onChange={(e) => handleCodeExpiryChange(e.target.value)}

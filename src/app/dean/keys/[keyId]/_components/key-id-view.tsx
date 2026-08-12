@@ -435,7 +435,10 @@ export const KeyIdView = () => {
                       value={selectedCandidateId}
                       onValueChange={setSelectedCandidateId}
                     >
-                      <SelectTrigger id={`picker-${idx}`} className="text-xs">
+                      <SelectTrigger
+                        id={`picker-${idx}`}
+                        className="w-full text-xs"
+                      >
                         {selectedCandidate ? (
                           <span className="flex items-center gap-1.5 overflow-hidden">
                             <span className="shrink-0 font-medium">
@@ -444,7 +447,7 @@ export const KeyIdView = () => {
                             <span className="shrink-0 text-muted-foreground">
                               ·
                             </span>
-                            <span className="truncate text-muted-foreground">
+                            <span className="min-w-0 flex-1 truncate text-muted-foreground">
                               {selectedCandidate.institutional_email}
                             </span>
                           </span>
@@ -460,11 +463,11 @@ export const KeyIdView = () => {
                         ) : (
                           candidates.map((c) => (
                             <SelectItem key={c.id} value={c.id}>
-                              <div className="flex flex-col gap-0.5">
-                                <span className="text-sm font-medium">
+                              <div className="flex w-full min-w-0 flex-col gap-0.5">
+                                <span className="truncate text-sm font-medium">
                                   {c.full_name}
                                 </span>
-                                <span className="text-xs text-muted-foreground">
+                                <span className="truncate text-xs text-muted-foreground">
                                   {c.institutional_email}
                                 </span>
                               </div>
