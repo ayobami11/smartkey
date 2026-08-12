@@ -8,6 +8,32 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-12 — Fixed every pg_net cron job: weekend reminders have never actually sent
+
+- **Why**: while manually triggering the new `daily-digest` webhook to test it end-to-end, the
+  `pg_net` call failed with `function extensions.http_post(...) does not exist`. Checked
+  `cron.job_run_details` to see how far back this went.
+- **What was actually broken**: `pg_net`'s functions live in the `net` schema. The original
+  `weekend-code-reminders` migration's `create extension pg_net with schema extensions` was a
+  no-op — `pg_net` was already installed in `net` by Supabase's own bootstrap — but every job that
+  called it since has used `extensions.http_post`, which never existed.
+  `cron.job_run_details` shows **`weekend-code-reminders` has failed every single run since it
+  was created (2026-07-11 onward, every Saturday and Sunday) — no weekend collection-code
+  reminder email has ever actually been sent, for the entire time this feature has existed.**
+  This predates today's work; today only made it worse by copying the same broken reference into
+  `overdue-key-check`'s new second statement (failed on its first run, 09:00 UTC today) and the
+  new `daily-digest` job (would have failed tonight).
+- Rescheduled all three jobs (`weekend-code-reminders`, `overdue-key-check`, `daily-digest`) to
+  call `net.http_post` instead, and raised each one's `pg_net` timeout to 25s (from the 5s
+  default) — these routes each do several DB round trips plus an SMTP send, tighter than 5s
+  comfortably allows. New migration `20260812140000_fix_pg_net_schema.sql`; applied to production
+  immediately, verified via a real manual trigger (real `net.http_post` call reusing the same
+  Vault secret pg_cron uses) before writing this entry, not assumed from the SQL alone.
+- **Not yet done**: nothing else about this needs a code change, but worth a mental note that
+  "the migration ran without error" was never sufficient evidence a cron job actually works —
+  only `cron.job_run_details` proved it. Any future `pg_net`-based job should be checked there
+  after its first real scheduled run, not just assumed from a clean `apply_migration`.
+
 ### 2026-08-12 — Daily activity digest for Dean and CSO
 
 - **Why**: both roles' Notifications tabs had a "daily digest" toggle that was never built — no
