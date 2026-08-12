@@ -25,13 +25,18 @@ import { SignatureMismatchDetailDialog } from '@/app/cso/dashboard/_components/s
 
 // Types
 
+export type MismatchCheck = {
+  ref_url: string;
+  submitted_url: string;
+  mismatch_pct: number;
+};
+
 export type SignatureMismatchAlert = {
   id: string;
   requested_for: string;
   occurred_at: string;
-  ref_url: string | null;
-  submitted_url: string | null;
-  mismatch_pct: number | null;
+  signature: MismatchCheck | null;
+  stamp: MismatchCheck | null;
   threshold_pct: number | null;
   requester?: { full_name: string } | null;
   key?: { code: string; room_name: string } | null;
@@ -151,9 +156,13 @@ export const SignatureMismatchAlerts = () => {
                           aria-hidden="true"
                         />
                         <span className="text-xs font-semibold text-destructive">
-                          Signature mismatch
-                          {alert.mismatch_pct !== null &&
-                            ` — ${alert.mismatch_pct}%`}
+                          {alert.signature && alert.stamp
+                            ? `Signature & stamp mismatch — ${alert.signature.mismatch_pct}% / ${alert.stamp.mismatch_pct}%`
+                            : alert.stamp
+                              ? `Stamp mismatch — ${alert.stamp.mismatch_pct}%`
+                              : alert.signature
+                                ? `Signature mismatch — ${alert.signature.mismatch_pct}%`
+                                : 'Mismatch detected'}
                         </span>
                       </div>
                       <time className="shrink-0 font-mono text-xs text-muted-foreground">

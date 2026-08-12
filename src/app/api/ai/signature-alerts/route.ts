@@ -3,10 +3,15 @@ import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/server';
 import { err, ok } from '@/types/api';
 
+type MismatchCheck = {
+  ref_url: string;
+  submitted_url: string;
+  mismatch_pct: number;
+};
+
 type MismatchPayload = {
-  ref_url?: string;
-  submitted_url?: string;
-  mismatch_pct?: number;
+  signature?: MismatchCheck | null;
+  stamp?: MismatchCheck | null;
   threshold_pct?: number;
 };
 
@@ -90,9 +95,8 @@ export const GET = async () => {
       return {
         ...request,
         occurred_at: mismatch.occurred_at,
-        ref_url: mismatch.payload.ref_url ?? null,
-        submitted_url: mismatch.payload.submitted_url ?? null,
-        mismatch_pct: mismatch.payload.mismatch_pct ?? null,
+        signature: mismatch.payload.signature ?? null,
+        stamp: mismatch.payload.stamp ?? null,
         threshold_pct: mismatch.payload.threshold_pct ?? null,
       };
     })

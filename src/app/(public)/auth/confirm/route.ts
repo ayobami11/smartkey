@@ -14,10 +14,13 @@ export const GET = async (request: NextRequest) => {
   const type = searchParams.get('type') as EmailOtpType | null;
   const next = searchParams.get('next') ?? '/';
 
+  const errorRedirect =
+    type === 'recovery'
+      ? '/reset-password?error=expired'
+      : '/login?error=invalid-link';
+
   if (!tokenHash || !type) {
-    return NextResponse.redirect(
-      new URL('/login?error=invalid-link', request.url)
-    );
+    return NextResponse.redirect(new URL(errorRedirect, request.url));
   }
 
   // Invite / magic links resolve before any role URL exists, so the session
@@ -30,9 +33,7 @@ export const GET = async (request: NextRequest) => {
 
   if (error) {
     logger.error('auth/confirm: verifyOtp failed', { err: error.message });
-    return NextResponse.redirect(
-      new URL('/login?error=invalid-link', request.url)
-    );
+    return NextResponse.redirect(new URL(errorRedirect, request.url));
   }
 
   const safeNext = next.startsWith('/') ? next : `/${next}`;

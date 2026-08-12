@@ -419,12 +419,53 @@ export const sendWeekendSubmittedEmail = async ({
     `,
   });
 
+// The digest emails carry more institutional weight than a transactional OTP
+// or confirmation mail — they read as a daily operational report
+const digestHeader = `
+  <table role="presentation" style="width:100%;border-collapse:collapse;background:#7B1F2D;border-radius:8px 8px 0 0;">
+    <tr>
+      <td style="padding:18px 24px;color:#fff;font-size:16px;font-weight:600;letter-spacing:0.01em;">
+        SmartKey
+      </td>
+      <td style="padding:18px 24px;text-align:right;color:rgba(255,255,255,0.75);font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;">
+        Daily digest
+      </td>
+    </tr>
+  </table>
+`;
+
+const formatDigestDate = (d: Date) => {
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  return `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+};
+
 // Shared stat-row markup for the two digest emails below.
-const digestRow = (label: string, value: number) => `
-  <tr>
-    <td style="padding:6px 0;color:#475569;font-size:14px;">${label}</td>
-    <td style="padding:6px 0;color:#0F172A;font-size:14px;font-weight:600;text-align:right;">${value}</td>
+
+const digestRow = (label: string, value: number, attention = false) => `
+  <tr style="border-bottom:1px solid #F1F5F9;">
+    <td style="padding:10px 0;color:#475569;font-size:14px;">${label}</td>
+    <td style="padding:10px 0;color:${attention && value > 0 ? '#DC2626' : '#0F172A'};font-size:14px;font-weight:600;text-align:right;">${value}</td>
   </tr>
+`;
+
+const digestFooter = `
+  <p style="margin:16px 0 0;text-align:center;color:#94A3B8;font-size:11px;">
+    SmartKey, University of Lagos Senate Building
+  </p>
 `;
 
 export const sendDeanDigestEmail = async ({
@@ -447,23 +488,27 @@ export const sendDeanDigestEmail = async ({
     to,
     subject: "Your faculty's daily activity digest",
     html: `
-      <div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:400px;margin:0 auto;padding:32px 16px;">
-        ${emailHeader}
-        <div style="background:#fff;border:1px solid #E2E8F0;border-top:none;padding:32px 24px;border-radius:0 0 8px 8px;">
-          <p style="margin:0 0 16px;color:#0F172A;font-size:16px;font-weight:600;">
+      <div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:440px;margin:0 auto;padding:32px 16px;">
+        ${digestHeader}
+        <div style="background:#fff;border:1px solid #E2E8F0;border-top:none;padding:28px 28px 24px;border-radius:0 0 8px 8px;">
+          <p style="margin:0 0 4px;color:#0F172A;font-size:17px;font-weight:600;">
             Good morning, ${fullName}
           </p>
-          <table style="width:100%;border-collapse:collapse;">
-            ${digestRow('Keys issued (last 24h)', stats.issued_count)}
-            ${digestRow('Keys returned (last 24h)', stats.returned_count)}
-            ${digestRow('Keys currently overdue', stats.overdue_count)}
-            ${digestRow('Weekend requests submitted (last 24h)', stats.weekend_submitted_count)}
-            ${digestRow('Weekend requests awaiting your decision', stats.weekend_pending_count)}
+          <p style="margin:0 0 20px;color:#64748B;font-size:12px;">
+            Faculty activity for the last 24 hours (${formatDigestDate(new Date())})
+          </p>
+          <table role="presentation" style="width:100%;border-collapse:collapse;">
+            ${digestRow('Keys issued', stats.issued_count)}
+            ${digestRow('Keys returned', stats.returned_count)}
+            ${digestRow('Keys currently overdue', stats.overdue_count, true)}
+            ${digestRow('Weekend requests submitted', stats.weekend_submitted_count)}
+            ${digestRow('Weekend requests awaiting your decision', stats.weekend_pending_count, true)}
           </table>
-          <p style="margin:24px 0 0;color:#94A3B8;font-size:12px;">
+          <p style="margin:20px 0 0;color:#94A3B8;font-size:12px;">
             You can turn this off in Settings → Notifications.
           </p>
         </div>
+        ${digestFooter}
       </div>
     `,
   });
@@ -489,24 +534,28 @@ export const sendCsoDigestEmail = async ({
     to,
     subject: "SmartKey's daily activity digest",
     html: `
-      <div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:400px;margin:0 auto;padding:32px 16px;">
-        ${emailHeader}
-        <div style="background:#fff;border:1px solid #E2E8F0;border-top:none;padding:32px 24px;border-radius:0 0 8px 8px;">
-          <p style="margin:0 0 16px;color:#0F172A;font-size:16px;font-weight:600;">
+      <div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:440px;margin:0 auto;padding:32px 16px;">
+        ${digestHeader}
+        <div style="background:#fff;border:1px solid #E2E8F0;border-top:none;padding:28px 28px 24px;border-radius:0 0 8px 8px;">
+          <p style="margin:0 0 4px;color:#0F172A;font-size:17px;font-weight:600;">
             Good morning, ${fullName}
           </p>
-          <table style="width:100%;border-collapse:collapse;">
-            ${digestRow('Keys issued (last 24h)', stats.issued_count)}
-            ${digestRow('Keys returned (last 24h)', stats.returned_count)}
-            ${digestRow('Keys currently overdue', stats.overdue_count)}
-            ${digestRow('High-risk requests (last 24h)', stats.high_risk_count)}
-            ${digestRow('Signature mismatches (last 24h)', stats.signature_mismatch_count)}
-            ${digestRow('Incidents logged (last 24h)', stats.incidents_count)}
+          <p style="margin:0 0 20px;color:#64748B;font-size:12px;">
+            Building-wide activity for the last 24 hours (${formatDigestDate(new Date())})
+          </p>
+          <table role="presentation" style="width:100%;border-collapse:collapse;">
+            ${digestRow('Keys issued', stats.issued_count)}
+            ${digestRow('Keys returned', stats.returned_count)}
+            ${digestRow('Keys currently overdue', stats.overdue_count, true)}
+            ${digestRow('High-risk requests', stats.high_risk_count, true)}
+            ${digestRow('Signature mismatches', stats.signature_mismatch_count, true)}
+            ${digestRow('Incidents logged', stats.incidents_count, true)}
           </table>
-          <p style="margin:24px 0 0;color:#94A3B8;font-size:12px;">
+          <p style="margin:20px 0 0;color:#94A3B8;font-size:12px;">
             You can turn this off in Settings → Notifications.
           </p>
         </div>
+        ${digestFooter}
       </div>
     `,
   });

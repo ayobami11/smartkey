@@ -108,30 +108,38 @@ Measured separation on stroke fixtures: identical 0%, same signature re-position
 
 **Tests**: `src/lib/ai/signature/verifier.test.ts` — 9 tests over rendered stroke fixtures with realistic ink coverage: identical, re-positioned, heavier pen, rescaled, different signature, blank-vs-real in both directions, the genuine-vs-forgery separation margin, and a custom threshold.
 
+**Stamp check**: the same pipeline also runs against the departmental stamp, independently of the signature check. A requester may optionally upload a close-up of the stamp alongside the authorisation letter (`requests.stamp_url`); at Dean approval, it is compared against the Dean's onboarded `stamp_ref_url` the same way the signature is compared against `signature_ref_url`. Either check, both, or neither may run — whichever URLs are present in the request. If a stamp is submitted but the Dean has no `stamp_ref_url` on file (shouldn't happen post-onboarding, but not enforced at the DB level), that check is skipped and logged rather than blocking approval.
+
+This is scoped to the **registered, Dean-approved** weekend flow only — the same place the signature check already runs, and for the same reasons:
+
+- Guest requests (`approve_guest_weekend`) have no Dean-onboarded reference to compare against; the Dean reviews the uploaded letter manually. No signature check runs there either.
+- The CSO's own approval path (Administration keys) has no CSO reference signature or stamp; `approve_weekend` is called directly with verification skipped.
+
 **How to trigger verification** (`POST /api/requests/hod-decision`):
 
-Verification only runs when the caller includes `submitted_signature_url` in the request body. The frontend must pass this URL when the requester uploaded a signed Dean authorisation letter.
+Verification runs when the caller includes `submitted_signature_url` and/or `submitted_stamp_url` in the request body. The frontend passes whichever URLs the requester uploaded alongside the authorisation letter.
 
 ```json
 {
   "request_id": "<uuid>",
   "decision": "APPROVED",
-  "submitted_signature_url": "<signed-url-to-letter-in-weekend-letters-bucket>"
+  "submitted_signature_url": "<signed-url-to-letter-in-weekend-letters-bucket>",
+  "submitted_stamp_url": "<signed-url-to-stamp-image-in-weekend-letters-bucket>"
 }
 ```
 
-Paths that **skip** verification:
+Paths that **skip** verification entirely:
 
-- `submitted_signature_url` is absent → approval proceeds without comparison (no letter was attached to the request).
-- Actor is CSO → CSO has no reference signature; `approve_weekend` is called directly with `signature_verified: true`.
+- Neither `submitted_signature_url` nor `submitted_stamp_url` is present → approval proceeds without comparison (no letter/stamp was attached to the request).
+- Actor is CSO → CSO has no reference signature or stamp; `approve_weekend` is called directly with `signature_verified: true`.
 - Request is a guest request → goes to `approve_guest_weekend`; the Dean reviews the uploaded letter manually and no pixel comparison runs.
 
-Server-side sequence when `submitted_signature_url` is present:
+Server-side sequence when either submitted URL is present:
 
-1. Fetch `profile.signature_ref_url` (Dean's onboarded reference) and `submitted_signature_url` in parallel.
-2. Call `verifySignature(refBuffer, subBuffer)` → returns `{ mismatch_ratio, passed }`.
-3. If `passed = false`: write `SIGNATURE_MISMATCH` audit entry with both URLs and the mismatch %; return `{ status: "HELD_SIGNATURE_MISMATCH", mismatch_pct }` (HTTP 200 — the RPC is never called).
-4. If `passed = true`: call `approve_weekend` RPC with `signature_verified: true` and the actual `mismatch_pct`; return `{ status: "APPROVED" }`.
+1. For each present URL, fetch the matching reference (`profile.signature_ref_url` or `profile.stamp_ref_url`) and the submitted image in parallel.
+2. Call `verifySignature(refBuffer, subBuffer)` → returns `{ mismatch_ratio, passed }`, independently per check.
+3. If **either** check fails: write a `SIGNATURE_MISMATCH` audit entry with both checks' URLs and mismatch percentages (`{ signature: {...} | null, stamp: {...} | null, threshold_pct }`); return `{ status: "HELD_SIGNATURE_MISMATCH", mismatches: { signature?: pct, stamp?: pct } }` (HTTP 200 — the RPC is never called).
+4. If every submitted check passes: call `approve_weekend` RPC with `signature_verified: true` and the signature check's `mismatch_pct` (the RPC's `p_signature_mismatch_pct` param remains signature-specific; the stamp figure lives only in the audit entry above); return `{ status: "APPROVED" }`.
 
 The CSO resolves a held mismatch by calling the same route with `cso_override: true`.
 

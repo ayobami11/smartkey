@@ -106,48 +106,81 @@ export const SignatureMismatchDetailDialog = ({
                 aria-hidden="true"
               />
               <p className="text-sm text-destructive">
-                {alert.mismatch_pct !== null
-                  ? `${alert.mismatch_pct}% mismatch`
-                  : 'Mismatch detected'}
+                {alert.signature && alert.stamp
+                  ? `Signature ${alert.signature.mismatch_pct}% / stamp ${alert.stamp.mismatch_pct}% mismatch`
+                  : alert.stamp
+                    ? `${alert.stamp.mismatch_pct}% stamp mismatch`
+                    : alert.signature
+                      ? `${alert.signature.mismatch_pct}% signature mismatch`
+                      : 'Mismatch detected'}
                 {alert.threshold_pct !== null &&
                   ` (threshold ${alert.threshold_pct}%)`}
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1.5">
-                <p className="text-xs font-medium text-muted-foreground">
-                  Reference signature on file
+            {alert.signature && (
+              <div className="flex flex-col gap-2">
+                <p className="text-xs font-semibold text-foreground">
+                  Signature
                 </p>
-                {alert.ref_url ? (
-                  // Regular <img> intentionally — Storage URL preview, matching
-                  // the convention in profile-photo-preview.tsx.
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={alert.ref_url}
-                    alt={`Reference signature on file for ${alert.requester?.full_name ?? 'this requester'}`}
-                    className="aspect-[2/1] w-full rounded-lg border border-border bg-muted object-contain"
-                  />
-                ) : (
-                  <div className="aspect-[2/1] w-full rounded-lg border border-border bg-muted" />
-                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Reference on file
+                    </p>
+                    {/* Regular <img> intentionally — Storage URL preview,
+                        matching the convention in profile-photo-preview.tsx. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={alert.signature.ref_url}
+                      alt={`Reference signature on file for ${alert.requester?.full_name ?? 'this requester'}`}
+                      className="aspect-[2/1] w-full rounded-lg border border-border bg-muted object-contain"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Submitted
+                    </p>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={alert.signature.submitted_url}
+                      alt={`Submitted signature for the request from ${alert.requester?.full_name ?? 'this requester'}`}
+                      className="aspect-[2/1] w-full rounded-lg border border-border bg-muted object-contain"
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="flex flex-col gap-1.5">
-                <p className="text-xs font-medium text-muted-foreground">
-                  Submitted signature
-                </p>
-                {alert.submitted_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={alert.submitted_url}
-                    alt={`Submitted signature for the request from ${alert.requester?.full_name ?? 'this requester'}`}
-                    className="aspect-[2/1] w-full rounded-lg border border-border bg-muted object-contain"
-                  />
-                ) : (
-                  <div className="aspect-[2/1] w-full rounded-lg border border-border bg-muted" />
-                )}
+            )}
+
+            {alert.stamp && (
+              <div className="flex flex-col gap-2">
+                <p className="text-xs font-semibold text-foreground">Stamp</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Reference on file
+                    </p>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={alert.stamp.ref_url}
+                      alt={`Reference stamp on file for ${alert.requester?.full_name ?? 'this requester'}`}
+                      className="aspect-[2/1] w-full rounded-lg border border-border bg-muted object-contain"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Submitted
+                    </p>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={alert.stamp.submitted_url}
+                      alt={`Submitted stamp for the request from ${alert.requester?.full_name ?? 'this requester'}`}
+                      className="aspect-[2/1] w-full rounded-lg border border-border bg-muted object-contain"
+                    />
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
 
             <RiskAcknowledgement
               acknowledged={acknowledged}
