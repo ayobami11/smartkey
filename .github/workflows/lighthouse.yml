@@ -123,3 +123,8 @@ jobs:
           name: lighthouse-reports
           path: .lighthouseci/
           retention-days: 7
+          # actions/upload-artifact@v4 excludes dot-directories by default;
+          # .lighthouseci/ is one, so without this the step silently found
+          # nothing to upload ("No files were found") despite lhci having
+          # written 15 reports to disk — confirmed on PR #55's first real run.
+          include-hidden-files: true

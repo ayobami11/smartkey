@@ -8,6 +8,11 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-11 — Lighthouse artifact upload was silently uploading nothing
+
+- **Why**: PR #55's first successful run of the reordered `Lighthouse — public pages` step wrote 15 reports to `.lighthouseci/public` (confirmed in the job log: "Dumping 15 reports to disk... Done writing reports to disk"), but the "Upload Lighthouse reports" step logged `##[warning]No files were found with the provided path: .lighthouseci/.` — `actions/upload-artifact@v4` excludes dot-directories by default, and `.lighthouseci/` is one.
+- **Fix**: added `include-hidden-files: true` to that step in `.github/workflows/lighthouse.yml`. No other behavior change.
+
 ### 2026-08-11 — Lighthouse CI's first real PR run surfaced a pre-existing missing-secrets gap; reordered the job around it
 
 - **Why**: the previous entry's `lighthouse.yml` failed on its first real PR (#55) — not on a performance assertion, but because the "Authenticate as REQUESTER" Playwright setup step timed out waiting for a navigation that never happened. `gh secret list` against the repo (plus a check of both GitHub Environments, `Preview` and `Production`, which have zero secrets) shows only `SMOKE_REQUESTER_EMAIL`, `SMOKE_REQUESTER_PASSWORD`, and `VERCEL_PROTECTION_BYPASS_SECRET` actually exist. `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `TEST_REQUESTER_EMAIL`, `TEST_REQUESTER_PASSWORD`, `TEST_VERIFIER_EMAIL`, `TEST_VERIFIER_PASSWORD`, `E2E_OTP_IMAP_USER`, and `E2E_OTP_IMAP_APP_PASSWORD` do not exist anywhere in the repo, so every `${{ secrets.X }}` reference to them silently resolves to an empty string rather than erroring. `gh run list --workflow=e2e.yml` shows this is not new — `e2e.yml` has failed on every PR run back to at least 2026-06-22, for the same root cause. This is a separate, pre-existing gap from anything `docs/SmartKey_Examiner_Review.pdf` flagged, and is left open here — fixing it needs the actual credential values (Supabase anon key, test account passwords, IMAP app password), which only the project owner has.
