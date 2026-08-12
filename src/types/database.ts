@@ -320,6 +320,38 @@ export type Database = {
           },
         ];
       };
+      notification_preferences: {
+        Row: {
+          key_issued_in_app: boolean;
+          overdue_email: boolean;
+          profile_id: string;
+          updated_at: string;
+          weekend_decided_email: boolean;
+        };
+        Insert: {
+          key_issued_in_app?: boolean;
+          overdue_email?: boolean;
+          profile_id: string;
+          updated_at?: string;
+          weekend_decided_email?: boolean;
+        };
+        Update: {
+          key_issued_in_app?: boolean;
+          overdue_email?: boolean;
+          profile_id?: string;
+          updated_at?: string;
+          weekend_decided_email?: boolean;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'notification_preferences_profile_id_fkey';
+            columns: ['profile_id'];
+            isOneToOne: true;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       operational_config: {
         Row: {
           code_expiry_minutes: number;
@@ -407,6 +439,7 @@ export type Database = {
           issued_by: string | null;
           key_id: string | null;
           letter_url: string | null;
+          overdue_reminder_sent_at: string | null;
           reminder_sent_at: string | null;
           requested_for: string;
           requested_room: string | null;
@@ -433,6 +466,7 @@ export type Database = {
           issued_by?: string | null;
           key_id?: string | null;
           letter_url?: string | null;
+          overdue_reminder_sent_at?: string | null;
           reminder_sent_at?: string | null;
           requested_for: string;
           requested_room?: string | null;
@@ -459,6 +493,7 @@ export type Database = {
           issued_by?: string | null;
           key_id?: string | null;
           letter_url?: string | null;
+          overdue_reminder_sent_at?: string | null;
           reminder_sent_at?: string | null;
           requested_for?: string;
           requested_room?: string | null;

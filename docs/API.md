@@ -1024,6 +1024,38 @@ If the mismatch exceeds `SIGNATURE_DIFF_THRESHOLD` (default 15%), the reference 
 
 ---
 
+### GET /api/profile/notification-preferences
+
+**File**: `src/app/api/profile/notification-preferences/route.ts`
+**Roles**: ALL (authenticated) — currently only the Requester settings UI calls this
+
+RLS-scoped direct read of the caller's own `notification_preferences` row. Returns defaults (`true`/`true`/`true`) if no row exists yet — a row is only created on first save, not on read.
+
+**Response `data`**: `{ "key_issued_in_app": true, "overdue_email": true, "weekend_decided_email": true }`
+
+**Errors**: `401` unauthenticated · `500` read failure
+
+---
+
+### PATCH /api/profile/notification-preferences
+
+**File**: `src/app/api/profile/notification-preferences/route.ts`
+**Roles**: ALL (authenticated)
+
+| Field                   | Type      | Required |
+| ----------------------- | --------- | -------- |
+| `key_issued_in_app`     | `boolean` | yes      |
+| `overdue_email`         | `boolean` | yes      |
+| `weekend_decided_email` | `boolean` | yes      |
+
+Upserts the caller's own row (RLS-scoped, `onConflict: 'profile_id'`). No RPC, no audit entry — self-service preference data at the same trust level as `PATCH /api/profile/me`. There is no `code_email` field: the collection-code email can't be disabled.
+
+**Response `data`**: echoes the saved `{ key_issued_in_app, overdue_email, weekend_decided_email }`.
+
+**Errors**: `401` unauthenticated · `422` validation · `500` write failure
+
+---
+
 ## 6. Reports and Incidents
 
 ### GET /api/reports
@@ -1122,6 +1154,21 @@ No request body.
 **Errors**: `401` missing/incorrect bearer secret · `500` `CRON_SECRET` not configured or query failure
 
 The pg_cron job reads its bearer secret from Supabase Vault (`weekend_cron_secret`), created once out of band with the same value as `CRON_SECRET` (see `supabase/migrations/20260622134716_weekend_code_reminders.sql`).
+
+---
+
+### POST /api/cron/overdue-reminders
+
+**File**: `src/app/api/cron/overdue-reminders/route.ts`
+**Roles**: SYSTEM (pg_cron; no user session)
+
+Not user-facing. Called by the `overdue-key-check` pg_cron job hourly, right after `mark_key_overdue()` in the same job (see `supabase/migrations/20260812110000_requester_notifications.sql`) — reuses the `weekend_cron_secret` Vault bearer secret. Finds `KEY_ISSUED` requests (registered and guest) whose `return_deadline` has passed with `overdue_reminder_sent_at IS NULL`, and for each registered requester checks `notification_preferences.overdue_email` (default true if no row) before emailing; guests have no preference and always receive it. Stamps `overdue_reminder_sent_at` for every processed row — including ones suppressed by preference, so they aren't re-queried every hour.
+
+No request body.
+
+**Response `data`**: `{ "sent": 1, "suppressed": 1, "failed": 0 }`
+
+**Errors**: `401` missing/incorrect bearer secret · `500` `CRON_SECRET` not configured or query failure
 
 ---
 

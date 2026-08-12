@@ -107,6 +107,18 @@ const notifyRequester = async (
     const profile = Array.isArray(req.profile) ? req.profile[0] : req.profile;
     if (!profile?.institutional_email) return;
 
+    // Absence of a preference row means the default (true) applies — it is
+    // not an opt-out. Guests (handled above) have no preference row and
+    // always get this email regardless.
+    if (req.requester_id) {
+      const { data: pref } = await admin
+        .from('notification_preferences')
+        .select('weekend_decided_email')
+        .eq('profile_id', req.requester_id)
+        .maybeSingle();
+      if (pref && !pref.weekend_decided_email) return;
+    }
+
     if (decision === 'APPROVED') {
       const link = `${siteUrl}/requester/request/${requestId}/code`;
       await sendWeekendApprovedEmail({

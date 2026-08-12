@@ -8,6 +8,31 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-12 — Requester Notifications tab: real preferences, two new emails
+
+- **Why**: settings-tab audit found the tab was a `useState` mockup, and going one layer deeper
+  found the mockup was hiding a mixed reality: "key issued" is real (Realtime), "weekend request
+  decided" already sent a real email (`hod-decision`'s `notifyRequester`), contrary to what I'd
+  told the user earlier — corrected, but "collection code
+  generated" and "return deadline reminder" had no email behavior at all, mockup or otherwise.
+- New `notification_preferences` table (one row per profile, RLS-scoped to the owner, no RPC —
+  same trust level as editing your own `full_name`) and `GET`/`PATCH /api/profile/notification-preferences`.
+  `notification-settings.tsx` rewritten to the same load/save pattern as the Risk rules and
+  Operational tabs. Collection-code email has no preference column — it can't be disabled,
+  matching the copy already on the tab.
+- New `sendCollectionCodeEmail`/`sendOverdueReminderEmail` in `src/lib/email/otp.ts`; wired the
+  first into all three places a collection code is minted (`submit`, `weekend-code`, the guest
+  code route) via a new shared `getRequestRecipient` helper. New `POST /api/cron/overdue-reminders`
+  (mirrors `weekend-reminders`), called by the existing `overdue-key-check` pg_cron job right
+  after `mark_key_overdue()` — new `requests.overdue_reminder_sent_at` idempotency column.
+  Gated the pre-existing weekend-decided email on the new preference for registered requesters
+  (guests unaffected — no preference row, always sent, unchanged).
+- Scope: Requester tab only. CSO and Dean Notifications tabs are still mockup and not yet
+  audited for what's real underneath — explicit follow-up, not silently dropped.
+- Applied to production (`ocpsklbbksuymjdbfpja`) via the Supabase admin connection immediately
+  after local verification, not as an afterthought — this morning's Operational-tab outage was
+  exactly a migration that shipped in code but never reached production.
+
 ### 2026-08-12 — Applied the operational-config migration to production; rotated the smoke requester password
 
 - **Why**: `/cso/settings` → Operational was 500ing in production ("Couldn't load operational settings") because `20260812090000_operational_config.sql` had only ever been applied to the local Docker stack, never to the real Supabase project — the code shipped, the schema it depends on didn't. Separately, the smoke test's requester login was failing with "Invalid email or password" against a genuinely `ACTIVE` account, cascading into 4 more failures downstream (no session to test with).

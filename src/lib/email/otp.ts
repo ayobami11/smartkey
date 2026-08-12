@@ -2,7 +2,6 @@ import { setDefaultResultOrder } from 'node:dns';
 
 import nodemailer from 'nodemailer';
 
-
 setDefaultResultOrder('ipv4first');
 
 const transporter = nodemailer.createTransport({
@@ -288,6 +287,97 @@ export const sendPasswordResetEmail = async ({
       </div>
     `,
   });
+
+export const sendCollectionCodeEmail = async ({
+  to,
+  fullName,
+  code,
+  codeExpiresAt,
+  keyCode,
+  roomName,
+}: {
+  to: string;
+  fullName: string;
+  code: string;
+  codeExpiresAt: string;
+  keyCode: string;
+  roomName: string;
+}) => {
+  const expiresAtLabel = new Date(codeExpiresAt).toLocaleTimeString('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  return transporter.sendMail({
+    from: `"SmartKey" <${process.env.GMAIL_USER}>`,
+    to,
+    subject: 'Your SmartKey collection code',
+    html: `
+      <div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:400px;margin:0 auto;padding:32px 16px;">
+        ${emailHeader}
+        <div style="background:#fff;border:1px solid #E2E8F0;border-top:none;padding:32px 24px;border-radius:0 0 8px 8px;">
+          <p style="margin:0 0 8px;color:#0F172A;font-size:16px;font-weight:600;">
+            Your collection code, ${fullName}
+          </p>
+          <p style="margin:0 0 16px;color:#475569;font-size:14px;">
+            For <strong>${roomName} (${keyCode})</strong>. Present this code at
+            the security desk to collect the key.
+          </p>
+          <div style="letter-spacing:10px;font-size:40px;font-family:monospace;font-weight:700;color:#0F172A;margin-bottom:16px;">${code}</div>
+          <p style="margin:0;color:#94A3B8;font-size:12px;">
+            Expires at ${expiresAtLabel}. If it expires, request a new code from the app.
+          </p>
+        </div>
+      </div>
+    `,
+  });
+};
+
+export const sendOverdueReminderEmail = async ({
+  to,
+  fullName,
+  keyCode,
+  roomName,
+  returnDeadline,
+}: {
+  to: string;
+  fullName: string;
+  keyCode: string;
+  roomName: string;
+  returnDeadline: string;
+}) => {
+  const deadlineLabel = new Date(returnDeadline).toLocaleString('en-GB', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  return transporter.sendMail({
+    from: `"SmartKey" <${process.env.GMAIL_USER}>`,
+    to,
+    subject: 'Your key is overdue for return',
+    html: `
+      <div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:400px;margin:0 auto;padding:32px 16px;">
+        ${emailHeader}
+        <div style="background:#fff;border:1px solid #E2E8F0;border-top:none;padding:32px 24px;border-radius:0 0 8px 8px;">
+          <p style="margin:0 0 8px;color:#0F172A;font-size:16px;font-weight:600;">
+            Your key is overdue, ${fullName}
+          </p>
+          <p style="margin:0 0 24px;color:#475569;font-size:14px;">
+            <strong>${roomName} (${keyCode})</strong> was due back by
+            <strong>${deadlineLabel}</strong>. Please return it to the security
+            desk as soon as possible.
+          </p>
+          <p style="margin:0;color:#94A3B8;font-size:12px;">
+            This has been logged. Contact the CSO if you believe this is an error.
+          </p>
+        </div>
+      </div>
+    `,
+  });
+};
 
 export const sendGuestWeekendEmail = async ({
   to,

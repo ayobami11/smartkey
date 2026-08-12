@@ -8,6 +8,8 @@ import type {
   RiskEngineConfig,
   RiskRuleKey,
 } from '@/lib/ai/risk/types';
+import { sendCollectionCodeEmail } from '@/lib/email/otp';
+import { getRequestRecipient } from '@/lib/email/request-recipient';
 import { logger } from '@/lib/logger';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
@@ -219,6 +221,29 @@ export const POST = async (request: NextRequest) => {
       }),
       { status: 201 }
     );
+  }
+
+  // Fire-and-forget — a failed send must not fail an otherwise-successful
+  // request. The code is already usable in-app regardless of email delivery.
+  if (result.code && result.code_expires_at) {
+    void getRequestRecipient(adminClient, result.request_id)
+      .then((recipient) => {
+        if (!recipient) return;
+        return sendCollectionCodeEmail({
+          to: recipient.to,
+          fullName: recipient.fullName,
+          code: result.code!,
+          codeExpiresAt: result.code_expires_at!,
+          keyCode: recipient.keyCode,
+          roomName: recipient.roomName,
+        });
+      })
+      .catch((e: unknown) => {
+        logger.error('submit: collection-code email failed', {
+          requestId: result.request_id,
+          err: e instanceof Error ? e.message : String(e),
+        });
+      });
   }
 
   return NextResponse.json(

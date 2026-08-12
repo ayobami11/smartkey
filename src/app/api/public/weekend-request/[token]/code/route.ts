@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
+import { sendCollectionCodeEmail } from '@/lib/email/otp';
+import { getRequestRecipient } from '@/lib/email/request-recipient';
 import { logger } from '@/lib/logger';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { err, ok } from '@/types/api';
@@ -67,6 +69,25 @@ export const POST = async (
       status: 500,
     });
   }
+
+  void getRequestRecipient(adminClient, result.request_id)
+    .then((recipient) => {
+      if (!recipient) return;
+      return sendCollectionCodeEmail({
+        to: recipient.to,
+        fullName: recipient.fullName,
+        code: result.code,
+        codeExpiresAt: result.code_expires_at,
+        keyCode: recipient.keyCode,
+        roomName: recipient.roomName,
+      });
+    })
+    .catch((e: unknown) => {
+      logger.error('guest weekend-code: collection-code email failed', {
+        requestId: result.request_id,
+        err: e instanceof Error ? e.message : String(e),
+      });
+    });
 
   return NextResponse.json(
     ok({
