@@ -1,7 +1,3 @@
-// Categorises raw audit_log.event names into a small set of types shared by
-// the CSO audit table filter (src/app/cso/audit/_components/audit-table.tsx)
-// and the dashboard activity chart (src/app/cso/dashboard/_components/events-chart.tsx).
-
 export type AuditEventType =
   | 'REQUEST'
   | 'ISSUE'
@@ -32,6 +28,7 @@ export const EVENT_TYPE_MAP: Record<string, AuditEventType> = {
   SHIFT_REPORT_INITIATED: 'SETTINGS',
   REPORT_COMMENT_ADDED: 'SETTINGS',
   RISK_CONFIG_UPDATED: 'SETTINGS',
+  OPERATIONAL_CONFIG_UPDATED: 'SETTINGS',
   SIGNATURE_MISMATCH: 'SIGNATURE',
   LOGIN_SUCCEEDED: 'LOGIN',
 };

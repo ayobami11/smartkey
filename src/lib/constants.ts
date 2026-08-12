@@ -10,9 +10,7 @@
  * the component that owns them.
  */
 
-// ---------------------------------------------------------------------------
 // User roles
-// ---------------------------------------------------------------------------
 
 export const USER_ROLES = ['CSO', 'DEAN', 'VERIFIER', 'REQUESTER'] as const;
 
@@ -33,9 +31,7 @@ export const ROLE_CLASSES: Record<UserRole, string> = {
   REQUESTER: 'bg-teal-100 text-teal-700',
 };
 
-// ---------------------------------------------------------------------------
 // User statuses
-// ---------------------------------------------------------------------------
 
 export const USER_STATUSES = [
   'ACTIVE',
@@ -63,9 +59,7 @@ export const USER_STATUS_CLASSES: Record<UserStatus, string> = {
   DEACTIVATED: 'bg-muted text-muted-foreground',
 };
 
-// ---------------------------------------------------------------------------
 // Request statuses
-// ---------------------------------------------------------------------------
 
 export const REQUEST_STATUSES = [
   'PENDING_HOD',
@@ -88,9 +82,7 @@ export const REQUEST_TYPES = ['WEEKDAY', 'WEEKEND'] as const;
 
 export type RequestType = (typeof REQUEST_TYPES)[number];
 
-// ---------------------------------------------------------------------------
 // Key statuses
-// ---------------------------------------------------------------------------
 
 export const KEY_STATUSES = [
   'AVAILABLE',
@@ -101,9 +93,7 @@ export const KEY_STATUSES = [
 
 export type KeyStatus = (typeof KEY_STATUSES)[number];
 
-// ---------------------------------------------------------------------------
 // Zones
-// ---------------------------------------------------------------------------
 
 export const ZONES = ['NEW_SENATE', 'OLD_SENATE'] as const;
 
@@ -114,9 +104,7 @@ export const ZONE_LABELS: Record<Zone, string> = {
   OLD_SENATE: 'Old Senate',
 };
 
-// ---------------------------------------------------------------------------
 // Incident types
-// ---------------------------------------------------------------------------
 
 export const INCIDENT_TYPES = [
   { value: 'MISSING_KEY', label: 'Missing key' },
@@ -133,9 +121,7 @@ export const INCIDENT_TYPE_LABELS: Record<IncidentType, string> =
     INCIDENT_TYPES.map(({ value, label }) => [value, label])
   ) as Record<IncidentType, string>;
 
-// ---------------------------------------------------------------------------
 // Incident severities
-// ---------------------------------------------------------------------------
 
 export const INCIDENT_SEVERITIES = [
   { value: 'LOW', label: 'Low' },
@@ -157,44 +143,29 @@ export const INCIDENT_SEVERITY_CLASSES: Record<IncidentSeverity, string> = {
   HIGH: 'bg-destructive/10 text-destructive',
 };
 
-// ---------------------------------------------------------------------------
 // Incident statuses
-// ---------------------------------------------------------------------------
 
 export const INCIDENT_STATUSES = ['OPEN', 'RESOLVED', 'ESCALATED'] as const;
 
 export type IncidentStatus = (typeof INCIDENT_STATUSES)[number];
 
-// ---------------------------------------------------------------------------
 // Risk tiers
-// Re-exported from src/lib/ai/risk/types.ts so callers have one import path.
-// ---------------------------------------------------------------------------
 
 export type { RiskTier } from '@/lib/ai/risk/types';
 
-// ---------------------------------------------------------------------------
 // HOD decisions
-// ---------------------------------------------------------------------------
 
 export const HOD_DECISIONS = ['APPROVED', 'DECLINED'] as const;
 
 export type HodDecision = (typeof HOD_DECISIONS)[number];
 
-// ---------------------------------------------------------------------------
 // Department authoriser types
-// ---------------------------------------------------------------------------
 
 export const AUTHORISER_TYPES = ['DEAN', 'CSO'] as const;
 
 export type AuthoriserType = (typeof AUTHORISER_TYPES)[number];
 
-// ---------------------------------------------------------------------------
 // Audit event names
-//
-// Every event written to audit_log.event must appear in this list.
-// Keep this in sync with the RPCs in supabase/migrations/ and the
-// writeAuditEntry callers in src/app/api/.
-// ---------------------------------------------------------------------------
 
 export const AUDIT_EVENTS = [
   'LOGIN_SUCCEEDED',
@@ -220,6 +191,7 @@ export const AUDIT_EVENTS = [
   'SHIFT_REPORT_INITIATED',
   'REPORT_COMMENT_ADDED',
   'RISK_CONFIG_UPDATED',
+  'OPERATIONAL_CONFIG_UPDATED',
 ] as const;
 
 export type AuditEvent = (typeof AUDIT_EVENTS)[number];

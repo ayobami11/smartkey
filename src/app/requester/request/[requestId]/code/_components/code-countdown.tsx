@@ -12,24 +12,26 @@ type Props = {
   codeExpiresAt: string | null;
 };
 
-// Code lifetime per product spec — create_request RPC always sets expiry to now + 10 min
-const CODE_LIFETIME_MS = 10 * 60 * 1000;
-
 export const CodeCountdown = ({ countdown, codeExpiresAt }: Props) => {
   const [now, setNow] = useState(() => Date.now());
+  const [lifetimeMs] = useState(() =>
+    codeExpiresAt
+      ? Math.max(0, new Date(codeExpiresAt).getTime() - Date.now())
+      : 0
+  );
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 100);
     return () => clearInterval(id);
   }, []);
 
-  if (!codeExpiresAt) return null;
+  if (!codeExpiresAt || lifetimeMs === 0) return null;
 
   const progressValue = Math.max(
     0,
     Math.min(
       100,
-      ((new Date(codeExpiresAt).getTime() - now) / CODE_LIFETIME_MS) * 100
+      ((new Date(codeExpiresAt).getTime() - now) / lifetimeMs) * 100
     )
   );
 

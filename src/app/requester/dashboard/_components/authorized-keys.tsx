@@ -62,17 +62,22 @@ const todayMin = () => {
   return `${yyyy}-${mm}-${dd}T00:00`;
 };
 
-const defaultReturnDeadline = () => {
+const FALLBACK_RETURN_DEADLINE_TIME = '17:00';
+
+const defaultReturnDeadline = (deadlineTime: string) => {
+  const [hh, mm] = deadlineTime.split(':').map(Number);
   const d = new Date();
-  d.setHours(23, 59, 0, 0);
-  // If already past 23:59, default to tomorrow
+  d.setHours(hh, mm, 0, 0);
+  // If already past today's deadline, default to tomorrow
   if (d.getTime() <= Date.now()) {
     d.setDate(d.getDate() + 1);
   }
   const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}T23:59`;
+  const hhStr = String(hh).padStart(2, '0');
+  const mmStr = String(mm).padStart(2, '0');
+  return `${yyyy}-${month}-${dd}T${hhStr}:${mmStr}`;
 };
 
 const zoneLabel = (zone: string) =>
@@ -96,7 +101,23 @@ export const AuthorizedKeys = () => {
 
   const weekdayForm = useForm<WeekdayRequestFormInput>({
     resolver: zodResolver(weekdayRequestFormSchema),
-    defaultValues: { return_deadline: defaultReturnDeadline() },
+    defaultValues: {
+      return_deadline: defaultReturnDeadline(FALLBACK_RETURN_DEADLINE_TIME),
+    },
+  });
+
+  const { data: returnDeadlineTime } = useQuery({
+    queryKey: ['operational-config', 'return-deadline-time'],
+    queryFn: async () => {
+      const supabase = createBrowserClient();
+      const { data, error } = await supabase
+        .from('operational_config')
+        .select('return_deadline_time')
+        .single();
+      if (error || !data) return FALLBACK_RETURN_DEADLINE_TIME;
+      return data.return_deadline_time.slice(0, 5);
+    },
+    staleTime: 5 * 60_000,
   });
 
   // Fetch authorized keys
@@ -134,7 +155,11 @@ export const AuthorizedKeys = () => {
 
   const openWeekdaySheet = (keyId: string) => {
     setSelectedKeyId(keyId);
-    weekdayForm.reset({ return_deadline: defaultReturnDeadline() });
+    weekdayForm.reset({
+      return_deadline: defaultReturnDeadline(
+        returnDeadlineTime ?? FALLBACK_RETURN_DEADLINE_TIME
+      ),
+    });
     setSubmitError(null);
     setStep('weekday_form');
     setWeekdayOpen(true);
@@ -382,7 +407,7 @@ export const AuthorizedKeys = () => {
                       />
                       {!fieldState.error && (
                         <p className="text-xs text-muted-foreground">
-                          Defaults to the end of current day (11:59 PM).
+                          Defaults to the operational return deadline.
                         </p>
                       )}
                       {fieldState.invalid && (

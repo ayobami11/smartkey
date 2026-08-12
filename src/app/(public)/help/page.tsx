@@ -33,9 +33,10 @@ const faqs = [
     question: "I didn't receive my verification code",
     answer: (
       <>
-        Check your spam or junk folder. Codes expire after 10 minutes — return
-        to the sign-in page and try again to request a fresh code. If the
-        problem persists, contact the CSO.
+        Check your spam or junk folder. Codes expire a short time after
+        generation — the code screen shows exactly how long you have left.
+        Return to the sign-in page and try again to request a fresh code if it
+        has expired. If the problem persists, contact the CSO.
       </>
     ),
   },
@@ -99,10 +100,7 @@ export default function HelpPage() {
             </h2>
             <Accordion type="multiple" className="mt-4">
               {faqs.map(({ id, question, answer }) => (
-                <AccordionItem
-                  key={id}
-                  value={id}
-                >
+                <AccordionItem key={id} value={id}>
                   <AccordionTrigger>{question}</AccordionTrigger>
                   <AccordionContent>
                     <p className="text-muted-foreground">{answer}</p>

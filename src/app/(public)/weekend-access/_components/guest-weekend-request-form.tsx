@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -24,11 +24,14 @@ import {
 } from '@/lib/validation/schemas';
 import { apiFetch } from '@/lib/api';
 import { todayDateISO } from '@/lib/dates';
+import { createBrowserClient } from '@/lib/supabase/client';
 import { AuthorizationLetterUpload } from '@/app/(public)/weekend-access/_components/authorization-letter-upload';
 
 // Types
 
 type DepartmentOption = { id: string; name: string };
+
+const FALLBACK_RETURN_DEADLINE_TIME = '17:00';
 
 type GuestWeekendRequestFormProps = {
   departments: DepartmentOption[];
@@ -42,8 +45,22 @@ export const GuestWeekendRequestForm = ({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [returnDeadlineTime, setReturnDeadlineTime] = useState(
+    FALLBACK_RETURN_DEADLINE_TIME
+  );
 
   const letterInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const supabase = createBrowserClient();
+    supabase
+      .from('operational_config')
+      .select('return_deadline_time')
+      .single()
+      .then(({ data }) => {
+        if (data) setReturnDeadlineTime(data.return_deadline_time.slice(0, 5));
+      });
+  }, []);
 
   const form = useForm<GuestWeekendRequestFormInput>({
     resolver: zodResolver(guestWeekendRequestFormSchema),
@@ -78,7 +95,7 @@ export const GuestWeekendRequestForm = ({
     formData.append('weekend_date', values.weekend_date);
     formData.append(
       'return_deadline',
-      new Date(`${values.weekend_date}T23:59:00`).toISOString()
+      new Date(`${values.weekend_date}T${returnDeadlineTime}:00`).toISOString()
     );
     formData.append('letter', (values.letter as FileList)[0]);
 

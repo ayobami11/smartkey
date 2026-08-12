@@ -47,6 +47,8 @@ type AvailableKey = {
 
 type WeekendStep = 'weekend_form' | 'submitting' | 'pending_hod';
 
+const FALLBACK_RETURN_DEADLINE_TIME = '17:00';
+
 // Props
 
 type WeekendAccessSheetProps = {
@@ -68,6 +70,9 @@ export const WeekendAccessSheet = ({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [availableKeys, setAvailableKeys] = useState<AvailableKey[]>([]);
   const [letterFile, setLetterFile] = useState<File | null>(null);
+  const [returnDeadlineTime, setReturnDeadlineTime] = useState(
+    FALLBACK_RETURN_DEADLINE_TIME
+  );
   const letterInputRef = useRef<HTMLInputElement>(null);
 
   const form = useForm<WeekendRequestFormInput>({
@@ -85,10 +90,21 @@ export const WeekendAccessSheet = ({
     setOpen(true);
     try {
       const supabase = createBrowserClient();
-      const { data } = await supabase
-        .from('authorisations')
-        .select('key:keys!key_id(id, code, room_name, status)')
-        .eq('profile_id', userId!);
+      const [{ data }, configResult] = await Promise.all([
+        supabase
+          .from('authorisations')
+          .select('key:keys!key_id(id, code, room_name, status)')
+          .eq('profile_id', userId!),
+        supabase
+          .from('operational_config')
+          .select('return_deadline_time')
+          .single(),
+      ]);
+      if (configResult.data) {
+        setReturnDeadlineTime(
+          configResult.data.return_deadline_time.slice(0, 5)
+        );
+      }
       const keys = ((data ?? []) as unknown as AvailableKey[]).filter(
         (a) => a.key.status !== 'RETIRED'
       );
@@ -146,7 +162,7 @@ export const WeekendAccessSheet = ({
           key_id: values.key_id,
           type: 'WEEKEND',
           return_deadline: new Date(
-            `${values.weekend_date}T23:59:00`
+            `${values.weekend_date}T${returnDeadlineTime}:00`
           ).toISOString(),
           weekend_date: values.weekend_date,
           ...(letterUrl ? { letter_url: letterUrl } : {}),
