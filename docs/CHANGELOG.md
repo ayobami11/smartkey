@@ -8,6 +8,13 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-12 — Applied the operational-config migration to production; rotated the smoke requester password
+
+- **Why**: `/cso/settings` → Operational was 500ing in production ("Couldn't load operational settings") because `20260812090000_operational_config.sql` had only ever been applied to the local Docker stack, never to the real Supabase project — the code shipped, the schema it depends on didn't. Separately, the smoke test's requester login was failing with "Invalid email or password" against a genuinely `ACTIVE` account, cascading into 4 more failures downstream (no session to test with).
+- Applied the migration directly to production (`ocpsklbbksuymjdbfpja`) via the Supabase admin connection; verified `zone_hours`/`operational_config` exist and are seeded with the same defaults as local.
+- Reset `smartkey.tests+requester@gmail.com`'s password in production (via `pgcrypto`, same technique used for the CSO test account fix on 2026-08-10) and handed the new value to the user to update in the `SMOKE_REQUESTER_PASSWORD` GitHub secret.
+- **Lesson**: a migration file being committed and passing locally is not the same as it being live in production. Applying a new Supabase migration to the actual hosted project needs to be a checked step before calling a DB-backed feature done, not assumed to happen automatically on deploy.
+
 ### 2026-08-12 — Disabled the post-deploy auto-rollback job
 
 - **Why**: the first real production smoke-test failure since this gate was armed tripped the rollback job (`vars.SMOKE_AUTO_ROLLBACK == 'true'`), which then itself failed with `VERCEL_TOKEN is not configured` — a hard CI error instead of the intended skip, on top of the underlying smoke-test failure (a requester test-account credential mismatch, tracked in `docs/REVIEW_ACTIONS_BACKEND.md`, unrelated to any code change).
