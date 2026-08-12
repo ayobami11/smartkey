@@ -15,11 +15,13 @@ import { Switch } from '@/components/ui/switch';
 type Prefs = {
   weekend_submitted_in_app: boolean;
   weekend_submitted_email: boolean;
+  digest_email: boolean;
 };
 
 const DEFAULTS: Prefs = {
   weekend_submitted_in_app: true,
   weekend_submitted_email: true,
+  digest_email: false,
 };
 
 const toggleableItems: {
@@ -35,6 +37,11 @@ const toggleableItems: {
   {
     id: 'weekend_submitted_email',
     label: 'Weekend requests submitted',
+    channel: 'email',
+  },
+  {
+    id: 'digest_email',
+    label: "Daily digest of your department's activity",
     channel: 'email',
   },
 ];
@@ -65,6 +72,7 @@ export const NotificationSettings = () => {
       const loaded = {
         weekend_submitted_in_app: result.data.weekend_submitted_in_app,
         weekend_submitted_email: result.data.weekend_submitted_email,
+        digest_email: result.data.digest_email,
       };
       setPrefs(loaded);
       setSavedPrefs(loaded);
@@ -104,6 +112,7 @@ export const NotificationSettings = () => {
     const saved = {
       weekend_submitted_in_app: result.data.weekend_submitted_in_app,
       weekend_submitted_email: result.data.weekend_submitted_email,
+      digest_email: result.data.digest_email,
     };
     setPrefs(saved);
     setSavedPrefs(saved);
@@ -198,26 +207,6 @@ export const NotificationSettings = () => {
                 />
               </div>
             ))}
-
-        <div className="flex items-center justify-between px-5 py-4 opacity-60">
-          <div>
-            <Label
-              htmlFor="digest-email"
-              className="cursor-not-allowed text-sm font-normal text-foreground"
-            >
-              Daily digest of your department&apos;s activity
-            </Label>
-            <p className="text-xs text-muted-foreground">
-              Email &middot; not yet available
-            </p>
-          </div>
-          <Switch
-            id="digest-email"
-            checked={false}
-            disabled
-            aria-label="Daily digest of your department's activity (email, not yet available)"
-          />
-        </div>
       </div>
 
       {saveState === 'success' && (

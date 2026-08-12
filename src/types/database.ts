@@ -322,6 +322,7 @@ export type Database = {
       };
       notification_preferences: {
         Row: {
+          digest_email: boolean;
           key_issued_in_app: boolean;
           overdue_email: boolean;
           profile_id: string;
@@ -331,6 +332,7 @@ export type Database = {
           weekend_submitted_in_app: boolean;
         };
         Insert: {
+          digest_email?: boolean;
           key_issued_in_app?: boolean;
           overdue_email?: boolean;
           profile_id: string;
@@ -340,6 +342,7 @@ export type Database = {
           weekend_submitted_in_app?: boolean;
         };
         Update: {
+          digest_email?: boolean;
           key_issued_in_app?: boolean;
           overdue_email?: boolean;
           profile_id?: string;
@@ -999,6 +1002,19 @@ export type Database = {
           code: string;
           code_expires_at: string;
           request_id: string;
+        }[];
+      };
+      get_digest_stats: {
+        Args: { p_since?: string; p_unit_id?: string };
+        Returns: {
+          high_risk_count: number;
+          incidents_count: number;
+          issued_count: number;
+          overdue_count: number;
+          returned_count: number;
+          signature_mismatch_count: number;
+          weekend_pending_count: number;
+          weekend_submitted_count: number;
         }[];
       };
       issue_key: {

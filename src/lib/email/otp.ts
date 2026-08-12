@@ -419,6 +419,98 @@ export const sendWeekendSubmittedEmail = async ({
     `,
   });
 
+// Shared stat-row markup for the two digest emails below.
+const digestRow = (label: string, value: number) => `
+  <tr>
+    <td style="padding:6px 0;color:#475569;font-size:14px;">${label}</td>
+    <td style="padding:6px 0;color:#0F172A;font-size:14px;font-weight:600;text-align:right;">${value}</td>
+  </tr>
+`;
+
+export const sendDeanDigestEmail = async ({
+  to,
+  fullName,
+  stats,
+}: {
+  to: string;
+  fullName: string;
+  stats: {
+    issued_count: number;
+    returned_count: number;
+    overdue_count: number;
+    weekend_submitted_count: number;
+    weekend_pending_count: number;
+  };
+}) =>
+  transporter.sendMail({
+    from: `"SmartKey" <${process.env.GMAIL_USER}>`,
+    to,
+    subject: "Your faculty's daily activity digest",
+    html: `
+      <div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:400px;margin:0 auto;padding:32px 16px;">
+        ${emailHeader}
+        <div style="background:#fff;border:1px solid #E2E8F0;border-top:none;padding:32px 24px;border-radius:0 0 8px 8px;">
+          <p style="margin:0 0 16px;color:#0F172A;font-size:16px;font-weight:600;">
+            Good morning, ${fullName}
+          </p>
+          <table style="width:100%;border-collapse:collapse;">
+            ${digestRow('Keys issued (last 24h)', stats.issued_count)}
+            ${digestRow('Keys returned (last 24h)', stats.returned_count)}
+            ${digestRow('Keys currently overdue', stats.overdue_count)}
+            ${digestRow('Weekend requests submitted (last 24h)', stats.weekend_submitted_count)}
+            ${digestRow('Weekend requests awaiting your decision', stats.weekend_pending_count)}
+          </table>
+          <p style="margin:24px 0 0;color:#94A3B8;font-size:12px;">
+            You can turn this off in Settings → Notifications.
+          </p>
+        </div>
+      </div>
+    `,
+  });
+
+export const sendCsoDigestEmail = async ({
+  to,
+  fullName,
+  stats,
+}: {
+  to: string;
+  fullName: string;
+  stats: {
+    issued_count: number;
+    returned_count: number;
+    overdue_count: number;
+    high_risk_count: number;
+    signature_mismatch_count: number;
+    incidents_count: number;
+  };
+}) =>
+  transporter.sendMail({
+    from: `"SmartKey" <${process.env.GMAIL_USER}>`,
+    to,
+    subject: "SmartKey's daily activity digest",
+    html: `
+      <div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:400px;margin:0 auto;padding:32px 16px;">
+        ${emailHeader}
+        <div style="background:#fff;border:1px solid #E2E8F0;border-top:none;padding:32px 24px;border-radius:0 0 8px 8px;">
+          <p style="margin:0 0 16px;color:#0F172A;font-size:16px;font-weight:600;">
+            Good morning, ${fullName}
+          </p>
+          <table style="width:100%;border-collapse:collapse;">
+            ${digestRow('Keys issued (last 24h)', stats.issued_count)}
+            ${digestRow('Keys returned (last 24h)', stats.returned_count)}
+            ${digestRow('Keys currently overdue', stats.overdue_count)}
+            ${digestRow('High-risk requests (last 24h)', stats.high_risk_count)}
+            ${digestRow('Signature mismatches (last 24h)', stats.signature_mismatch_count)}
+            ${digestRow('Incidents logged (last 24h)', stats.incidents_count)}
+          </table>
+          <p style="margin:24px 0 0;color:#94A3B8;font-size:12px;">
+            You can turn this off in Settings → Notifications.
+          </p>
+        </div>
+      </div>
+    `,
+  });
+
 export const sendGuestWeekendEmail = async ({
   to,
   link,

@@ -8,6 +8,30 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-12 — Daily activity digest for Dean and CSO
+
+- **Why**: both roles' Notifications tabs had a "daily digest" toggle that was never built — no
+  cron job, no email, no content. Deferred in the previous two passes as a bigger, separate
+  piece of work; built now per direct product discussion on what it should contain.
+- One mechanism, two lenses: new `get_digest_stats(unit_id?, since?)` SQL function returns 8
+  activity counts (keys issued/returned/overdue, weekend submitted/pending, plus building-wide
+  high-risk/signature-mismatch/incident counts) — `unit_id = null` for CSO (building-wide), a
+  real unit id for Dean (faculty-scoped). New `sendDeanDigestEmail`/`sendCsoDigestEmail` and
+  `POST /api/cron/daily-digest`, called by a new `daily-digest` pg_cron job at 07:00 UTC
+  (= 08:00 WAT, matching the CSO mockup's existing "Daily digest at 08:00" label).
+- New `notification_preferences.digest_email` column — **defaults to `false`**, the opposite
+  convention from the other 5 columns on that table, since this is opt-in, not core. Skips
+  sending entirely for a recipient whose 24h window has nothing to report, rather than firing an
+  all-zero email every day.
+- Wired the real toggle onto both tabs: Dean's digest row (previously rendered disabled/"not yet
+  available") is now the third real field in its existing load/save state. CSO's tab was a
+  Server Component with zero interactivity (`defaultChecked`, no state at all) — converted to a
+  Client Component; only the digest row is real, the other three (anomaly in-app/email,
+  signature mismatches) are untouched, still local-only mockup.
+- Verified against production (`ocpsklbbksuymjdbfpja`): `get_digest_stats` sanity-checked with a
+  wide time window before wiring anything to it; the migration (column, RPC, cron job) applied to
+  production immediately after local verification, before this was called done.
+
 ### 2026-08-12 — Dean Notifications tab: real preferences, one new email, digest deferred
 
 - **Why**: same audit-then-implement pass just applied to the Requester tab. Dean's tab lists

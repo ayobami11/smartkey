@@ -1033,7 +1033,7 @@ If the mismatch exceeds `SIGNATURE_DIFF_THRESHOLD` (default 15%), the reference 
 
 RLS-scoped direct read of the caller's own `notification_preferences` row. Returns defaults (all `true`) if no row exists yet — a row is only created on first save, not on read.
 
-**Response `data`**: `{ "key_issued_in_app": true, "overdue_email": true, "weekend_decided_email": true, "weekend_submitted_in_app": true, "weekend_submitted_email": true }`
+**Response `data`**: `{ "key_issued_in_app": true, "overdue_email": true, "weekend_decided_email": true, "weekend_submitted_in_app": true, "weekend_submitted_email": true, "digest_email": false }`
 
 **Errors**: `401` unauthenticated · `500` read failure
 
@@ -1051,8 +1051,9 @@ RLS-scoped direct read of the caller's own `notification_preferences` row. Retur
 | `weekend_decided_email`    | `boolean` | no — Requester field |
 | `weekend_submitted_in_app` | `boolean` | no — Dean field      |
 | `weekend_submitted_email`  | `boolean` | no — Dean field      |
+| `digest_email`             | `boolean` | no — Dean/CSO field  |
 
-All fields are individually optional but at least one is required. Upserts the caller's own row (RLS-scoped, `onConflict: 'profile_id'`) — Postgrest only touches the columns present in the body, so a Dean's PATCH never disturbs the Requester-only columns and vice versa. No RPC, no audit entry — self-service preference data at the same trust level as `PATCH /api/profile/me`. There is no `code_email` field: the collection-code email can't be disabled. There is no digest field: the Dean "daily digest" toggle isn't implemented yet.
+All fields are individually optional but at least one is required. Upserts the caller's own row (RLS-scoped, `onConflict: 'profile_id'`) — Postgrest only touches the columns present in the body, so a Dean's PATCH never disturbs the Requester-only columns and vice versa. No RPC, no audit entry — self-service preference data at the same trust level as `PATCH /api/profile/me`. There is no `code_email` field: the collection-code email can't be disabled. `digest_email` **defaults to `false`** — the opposite convention from every other field here.
 
 **Response `data`**: echoes the saved fields (only the ones sent).
 
@@ -1171,6 +1172,21 @@ Not user-facing. Called by the `overdue-key-check` pg_cron job hourly, right aft
 No request body.
 
 **Response `data`**: `{ "sent": 1, "suppressed": 1, "failed": 0 }`
+
+**Errors**: `401` missing/incorrect bearer secret · `500` `CRON_SECRET` not configured or query failure
+
+---
+
+### POST /api/cron/daily-digest
+
+**File**: `src/app/api/cron/daily-digest/route.ts`
+**Roles**: SYSTEM (pg_cron; no user session)
+
+Not user-facing. Called by the `daily-digest` pg_cron job at 07:00 UTC daily — same `CRON_SECRET` bearer-auth pattern as the other two cron routes. Finds every `ACTIVE` `DEAN`/`CSO` profile with `notification_preferences.digest_email = true` (absence of a row means **not** opted in — the opposite default from every other preference column) and, for each, calls the `get_digest_stats` RPC (building-wide once, cached, for every CSO; per-unit for each Dean) covering the last 24 hours. Skips sending entirely for a recipient whose window has nothing to report in any relevant field — an always-firing digest with all zeros trains people to ignore it.
+
+No request body.
+
+**Response `data`**: `{ "sent": 1, "skipped": 1, "failed": 0 }`
 
 **Errors**: `401` missing/incorrect bearer secret · `500` `CRON_SECRET` not configured or query failure
 
