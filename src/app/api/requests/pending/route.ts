@@ -39,6 +39,7 @@ export const GET = async () => {
       risk_factors,
       created_at,
       letter_url,
+      stamp_url,
       requested_room,
       requested_unit_id,
       requester:profiles!requester_id(id, full_name, photo_url, institutional_email),

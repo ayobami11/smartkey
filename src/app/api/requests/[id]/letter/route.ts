@@ -13,10 +13,13 @@ import { err, ok } from '@/types/api';
 const SIGNED_URL_TTL_SECONDS = 300;
 
 export const GET = async (
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) => {
   const { id } = await params;
+  const type =
+    request.nextUrl.searchParams.get('type') === 'stamp' ? 'stamp' : 'letter';
+  const column = type === 'stamp' ? 'stamp_url' : 'letter_url';
 
   const supabase = await createServerClient();
   const {
@@ -40,12 +43,16 @@ export const GET = async (
     profile.role === 'CSO' ? createAdminClient() : supabase
   )
     .from('requests')
-    .select('letter_url, requested_unit_id')
+    .select('letter_url, stamp_url, requested_unit_id')
     .eq('id', id)
     .maybeSingle();
 
-  if (!req || !req.letter_url) {
-    return NextResponse.json(err('Letter not found', 404), { status: 404 });
+  const fileUrl = req?.[column] ?? null;
+  if (!req || !fileUrl) {
+    return NextResponse.json(
+      err(type === 'stamp' ? 'Stamp not found' : 'Letter not found', 404),
+      { status: 404 }
+    );
   }
 
   // DEAN: only their department's requests.
@@ -57,21 +64,22 @@ export const GET = async (
     return NextResponse.json(err('Forbidden', 403), { status: 403 });
   }
 
-  // letter_url is stored as a full Supabase Storage public URL; extract the
-  // bucket-relative path that createSignedUrl expects.
+  // letter_url/stamp_url are stored as full Supabase Storage public URLs;
+  // extract the bucket-relative path that createSignedUrl expects.
   const bucketMarker = '/weekend-letters/';
-  const markerIdx = req.letter_url.indexOf(bucketMarker);
+  const markerIdx = fileUrl.indexOf(bucketMarker);
   if (markerIdx === -1) {
     const ref = crypto.randomUUID();
-    logger.error('weekend-letter: malformed letter_url', {
+    logger.error('weekend-letter: malformed url', {
       ref,
-      letter_url: req.letter_url,
+      type,
+      url: fileUrl,
     });
     return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
       status: 500,
     });
   }
-  const storagePath = req.letter_url.slice(markerIdx + bucketMarker.length);
+  const storagePath = fileUrl.slice(markerIdx + bucketMarker.length);
 
   const admin = createAdminClient();
   const { data: signed, error: signError } = await admin.storage

@@ -70,10 +70,12 @@ export const WeekendAccessSheet = ({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [availableKeys, setAvailableKeys] = useState<AvailableKey[]>([]);
   const [letterFile, setLetterFile] = useState<File | null>(null);
+  const [stampFile, setStampFile] = useState<File | null>(null);
   const [returnDeadlineTime, setReturnDeadlineTime] = useState(
     FALLBACK_RETURN_DEADLINE_TIME
   );
   const letterInputRef = useRef<HTMLInputElement>(null);
+  const stampInputRef = useRef<HTMLInputElement>(null);
 
   const form = useForm<WeekendRequestFormInput>({
     resolver: zodResolver(weekendRequestFormSchema),
@@ -124,6 +126,7 @@ export const WeekendAccessSheet = ({
       setStep('weekend_form');
       setSubmitError(null);
       setLetterFile(null);
+      setStampFile(null);
       form.reset();
     }, 200);
   };
@@ -132,23 +135,39 @@ export const WeekendAccessSheet = ({
     setStep('submitting');
     setSubmitError(null);
 
+    const supabase = createBrowserClient();
+
+    const uploadToWeekendLetters = async (file: File) => {
+      const ext = file.name.split('.').pop() ?? 'bin';
+      const path = `${userId}/${crypto.randomUUID()}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from('weekend-letters')
+        .upload(path, file, { contentType: file.type });
+      if (uploadError) throw uploadError;
+      const { data: urlData } = supabase.storage
+        .from('weekend-letters')
+        .getPublicUrl(path);
+      return urlData.publicUrl;
+    };
+
     let letterUrl: string | undefined;
+    let stampUrl: string | undefined;
 
     if (letterFile) {
       try {
-        const supabase = createBrowserClient();
-        const ext = letterFile.name.split('.').pop() ?? 'bin';
-        const path = `${userId}/${crypto.randomUUID()}.${ext}`;
-        const { error: uploadError } = await supabase.storage
-          .from('weekend-letters')
-          .upload(path, letterFile, { contentType: letterFile.type });
-        if (uploadError) throw uploadError;
-        const { data: urlData } = supabase.storage
-          .from('weekend-letters')
-          .getPublicUrl(path);
-        letterUrl = urlData.publicUrl;
+        letterUrl = await uploadToWeekendLetters(letterFile);
       } catch {
         setSubmitError('Failed to upload signature image. Try again.');
+        setStep('weekend_form');
+        return;
+      }
+    }
+
+    if (stampFile) {
+      try {
+        stampUrl = await uploadToWeekendLetters(stampFile);
+      } catch {
+        setSubmitError('Failed to upload stamp image. Try again.');
         setStep('weekend_form');
         return;
       }
@@ -166,6 +185,7 @@ export const WeekendAccessSheet = ({
           ).toISOString(),
           weekend_date: values.weekend_date,
           ...(letterUrl ? { letter_url: letterUrl } : {}),
+          ...(stampUrl ? { stamp_url: stampUrl } : {}),
         },
       }
     );
@@ -350,6 +370,49 @@ export const WeekendAccessSheet = ({
                     Upload a close-up photo of the Dean&apos;s signature from
                     the authorisation memo. Enables automatic verification. PNG
                     or JPG only.
+                  </p>
+                </Field>
+
+                {/* Hidden file input — triggered by AuthorizationLetterUpload */}
+                <input
+                  ref={stampInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png"
+                  className="sr-only"
+                  aria-hidden="true"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] ?? null;
+                    if (file && file.size > LETTER_MAX_BYTES) {
+                      setSubmitError('Stamp image must be 5 MB or smaller.');
+                      e.target.value = '';
+                      return;
+                    }
+                    setSubmitError(null);
+                    setStampFile(file);
+                  }}
+                />
+
+                <Field>
+                  <FieldLabel htmlFor="weekend-stamp">
+                    Dean&apos;s stamp{' '}
+                    <span className="font-normal text-muted-foreground">
+                      (optional)
+                    </span>
+                  </FieldLabel>
+                  <AuthorizationLetterUpload
+                    id="weekend-stamp"
+                    file={stampFile}
+                    onPickClick={() => stampInputRef.current?.click()}
+                    onRemove={() => {
+                      setStampFile(null);
+                      if (stampInputRef.current)
+                        stampInputRef.current.value = '';
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Upload a close-up photo of the departmental stamp from the
+                    authorisation memo. Enables automatic verification. PNG or
+                    JPG only.
                   </p>
                 </Field>
               </form>

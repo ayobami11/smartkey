@@ -24,6 +24,9 @@ const bodySchema = z.object({
   // storage. When present, the embedded signature is compared pixel-level
   // against the HOD's onboarded reference. Omit if no letter was uploaded.
   submitted_signature_url: z.url().optional(),
+  // Same idea, for the departmental stamp. Independent of the signature
+  // check — either, both, or neither may be present.
+  submitted_stamp_url: z.url().optional(),
   // For external (guest) requests, the HOD assigns the actual key on approval —
   // the request has no key_id until then. Required when approving a guest
   // request; ignored for registered requests.
@@ -156,15 +159,11 @@ export const POST = async (request: NextRequest) => {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, unit_id, signature_ref_url')
+    .select('role, unit_id, signature_ref_url, stamp_ref_url')
     .eq('id', user.id)
     .single();
   if (!profile)
     return NextResponse.json(err('Unauthorized', 401), { status: 401 });
-  // HODs decide for their faculty's keys; the CSO decides for Administration
-  // (authoriser = 'CSO') keys, which have no Dean. The RPC re-validates that the
-  // actor's role matches the target department's authoriser, so a cross-type
-  // attempt (HOD on an admin key, or CSO on a faculty key) is rejected there.
   if (profile.role !== 'DEAN' && profile.role !== 'CSO')
     return NextResponse.json(err('Forbidden', 403), { status: 403 });
   const isCso = profile.role === 'CSO';
@@ -180,6 +179,7 @@ export const POST = async (request: NextRequest) => {
     decision,
     note,
     submitted_signature_url,
+    submitted_stamp_url,
     key_id,
     cso_override,
   } = parsed.data;
@@ -282,27 +282,69 @@ export const POST = async (request: NextRequest) => {
       );
     }
 
-    // Run pixel-level signature verification when a submitted letter is present.
-    if (submitted_signature_url) {
-      let verifyResult: { mismatch_ratio: number; passed: boolean };
+    // Run pixel-level verification for whichever of signature/stamp was
+    // submitted — independent checks, either/both/neither may be present.
+    if (submitted_signature_url || submitted_stamp_url) {
+      type CheckResult = {
+        ref_url: string;
+        submitted_url: string;
+        mismatch_pct: number;
+        passed: boolean;
+      };
 
-      try {
+      const runCheck = async (
+        refUrl: string,
+        submittedUrl: string
+      ): Promise<CheckResult> => {
         const [refRes, subRes] = await Promise.all([
-          fetch(profile.signature_ref_url),
-          fetch(submitted_signature_url),
+          fetch(refUrl),
+          fetch(submittedUrl),
         ]);
         if (!refRes.ok || !subRes.ok)
-          throw new Error('Failed to fetch signature images');
+          throw new Error('Failed to fetch reference/submitted images');
 
         const [refBuffer, subBuffer] = await Promise.all([
           refRes.arrayBuffer().then(Buffer.from),
           subRes.arrayBuffer().then(Buffer.from),
         ]);
 
-        verifyResult = await verifySignature(refBuffer, subBuffer);
+        const verifyResult = await verifySignature(refBuffer, subBuffer);
+        return {
+          ref_url: refUrl,
+          submitted_url: submittedUrl,
+          mismatch_pct: parseFloat(
+            (verifyResult.mismatch_ratio * 100).toFixed(2)
+          ),
+          passed: verifyResult.passed,
+        };
+      };
+
+      let signatureCheck: CheckResult | null = null;
+      let stampCheck: CheckResult | null = null;
+
+      try {
+        if (submitted_signature_url) {
+          signatureCheck = await runCheck(
+            profile.signature_ref_url,
+            submitted_signature_url
+          );
+        }
+        if (submitted_stamp_url) {
+          if (profile.stamp_ref_url) {
+            stampCheck = await runCheck(
+              profile.stamp_ref_url,
+              submitted_stamp_url
+            );
+          } else {
+            logger.error(
+              'hod-decision: stamp submitted but no stamp_ref_url on file',
+              { requestId: request_id }
+            );
+          }
+        }
       } catch (e) {
         const ref = crypto.randomUUID();
-        logger.error('hod-decision: signature fetch/verify failed', {
+        logger.error('hod-decision: signature/stamp fetch/verify failed', {
           ref,
           err: e instanceof Error ? e.message : String(e),
         });
@@ -312,12 +354,11 @@ export const POST = async (request: NextRequest) => {
         );
       }
 
-      if (!verifyResult.passed) {
-        // Approval is held — do not call approve_weekend. Write an audit entry
-        // so the CSO can see the reference URL, submitted URL, and mismatch %.
-        const mismatch_pct = parseFloat(
-          (verifyResult.mismatch_ratio * 100).toFixed(2)
-        );
+      const failed = [signatureCheck, stampCheck].filter(
+        (c): c is CheckResult => c !== null && !c.passed
+      );
+
+      if (failed.length > 0) {
         try {
           await writeAuditEntry({
             event: 'SIGNATURE_MISMATCH',
@@ -326,9 +367,20 @@ export const POST = async (request: NextRequest) => {
             targetType: 'request',
             targetId: request_id,
             payload: {
-              ref_url: profile.signature_ref_url,
-              submitted_url: submitted_signature_url,
-              mismatch_pct,
+              signature: signatureCheck
+                ? {
+                    ref_url: signatureCheck.ref_url,
+                    submitted_url: signatureCheck.submitted_url,
+                    mismatch_pct: signatureCheck.mismatch_pct,
+                  }
+                : null,
+              stamp: stampCheck
+                ? {
+                    ref_url: stampCheck.ref_url,
+                    submitted_url: stampCheck.submitted_url,
+                    mismatch_pct: stampCheck.mismatch_pct,
+                  }
+                : null,
               threshold_pct: parseFloat((DEFAULT_THRESHOLD * 100).toFixed(2)),
             },
           });
@@ -346,22 +398,26 @@ export const POST = async (request: NextRequest) => {
           ok({
             request_id,
             status: 'HELD_SIGNATURE_MISMATCH',
-            mismatch_pct,
+            mismatches: {
+              ...(signatureCheck && !signatureCheck.passed
+                ? { signature: signatureCheck.mismatch_pct }
+                : {}),
+              ...(stampCheck && !stampCheck.passed
+                ? { stamp: stampCheck.mismatch_pct }
+                : {}),
+            },
             message:
-              'Approval held: signature mismatch detected. The CSO has been notified.',
+              'Approval held: mismatch detected. The CSO has been notified.',
           })
         );
       }
 
-      // Verification passed — call RPC with real mismatch data.
       const { data, error } = await supabase.rpc('approve_weekend', {
         p_request_id: request_id,
         p_hod_id: user.id,
         p_note: note ?? undefined,
         p_signature_verified: true,
-        p_signature_mismatch_pct: parseFloat(
-          (verifyResult.mismatch_ratio * 100).toFixed(2)
-        ),
+        p_signature_mismatch_pct: signatureCheck?.mismatch_pct,
       });
 
       if (error) {
@@ -388,7 +444,7 @@ export const POST = async (request: NextRequest) => {
       );
     }
 
-    // No submitted letter — proceed without comparison.
+    // No submitted letter or stamp — proceed without comparison.
     const { data, error } = await supabase.rpc('approve_weekend', {
       p_request_id: request_id,
       p_hod_id: user.id,

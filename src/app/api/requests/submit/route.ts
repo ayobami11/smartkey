@@ -30,6 +30,7 @@ const bodySchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .optional(),
   letter_url: z.url().optional(),
+  stamp_url: z.url().optional(),
 });
 
 const mapRpcError = (msg: string): { status: number; message: string } => {
@@ -75,7 +76,7 @@ export const POST = async (request: NextRequest) => {
     return NextResponse.json(err('Invalid request body', 422), { status: 422 });
   }
 
-  const { key_id, type, return_deadline, weekend_date, letter_url } =
+  const { key_id, type, return_deadline, weekend_date, letter_url, stamp_url } =
     parsed.data;
 
   // Fetch risk context data in parallel before calling the RPC.
@@ -205,13 +206,16 @@ export const POST = async (request: NextRequest) => {
     });
   }
 
-  if (type === 'WEEKEND' && letter_url) {
+  if (type === 'WEEKEND' && (letter_url || stamp_url)) {
     const { error: letterUpdateError } = await adminClient
       .from('requests')
-      .update({ letter_url })
+      .update({
+        ...(letter_url ? { letter_url } : {}),
+        ...(stamp_url ? { stamp_url } : {}),
+      })
       .eq('id', result.request_id);
     if (letterUpdateError) {
-      logger.error('failed to persist letter_url', {
+      logger.error('failed to persist letter_url/stamp_url', {
         requestId: result.request_id,
         err: letterUpdateError.message,
       });

@@ -460,6 +460,7 @@ export type Database = {
           returned_at: string | null;
           risk_factors: Json | null;
           risk_tier: Database['public']['Enums']['risk_tier'] | null;
+          stamp_url: string | null;
           status: Database['public']['Enums']['request_status'];
           type: Database['public']['Enums']['request_type'];
         };
@@ -487,6 +488,7 @@ export type Database = {
           returned_at?: string | null;
           risk_factors?: Json | null;
           risk_tier?: Database['public']['Enums']['risk_tier'] | null;
+          stamp_url?: string | null;
           status?: Database['public']['Enums']['request_status'];
           type: Database['public']['Enums']['request_type'];
         };
@@ -514,6 +516,7 @@ export type Database = {
           returned_at?: string | null;
           risk_factors?: Json | null;
           risk_tier?: Database['public']['Enums']['risk_tier'] | null;
+          stamp_url?: string | null;
           status?: Database['public']['Enums']['request_status'];
           type?: Database['public']['Enums']['request_type'];
         };

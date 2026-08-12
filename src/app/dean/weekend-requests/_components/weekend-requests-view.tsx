@@ -100,6 +100,7 @@ type PendingRequest = {
   type: 'WEEKDAY' | 'WEEKEND';
   risk_tier: string;
   letter_url: string | null;
+  stamp_url: string | null;
   requested_room: string | null;
   requested_unit_id: string | null;
 };
