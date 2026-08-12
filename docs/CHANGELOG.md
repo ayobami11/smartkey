@@ -8,6 +8,30 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-12 — Dean Notifications tab: real preferences, one new email, digest deferred
+
+- **Why**: same audit-then-implement pass just applied to the Requester tab. Dean's tab lists
+  three items; the reality was a third mix again — "weekend submitted (in-app)" already has a
+  real underlying signal (the Dean dashboard's live Realtime pending-count), "weekend submitted
+  (email)" had no email anywhere, and "daily digest" has no email, no cron job, and no content
+  design — genuinely a bigger, separate piece of work, not just a wiring gap.
+- Extended `notification_preferences` (not a new table — the existing one is role-agnostic, RLS
+  gates on `profile_id` with no role check) with `weekend_submitted_in_app` and
+  `weekend_submitted_email`. Generalized `GET`/`PATCH /api/profile/notification-preferences` to a
+  partial-update shape covering all 5 known columns across both roles, instead of hardcoding the
+  3 Requester ones.
+- New `sendWeekendSubmittedEmail` plus `getDeanRecipientForUnit`/`getDeanRecipientForKey` in
+  `src/lib/email/`, wired into both places a weekend request is created
+  (`POST /api/requests/submit`, `POST /api/public/weekend-request`). Deliberately resolves to no
+  recipient (no email sent) for Administration (`authoriser='CSO'`) units — CSO's Notifications
+  tab is a separate, still-mockup, not-yet-audited surface, not silently pulled into this scope.
+- "Daily digest of your department's activity" is explicitly **not** implemented this pass — by
+  the user's call, since it needs its own daily cron job and a real decision about what counts as
+  "activity," unlike the other two items which mirrored patterns already built for Requester. The
+  tab renders it disabled with "not yet available" rather than a switch that silently no-ops.
+- Applied to production (`ocpsklbbksuymjdbfpja`) immediately after local verification, same as the
+  Requester pass — verified the 2 new columns exist on the live table before calling this done.
+
 ### 2026-08-12 — Requester Notifications tab: real preferences, two new emails
 
 - **Why**: settings-tab audit found the tab was a `useState` mockup, and going one layer deeper

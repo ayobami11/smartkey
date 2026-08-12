@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-import { sendGuestWeekendEmail } from '@/lib/email/otp';
+import { sendGuestWeekendEmail, sendWeekendSubmittedEmail } from '@/lib/email/otp';
+import { getDeanRecipientForUnit } from '@/lib/email/request-recipient';
 import { logger } from '@/lib/logger';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { err, ok } from '@/types/api';
@@ -193,6 +194,25 @@ export const POST = async (request: NextRequest) => {
       err: e instanceof Error ? e.message : String(e),
     });
   }
+
+  void getDeanRecipientForUnit(adminClient, parsed.data.department_id)
+    .then((recipient) => {
+      if (!recipient) return;
+      return sendWeekendSubmittedEmail({
+        to: recipient.to,
+        fullName: recipient.fullName,
+        requesterName: parsed.data.full_name,
+        unitName: recipient.unitName,
+        requestedFor: parsed.data.weekend_date,
+        link: `${siteUrl}/dean/weekend-requests`,
+      });
+    })
+    .catch((e: unknown) => {
+      logger.error('guest weekend-request: dean notification failed', {
+        requestId: result.request_id,
+        err: e instanceof Error ? e.message : String(e),
+      });
+    });
 
   return NextResponse.json(
     ok(

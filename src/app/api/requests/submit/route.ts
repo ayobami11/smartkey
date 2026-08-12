@@ -8,8 +8,14 @@ import type {
   RiskEngineConfig,
   RiskRuleKey,
 } from '@/lib/ai/risk/types';
-import { sendCollectionCodeEmail } from '@/lib/email/otp';
-import { getRequestRecipient } from '@/lib/email/request-recipient';
+import {
+  sendCollectionCodeEmail,
+  sendWeekendSubmittedEmail,
+} from '@/lib/email/otp';
+import {
+  getDeanRecipientForKey,
+  getRequestRecipient,
+} from '@/lib/email/request-recipient';
 import { logger } from '@/lib/logger';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
@@ -55,7 +61,7 @@ export const POST = async (request: NextRequest) => {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, unit_id')
+    .select('role, unit_id, full_name')
     .eq('id', user.id)
     .single();
   if (!profile)
@@ -213,6 +219,30 @@ export const POST = async (request: NextRequest) => {
   }
 
   if (type === 'WEEKEND') {
+    // Fire-and-forget — resolves to null (no send) for Administration
+    // (authoriser='CSO') keys, which have no Dean.
+    void getDeanRecipientForKey(adminClient, key_id)
+      .then((recipient) => {
+        if (!recipient) return;
+        const siteUrl =
+          process.env.NEXT_PUBLIC_SITE_URL ??
+          'https://smartkey-ochre.vercel.app';
+        return sendWeekendSubmittedEmail({
+          to: recipient.to,
+          fullName: recipient.fullName,
+          requesterName: profile.full_name,
+          unitName: recipient.unitName,
+          requestedFor: weekend_date ?? '',
+          link: `${siteUrl}/dean/weekend-requests`,
+        });
+      })
+      .catch((e: unknown) => {
+        logger.error('submit: weekend-submitted email failed', {
+          requestId: result.request_id,
+          err: e instanceof Error ? e.message : String(e),
+        });
+      });
+
     return NextResponse.json(
       ok({
         request_id: result.request_id,

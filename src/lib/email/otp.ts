@@ -379,6 +379,46 @@ export const sendOverdueReminderEmail = async ({
   });
 };
 
+export const sendWeekendSubmittedEmail = async ({
+  to,
+  fullName,
+  requesterName,
+  unitName,
+  requestedFor,
+  link,
+}: {
+  to: string;
+  fullName: string;
+  requesterName: string;
+  unitName: string;
+  requestedFor: string;
+  link: string;
+}) =>
+  transporter.sendMail({
+    from: `"SmartKey" <${process.env.GMAIL_USER}>`,
+    to,
+    subject: 'New weekend access request awaiting your review',
+    html: `
+      <div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:400px;margin:0 auto;padding:32px 16px;">
+        ${emailHeader}
+        <div style="background:#fff;border:1px solid #E2E8F0;border-top:none;padding:32px 24px;border-radius:0 0 8px 8px;">
+          <p style="margin:0 0 8px;color:#0F172A;font-size:16px;font-weight:600;">
+            New weekend request, ${fullName}
+          </p>
+          <p style="margin:0 0 24px;color:#475569;font-size:14px;">
+            <strong>${requesterName}</strong> has requested weekend access in
+            <strong>${unitName}</strong> for <strong>${requestedFor}</strong>.
+            It's awaiting your review.
+          </p>
+          <a href="${link}"
+            style="display:inline-block;background:#7B1F2D;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">
+            Review request
+          </a>
+        </div>
+      </div>
+    `,
+  });
+
 export const sendGuestWeekendEmail = async ({
   to,
   link,

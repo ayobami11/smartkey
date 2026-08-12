@@ -8,13 +8,21 @@ const DEFAULTS = {
   key_issued_in_app: true,
   overdue_email: true,
   weekend_decided_email: true,
+  weekend_submitted_in_app: true,
+  weekend_submitted_email: true,
 };
 
-const bodySchema = z.object({
-  key_issued_in_app: z.boolean(),
-  overdue_email: z.boolean(),
-  weekend_decided_email: z.boolean(),
-});
+const bodySchema = z
+  .object({
+    key_issued_in_app: z.boolean().optional(),
+    overdue_email: z.boolean().optional(),
+    weekend_decided_email: z.boolean().optional(),
+    weekend_submitted_in_app: z.boolean().optional(),
+    weekend_submitted_email: z.boolean().optional(),
+  })
+  .refine((body) => Object.keys(body).length > 0, {
+    message: 'At least one preference field is required',
+  });
 
 export const GET = async () => {
   const supabase = await createServerClient();
@@ -27,7 +35,9 @@ export const GET = async () => {
 
   const { data: prefs, error } = await supabase
     .from('notification_preferences')
-    .select('key_issued_in_app, overdue_email, weekend_decided_email')
+    .select(
+      'key_issued_in_app, overdue_email, weekend_decided_email, weekend_submitted_in_app, weekend_submitted_email'
+    )
     .eq('profile_id', user.id)
     .maybeSingle();
 

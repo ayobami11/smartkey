@@ -231,6 +231,8 @@ The RPC runs the risk engine, generates the code, and writes the audit entry ato
 
 **Errors**: `403` requester not authorised for this key · `409` active request already exists for this key · `422` outside operational hours (weekend requests) · `500` RPC failure
 
+For a `WEEKDAY` request, fires a fire-and-forget `sendCollectionCodeEmail` to the requester. For a `WEEKEND` request, fires a fire-and-forget `sendWeekendSubmittedEmail` to the key's unit's Dean (resolved via `getDeanRecipientForKey`) — no-op for Administration (`authoriser='CSO'`) keys, which have no Dean. Neither send can fail the response.
+
 ---
 
 ### GET /api/requests/my
@@ -476,7 +478,7 @@ These routes let an external person with no SmartKey account submit a weekend ke
 **Roles**: ALL (unauthenticated)
 **RPC**: `create_guest_weekend_request(full_name, email, phone, id_type, id_number, department_id, weekend_date, return_deadline, letter_url, requested_room)`
 
-Multipart form. Uploads the Dean authorisation letter to the `weekend-letters` bucket, creates the guest + request (`PENDING_HOD`, no code), and emails the status link to the guest (via the shared email sender in `src/lib/email/`). Email failure is logged but does not fail the request. Returns `201`.
+Multipart form. Uploads the Dean authorisation letter to the `weekend-letters` bucket, creates the guest + request (`PENDING_HOD`, no code), and emails the status link to the guest (via the shared email sender in `src/lib/email/`). Also fires a fire-and-forget `sendWeekendSubmittedEmail` to the target unit's Dean (resolved via `getDeanRecipientForUnit`, `department_id`) — no-op for Administration units. Neither send can fail the request. Returns `201`.
 
 | Field                | Type                       | Required |
 | -------------------- | -------------------------- | -------- |
@@ -1027,11 +1029,11 @@ If the mismatch exceeds `SIGNATURE_DIFF_THRESHOLD` (default 15%), the reference 
 ### GET /api/profile/notification-preferences
 
 **File**: `src/app/api/profile/notification-preferences/route.ts`
-**Roles**: ALL (authenticated) — currently only the Requester settings UI calls this
+**Roles**: ALL (authenticated) — shared by the Requester and Dean settings UIs; each only reads the fields it displays
 
-RLS-scoped direct read of the caller's own `notification_preferences` row. Returns defaults (`true`/`true`/`true`) if no row exists yet — a row is only created on first save, not on read.
+RLS-scoped direct read of the caller's own `notification_preferences` row. Returns defaults (all `true`) if no row exists yet — a row is only created on first save, not on read.
 
-**Response `data`**: `{ "key_issued_in_app": true, "overdue_email": true, "weekend_decided_email": true }`
+**Response `data`**: `{ "key_issued_in_app": true, "overdue_email": true, "weekend_decided_email": true, "weekend_submitted_in_app": true, "weekend_submitted_email": true }`
 
 **Errors**: `401` unauthenticated · `500` read failure
 
@@ -1042,17 +1044,19 @@ RLS-scoped direct read of the caller's own `notification_preferences` row. Retur
 **File**: `src/app/api/profile/notification-preferences/route.ts`
 **Roles**: ALL (authenticated)
 
-| Field                   | Type      | Required |
-| ----------------------- | --------- | -------- |
-| `key_issued_in_app`     | `boolean` | yes      |
-| `overdue_email`         | `boolean` | yes      |
-| `weekend_decided_email` | `boolean` | yes      |
+| Field                      | Type      | Required             |
+| -------------------------- | --------- | -------------------- |
+| `key_issued_in_app`        | `boolean` | no — Requester field |
+| `overdue_email`            | `boolean` | no — Requester field |
+| `weekend_decided_email`    | `boolean` | no — Requester field |
+| `weekend_submitted_in_app` | `boolean` | no — Dean field      |
+| `weekend_submitted_email`  | `boolean` | no — Dean field      |
 
-Upserts the caller's own row (RLS-scoped, `onConflict: 'profile_id'`). No RPC, no audit entry — self-service preference data at the same trust level as `PATCH /api/profile/me`. There is no `code_email` field: the collection-code email can't be disabled.
+All fields are individually optional but at least one is required. Upserts the caller's own row (RLS-scoped, `onConflict: 'profile_id'`) — Postgrest only touches the columns present in the body, so a Dean's PATCH never disturbs the Requester-only columns and vice versa. No RPC, no audit entry — self-service preference data at the same trust level as `PATCH /api/profile/me`. There is no `code_email` field: the collection-code email can't be disabled. There is no digest field: the Dean "daily digest" toggle isn't implemented yet.
 
-**Response `data`**: echoes the saved `{ key_issued_in_app, overdue_email, weekend_decided_email }`.
+**Response `data`**: echoes the saved fields (only the ones sent).
 
-**Errors**: `401` unauthenticated · `422` validation · `500` write failure
+**Errors**: `401` unauthenticated · `422` validation (empty body) · `500` write failure
 
 ---
 

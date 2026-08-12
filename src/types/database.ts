@@ -327,6 +327,8 @@ export type Database = {
           profile_id: string;
           updated_at: string;
           weekend_decided_email: boolean;
+          weekend_submitted_email: boolean;
+          weekend_submitted_in_app: boolean;
         };
         Insert: {
           key_issued_in_app?: boolean;
@@ -334,6 +336,8 @@ export type Database = {
           profile_id: string;
           updated_at?: string;
           weekend_decided_email?: boolean;
+          weekend_submitted_email?: boolean;
+          weekend_submitted_in_app?: boolean;
         };
         Update: {
           key_issued_in_app?: boolean;
@@ -341,6 +345,8 @@ export type Database = {
           profile_id?: string;
           updated_at?: string;
           weekend_decided_email?: boolean;
+          weekend_submitted_email?: boolean;
+          weekend_submitted_in_app?: boolean;
         };
         Relationships: [
           {

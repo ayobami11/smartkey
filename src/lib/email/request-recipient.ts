@@ -51,3 +51,51 @@ export const getRequestRecipient = async (
     isGuest: false,
   };
 };
+
+export const getDeanRecipientForUnit = async (
+  admin: ReturnType<typeof createAdminClient>,
+  unitId: string
+): Promise<{ to: string; fullName: string; unitName: string } | null> => {
+  const { data: unit } = await admin
+    .from('units')
+    .select('name, authoriser, hod_id')
+    .eq('id', unitId)
+    .single();
+
+  if (!unit || unit.authoriser !== 'DEAN' || !unit.hod_id) return null;
+
+  const { data: dean } = await admin
+    .from('profiles')
+    .select('full_name, institutional_email')
+    .eq('id', unit.hod_id)
+    .single();
+
+  if (!dean?.institutional_email) return null;
+
+  const { data: pref } = await admin
+    .from('notification_preferences')
+    .select('weekend_submitted_email')
+    .eq('profile_id', unit.hod_id)
+    .maybeSingle();
+  if (pref && !pref.weekend_submitted_email) return null;
+
+  return {
+    to: dean.institutional_email,
+    fullName: dean.full_name,
+    unitName: unit.name,
+  };
+};
+
+export const getDeanRecipientForKey = async (
+  admin: ReturnType<typeof createAdminClient>,
+  keyId: string
+): Promise<{ to: string; fullName: string; unitName: string } | null> => {
+  const { data: key } = await admin
+    .from('keys')
+    .select('unit_id')
+    .eq('id', keyId)
+    .single();
+
+  if (!key?.unit_id) return null;
+  return getDeanRecipientForUnit(admin, key.unit_id);
+};

@@ -208,13 +208,17 @@ CSO-editable return deadline and code-expiry minutes. Singleton table — fixed 
 
 ### notification_preferences
 
-Self-service Requester notification preferences, backing the `/requester/settings` "Notifications" tab (previously a static mockup — see `docs/REVIEW_ACTIONS_BACKEND.md`). One row per profile, created lazily on first save (no backfill, no trigger). RLS: a profile reads/writes only its own row (`profile_id = auth.uid()`) — no RPC, same trust level as editing `full_name` via `PATCH /api/profile/me`. Collection-code email has no column here — it can't be disabled.
+Self-service notification preferences, shared by the `/requester/settings` and `/dean/settings` "Notifications" tabs (both previously static mockups — see `docs/REVIEW_ACTIONS_BACKEND.md`). One row per profile, created lazily on first save (no backfill, no trigger). RLS: a profile reads/writes only its own row (`profile_id = auth.uid()`), no role check — the table is role-agnostic; each role's UI/route only reads and writes the columns it displays. No RPC, same trust level as editing `full_name` via `PATCH /api/profile/me`.
 
 - `profile_id` UUID PK, FK `profiles`, `ON DELETE CASCADE`
-- `key_issued_in_app` boolean, default true — persists but doesn't currently gate anything; there's no separate in-app notification to suppress, the dashboard's live status (via Realtime) is the notification.
-- `overdue_email` boolean, default true — gates `POST /api/cron/overdue-reminders`. Absence of a row means the default applies, not an opt-out.
-- `weekend_decided_email` boolean, default true — gates the existing `hod-decision` approval/decline email for **registered** requesters only; guests have no row and always receive it.
+- `key_issued_in_app` boolean, default true — Requester. Persists but doesn't currently gate anything; there's no separate in-app notification to suppress, the dashboard's live status (via Realtime) is the notification.
+- `overdue_email` boolean, default true — Requester. Gates `POST /api/cron/overdue-reminders`. Absence of a row means the default applies, not an opt-out. Collection-code email has no column here — it can't be disabled.
+- `weekend_decided_email` boolean, default true — Requester. Gates the existing `hod-decision` approval/decline email for **registered** requesters only; guests have no row and always receive it.
+- `weekend_submitted_in_app` boolean, default true — Dean. Same "persists, gates nothing" treatment as `key_issued_in_app`: the Dean dashboard's live Realtime pending-count is the notification.
+- `weekend_submitted_email` boolean, default true — Dean. Gates `sendWeekendSubmittedEmail`, sent when a weekend request lands in a **Dean-authorised** unit (`units.authoriser = 'DEAN'`); Administration (`authoriser = 'CSO'`) units resolve no recipient and send nothing — CSO's Notifications tab is a separate, still-deferred audit.
 - `updated_at` timestamptz
+
+Dean's "Daily digest of your department's activity" toggle is deliberately **not** a column here — it needs its own cron job and content design, out of scope for now (see `docs/REVIEW_ACTIONS_BACKEND.md`); the UI renders it disabled rather than pretending it saves something.
 
 ### requests.overdue_reminder_sent_at
 
