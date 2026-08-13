@@ -8,6 +8,19 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-13 — Fixed CI test failure caused by the change-password button-disable logic
+
+- **Why**: deployment's `npm test` step failed on `change-password-form.test.tsx` — "shows validation
+  error when current password is empty" clicked "Update password" with every field blank, expecting
+  the zod message "Current password is required." to appear. That message can no longer surface:
+  the submit button is now `disabled` while any field is empty (re-added earlier this session per
+  direct request), so the click no-ops and the form never actually submits.
+- Replaced the test with one that verifies the actual current behavior — the button starts disabled,
+  stays disabled as fields are filled in one at a time, and only enables once all three hold a value —
+  instead of patching around a UI state the button now prevents from ever occurring.
+- Verified: `npm run typecheck`, `npm run lint`, and `npm test` all pass clean (351 tests, 1
+  pre-existing unrelated skip).
+
 ### 2026-08-13 — Collector-picker email overflow, last-sign-in sort, code-expiry input
 
 - **Why**: follow-up polish pass across `/cso/keys`, `/dean/keys`, `/cso/users`, and

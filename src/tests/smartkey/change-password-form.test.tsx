@@ -69,15 +69,25 @@ describe('ChangePasswordForm', () => {
     ).toBeInTheDocument();
   });
 
-  it('shows validation error when current password is empty', async () => {
+  it('disables the submit button until every field is filled', async () => {
     const user = userEvent.setup();
     render(<ChangePasswordForm />);
-    await user.click(screen.getByRole('button', { name: /update password/i }));
-    await waitFor(() => {
-      expect(
-        screen.getByText('Current password is required.')
-      ).toBeInTheDocument();
+    const submitButton = screen.getByRole('button', {
+      name: /update password/i,
     });
+    expect(submitButton).toBeDisabled();
+
+    await user.type(screen.getByLabelText('Current password'), 'oldpass');
+    expect(submitButton).toBeDisabled();
+
+    await user.type(screen.getByLabelText('New password'), VALID_PASSWORD);
+    expect(submitButton).toBeDisabled();
+
+    await user.type(
+      screen.getByLabelText('Confirm new password'),
+      VALID_PASSWORD
+    );
+    expect(submitButton).toBeEnabled();
   });
 
   it('shows error when passwords do not match', async () => {
