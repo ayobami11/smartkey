@@ -8,6 +8,24 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-18 — E2E OTP mailbox: Gmail was routing the codes to Spam
+
+- **Why**: with local credentials and the app-under-test's SMTP config both confirmed correct, CSO/
+  Dean/Verifier E2E logins still failed with "No OTP email arrived within 30s". Rather than assume
+  another config gap, sent a real diagnostic OTP-shaped email and watched exactly where it landed.
+- Gmail delivers this mailbox's SmartKey OTP mail straight to `[Gmail]/Spam`, not `INBOX` — a real,
+  successfully-sent email, confirmed via a direct SMTP send and IMAP read. Likely cause: the same
+  sender/subject repeated on every automated test run is a classic spam signature, and nobody's ever
+  there to mark it "Not spam" on this unattended mailbox.
+- `tests/e2e/utils/otp.ts`'s `fetchOtpCode` only ever searched `INBOX`, so a correctly-sent,
+  correctly-delivered email was invisible to it. Refactored to search `INBOX` then `[Gmail]/Spam` in
+  order (extracted the per-mailbox search into `searchMailbox`, reused across both). Deliberately not
+  `[Gmail]/All Mail` — Gmail's IMAP implementation excludes both Spam and Trash from All Mail, so
+  that folder alone wouldn't have caught this.
+- Verified end-to-end: sent a real diagnostic email, confirmed the new search logic finds it in
+  Spam and correctly extracts its code. `npm run typecheck` and `npx eslint tests/e2e/utils/otp.ts`
+  both clean.
+
 ### 2026-08-18 — Two real local-env bugs found while re-running E2E after the smoke fix
 
 - **Why**: `npm run test:e2e -- --grep "CSO dashboard"` still failed after `.env.local` was updated
