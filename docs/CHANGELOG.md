@@ -8,6 +8,58 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-18 — Uptime monitoring setup instructions for `/api/health`
+
+- **Why**: `docs/review.md` item 11 has had uptime monitoring open since the endpoint was built —
+  `/api/health` exists and is correct (real DB query, `503` on failure, deliberately not `/`, which
+  is static and returns `200` through a total outage), but nothing pointed an actual monitor at it.
+  Verified the endpoint's behavior by reading the route rather than assuming its docstring is still
+  accurate.
+- New `docs/UPTIME_MONITORING.md`: exact values for the monitor (URL, method, expected status,
+  optional keyword check to also catch the `"degraded"` slow-but-up state that a plain status-code
+  check misses), and the production URL to point it at (`smartkey-ochre.vercel.app`, per
+  `docs/SMOKE_TEST_SETUP.md`'s existing reference).
+- **Not done**: creating the monitor itself. This is a dashboard action on a third-party site
+  (UptimeRobot, per the route's own docstring) — no API key for it exists in this repo or
+  environment, so it can't be automated from here without one being handed over.
+
+### 2026-08-18 — E2E OTP mailbox: fixed the silent CI SMTP gap and the resend-otp false-success bug
+
+- **Why**: `docs/review.md` item 4 said OTP delivery to the E2E mailbox was still broken, guessed
+  to be a stale `GMAIL_APP_PASSWORD`, with Dean/Verifier test accounts and six GitHub secrets
+  listed as still open. Investigated directly against production via the Supabase MCP rather than
+  guessing further.
+- **Test accounts were never actually missing**: CSO/Dean/Verifier/Requester all exist, `ACTIVE`,
+  as `smartkey.tests+<role>@gmail.com` — `docs/E2E_OTP_SETUP.md` just described a different,
+  never-created mailbox (`smartkey.e2e.tests+<role>@gmail.com`). If `E2E_OTP_IMAP_USER` was ever
+  set to that literal address, it would read a mailbox that never received any of the real OTP
+  mail — alone enough to explain a permanent "No OTP email arrived" timeout. Doc corrected to the
+  real addresses.
+- **Real bug in `.github/workflows/e2e.yml`**: the "Run E2E tests" step's `env:` block never set
+  `GMAIL_USER` / `GMAIL_APP_PASSWORD` — the two vars `src/lib/email/otp.ts`'s transporter needs to
+  authenticate. The app-under-test in CI therefore had no SMTP credentials at all, so every OTP
+  send failed before any mailbox or password-staleness question was even reachable. Added both,
+  reading from `secrets.GMAIL_USER` / `secrets.GMAIL_APP_PASSWORD`.
+- `TEST_CSO_PASSWORD` / `TEST_DEAN_PASSWORD` / `TEST_VERIFIER_PASSWORD` were unknown, so all three
+  were reset directly against `auth.users.encrypted_password` via `pgcrypto` (same technique as the
+  2026-08-12 requester-account fix). All 10 secrets this setup needs — the IMAP pair, the Gmail
+  send pair, and the three `TEST_*_EMAIL`/`TEST_*_PASSWORD` pairs — are now added to the repo.
+- **`POST /api/auth/resend-otp` reported success even when `sendOtpEmail` threw** — the failure was
+  caught, logged, and swallowed into an unconditional `ok(null)`, so a genuine SMTP failure on
+  resend looked identical to a successful send from the client's point of view; the OTP screen
+  toasted "New code sent" and started a 60s cooldown regardless. Fixed by mirroring
+  `POST /api/auth/login`'s existing `email_delivery_failed` field — but only reveal it when the
+  caller already holds the session `login` set for that exact profile (proven via `getUser()`
+  against the role-namespaced cookie), the same condition that makes it safe for `login` to reveal
+  it. An anonymous caller probing an arbitrary email still gets the unconditional `ok(null)`, so
+  this closes the UX gap without opening an enumeration oracle during an SMTP outage.
+  `otp-form.tsx`'s `handleResendOtp` now toasts an error and skips the cooldown on genuine failure
+  instead of always toasting success.
+- Verified: `npm run typecheck` and `npm run lint` clean on the four changed files. Migration state
+  double-checked directly against production (`ocpsklbbksuymjdbfpja`) — unrelated to this change,
+  but confirmed while in there: the `stamp_mismatch` and `profiles_last_login_at` migrations are
+  both already applied.
+
 ### 2026-08-13 — Fixed CI test failure caused by the change-password button-disable logic
 
 - **Why**: deployment's `npm test` step failed on `change-password-form.test.tsx` — "shows validation

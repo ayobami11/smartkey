@@ -73,10 +73,12 @@ jobs:
           TEST_VERIFIER_PASSWORD: ${{ secrets.TEST_VERIFIER_PASSWORD }}
           TEST_REQUESTER_EMAIL: ${{ secrets.TEST_REQUESTER_EMAIL }}
           TEST_REQUESTER_PASSWORD: ${{ secrets.TEST_REQUESTER_PASSWORD }}
-          # Shared IMAP mailbox that reads the real OTP emails sent to the
-          # CSO/DEAN/VERIFIER test accounts above — see docs/E2E_OTP_SETUP.md.
           E2E_OTP_IMAP_USER: ${{ secrets.E2E_OTP_IMAP_USER }}
           E2E_OTP_IMAP_APP_PASSWORD: ${{ secrets.E2E_OTP_IMAP_APP_PASSWORD }}
+          # SMTP creds for the app-under-test's own OTP send (src/lib/email/otp.ts).
+          # Without these the webServer has no way to send the email at all.
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
 
       - name: Upload Playwright report
         if: failure()
