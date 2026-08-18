@@ -118,13 +118,17 @@ export const OtpForm = ({
   const handleResendOtp = async () => {
     if (resendCooldown > 0 || isResending) return;
     setIsResending(true);
-    const result = await apiFetch('/api/auth/resend-otp', {
-      method: 'POST',
-      body: { email: pendingEmail },
-    });
+    const result = await apiFetch<{ email_delivery_failed?: boolean }>(
+      '/api/auth/resend-otp',
+      { method: 'POST', body: { email: pendingEmail } }
+    );
     setIsResending(false);
     if (result.error) {
       toast.error(result.error);
+      return;
+    }
+    if (result.data?.email_delivery_failed) {
+      toast.error('Could not send the code. Please try again.');
       return;
     }
     toast.success('New code sent — check your inbox.');
