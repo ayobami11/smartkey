@@ -15,11 +15,11 @@ Each entry: date, brief title, what changed, why.
   than assuming the account setup itself was wrong.
 - **`dotenv` silently truncates unquoted values at an unescaped `#`.** Two of the freshly-reset
   passwords (`TEST_CSO_PASSWORD`, `TEST_VERIFIER_PASSWORD`) happened to contain one, so `dotenv`
-  read `JkaE@=58TyeHWq2#` as 15 chars (dropped the `#`) and `*r#-25jGiB2f6RtP` as just `*r`
-  (everything after `#` treated as a comment). The Supabase-side passwords were always correct —
-  only the local `.env.local` representation was broken. Fixed by quoting all four generated
-  passwords. Confirmed directly against Supabase Auth's REST API (bypassing the app entirely) that
-  all four roles now authenticate.
+  silently dropped everything from the `#` onward when loading `.env.local` — one lost its last
+  character, the other lost most of itself. The Supabase-side passwords were always correct — only
+  the local `.env.local` representation was broken. Fixed by quoting all four generated passwords.
+  Confirmed directly against Supabase Auth's REST API (bypassing the app entirely) that all four
+  roles now authenticate.
 - **`TEST_REQUESTER_EMAIL`/`TEST_REQUESTER_PASSWORD` were never set at all** — `loginAs()` defaults
   missing env vars to `''`, so the REQUESTER E2E login was silently submitting blank credentials,
   timing out waiting for a redirect that could never happen. Added both (reusing the same account
