@@ -62,6 +62,7 @@ docs/SmartKey_Examiner_Review.pdf
 # context. Neither belongs in tracked source.
 docs/E2E_OTP_SETUP.md
 docs/SIGNATURE_CALIBRATION_TEST_RUN.md
+docs/SESSION_CREDENTIALS.md
 
 # typescript
 *.tsbuildinfo
