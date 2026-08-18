@@ -8,6 +8,16 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-18 — Smoke test requester account was deactivated
+
+- **Why**: a live smoke run against a preview deployment failed 5 of 11 checks, all cascading from
+  one root cause — `xafegok266@dysonc.com`, the account `docs/SMOKE_TEST_SETUP.md` documents as the
+  smoke requester, is now `DEACTIVATED` in production (and therefore banned from Supabase Auth
+  login), so every check downstream of a successful login saw no session at all.
+- Reset the password on the account already in actual use for this (`smartkey.tests+requester@gmail.com`,
+  `ACTIVE`, previously reset for the same purpose per the 2026-08-12 entry) and handed the new value
+  to the user to update in the `SMOKE_REQUESTER_EMAIL`/`SMOKE_REQUESTER_PASSWORD` GitHub secrets.
+
 ### 2026-08-18 — Uptime monitoring setup instructions for `/api/health`
 
 - **Why**: `docs/review.md` item 11 has had uptime monitoring open since the endpoint was built —
