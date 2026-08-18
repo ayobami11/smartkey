@@ -8,6 +8,33 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-18 — Two real local-env bugs found while re-running E2E after the smoke fix
+
+- **Why**: `npm run test:e2e -- --grep "CSO dashboard"` still failed after `.env.local` was updated
+  with the CSO/DEAN/VERIFIER/REQUESTER test credentials — worth understanding exactly why rather
+  than assuming the account setup itself was wrong.
+- **`dotenv` silently truncates unquoted values at an unescaped `#`.** Two of the freshly-reset
+  passwords (`TEST_CSO_PASSWORD`, `TEST_VERIFIER_PASSWORD`) happened to contain one, so `dotenv`
+  read `JkaE@=58TyeHWq2#` as 15 chars (dropped the `#`) and `*r#-25jGiB2f6RtP` as just `*r`
+  (everything after `#` treated as a comment). The Supabase-side passwords were always correct —
+  only the local `.env.local` representation was broken. Fixed by quoting all four generated
+  passwords. Confirmed directly against Supabase Auth's REST API (bypassing the app entirely) that
+  all four roles now authenticate.
+- **`TEST_REQUESTER_EMAIL`/`TEST_REQUESTER_PASSWORD` were never set at all** — `loginAs()` defaults
+  missing env vars to `''`, so the REQUESTER E2E login was silently submitting blank credentials,
+  timing out waiting for a redirect that could never happen. Added both (reusing the same account
+  as `SMOKE_REQUESTER_*`, since it's already a dedicated low-privilege REQUESTER).
+- **Separate, still-open issue**: `E2E_OTP_IMAP_APP_PASSWORD` was rejected by Gmail's IMAP server
+  (`Invalid credentials (Failure)`, confirmed via a direct `imapflow` connection test, not a network
+  problem). Root cause: the app password had been generated on `mohammedfirdous682@gmail.com`'s
+  Google account, not `smartkey.tests@gmail.com`'s — a Gmail app password only authenticates the
+  account it was generated on. User is regenerating it from the correct account.
+- `.env.local.example` also fell out of sync with `.env.local` and had grown much more verbose than
+  the rest of the codebase's comment style — condensed and synced in a separate commit
+  (`613f1b6`), and `docs/SESSION_CREDENTIALS.md` (the local-only, gitignored record of every
+  secret touched this session) added to `.gitignore` (`b023e06`). Neither commit carried a
+  changelog entry at the time; this entry covers both retroactively.
+
 ### 2026-08-18 — Smoke test requester account was deactivated
 
 - **Why**: a live smoke run against a preview deployment failed 5 of 11 checks, all cascading from
