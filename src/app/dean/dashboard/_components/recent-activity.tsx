@@ -1,11 +1,16 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+
+import { ClockIcon } from 'lucide-react';
 
 import { apiFetch } from '@/lib/api';
 import { useRealtime } from '@/hooks/use-realtime';
 import { useConnectionStatus } from '@/hooks/use-connection-status';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Empty,
@@ -16,36 +21,15 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { SectionCardHeader } from '@/components/smartkey/section-card-header';
 import {
-  getTransactionDate,
-  getTransactionReturnLine,
   TRANSACTION_STATUS_CONFIG,
   type Transaction,
 } from '@/components/smartkey/transaction-status';
 import { formatDate, relativeTimeCompact } from '@/lib/dates';
 
 const QUERY_KEY = ['dean', 'recent-activity'];
+const PAGE_LIMIT = 10;
 
-// One-line, past-tense description of what happened, e.g. "Dr. Bakare
-// collected the key for Senate Hall A (NS-304)" — the card's headline
-// rather than listing the key and requester as separate, disconnected facts.
-const describeActivity = (tx: Transaction): string => {
-  const who = tx.requester?.full_name ?? 'Someone';
-  const what = tx.key
-    ? `the key for ${tx.key.room_name} (${tx.key.code})`
-    : 'a key';
-  switch (tx.status) {
-    case 'KEY_ISSUED':
-      return `${who} collected ${what}`;
-    case 'KEY_RETURNED':
-      return `${who} returned ${what}`;
-    case 'EXPIRED':
-      return `${who}’s request to collect ${what} expired`;
-    case 'CANCELLED':
-      return `${who} cancelled their request to collect ${what}`;
-    case 'DECLINED':
-      return `${who}’s request to collect ${what} was declined`;
-  }
-};
+type HistoryPage = { transactions: Transaction[]; next_cursor: string | null };
 
 export const RecentActivity = () => {
   const queryClient = useQueryClient();
@@ -58,23 +42,66 @@ export const RecentActivity = () => {
   });
 
   const {
-    data: transactions = [],
+    data: firstPage,
     isLoading,
     error,
     refetch,
   } = useQuery({
     queryKey: QUERY_KEY,
     refetchInterval: connectionStatus !== 'connected' ? 10_000 : false,
-    queryFn: async (): Promise<Transaction[]> => {
-      const result = await apiFetch<{
-        transactions: Transaction[];
-        next_cursor: string | null;
-      }>('/api/keys/history?limit=5');
+    queryFn: async (): Promise<HistoryPage> => {
+      const result = await apiFetch<HistoryPage>(
+        `/api/keys/history?limit=${PAGE_LIMIT}`
+      );
       if (result.error || !result.data)
         throw new Error(result.error ?? 'Failed to load recent activity.');
-      return result.data.transactions;
+      return result.data;
     },
   });
+
+  // Extra pages loaded via "Load more", kept separate from the react-query
+  // cache so a realtime-triggered refetch of the first page (see useRealtime
+  // above) doesn't fight with locally-accumulated pages. Reset whenever the
+  // first page changes — its own cursor is no longer valid otherwise.
+  const [extraTransactions, setExtraTransactions] = useState<Transaction[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setExtraTransactions([]);
+    setNextCursor(firstPage?.next_cursor ?? null);
+  }, [firstPage]);
+
+  const transactions = [
+    ...(firstPage?.transactions ?? []),
+    ...extraTransactions,
+  ];
+
+  const handleLoadMore = async () => {
+    if (!nextCursor) return;
+    setLoadingMore(true);
+    setLoadMoreError(null);
+    try {
+      // Raw timestamptz cursors from PostgREST include a "+00:00" offset —
+      // an unencoded "+" in a query string decodes as a space server-side,
+      // corrupting the timestamp and making Postgres reject it. Must encode.
+      const result = await apiFetch<HistoryPage>(
+        `/api/keys/history?limit=${PAGE_LIMIT}&cursor=${encodeURIComponent(nextCursor)}`
+      );
+      if (result.error || !result.data)
+        throw new Error(result.error ?? 'Failed to load more.');
+      const page = result.data;
+      setExtraTransactions((prev) => [...prev, ...page.transactions]);
+      setNextCursor(page.next_cursor);
+    } catch (err) {
+      setLoadMoreError(
+        err instanceof Error ? err.message : 'Failed to load more.'
+      );
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -83,7 +110,20 @@ export const RecentActivity = () => {
       {isLoading && (
         <div className="flex flex-col gap-3" aria-busy="true">
           {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-16 rounded-lg" />
+            <div
+              key={i}
+              className="flex overflow-hidden rounded-lg border border-border bg-card shadow-[0_2px_4px_rgba(15,23,42,0.06)]"
+            >
+              <Skeleton className="w-1 shrink-0 rounded-none" />
+              <div className="flex flex-1 items-center gap-3 p-4">
+                <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                  <Skeleton className="h-5 w-20 rounded-full" />
+                  <Skeleton className="h-4 w-48" />
+                  <Skeleton className="h-3 w-28" />
+                </div>
+                <Skeleton className="h-5 w-16 shrink-0 rounded-full" />
+              </div>
+            </div>
           ))}
         </div>
       )}
@@ -117,61 +157,81 @@ export const RecentActivity = () => {
       )}
 
       {!isLoading && !error && transactions.length > 0 && (
-        <div
+        <ul
           className="flex flex-col gap-3"
           aria-live="polite"
           aria-relevant="additions"
         >
           {transactions.map((tx) => {
             const config = TRANSACTION_STATUS_CONFIG[tx.status];
-            const { Icon } = config;
 
-            const dateIso = getTransactionDate(tx);
-            const returnLine = getTransactionReturnLine(tx);
+            // created_at, not getTransactionDate() — the latter falls back
+            // to requested_for for terminal states, which for a weekend
+            // request is a future Sat/Sun even after it's cancelled/
+            // declined/expired. relativeTimeCompact has no way to render a
+            // future date sensibly as "time ago"; created_at is always a
+            // real past timestamp.
+            const dateIso = tx.created_at;
 
             return (
-              <div
+              <li
                 key={tx.id}
-                className="flex w-full overflow-hidden rounded-lg border border-border bg-card shadow-[0_2px_4px_rgba(15,23,42,0.06)]"
+                className="flex overflow-hidden rounded-lg border border-border bg-card shadow-[0_2px_4px_rgba(15,23,42,0.06)]"
               >
                 <div
                   className={`w-1 shrink-0 ${config.stripe}`}
                   aria-hidden="true"
                 />
                 <div className="flex flex-1 items-center gap-3 p-4">
-                  <div className="flex min-w-0 flex-1 flex-col gap-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span
-                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${config.badge}`}
-                        aria-label={config.label}
-                      >
-                        <Icon className="size-3" aria-hidden="true" />
+                  <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-sm font-medium text-foreground">
+                        {tx.key?.code ?? '—'}
+                      </span>
+                      <Badge className={config.badge} aria-label={config.label}>
                         {config.label}
-                      </span>
-                      <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                        {tx.type === 'WEEKEND' ? 'Weekend' : 'Weekday'}
-                      </span>
+                      </Badge>
                     </div>
-                    <p className="truncate text-sm font-medium text-foreground">
-                      {describeActivity(tx)}
+                    <p className="truncate text-xs text-muted-foreground">
+                      {tx.key?.room_name ?? 'Key unavailable'}
                     </p>
-                    {returnLine && (
-                      <p className="truncate text-xs text-muted-foreground">
-                        {returnLine}
-                      </p>
-                    )}
+                    <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <ClockIcon
+                        className="size-3 shrink-0"
+                        aria-hidden="true"
+                      />
+                      <time dateTime={dateIso} title={formatDate(dateIso)}>
+                        {relativeTimeCompact(dateIso)}
+                      </time>
+                    </p>
                   </div>
-                  <time
-                    dateTime={dateIso}
-                    title={formatDate(dateIso)}
-                    className="shrink-0 text-xs text-muted-foreground"
-                  >
-                    {relativeTimeCompact(dateIso)}
-                  </time>
+                  <Badge variant="outline" className="shrink-0 text-xs">
+                    {tx.type === 'WEEKEND' ? 'Weekend' : 'Weekday'}
+                  </Badge>
                 </div>
-              </div>
+              </li>
             );
           })}
+        </ul>
+      )}
+
+      {!isLoading && !error && loadMoreError && (
+        <p className="text-xs text-destructive" role="alert">
+          {loadMoreError}
+        </p>
+      )}
+
+      {!isLoading && !error && nextCursor && (
+        <div className="flex justify-center">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleLoadMore}
+            disabled={loadingMore}
+            aria-busy={loadingMore}
+          >
+            {loadingMore ? 'Loading...' : 'Load more'}
+          </Button>
         </div>
       )}
     </div>

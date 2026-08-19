@@ -1,9 +1,9 @@
-import { CalendarIcon } from 'lucide-react';
+import { ClockIcon } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 
 import { type RequestStatus, type RequestType } from '@/lib/constants';
-import { formatDateNumeric } from '@/lib/dates';
+import { formatDate, relativeTimeCompact } from '@/lib/dates';
 
 // Re-export so callers don't need to update their imports.
 export type { RequestStatus, RequestType };
@@ -100,8 +100,13 @@ export const RequestCard = ({ request }: RequestCardProps) => {
             {request.key?.room_name ?? 'Key unavailable'}
           </p>
           <p className="flex items-center gap-1 text-xs text-muted-foreground">
-            <CalendarIcon className="size-3 shrink-0" aria-hidden="true" />
-            {formatDateNumeric(request.created_at)}
+            <ClockIcon className="size-3 shrink-0" aria-hidden="true" />
+            <time
+              dateTime={request.created_at}
+              title={formatDate(request.created_at)}
+            >
+              {relativeTimeCompact(request.created_at)}
+            </time>
           </p>
         </div>
         <Badge variant="outline" className="shrink-0 text-xs">

@@ -192,6 +192,7 @@ export const IncidentsView = () => {
                       >
                         <SelectTrigger
                           id="incident-type"
+                          className="w-full"
                           aria-invalid={fieldState.invalid}
                         >
                           {selectedType ? (
@@ -202,7 +203,7 @@ export const IncidentsView = () => {
                               <span className="shrink-0 text-muted-foreground">
                                 ·
                               </span>
-                              <span className="truncate text-muted-foreground">
+                              <span className="min-w-0 flex-1 truncate text-muted-foreground">
                                 {selectedType.hint}
                               </span>
                             </span>
@@ -213,11 +214,11 @@ export const IncidentsView = () => {
                         <SelectContent position="popper">
                           {INCIDENT_TYPE_DETAILS.map((t) => (
                             <SelectItem key={t.value} value={t.value}>
-                              <div className="flex flex-col gap-0.5">
-                                <span className="text-sm font-medium">
+                              <div className="flex w-full min-w-0 flex-col gap-0.5">
+                                <span className="truncate text-sm font-medium">
                                   {t.label}
                                 </span>
-                                <span className="text-xs text-muted-foreground">
+                                <span className="truncate text-xs text-muted-foreground">
                                   {t.hint}
                                 </span>
                               </div>
@@ -253,6 +254,7 @@ export const IncidentsView = () => {
                       >
                         <SelectTrigger
                           id="incident-severity"
+                          className="w-full"
                           aria-invalid={fieldState.invalid}
                         >
                           {selectedSeverity ? (
@@ -263,7 +265,7 @@ export const IncidentsView = () => {
                               <span className="shrink-0 text-muted-foreground">
                                 ·
                               </span>
-                              <span className="truncate text-muted-foreground">
+                              <span className="min-w-0 flex-1 truncate text-muted-foreground">
                                 {selectedSeverity.hint}
                               </span>
                             </span>
@@ -274,11 +276,11 @@ export const IncidentsView = () => {
                         <SelectContent position="popper">
                           {SEVERITIES.map((s) => (
                             <SelectItem key={s.value} value={s.value}>
-                              <div className="flex flex-col gap-0.5">
-                                <span className="text-sm font-medium">
+                              <div className="flex w-full min-w-0 flex-col gap-0.5">
+                                <span className="truncate text-sm font-medium">
                                   {s.label}
                                 </span>
-                                <span className="text-xs text-muted-foreground">
+                                <span className="truncate text-xs text-muted-foreground">
                                   {s.hint}
                                 </span>
                               </div>

@@ -140,6 +140,7 @@ export const GenerateReportDialog = ({ onGenerated }: Props) => {
                     <Select value={field.value} onValueChange={field.onChange}>
                       <SelectTrigger
                         id="shift-select"
+                        className="w-full"
                         aria-invalid={fieldState.invalid}
                       >
                         <SelectValue placeholder="Select a shift" />

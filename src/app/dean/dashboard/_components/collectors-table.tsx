@@ -196,7 +196,6 @@ export const CollectorsTable = () => {
               <TableRow>
                 <TableHead>Key</TableHead>
                 <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
                 <TableHead>Date assigned</TableHead>
               </TableRow>
             </TableHeader>
@@ -219,9 +218,6 @@ export const CollectorsTable = () => {
                         {row.full_name}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {row.institutional_email}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
                         <span
                           aria-label={`Date assigned: ${new Date(
                             row.authorised_at
@@ -234,8 +230,8 @@ export const CollectorsTable = () => {
                     </>
                   ) : (
                     <TableCell
-                      colSpan={3}
-                      className="text-sm text-amber-600 italic dark:text-amber-500"
+                      colSpan={2}
+                      className="text-sm text-muted-foreground italic"
                     >
                       {row.unassignedCount} slot
                       {row.unassignedCount === 1 ? '' : 's'} unassigned

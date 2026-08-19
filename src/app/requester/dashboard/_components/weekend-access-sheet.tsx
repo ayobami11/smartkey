@@ -258,15 +258,19 @@ export const WeekendAccessSheet = ({
                           setSelectedKeyId(val);
                         }}
                       >
-                        <SelectTrigger id="weekend-key">
+                        <SelectTrigger id="weekend-key" className="w-full">
                           <SelectValue placeholder="Select a key" />
                         </SelectTrigger>
                         <SelectContent>
                           {availableKeys.map((a) => (
                             <SelectItem key={a.key.id} value={a.key.id}>
-                              <span className="font-mono">{a.key.code}</span>
-                              <span className="ml-2 text-muted-foreground">
-                                — {a.key.room_name}
+                              <span className="flex min-w-0 items-center gap-1">
+                                <span className="shrink-0 font-mono">
+                                  {a.key.code}
+                                </span>
+                                <span className="truncate text-muted-foreground">
+                                  — {a.key.room_name}
+                                </span>
                               </span>
                             </SelectItem>
                           ))}

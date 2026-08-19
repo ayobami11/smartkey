@@ -754,6 +754,7 @@ export const WeekendRequestsView = () => {
                             >
                               <SelectTrigger
                                 id="assign-key"
+                                className="w-full"
                                 aria-invalid={fieldState.invalid}
                               >
                                 {selectedKey ? (
@@ -764,7 +765,7 @@ export const WeekendRequestsView = () => {
                                     <span className="shrink-0 text-muted-foreground">
                                       ·
                                     </span>
-                                    <span className="truncate text-muted-foreground">
+                                    <span className="min-w-0 flex-1 truncate text-muted-foreground">
                                       {selectedKey.room_name}
                                     </span>
                                   </span>
@@ -775,11 +776,11 @@ export const WeekendRequestsView = () => {
                               <SelectContent position="popper">
                                 {deptKeys.map((k) => (
                                   <SelectItem key={k.id} value={k.id}>
-                                    <div className="flex flex-col gap-0.5">
-                                      <span className="font-mono text-sm font-medium">
+                                    <div className="flex w-full min-w-0 flex-col gap-0.5">
+                                      <span className="truncate font-mono text-sm font-medium">
                                         {k.code}
                                       </span>
-                                      <span className="text-xs text-muted-foreground">
+                                      <span className="truncate text-xs text-muted-foreground">
                                         {k.room_name}
                                       </span>
                                     </div>

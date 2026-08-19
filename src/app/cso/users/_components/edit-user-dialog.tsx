@@ -167,6 +167,7 @@ export const EditUserDialog = ({ user, onClose, onSuccess }: Props) => {
                     >
                       <SelectTrigger
                         id="edit-dept-select"
+                        className="w-full"
                         aria-invalid={fieldState.invalid}
                       >
                         <SelectValue placeholder="Select a unit" />

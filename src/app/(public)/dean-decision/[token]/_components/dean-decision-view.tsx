@@ -338,17 +338,17 @@ export const DeanDecisionView = ({ token }: DeanDecisionViewProps) => {
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="assign-key">Assign a key (required to approve)</Label>
           <Select value={keyId} onValueChange={setKeyId}>
-            <SelectTrigger id="assign-key">
+            <SelectTrigger id="assign-key" className="w-full">
               <SelectValue placeholder="Select a key" />
             </SelectTrigger>
             <SelectContent position="popper">
               {data.available_keys.map((k) => (
                 <SelectItem key={k.id} value={k.id}>
-                  <div className="flex flex-col gap-0.5">
-                    <span className="font-mono text-sm font-medium">
+                  <div className="flex w-full min-w-0 flex-col gap-0.5">
+                    <span className="truncate font-mono text-sm font-medium">
                       {k.code}
                     </span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="truncate text-xs text-muted-foreground">
                       {k.room_name}
                     </span>
                   </div>

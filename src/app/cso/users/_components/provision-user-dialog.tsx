@@ -221,6 +221,7 @@ export const ProvisionUserDialog = ({ onSuccess }: Props) => {
                         >
                           <SelectTrigger
                             id="role-select"
+                            className="w-full"
                             aria-invalid={fieldState.invalid}
                           >
                             <SelectValue placeholder="Select a role" />
@@ -253,6 +254,7 @@ export const ProvisionUserDialog = ({ onSuccess }: Props) => {
                           >
                             <SelectTrigger
                               id="dept-select"
+                              className="w-full"
                               aria-invalid={fieldState.invalid}
                             >
                               <SelectValue placeholder="Select a unit" />

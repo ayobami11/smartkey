@@ -58,7 +58,12 @@ export const KeyHistory = ({ keyId }: Props) => {
     const result = await apiFetch<{
       transactions: Transaction[];
       next_cursor: string | null;
-    }>(`/api/keys/history?key_id=${keyId}&limit=10&cursor=${cursor}`);
+    }>(
+      // Raw timestamptz cursors from PostgREST include a "+00:00" offset —
+      // an unencoded "+" in a query string decodes as a space server-side,
+      // corrupting the timestamp and making Postgres reject it.
+      `/api/keys/history?key_id=${keyId}&limit=10&cursor=${encodeURIComponent(cursor)}`
+    );
     setLoadingMore(false);
     if (result.error || !result.data) return;
     setExtra((prev) => [...prev, ...result.data!.transactions]);

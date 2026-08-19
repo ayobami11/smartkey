@@ -3,12 +3,7 @@
 import Link from 'next/link';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  CalendarIcon,
-  CheckCircleIcon,
-  ExternalLinkIcon,
-  UserRoundIcon,
-} from 'lucide-react';
+import { CalendarIcon, CheckCircleIcon, ExternalLinkIcon } from 'lucide-react';
 
 import { useConnectionStatus } from '@/hooks/use-connection-status';
 import { useRealtime } from '@/hooks/use-realtime';
@@ -25,6 +20,7 @@ import {
 } from '@/components/ui/empty';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ExpiredBadge } from '@/components/smartkey/expired-badge';
+import { GuestBadge } from '@/components/smartkey/guest-badge';
 import { SectionCardHeader } from '@/components/smartkey/section-card-header';
 
 // Types
@@ -84,7 +80,19 @@ export const WeekendRequests = () => {
       {isLoading && (
         <div className="flex flex-col gap-3" aria-busy="true">
           {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-20 rounded-lg" />
+            <div
+              key={i}
+              className="flex overflow-hidden rounded-lg border border-border bg-card shadow-[0_2px_4px_rgba(15,23,42,0.06)]"
+            >
+              <Skeleton className="w-1 shrink-0 rounded-none" />
+              <div className="flex flex-1 items-center gap-3 p-4">
+                <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-3 w-40" />
+                </div>
+                <Skeleton className="h-8 w-20 shrink-0 rounded-md" />
+              </div>
+            </div>
           ))}
         </div>
       )}
@@ -125,7 +133,11 @@ export const WeekendRequests = () => {
               </EmptyContent>
             </Empty>
           ) : (
-            <div className="flex flex-col gap-3">
+            <ul
+              className="flex flex-col gap-3"
+              aria-live="polite"
+              aria-relevant="additions"
+            >
               {pendingRequests.slice(0, 5).map((req) => {
                 const requesterName =
                   req.requester?.full_name ??
@@ -133,9 +145,9 @@ export const WeekendRequests = () => {
                   'External requester';
                 const isGuest = !!req.guest;
                 return (
-                  <div
+                  <li
                     key={req.id}
-                    className="flex w-full overflow-hidden rounded-lg border border-border bg-card shadow-[0_2px_4px_rgba(15,23,42,0.06)]"
+                    className="flex overflow-hidden rounded-lg border border-border bg-card shadow-[0_2px_4px_rgba(15,23,42,0.06)]"
                   >
                     <div
                       className="w-1 shrink-0 bg-amber-500"
@@ -147,18 +159,7 @@ export const WeekendRequests = () => {
                           <span className="text-sm font-medium text-foreground">
                             {requesterName}
                           </span>
-                          {isGuest && (
-                            <span
-                              className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
-                              aria-label="External requester"
-                            >
-                              <UserRoundIcon
-                                className="size-3"
-                                aria-hidden="true"
-                              />
-                              External
-                            </span>
-                          )}
+                          {isGuest && <GuestBadge label="External" showIcon />}
                           {isPastDate(req.requested_for) && <ExpiredBadge />}
                         </div>
                         <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
@@ -209,10 +210,10 @@ export const WeekendRequests = () => {
                         </Link>
                       </Button>
                     </div>
-                  </div>
+                  </li>
                 );
               })}
-            </div>
+            </ul>
           )}
         </>
       )}

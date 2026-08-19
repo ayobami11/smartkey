@@ -172,6 +172,7 @@ export const CreateKeyDialog = ({ onCreated }: Props) => {
                         >
                           <SelectTrigger
                             id="zone-select"
+                            className="w-full"
                             aria-invalid={fieldState.invalid}
                           >
                             <SelectValue placeholder="Select a zone" />
@@ -226,6 +227,7 @@ export const CreateKeyDialog = ({ onCreated }: Props) => {
                         >
                           <SelectTrigger
                             id="unit-select"
+                            className="w-full"
                             aria-invalid={fieldState.invalid}
                           >
                             <SelectValue placeholder="Select a unit" />

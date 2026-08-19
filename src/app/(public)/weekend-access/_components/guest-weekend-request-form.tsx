@@ -265,6 +265,7 @@ export const GuestWeekendRequestForm = ({
             <Select value={field.value} onValueChange={field.onChange}>
               <SelectTrigger
                 id="guest-id-type"
+                className="w-full"
                 aria-invalid={fieldState.invalid}
               >
                 <SelectValue placeholder="Select an ID type" />
@@ -343,6 +344,7 @@ export const GuestWeekendRequestForm = ({
             >
               <SelectTrigger
                 id="guest-department"
+                className="w-full"
                 aria-invalid={fieldState.invalid}
               >
                 <SelectValue

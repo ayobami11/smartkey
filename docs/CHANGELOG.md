@@ -6,6 +6,45 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-08-19 — Dean dashboard polish, requester history pagination, and a Select-trigger truncation sweep
+
+- **Why**: a UI-only pass over the Dean dashboard and requester history pages surfaced a real bug (a
+  paginated key-history fetch failing) and a recurring truncation defect that turned out to affect
+  many more `Select` triggers than the one originally reported (frontend scope; no `src/app/api/` or
+  database changes beyond none — all fixes are client-side).
+- **Load-more cursor bug**: `recent-activity.tsx`'s and `key-history.tsx`'s "Load more" both
+  interpolated a raw Postgres `timestamptz` cursor (e.g. `...482+00:00`) straight into the URL. An
+  unencoded `+` in a query string decodes as a space server-side, corrupting the timestamp and making
+  Supabase reject it with a 500 ("Failed to fetch key history"). Fixed with `encodeURIComponent`.
+- **`recent-activity.tsx`**: switched from `getTransactionDate()` (which falls back to
+  `requested_for` for terminal states — a _future_ date for weekend requests, even after they're
+  cancelled/declined/expired) to `tx.created_at` for its relative-time display, since a future date
+  rendered as "time ago" was showing "just now" for things that happened hours ago. Also restructured
+  the card to match `RequestCard`'s field layout (key code + status badge / room name / elapsed
+  time), added real "Load more" pagination (limit 10, matching the requester history page), and
+  switched `CalendarIcon` to `ClockIcon` for the now-relative timestamp.
+- **`weekend-requests.tsx`** (Dean dashboard): aligned to the same card format — `ul`/`li` markup,
+  the shared `GuestBadge` component instead of a hand-rolled amber "External" span (which also fixed
+  a color inconsistency; the shared standard is cyan), and a skeleton that mirrors the real row
+  structure.
+- **`collectors-table.tsx`**: removed the email column per request; the "N unassigned" cell now
+  matches the surrounding muted-foreground color instead of amber, kept italic.
+- **Requester history**: page size dropped from 20 to 10 (less scrolling on a phone-primary screen);
+  the loading skeleton now mirrors `RequestCard`'s real structure instead of a flat guessed height;
+  the date line switched from an absolute date to elapsed time with `ClockIcon`, matching
+  `recent-activity.tsx`.
+- **Select-trigger truncation sweep**: the original report (Dean's "Assign a key" sheet showing an
+  overflowing "FENV-DEAN · Environmental Sciences Dean's Office") traced to shadcn's `SelectTrigger`
+  defaulting to `w-fit` — nothing constrains the trigger's width, so an inner `truncate` span has
+  nothing to shrink against. Audited all 17 `SelectTrigger` call sites in the codebase and fixed the
+  ones with real overflow risk (long unit names, key-code+room-name combos, incident type/severity
+  hints) across weekend-request key pickers, the public dean-decision page, user provisioning/edit
+  dialogs, key creation, and incident logging. Left the two already-sized page-size selectors and the
+  fixed-short-label selects (audit type/severity, the compact dashboard chart filter) unchanged —
+  they carry no truncation risk and `w-full` would have visually regressed the compact ones.
+- Verified: `npm run typecheck`, `npm run lint`, and `npm test` all pass clean (355 tests, 1
+  pre-existing unrelated skip).
+
 ### 2026-08-19 — Show the specific key/room in the weekend-submitted email, not just the faculty name
 
 - **Why**: `sendWeekendSubmittedEmail` told the Dean "requested weekend access in Faculty of

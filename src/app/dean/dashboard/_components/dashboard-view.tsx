@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 
 import { createBrowserClient } from '@/lib/supabase/client';
 
+import { Skeleton } from '@/components/ui/skeleton';
+
 import { WeekendRequests } from '@/app/dean/dashboard/_components/weekend-requests';
 import { RecentActivity } from '@/app/dean/dashboard/_components/recent-activity';
 import { CollectorsTable } from '@/app/dean/dashboard/_components/collectors-table';
@@ -55,9 +57,13 @@ export const DashboardView = () => {
           {getGreeting()}
           {fullName ? `, ${fullName}` : ''}.
         </h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">
-          {loading ? 'Loading...' : deptName || 'No unit assigned'}
-        </p>
+        {loading ? (
+          <Skeleton className="mt-1.5 h-4 w-32" />
+        ) : (
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            {deptName || 'No unit assigned'}
+          </p>
+        )}
       </div>
 
       <WeekendRequests />

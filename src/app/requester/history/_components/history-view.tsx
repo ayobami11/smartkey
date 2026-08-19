@@ -27,7 +27,7 @@ export const HistoryView = () => {
   const [error, setError] = useState<string | null>(null);
 
   const fetchHistory = useCallback(async (cursor?: string) => {
-    const params = new URLSearchParams({ limit: '20' });
+    const params = new URLSearchParams({ limit: '10' });
     if (cursor) params.set('cursor', cursor);
     const result = await apiFetch<ApiResponse>(
       `/api/requests/my?${params.toString()}`
