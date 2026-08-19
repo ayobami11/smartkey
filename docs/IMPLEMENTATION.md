@@ -45,13 +45,13 @@ It is built around three purpose-specific AI components — **not** a single gen
 
 The application replaces the logbook with role-specific dashboards, an immutable audit trail, and real-time updates over Supabase Realtime, targeting the following success criteria (from `docs/PRODUCT.md`):
 
-| Criterion                                | Target                                   |
-| ---------------------------------------- | ---------------------------------------- |
-| Processing time reduction (UAT vs paper) | 80–90%                                   |
-| Audit-log accuracy                       | Zero missing or malformed entries        |
-| Operational uptime                       | 99.5%                                    |
-| Performance                              | LCP ≤ 2.5s · CLS < 0.1 · Lighthouse ≥ 85 |
-| Accessibility                            | WCAG 2.2 AA across every flow            |
+| Criterion                                | Target                                             |
+| ---------------------------------------- | -------------------------------------------------- |
+| Processing time reduction (UAT vs paper) | 80–90%                                             |
+| Audit-log accuracy                       | Zero missing or malformed entries                  |
+| Operational uptime                       | 99.5%                                              |
+| Performance                              | LCP ≤ 2.5s · CLS < 0.1 (via Vercel Speed Insights) |
+| Accessibility                            | WCAG 2.2 AA across every flow                      |
 
 Scale at launch: 5 departments, up to 50 keys per zone across 2 zones (New Senate, Old Senate), all keys collected every weekday, roughly 100–500 staff requesters.
 

@@ -67,13 +67,13 @@ Departmental staff, primary device a phone. Lowest visit frequency, lowest toler
 
 ## Success criteria
 
-| Criterion                                | Target                                   |
-| ---------------------------------------- | ---------------------------------------- |
-| Processing time reduction (UAT vs paper) | 80–90%                                   |
-| Audit-log accuracy                       | Zero missing or malformed entries        |
-| Operational uptime                       | 99.5%                                    |
-| Performance                              | LCP ≤ 2.5s · CLS < 0.1 · Lighthouse ≥ 85 |
-| Accessibility                            | WCAG 2.2 AA across every flow            |
+| Criterion                                | Target                                             |
+| ---------------------------------------- | -------------------------------------------------- |
+| Processing time reduction (UAT vs paper) | 80–90%                                             |
+| Audit-log accuracy                       | Zero missing or malformed entries                  |
+| Operational uptime                       | 99.5%                                              |
+| Performance                              | LCP ≤ 2.5s · CLS < 0.1 (via Vercel Speed Insights) |
+| Accessibility                            | WCAG 2.2 AA across every flow                      |
 
 ## Scale at launch
 

@@ -6,6 +6,29 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-08-19 — Decided against Lighthouse CI; removed remaining references
+
+- **Why**: the 2026-08-05 entry above left Lighthouse CI as an open gap inherited from the examiner
+  review. With the deadline a few days out and Vercel Speed Insights already live in production
+  (real-user Core Web Vitals, zero added CI maintenance), decided the tradeoff wasn't worth it right
+  now — a lab-data CI gate this close to shipping risks blocking merges on threshold noise rather than
+  catching real regressions, and the team's actual incidents so far (migrations not reaching
+  production, a cron job silently dead for weeks) have been correctness/deployment problems, not
+  performance ones. Revisit post-launch if Speed Insights surfaces a real regression that needs a
+  pre-merge gate to prevent recurrence.
+- Removed the local `.lighthouseci/` directory (untracked scratch output from one manual run on
+  2026-08-11 — never wired into CI, no `lighthouserc.json` ever existed) and its now-unnecessary
+  `.gitignore` entry.
+- Updated every doc that named "Lighthouse ≥ 85" as a live target or gate — `docs/TESTING.md`,
+  `docs/SCREEN_CHECKLIST.md`, `docs/PRODUCT.md`, `docs/IMPLEMENTATION.md`, `design-system/screens.md`,
+  `design-system/DESIGN.md` — to reference Vercel Speed Insights (for the LCP/CLS targets) or
+  axe-core (for the accessibility-contrast claim `DESIGN.md` had incorrectly attributed to Lighthouse)
+  instead. Left two references untouched as historical records rather than rewriting them: the
+  2026-08-05 CHANGELOG entry above (explains the decision _at the time_, still accurate as history),
+  and the `gh issue create` template body in `docs/GITHUB.md` §3 (the literal text already posted to
+  a real, already-created GitHub issue — editing it here wouldn't change what's on GitHub, and would
+  misrepresent what that issue's body actually said).
+
 ### 2026-08-19 — Dean dashboard polish, requester history pagination, and a Select-trigger truncation sweep
 
 - **Why**: a UI-only pass over the Dean dashboard and requester history pages surfaced a real bug (a

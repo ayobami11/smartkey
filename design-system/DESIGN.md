@@ -413,7 +413,7 @@ No motion ever conveys essential information. A new request appearing must also 
 
 Floor: WCAG 2.2 AA across every flow. Audit:
 
-- **Contrast**: all body text ≥ 4.5:1, large text ≥ 3:1, meaningful icons ≥ 3:1. Validated by the DESIGN.md linter and by Lighthouse CI.
+- **Contrast**: all body text ≥ 4.5:1, large text ≥ 3:1, meaningful icons ≥ 3:1. Validated by the DESIGN.md linter and by axe-core in the E2E suite.
 - **Focus visible**: every interactive element has a 2px maroon outline with 2px offset. Never remove the default focus ring; replace it with the design-system one.
 - **Keyboard navigation**: tab order follows visual order. Every flow completable by keyboard alone. Modals trap focus and return it on close. Escape closes any overlay.
 - **Screen reader**: every form field has a real label (not just a placeholder); every status badge has an `aria-label`; live regions announce realtime updates ("New request from Dr. Bakare") at polite priority.

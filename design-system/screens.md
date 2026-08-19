@@ -28,7 +28,7 @@ Three AI components run in the background:
 2. **Gemini-generated shift reports** — readable summaries from raw event data, surfaced on the CSO dashboard.
 3. **Signature verification (Sharp + Pixelmatch)** — pixel-level match of Dean signatures against onboarded references.
 
-Success criteria: 80–90% reduction in end-to-end request processing time vs the manual baseline; zero missing or malformed audit log entries; WCAG 2.2 AA conformance; LCP ≤ 2.5s, CLS < 0.1, Lighthouse ≥ 85.
+Success criteria: 80–90% reduction in end-to-end request processing time vs the manual baseline; zero missing or malformed audit log entries; WCAG 2.2 AA conformance; LCP ≤ 2.5s, CLS < 0.1 (via Vercel Speed Insights).
 
 ---
 

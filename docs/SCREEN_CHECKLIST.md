@@ -63,7 +63,7 @@ For each piece of data that loads or mutates, the screen must handle:
 - [ ] Server Component by default. `"use client"` only where genuinely needed.
 - [ ] No N+1 queries — joins or RPCs.
 - [ ] Images via `next/image` with explicit width and height.
-- [ ] Lighthouse ≥ 85.
+- [ ] No obvious LCP/CLS red flags (unsized images, layout-shifting skeletons, render-blocking client-side fetches) — confirmed post-ship via Vercel Speed Insights, not a pre-merge score gate.
 
 ## Testing
 
