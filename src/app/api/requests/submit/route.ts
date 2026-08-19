@@ -89,7 +89,11 @@ export const POST = async (request: NextRequest) => {
     ruleConfigRes,
     tierConfigRes,
   ] = await Promise.all([
-    supabase.from('keys').select('zone').eq('id', key_id).single(),
+    supabase
+      .from('keys')
+      .select('zone, code, room_name')
+      .eq('id', key_id)
+      .single(),
     supabase
       .from('requests')
       .select('key_id')
@@ -252,6 +256,10 @@ export const POST = async (request: NextRequest) => {
           fullName: recipient.fullName,
           requesterName: profile.full_name,
           unitName: recipient.unitName,
+          roomLabel:
+            keyRes.data?.room_name && keyRes.data.code
+              ? `${keyRes.data.room_name} (${keyRes.data.code})`
+              : recipient.unitName,
           requestedFor: weekend_date ?? '',
           link: `${siteUrl}/dean/weekend-requests`,
           decisionLink: tokenError

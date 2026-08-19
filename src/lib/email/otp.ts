@@ -384,6 +384,7 @@ export const sendWeekendSubmittedEmail = async ({
   fullName,
   requesterName,
   unitName,
+  roomLabel,
   requestedFor,
   link,
   decisionLink,
@@ -393,6 +394,7 @@ export const sendWeekendSubmittedEmail = async ({
   fullName: string;
   requesterName: string;
   unitName: string;
+  roomLabel: string;
   requestedFor: string;
   link: string;
   // Present for both registered-requester and guest requests routed to a
@@ -423,9 +425,9 @@ export const sendWeekendSubmittedEmail = async ({
               isGuest
                 ? ` <span style="display:inline-block;background:#CFFAFE;color:#0E7490;font-size:11px;font-weight:600;padding:2px 8px;border-radius:9999px;vertical-align:middle;">External</span>`
                 : ''
-            } has requested weekend access in
-            <strong>${unitName}</strong> for <strong>${requestedFor}</strong>.
-            It's awaiting your review.
+            } has requested weekend access to
+            <strong>${roomLabel}</strong> in ${unitName} for
+            <strong>${requestedFor}</strong>. It's awaiting your review.
           </p>
           ${
             decisionLink

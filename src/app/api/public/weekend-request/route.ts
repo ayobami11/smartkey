@@ -219,6 +219,9 @@ export const POST = async (request: NextRequest) => {
         fullName: recipient.fullName,
         requesterName: parsed.data.full_name,
         unitName: recipient.unitName,
+        // No key exists yet — this is the guest's free-text ask; the Dean
+        // assigns the actual key at approval.
+        roomLabel: parsed.data.requested_room,
         requestedFor: parsed.data.weekend_date,
         link: `${siteUrl}/dean/weekend-requests`,
         isGuest: true,

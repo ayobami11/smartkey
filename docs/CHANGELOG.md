@@ -6,7 +6,31 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
-## Entries
+### 2026-08-19 — Show the specific key/room in the weekend-submitted email, not just the faculty name
+
+- **Why**: `sendWeekendSubmittedEmail` told the Dean "requested weekend access in Faculty of
+  Environmental Sciences" — the faculty name only, never which specific room or key. For a
+  registered request the key is already known at submission; showing only the department name made
+  the Dean open the dashboard just to find out what was actually being asked for, undermining the
+  point of the one-click email flow.
+- `sendWeekendSubmittedEmail` (`src/lib/email/otp.ts`) gained a required `roomLabel` param and the
+  body copy now leads with it: "requested weekend access to **{roomLabel}** in {unitName}..." —
+  faculty name kept as secondary context, room/key is now the primary, specific fact.
+- `POST /api/requests/submit` (registered): extended the existing `keys` query (already fetched for
+  risk scoring) to also select `code, room_name`, and builds `roomLabel` as `"{room_name} ({code})"`
+  — no extra query, reuses data already being fetched for a different purpose.
+- `POST /api/public/weekend-request` (guest): passes the guest's own free-text `requested_room` as
+  `roomLabel` — there's no key yet at submission (the Dean assigns one at approval), so this is
+  what's actually known, and it's exactly what the Dean needs to judge the request.
+- The guest/registered "External" badge on this same email (added in the one-click-email-decision
+  pass just above) already covers the "how do I tell them apart" need — confirmed still correct,
+  no change needed there.
+- Verified: `npm run typecheck && npm run lint` clean; `npx vitest run` — 355 passed, 1 skipped. Live
+  guest-path resend confirmed no send errors. The registered-path `roomLabel` construction is a
+  trivial extension of the already-live-tested `keyRes.data?.zone` read in the same query — didn't
+  force a live resubmission through that path this pass, since both of the test requester's
+  authorised keys were already occupied by this session's own earlier test data and the "one active
+  request per key" rule (pre-existing, unrelated to this change) blocked a clean retry.
 
 ### 2026-08-19 — Extend one-click email decision to guest (external) weekend requests
 
