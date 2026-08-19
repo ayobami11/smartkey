@@ -40,14 +40,26 @@ const findRequestByToken = async (
     .eq('decision_token', token)
     .maybeSingle();
 
-// Registered requests carry their unit via key_id; guest requests have no
+// Resolves the Dean-authorising unit for a request. Registered requests
+// carry it indirectly via key_id -> keys.unit_id; guest requests have no
 // key yet, so they carry it directly as requested_unit_id.
-const resolveUnitId = (reqRow: {
-  guest_id: string | null;
-  key_id: string | null;
-  requested_unit_id: string | null;
-}): string | null =>
-  reqRow.guest_id ? reqRow.requested_unit_id : reqRow.key_id;
+const resolveUnitId = async (
+  admin: ReturnType<typeof createAdminClient>,
+  reqRow: {
+    guest_id: string | null;
+    key_id: string | null;
+    requested_unit_id: string | null;
+  }
+): Promise<string | null> => {
+  if (reqRow.guest_id) return reqRow.requested_unit_id;
+  if (!reqRow.key_id) return null;
+  const { data: key } = await admin
+    .from('keys')
+    .select('unit_id')
+    .eq('id', reqRow.key_id)
+    .single();
+  return key?.unit_id ?? null;
+};
 
 export const GET = async (
   _request: NextRequest,
@@ -80,10 +92,9 @@ export const GET = async (
     signLetterUrl(admin, reqRow.stamp_url),
     (async () => {
       if (!isGuest || !decidable) return [];
-      // For a registered request, key_id is either already set (this branch
-      // never applies) — for a guest request, resolveUnitId gives the
+      // Only reached for guest requests — resolveUnitId gives the
       // requested unit, from which the Dean must assign a key.
-      const unitId = resolveUnitId(reqRow);
+      const unitId = await resolveUnitId(admin, reqRow);
       if (!unitId) return [];
       const { data } = await admin
         .from('keys')
@@ -165,7 +176,7 @@ export const POST = async (
   }
 
   const isGuest = !!reqRow.guest_id;
-  const unitId = resolveUnitId(reqRow);
+  const unitId = await resolveUnitId(admin, reqRow);
   if (!unitId) {
     return NextResponse.json(err('Request not found', 404), { status: 404 });
   }
