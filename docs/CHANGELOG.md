@@ -8,6 +8,35 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-19 — Extend one-click email decision to guest (external) weekend requests
+
+- **Why**: the one-click Approve/Decline email shipped earlier today excluded guest requests
+  because approval assigns a key (`approve_guest_weekend` takes `p_key_id`) and a guest only names
+  a unit + free-text room, not a specific key — that blocker dissolves once the key picker lives on
+  the same confirmation page instead of requiring the dashboard. Also added a clear visual signal —
+  requested for both the email and the page — for whether a request is from a registered staff
+  member or an external guest, since the two now look identical on first glance otherwise.
+- `decideWeekendRequest()` (`src/lib/requests/decide-weekend.ts`) gained `isGuest`/`keyId` params
+  and a new first branch calling `approve_guest_weekend` — folding in the guest-approve logic that
+  previously lived only inline in `hod-decision/route.ts`. That route now calls the shared function
+  uniformly for every case (guest/registered × Dean/CSO × approve/decline) instead of special-casing
+  guests separately, finishing the consolidation started with the first pass at this feature.
+- `POST /api/public/weekend-request` (guest submission) now mints and persists `decision_token` the
+  same way `POST /api/requests/submit` already did for registered requests, when a Dean recipient
+  resolves.
+- `GET`/`POST /api/public/dean-decision/[token]` extended to branch on `guest_id`: resolve the unit
+  via `requested_unit_id` instead of `key_id` (guests have no key until approved), return
+  `is_guest`/guest identity fields/`requested_room`, and — for a guest request still `PENDING_HOD` —
+  `available_keys` (every non-`RETIRED` key in the unit, the exact filter the dashboard's own guest
+  key-picker already uses). `POST` accepts an optional `key_id`, required only for a guest
+  `APPROVED` decision; guest requests never send `submitted_signature_url`/`submitted_stamp_url`
+  (no HOD reference exists to compare against — same as the dashboard's guest path).
+- Visual distinction: reused the existing `GuestBadge` component (cyan pill, already used on the
+  CSO/Dean dashboards) on the confirmation page, and added an equivalent inline-styled badge to
+  `sendWeekendSubmittedEmail` (new `isGuest` param) next to the requester's name in the email body.
+- `npm run typecheck && npm run lint` clean; `npx vitest run` — 355 passed, 1 skipped, no
+  regressions from this second round of refactoring the shared decision core.
+
 ### 2026-08-19 — One-click Approve/Decline in the weekend-request submitted email
 
 - **Why**: Deans aren't always at a screen, and the only path to act on a weekend request was the

@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-import { logger } from '@/lib/logger';
-import {
-  decideWeekendRequest,
-  mapRpcError,
-  notifyRequester,
-} from '@/lib/requests/decide-weekend';
+import { decideWeekendRequest } from '@/lib/requests/decide-weekend';
 import { createServerClient } from '@/lib/supabase/server';
 import { err, ok } from '@/types/api';
 
@@ -69,10 +64,9 @@ export const POST = async (request: NextRequest) => {
   } = parsed.data;
 
   // Detect whether this is an external (guest) request. Guests have no HOD
-  // reference signature to compare, so they take a distinct approval path that
-  // assigns a key and skips signature verification (the HOD reviews the
-  // uploaded letter manually). This path is not shared with the token-based
-  // email flow — a one-click email action can't supply a key assignment.
+  // reference signature to compare, so decideWeekendRequest takes a
+  // distinct approval path for them that assigns a key and skips
+  // signature verification (the HOD reviews the uploaded letter manually).
   const { data: targetRequest } = await supabase
     .from('requests')
     .select('guest_id')
@@ -80,54 +74,17 @@ export const POST = async (request: NextRequest) => {
     .maybeSingle();
   const isGuestRequest = Boolean(targetRequest?.guest_id);
 
-  if (decision === 'APPROVED' && isGuestRequest) {
-    if (!key_id) {
-      return NextResponse.json(
-        err('A key must be assigned to approve an external request.', 422),
-        { status: 422 }
-      );
-    }
-
-    const { data, error } = await supabase.rpc('approve_guest_weekend', {
-      p_request_id: request_id,
-      p_hod_id: user.id,
-      p_key_id: key_id,
-      p_note: note ?? undefined,
-    });
-
-    if (error) {
-      const mapped = mapRpcError(error.message);
-      if (mapped.status === 500) {
-        const ref = crypto.randomUUID();
-        logger.error('approve_guest_weekend RPC failed', {
-          err: error.message,
-          ref,
-        });
-        return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
-          status: 500,
-        });
-      }
-      return NextResponse.json(err(mapped.message, mapped.status), {
-        status: mapped.status,
-      });
-    }
-
-    const result = Array.isArray(data) ? data[0] : data;
-    void notifyRequester(result.request_id, 'APPROVED');
-    return NextResponse.json(
-      ok({ request_id: result.request_id, status: 'APPROVED' })
-    );
-  }
-
   const result = await decideWeekendRequest({
     requestId: request_id,
     hodId: user.id,
     isCso,
+    isGuest: isGuestRequest,
     decision,
     note,
     submittedSignatureUrl: submitted_signature_url,
     submittedStampUrl: submitted_stamp_url,
     csoOverride: cso_override,
+    keyId: key_id,
   });
 
   if (!result.ok) {

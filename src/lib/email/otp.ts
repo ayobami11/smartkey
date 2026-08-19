@@ -387,6 +387,7 @@ export const sendWeekendSubmittedEmail = async ({
   requestedFor,
   link,
   decisionLink,
+  isGuest,
 }: {
   to: string;
   fullName: string;
@@ -394,13 +395,17 @@ export const sendWeekendSubmittedEmail = async ({
   unitName: string;
   requestedFor: string;
   link: string;
-  // Present only for registered-requester requests routed to a Dean —
-  // guest requests need a key assigned at approval time, which a one-click
-  // email action can't supply, so they never get this link. When present,
-  // it's the entry point to a confirmation page (never a bare GET action —
-  // mail scanners prefetch links, so the decision only ever happens on an
-  // explicit click on that page).
+  // Present for both registered-requester and guest requests routed to a
+  // Dean-authorised unit — the entry point to a confirmation page (never a
+  // bare GET action — mail scanners prefetch links, so the decision only
+  // ever happens on an explicit click on that page). Absent only when no
+  // Dean-authorised recipient resolves at all (Administration units).
   decisionLink?: string;
+  // External (guest) requester, distinct from a registered staff member —
+  // rendered as a small badge next to their name so the Dean can tell at a
+  // glance, matching the same cyan GuestBadge treatment used on the
+  // dashboard and the confirmation page.
+  isGuest?: boolean;
 }) =>
   transporter.sendMail({
     from: `"SmartKey" <${process.env.GMAIL_USER}>`,
@@ -414,7 +419,11 @@ export const sendWeekendSubmittedEmail = async ({
             New weekend request, ${fullName}
           </p>
           <p style="margin:0 0 24px;color:#475569;font-size:14px;">
-            <strong>${requesterName}</strong> has requested weekend access in
+            <strong>${requesterName}</strong>${
+              isGuest
+                ? ` <span style="display:inline-block;background:#CFFAFE;color:#0E7490;font-size:11px;font-weight:600;padding:2px 8px;border-radius:9999px;vertical-align:middle;">External</span>`
+                : ''
+            } has requested weekend access in
             <strong>${unitName}</strong> for <strong>${requestedFor}</strong>.
             It's awaiting your review.
           </p>

@@ -8,6 +8,8 @@ import {
   CheckCircleIcon,
   ClockIcon,
   FileWarningIcon,
+  IdCardIcon,
+  MapPinIcon,
   RefreshCwIcon,
   XCircleIcon,
 } from 'lucide-react';
@@ -17,9 +19,19 @@ import { formatDateLong } from '@/lib/dates';
 
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { GuestBadge } from '@/components/smartkey/guest-badge';
 
 // Types
+
+type AvailableKey = { id: string; code: string; room_name: string };
 
 type DecisionStatusData = {
   request_id: string;
@@ -33,9 +45,14 @@ type DecisionStatusData = {
     | 'DECLINED'
     | 'CANCELLED';
   decidable: boolean;
+  is_guest: boolean;
   requested_for: string;
   requester_name: string | null;
+  requested_room: string | null;
+  id_document_type: string | null;
+  id_document_number: string | null;
   key: { code: string; room_name: string } | null;
+  available_keys: AvailableKey[];
   letter_url: string | null;
   stamp_url: string | null;
 };
@@ -78,6 +95,7 @@ export const DeanDecisionView = ({ token }: DeanDecisionViewProps) => {
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   const [note, setNote] = useState('');
+  const [keyId, setKeyId] = useState('');
   const [submitting, setSubmitting] = useState<'APPROVED' | 'DECLINED' | null>(
     null
   );
@@ -110,7 +128,16 @@ export const DeanDecisionView = ({ token }: DeanDecisionViewProps) => {
     setSubmitError(null);
     const res = await apiFetch<DecideResponse>(
       `/api/public/dean-decision/${token}`,
-      { method: 'POST', body: { decision, note: note || undefined } }
+      {
+        method: 'POST',
+        body: {
+          decision,
+          note: note || undefined,
+          ...(data?.is_guest && decision === 'APPROVED'
+            ? { key_id: keyId }
+            : {}),
+        },
+      }
     );
     setSubmitting(null);
     if (res.status === 409) {
@@ -231,8 +258,10 @@ export const DeanDecisionView = ({ token }: DeanDecisionViewProps) => {
           />
           <p className="font-medium text-foreground">Weekend access request</p>
         </div>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {data.requester_name ?? 'A staff member'}
+        <p className="mt-1 flex flex-wrap items-center justify-center gap-1.5 text-sm text-muted-foreground">
+          {data.requester_name ??
+            (data.is_guest ? 'A visitor' : 'A staff member')}
+          {data.is_guest && <GuestBadge label="External" showIcon />}
           {data.key ? ` — ${data.key.room_name} (${data.key.code})` : ''}
         </p>
         <p className="mt-2 flex items-center justify-center gap-1.5 text-sm text-muted-foreground">
@@ -240,6 +269,33 @@ export const DeanDecisionView = ({ token }: DeanDecisionViewProps) => {
           {formatDateLong(data.requested_for)}
         </p>
       </div>
+
+      {data.is_guest && (
+        <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/40 p-4 text-xs text-muted-foreground">
+          {data.requested_room && (
+            <div className="flex items-center gap-2">
+              <MapPinIcon className="size-3.5 shrink-0" aria-hidden="true" />
+              <span>
+                Requested room:{' '}
+                <span className="font-medium text-foreground">
+                  {data.requested_room}
+                </span>
+              </span>
+            </div>
+          )}
+          {data.id_document_type && data.id_document_number && (
+            <div className="flex items-center gap-2">
+              <IdCardIcon className="size-3.5 shrink-0" aria-hidden="true" />
+              <span>
+                <span className="font-medium text-foreground">
+                  {data.id_document_type}:
+                </span>{' '}
+                <span className="font-mono">{data.id_document_number}</span>
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
       {(data.letter_url || data.stamp_url) && (
         <div className="grid grid-cols-2 gap-3">
@@ -278,6 +334,37 @@ export const DeanDecisionView = ({ token }: DeanDecisionViewProps) => {
         </div>
       )}
 
+      {data.is_guest && (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="assign-key">Assign a key (required to approve)</Label>
+          <Select value={keyId} onValueChange={setKeyId}>
+            <SelectTrigger id="assign-key">
+              <SelectValue placeholder="Select a key" />
+            </SelectTrigger>
+            <SelectContent position="popper">
+              {data.available_keys.map((k) => (
+                <SelectItem key={k.id} value={k.id}>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-mono text-sm font-medium">
+                      {k.code}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {k.room_name}
+                    </span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {data.available_keys.length === 0 && (
+            <p className="text-xs text-muted-foreground">
+              No keys available in this unit — use the SmartKey dashboard
+              instead.
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="decision-note">Note (optional)</Label>
         <Textarea
@@ -298,7 +385,7 @@ export const DeanDecisionView = ({ token }: DeanDecisionViewProps) => {
       <div className="flex flex-col gap-2">
         <Button
           onClick={() => void handleDecide('APPROVED')}
-          disabled={submitting !== null}
+          disabled={submitting !== null || (data.is_guest && !keyId)}
           aria-busy={submitting === 'APPROVED'}
           className="w-full"
         >

@@ -132,11 +132,18 @@ export type DecideWeekendParams = {
   requestId: string;
   hodId: string; // resolved Dean or CSO profile id
   isCso: boolean;
+  // External (guest) request — approval assigns a key rather than
+  // comparing a signature (guests have no HOD reference to compare
+  // against). Ignored for DECLINE, which is identical for guest and
+  // registered requests.
+  isGuest: boolean;
   decision: 'APPROVED' | 'DECLINED';
   note?: string;
   submittedSignatureUrl?: string;
   submittedStampUrl?: string;
   csoOverride?: boolean;
+  // Required when isGuest && decision === 'APPROVED'; ignored otherwise.
+  keyId?: string;
 };
 
 export type DecideWeekendResult =
@@ -156,14 +163,60 @@ export const decideWeekendRequest = async (
     requestId,
     hodId,
     isCso,
+    isGuest,
     decision,
     note,
     submittedSignatureUrl,
     submittedStampUrl,
     csoOverride,
+    keyId,
   } = params;
 
   const admin = createAdminClient();
+
+  // External (guest) request approval — assigns a key rather than
+  // comparing a signature (guests have no HOD reference on file; the
+  // authoriser reviews the uploaded letter manually). Checked before the
+  // CSO/Dean signature-verification branches below: a guest request may be
+  // approved by either a Dean or the CSO, whichever authorises the chosen
+  // key — approve_guest_weekend validates that itself.
+  if (decision === 'APPROVED' && isGuest) {
+    if (!keyId) {
+      return {
+        ok: false,
+        httpStatus: 422,
+        message: 'A key must be assigned to approve an external request.',
+      };
+    }
+
+    const { data, error } = await admin.rpc('approve_guest_weekend', {
+      p_request_id: requestId,
+      p_hod_id: hodId,
+      p_key_id: keyId,
+      p_note: note ?? undefined,
+    });
+
+    if (error) {
+      const mapped = mapRpcError(error.message);
+      if (mapped.status === 500) {
+        const ref = crypto.randomUUID();
+        logger.error('approve_guest_weekend RPC failed', {
+          err: error.message,
+          ref,
+        });
+        return {
+          ok: false,
+          httpStatus: 500,
+          message: `Internal error. Ref: ${ref}`,
+        };
+      }
+      return { ok: false, httpStatus: mapped.status, message: mapped.message };
+    }
+
+    const result = Array.isArray(data) ? data[0] : data;
+    void notifyRequester(result.request_id, 'APPROVED');
+    return { ok: true, requestId: result.request_id, status: 'APPROVED' };
+  }
 
   if (decision === 'DECLINED') {
     const { data, error } = await admin.rpc('decline_weekend', {

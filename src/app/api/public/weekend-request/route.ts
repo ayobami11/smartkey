@@ -196,8 +196,24 @@ export const POST = async (request: NextRequest) => {
   }
 
   void getDeanRecipientForUnit(adminClient, parsed.data.department_id)
-    .then((recipient) => {
+    .then(async (recipient) => {
       if (!recipient) return;
+
+      // One-click email Approve/Decline — same mechanism as the registered
+      // flow. Mint and persist the token before sending so the email link
+      // is never dead on arrival.
+      const decisionToken = crypto.randomUUID();
+      const { error: tokenError } = await adminClient
+        .from('requests')
+        .update({ decision_token: decisionToken })
+        .eq('id', result.request_id);
+      if (tokenError) {
+        logger.error('guest weekend-request: failed to persist decision_token', {
+          requestId: result.request_id,
+          err: tokenError.message,
+        });
+      }
+
       return sendWeekendSubmittedEmail({
         to: recipient.to,
         fullName: recipient.fullName,
@@ -205,6 +221,10 @@ export const POST = async (request: NextRequest) => {
         unitName: recipient.unitName,
         requestedFor: parsed.data.weekend_date,
         link: `${siteUrl}/dean/weekend-requests`,
+        isGuest: true,
+        decisionLink: tokenError
+          ? undefined
+          : `${siteUrl}/dean-decision/${decisionToken}`,
       });
     })
     .catch((e: unknown) => {

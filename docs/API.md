@@ -493,7 +493,7 @@ These routes let an external person with no SmartKey account submit a weekend ke
 **Roles**: ALL (unauthenticated)
 **RPC**: `create_guest_weekend_request(full_name, email, phone, id_type, id_number, department_id, weekend_date, return_deadline, letter_url, requested_room)`
 
-Multipart form. Uploads the Dean authorisation letter to the `weekend-letters` bucket, creates the guest + request (`PENDING_HOD`, no code), and emails the status link to the guest (via the shared email sender in `src/lib/email/`). Also fires a fire-and-forget `sendWeekendSubmittedEmail` to the target unit's Dean (resolved via `getDeanRecipientForUnit`, `department_id`) — no-op for Administration units. Neither send can fail the request. Returns `201`.
+Multipart form. Uploads the Dean authorisation letter to the `weekend-letters` bucket, creates the guest + request (`PENDING_HOD`, no code), and emails the status link to the guest (via the shared email sender in `src/lib/email/`). Also fires a fire-and-forget `sendWeekendSubmittedEmail` to the target unit's Dean (resolved via `getDeanRecipientForUnit`, `department_id`) — no-op for Administration units. When a Dean recipient does resolve, a `decision_token` is minted and persisted on the request first, and the email's `decisionLink` points at `/dean-decision/[token]` with `isGuest: true` (renders the "External" badge) — the same one-click Approve/Decline flow as registered requests (see "Public one-click Dean decision" below), except approving here requires the Dean to also pick a key on that page. Neither send can fail the request. Returns `201`.
 
 | Field                | Type                       | Required |
 | -------------------- | -------------------------- | -------- |
@@ -604,7 +604,9 @@ Returns a short-lived (5-minute) signed URL for a request's uploaded authorisati
 
 ### Public one-click Dean decision (email Approve/Decline)
 
-Lets a Dean act on a **registered requester's** Dean-authorised weekend request straight from the "New weekend request" email — no login. Reuses the same `decideWeekendRequest` core as `POST /api/requests/hod-decision` (`src/lib/requests/decide-weekend.ts`), so verification, mismatch-holding, the CSO mismatch email, and the requester notification all behave identically to the dashboard flow. Scoped to Dean-authorised units only — guest requests (approval needs a key assigned, which this can't supply) and Administration/CSO-routed requests (no submission email exists for those today) never receive a `decision_token` and so 404 here.
+Lets a Dean act on a Dean-authorised weekend request straight from the "New weekend request" email — no login. Covers both **registered-requester** and **guest (external)** requests. Reuses the same `decideWeekendRequest` core as `POST /api/requests/hod-decision` (`src/lib/requests/decide-weekend.ts`), so verification, mismatch-holding, guest key-assignment, the CSO mismatch email, and the requester notification all behave identically to the dashboard flow. Scoped to Dean-authorised units only — Administration/CSO-routed requests (no submission email exists for those today) never receive a `decision_token` and so 404 here.
+
+The email itself distinguishes the two: a guest submission renders a small cyan "External" badge next to the requester's name (`sendWeekendSubmittedEmail`'s `isGuest` param), matching the `GuestBadge` treatment already used on the CSO/Dean dashboards and on the confirmation page below.
 
 Security note: `GET` is strictly read-only. It must never mutate state — mail scanners (Outlook Safe Links, Gmail, etc.) prefetch every link in an email, so if a page load could decide the request, the scanner itself would silently approve or decline it before a human opened the email. The actual decision only happens on `POST`, triggered by an explicit button click on `/dean-decision/[token]`.
 
@@ -613,24 +615,51 @@ Security note: `GET` is strictly read-only. It must never mutate state — mail 
 **File**: `src/app/api/public/dean-decision/[token]/route.ts`
 **Roles**: ALL (unauthenticated)
 
-Read-only. Looks up the request by `decision_token` (admin client) and returns the fields the confirmation page needs, including short-lived (5-minute) signed URLs for the letter/stamp if present (same signing approach as `GET /api/requests/[id]/letter`).
+Read-only. Looks up the request by `decision_token` (admin client) and returns the fields the confirmation page needs, including short-lived (5-minute) signed URLs for the letter/stamp if present (same signing approach as `GET /api/requests/[id]/letter`). For a guest request that's still `PENDING_HOD`, also returns `available_keys` — every non-`RETIRED` key in the requested unit (same filter the dashboard's guest key-picker uses) — so the confirmation page can render a picker.
 
-**Response `data`**:
+**Response `data`** (registered requester):
 
 ```json
 {
   "request_id": "<uuid>",
   "status": "PENDING_HOD",
   "decidable": true,
+  "is_guest": false,
   "requested_for": "2026-08-22",
   "requester_name": "Dr. Bakare",
+  "requested_room": null,
+  "id_document_type": null,
+  "id_document_number": null,
   "key": { "code": "NS-304", "room_name": "Senate Hall A" },
+  "available_keys": [],
   "letter_url": "<signed-url>",
   "stamp_url": null
 }
 ```
 
-`decidable` is `status === 'PENDING_HOD'` — the page renders Approve/Decline only when `true`; otherwise it renders the terminal state named by `status`.
+**Response `data`** (guest — note `key` is `null` until approved, `available_keys` populated instead):
+
+```json
+{
+  "request_id": "<uuid>",
+  "status": "PENDING_HOD",
+  "decidable": true,
+  "is_guest": true,
+  "requested_for": "2026-08-22",
+  "requester_name": "Jane Doe",
+  "requested_room": "Senate Hall A",
+  "id_document_type": "National ID",
+  "id_document_number": "A1234567",
+  "key": null,
+  "available_keys": [
+    { "id": "<uuid>", "code": "NS-304", "room_name": "Senate Hall A" }
+  ],
+  "letter_url": "<signed-url>",
+  "stamp_url": null
+}
+```
+
+`decidable` is `status === 'PENDING_HOD'` — the page renders Approve/Decline only when `true`; otherwise it renders the terminal state named by `status`. `available_keys` is only populated when `is_guest && decidable`; empty otherwise.
 
 **Errors**: `404` token not found or malformed
 
@@ -641,16 +670,17 @@ Read-only. Looks up the request by `decision_token` (admin client) and returns t
 **File**: `src/app/api/public/dean-decision/[token]/route.ts`
 **Roles**: ALL (unauthenticated)
 
-| Field      | Type                       | Required |
-| ---------- | -------------------------- | -------- |
-| `decision` | `'APPROVED' \| 'DECLINED'` | yes      |
-| `note`     | `string`                   | no       |
+| Field      | Type                       | Required                        |
+| ---------- | -------------------------- | ------------------------------- |
+| `decision` | `'APPROVED' \| 'DECLINED'` | yes                             |
+| `note`     | `string`                   | no                              |
+| `key_id`   | `string` (uuid)            | guest requests, `APPROVED` only |
 
-Re-resolves the **current** Dean of the request's unit at decision time (not an identity captured when the email was sent, so a Dean handover in between is handled correctly), reads `letter_url`/`stamp_url` off the request row itself as the submitted signature/stamp (server-side source of truth — unlike the dashboard route, there is no client to supply these), then calls the same `decideWeekendRequest` core as `POST /api/requests/hod-decision`.
+Re-resolves the **current** Dean of the request's unit at decision time (not an identity captured when the email was sent, so a Dean handover in between is handled correctly) — for a guest request the unit comes from `requested_unit_id` (no `key_id` exists yet); for a registered request, from the request's own `key_id`. Reads `letter_url`/`stamp_url` off the request row itself as the submitted signature/stamp for **registered** requests only (server-side source of truth — unlike the dashboard route, there is no client to supply these); guest requests never send these — same as the dashboard's guest-approval path, which reviews the letter manually with no reference signature to compare against. Then calls the same `decideWeekendRequest` core as `POST /api/requests/hod-decision`, which for a guest `APPROVED` decision calls `approve_guest_weekend` with the chosen `key_id`.
 
-**Response `data`**: identical shape to `POST /api/requests/hod-decision` — `{ "request_id": "<uuid>", "status": "APPROVED" | "DECLINED" }`, or the held-mismatch shape `{ "request_id": "<uuid>", "status": "HELD_SIGNATURE_MISMATCH", "mismatches": {...}, "message": "..." }` (still HTTP 200).
+**Response `data`**: identical shape to `POST /api/requests/hod-decision` — `{ "request_id": "<uuid>", "status": "APPROVED" | "DECLINED" }`, or the held-mismatch shape `{ "request_id": "<uuid>", "status": "HELD_SIGNATURE_MISMATCH", "mismatches": {...}, "message": "..." }` (still HTTP 200; never reachable for a guest request, which has no reference signature to mismatch against).
 
-**Errors**: `403` the unit is no longer Dean-authorised, or has no Dean · `404` token not found, or the request has no `key_id` · `409` request is no longer `PENDING_HOD` (already decided — the page refetches to show the real terminal state) · `422` validation
+**Errors**: `403` the unit is no longer Dean-authorised, or has no Dean · `404` token not found, or the request resolves to no unit · `409` request is no longer `PENDING_HOD` (already decided — the page refetches to show the real terminal state) · `422` validation, or (guest `APPROVED` only) no `key_id` supplied
 
 ---
 
