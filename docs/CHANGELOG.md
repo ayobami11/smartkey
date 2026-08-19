@@ -8,6 +8,50 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-19 — One-click Approve/Decline in the weekend-request submitted email
+
+- **Why**: Deans aren't always at a screen, and the only path to act on a weekend request was the
+  dashboard. Reduce friction by putting the decision in the "New weekend request" email itself,
+  GitHub-repo-invite style, while leaving the dashboard flow untouched as the full-featured path.
+- Scoped to **registered-requester weekend requests routed to a Dean** only. Guest requests need a
+  key assigned at approval time (`approve_guest_weekend` takes `p_key_id`), which a one-click email
+  action can't supply — dashboard-only, unchanged. Administration/CSO-routed requests don't
+  currently generate a submission email to the CSO at all — out of scope, not silently expanded.
+- **Security**: `GET` never mutates state. Mail scanners (Outlook Safe Links, Gmail, corporate
+  gateways) prefetch every link in an email to check for malware — if the link itself decided the
+  request, the scanner would silently approve/decline it before a human opened the email. The email
+  links to a confirmation page (`/dean-decision/[token]`); the decision only happens on `POST`,
+  triggered by an explicit button click there — same pattern GitHub's own invite email uses. The
+  token is a single-purpose credential (proves "this email was legitimately sent for this one
+  pending request"), not a login — grants no session, and its validity is entirely bounded by
+  `status = 'PENDING_HOD'`, no separate expiry bookkeeping needed. Authorisation is enforced
+  identically to the dashboard, via the same `approve_weekend`/`decline_weekend` RPCs (which take
+  `p_hod_id` explicitly, not derived from a session) — the route re-resolves the **current** Dean of
+  the request's unit at decision time rather than trusting an identity captured when the email was
+  sent, so a Dean handover in between is handled correctly.
+- Extended `requests` with `decision_token uuid` (unique, partial index on `is not null`, mirrors
+  `access_token`'s existing pattern). Minted in `POST /api/requests/submit`'s `WEEKEND` branch only
+  when a Dean recipient actually resolves.
+- Extracted the entire non-guest decision core out of `POST /api/requests/hod-decision` — signature/
+  stamp verification, mismatch-hold + CSO email, the `approve_weekend`/`decline_weekend` RPC calls,
+  requester notification — into `src/lib/requests/decide-weekend.ts`'s `decideWeekendRequest()`. This
+  is a **lift, not a rewrite**: `hod-decision`'s request/response contract is unchanged, verified by
+  running the full existing test suite (355 tests) plus manual dashboard checks (clean approval,
+  passing-signature approval, signature-mismatch hold via
+  `tests/manual/signature-mismatch-review/trigger-mismatch.mjs`, decline) before and after. New
+  `POST /api/public/dean-decision/[token]` (the guest branch stays inline in `hod-decision`, out of
+  scope for the shared function — it needs a key assignment the token flow can't provide) calls the
+  same core function, so verification/mismatch/notification behaviour is identical between the two
+  entry points by construction, not by duplicated logic staying in sync.
+- `sendWeekendSubmittedEmail` gained an optional `decisionLink` param — when present, renders
+  Approve/Decline buttons alongside the existing "Review request" dashboard link; when absent (guest
+  submissions, which never get a token), the email is byte-for-byte what it was before.
+- New page `src/app/(public)/dean-decision/[token]/` mirrors the existing
+  `(public)/weekend-access/[token]/` guest-status page's structure and conventions (brand header,
+  terminal-state handling, persistent confirmation rather than a toast).
+- `npm run db:types` after the migration; `npm run typecheck && npm run lint` clean;
+  `npx vitest run` — 355 passed, 1 skipped, no regressions.
+
 ### 2026-08-19 — Reject non-signature/stamp uploads at Dean onboarding and profile replacement
 
 - **Why**: Deans upload two reference images — their signature and their departmental stamp — that

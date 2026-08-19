@@ -447,6 +447,7 @@ export type Database = {
           code: string | null;
           code_expires_at: string | null;
           created_at: string;
+          decision_token: string | null;
           guest_id: string | null;
           hod_decision_id: string | null;
           id: string;
@@ -475,6 +476,7 @@ export type Database = {
           code?: string | null;
           code_expires_at?: string | null;
           created_at?: string;
+          decision_token?: string | null;
           guest_id?: string | null;
           hod_decision_id?: string | null;
           id?: string;
@@ -503,6 +505,7 @@ export type Database = {
           code?: string | null;
           code_expires_at?: string | null;
           created_at?: string;
+          decision_token?: string | null;
           guest_id?: string | null;
           hod_decision_id?: string | null;
           id?: string;

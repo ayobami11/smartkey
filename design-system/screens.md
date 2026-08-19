@@ -43,6 +43,7 @@ Success criteria: 80–90% reduction in end-to-end request processing time vs th
 - `/help` — Static FAQ and contact-the-CSO instructions.
 - `/weekend-access` — External (non-registered) weekend request form: department, weekend date, work description, name/email/phone, ID document type + number, Dean authorisation letter upload.
 - `/weekend-access/:token` — Session-less guest status/code page reached via the request's `access_token`: shows status, the Dean-assigned key once present, and the 6-digit code with countdown on the requested date.
+- `/dean-decision/:token` — Session-less Dean decision page reached via the `decision_token` in the "New weekend request" email, for registered-requester requests routed to a Dean only. Shows requester, key, date, and the uploaded letter/stamp if any, with Approve/Decline buttons. GET never mutates state (mail-scanner safety); the decision happens only on an explicit button click, which `POST`s.
 
 ### 2.2 CSO area
 

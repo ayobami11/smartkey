@@ -386,6 +386,7 @@ export const sendWeekendSubmittedEmail = async ({
   unitName,
   requestedFor,
   link,
+  decisionLink,
 }: {
   to: string;
   fullName: string;
@@ -393,6 +394,13 @@ export const sendWeekendSubmittedEmail = async ({
   unitName: string;
   requestedFor: string;
   link: string;
+  // Present only for registered-requester requests routed to a Dean —
+  // guest requests need a key assigned at approval time, which a one-click
+  // email action can't supply, so they never get this link. When present,
+  // it's the entry point to a confirmation page (never a bare GET action —
+  // mail scanners prefetch links, so the decision only ever happens on an
+  // explicit click on that page).
+  decisionLink?: string;
 }) =>
   transporter.sendMail({
     from: `"SmartKey" <${process.env.GMAIL_USER}>`,
@@ -410,10 +418,40 @@ export const sendWeekendSubmittedEmail = async ({
             <strong>${unitName}</strong> for <strong>${requestedFor}</strong>.
             It's awaiting your review.
           </p>
+          ${
+            decisionLink
+              ? `
+          <table role="presentation" style="border-collapse:collapse;">
+            <tr>
+              <td style="padding-right:8px;">
+                <a href="${decisionLink}"
+                  style="display:inline-block;background:#7B1F2D;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">
+                  Approve
+                </a>
+              </td>
+              <td>
+                <a href="${decisionLink}"
+                  style="display:inline-block;background:#fff;color:#7B1F2D;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;border:1px solid #7B1F2D;">
+                  Decline
+                </a>
+              </td>
+            </tr>
+          </table>
+          <p style="margin:16px 0 0;color:#94A3B8;font-size:12px;">
+            Both buttons open a confirmation page — nothing is decided until
+            you click Approve or Decline there.
+          </p>
+          <a href="${link}" style="display:inline-block;margin-top:16px;color:#7B1F2D;font-size:13px;font-weight:600;text-decoration:underline;">
+            Or review on the dashboard
+          </a>
+          `
+              : `
           <a href="${link}"
             style="display:inline-block;background:#7B1F2D;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">
             Review request
           </a>
+          `
+          }
         </div>
       </div>
     `,

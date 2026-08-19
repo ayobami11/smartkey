@@ -226,11 +226,27 @@ export const POST = async (request: NextRequest) => {
     // Fire-and-forget — resolves to null (no send) for Administration
     // (authoriser='CSO') keys, which have no Dean.
     void getDeanRecipientForKey(adminClient, key_id)
-      .then((recipient) => {
+      .then(async (recipient) => {
         if (!recipient) return;
         const siteUrl =
           process.env.NEXT_PUBLIC_SITE_URL ??
           'https://smartkey-ochre.vercel.app';
+
+        // One-click email Approve/Decline — only for this (registered,
+        // Dean-routed) case. Mint and persist the token before sending so
+        // the email link is never dead on arrival.
+        const decisionToken = crypto.randomUUID();
+        const { error: tokenError } = await adminClient
+          .from('requests')
+          .update({ decision_token: decisionToken })
+          .eq('id', result.request_id);
+        if (tokenError) {
+          logger.error('submit: failed to persist decision_token', {
+            requestId: result.request_id,
+            err: tokenError.message,
+          });
+        }
+
         return sendWeekendSubmittedEmail({
           to: recipient.to,
           fullName: recipient.fullName,
@@ -238,6 +254,9 @@ export const POST = async (request: NextRequest) => {
           unitName: recipient.unitName,
           requestedFor: weekend_date ?? '',
           link: `${siteUrl}/dean/weekend-requests`,
+          decisionLink: tokenError
+            ? undefined
+            : `${siteUrl}/dean-decision/${decisionToken}`,
         });
       })
       .catch((e: unknown) => {

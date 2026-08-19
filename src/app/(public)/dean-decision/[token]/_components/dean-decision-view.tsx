@@ -1,0 +1,377 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+
+import {
+  AlertCircleIcon,
+  CalendarClockIcon,
+  CheckCircleIcon,
+  ClockIcon,
+  FileWarningIcon,
+  RefreshCwIcon,
+  XCircleIcon,
+} from 'lucide-react';
+
+import { apiFetch } from '@/lib/api';
+import { formatDateLong } from '@/lib/dates';
+
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+
+// Types
+
+type DecisionStatusData = {
+  request_id: string;
+  status:
+    | 'PENDING_HOD'
+    | 'APPROVED'
+    | 'CODE_ISSUED'
+    | 'KEY_ISSUED'
+    | 'KEY_RETURNED'
+    | 'EXPIRED'
+    | 'DECLINED'
+    | 'CANCELLED';
+  decidable: boolean;
+  requested_for: string;
+  requester_name: string | null;
+  key: { code: string; room_name: string } | null;
+  letter_url: string | null;
+  stamp_url: string | null;
+};
+
+type DecideResponse = {
+  request_id: string;
+  status: 'APPROVED' | 'DECLINED' | 'HELD_SIGNATURE_MISMATCH';
+  mismatches?: { signature?: number; stamp?: number };
+};
+
+type DeanDecisionViewProps = {
+  token: string;
+};
+
+const TERMINAL_COPY: Record<string, { title: string; body: string }> = {
+  APPROVED: {
+    title: 'Already approved',
+    body: 'This request has already been approved.',
+  },
+  DECLINED: {
+    title: 'Already declined',
+    body: 'This request has already been declined.',
+  },
+  EXPIRED: {
+    title: 'Request expired',
+    body: 'This request is no longer active.',
+  },
+  CANCELLED: {
+    title: 'Request cancelled',
+    body: 'The requester cancelled this request.',
+  },
+};
+
+// Component
+
+export const DeanDecisionView = ({ token }: DeanDecisionViewProps) => {
+  const [data, setData] = useState<DecisionStatusData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
+  const [note, setNote] = useState('');
+  const [submitting, setSubmitting] = useState<'APPROVED' | 'DECLINED' | null>(
+    null
+  );
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [result, setResult] = useState<DecideResponse | null>(null);
+
+  const fetchStatus = async () => {
+    const res = await apiFetch<DecisionStatusData>(
+      `/api/public/dean-decision/${token}`
+    );
+    setLoading(false);
+    if (res.status === 404) {
+      setNotFound(true);
+      return;
+    }
+    if (res.error || !res.data) {
+      setFetchError(res.error ?? 'Could not load this request.');
+      return;
+    }
+    setData(res.data);
+  };
+
+  useEffect(() => {
+    void fetchStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  const handleDecide = async (decision: 'APPROVED' | 'DECLINED') => {
+    setSubmitting(decision);
+    setSubmitError(null);
+    const res = await apiFetch<DecideResponse>(
+      `/api/public/dean-decision/${token}`,
+      { method: 'POST', body: { decision, note: note || undefined } }
+    );
+    setSubmitting(null);
+    if (res.status === 409) {
+      // Someone else (e.g. the dashboard) already decided it — refetch to
+      // show the real terminal state instead of a generic error.
+      await fetchStatus();
+      return;
+    }
+    if (res.error || !res.data) {
+      setSubmitError(res.error ?? 'Something went wrong. Please try again.');
+      return;
+    }
+    setResult(res.data);
+  };
+
+  // Loading
+
+  if (loading) {
+    return (
+      <div className="w-full max-w-sm space-y-4">
+        <div className="h-6 w-40 animate-pulse rounded bg-muted" />
+        <div className="h-40 animate-pulse rounded-lg bg-muted" />
+      </div>
+    );
+  }
+
+  // Not found
+
+  if (notFound) {
+    return (
+      <StatusCard
+        tone="neutral"
+        icon={XCircleIcon}
+        title="Link not found"
+        body="This link is invalid. If you still need to decide on a request, use the SmartKey dashboard."
+      />
+    );
+  }
+
+  // Fetch error
+
+  if (fetchError || !data) {
+    return (
+      <div
+        className="w-full max-w-sm rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-center"
+        role="alert"
+      >
+        <AlertCircleIcon
+          className="mx-auto size-8 text-destructive"
+          aria-hidden="true"
+        />
+        <p className="mt-3 font-medium text-foreground">Something went wrong</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {fetchError ?? 'Could not load this request.'}
+        </p>
+        <Button
+          variant="outline"
+          size="sm"
+          className="mt-4"
+          onClick={() => void fetchStatus()}
+        >
+          <RefreshCwIcon className="size-3.5" aria-hidden="true" />
+          Try again
+        </Button>
+      </div>
+    );
+  }
+
+  // Just decided, this turn
+
+  if (result) {
+    if (result.status === 'HELD_SIGNATURE_MISMATCH') {
+      return (
+        <StatusCard
+          tone="warning"
+          icon={FileWarningIcon}
+          title="Held for review"
+          body="The submitted signature or stamp didn't match the one on file. This has been held and the CSO has been notified to review it."
+        />
+      );
+    }
+    return (
+      <StatusCard
+        tone={result.status === 'APPROVED' ? 'success' : 'neutral'}
+        icon={result.status === 'APPROVED' ? CheckCircleIcon : XCircleIcon}
+        title={result.status === 'APPROVED' ? 'Approved' : 'Declined'}
+        body={`${data.requester_name ?? 'The requester'} has been notified by email.`}
+      />
+    );
+  }
+
+  // Already decided/expired before this page loaded
+
+  if (!data.decidable) {
+    const copy = TERMINAL_COPY[data.status] ?? {
+      title: 'No longer pending',
+      body: 'This request can no longer be decided here.',
+    };
+    return (
+      <StatusCard
+        tone={data.status === 'APPROVED' ? 'success' : 'neutral'}
+        icon={data.status === 'APPROVED' ? CheckCircleIcon : XCircleIcon}
+        title={copy.title}
+        body={copy.body}
+      />
+    );
+  }
+
+  // Decidable — show the request and Approve/Decline
+
+  return (
+    <div className="w-full max-w-sm space-y-5">
+      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-center dark:border-amber-900 dark:bg-amber-950/30">
+        <div className="flex items-center justify-center gap-2">
+          <ClockIcon
+            className="size-5 text-amber-700 dark:text-amber-400"
+            aria-hidden="true"
+          />
+          <p className="font-medium text-foreground">Weekend access request</p>
+        </div>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {data.requester_name ?? 'A staff member'}
+          {data.key ? ` — ${data.key.room_name} (${data.key.code})` : ''}
+        </p>
+        <p className="mt-2 flex items-center justify-center gap-1.5 text-sm text-muted-foreground">
+          <CalendarClockIcon className="size-4" aria-hidden="true" />
+          {formatDateLong(data.requested_for)}
+        </p>
+      </div>
+
+      {(data.letter_url || data.stamp_url) && (
+        <div className="grid grid-cols-2 gap-3">
+          {data.letter_url && (
+            <a
+              href={data.letter_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex flex-col items-center gap-1.5 rounded-lg border border-border p-2 text-xs font-medium text-primary underline-offset-4 hover:underline"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={data.letter_url}
+                alt="Uploaded authorisation letter"
+                className="aspect-[3/4] w-full rounded-md border border-border object-cover"
+              />
+              View letter
+            </a>
+          )}
+          {data.stamp_url && (
+            <a
+              href={data.stamp_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex flex-col items-center gap-1.5 rounded-lg border border-border p-2 text-xs font-medium text-primary underline-offset-4 hover:underline"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={data.stamp_url}
+                alt="Uploaded departmental stamp"
+                className="aspect-[3/4] w-full rounded-md border border-border object-cover"
+              />
+              View stamp
+            </a>
+          )}
+        </div>
+      )}
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="decision-note">Note (optional)</Label>
+        <Textarea
+          id="decision-note"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Add a note for the requester, e.g. a reason for declining"
+          rows={3}
+        />
+      </div>
+
+      {submitError && (
+        <p className="text-sm text-destructive" role="alert">
+          {submitError}
+        </p>
+      )}
+
+      <div className="flex flex-col gap-2">
+        <Button
+          onClick={() => void handleDecide('APPROVED')}
+          disabled={submitting !== null}
+          aria-busy={submitting === 'APPROVED'}
+          className="w-full"
+        >
+          {submitting === 'APPROVED' ? 'Approving…' : 'Approve'}
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => void handleDecide('DECLINED')}
+          disabled={submitting !== null}
+          aria-busy={submitting === 'DECLINED'}
+          className="w-full"
+        >
+          {submitting === 'DECLINED' ? 'Declining…' : 'Decline'}
+        </Button>
+      </div>
+
+      <p className="text-center text-xs text-muted-foreground">
+        You can also review this from your SmartKey dashboard.
+      </p>
+    </div>
+  );
+};
+
+// Sub-components
+
+type StatusTone = 'success' | 'warning' | 'error' | 'neutral';
+
+const TONE_CLASSES: Record<
+  StatusTone,
+  { wrap: string; iconWrap: string; icon: string }
+> = {
+  success: {
+    wrap: 'border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/30',
+    iconWrap: 'bg-emerald-100 dark:bg-emerald-900/50',
+    icon: 'text-emerald-700 dark:text-emerald-400',
+  },
+  warning: {
+    wrap: 'border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30',
+    iconWrap: 'bg-amber-100 dark:bg-amber-900/50',
+    icon: 'text-amber-700 dark:text-amber-400',
+  },
+  error: {
+    wrap: 'border-destructive/30 bg-destructive/5',
+    iconWrap: 'bg-destructive/10',
+    icon: 'text-destructive',
+  },
+  neutral: {
+    wrap: 'border-border bg-card',
+    iconWrap: 'bg-muted',
+    icon: 'text-muted-foreground',
+  },
+};
+
+type StatusCardProps = {
+  tone: StatusTone;
+  icon: React.ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
+  title: string;
+  body: string;
+};
+
+const StatusCard = ({ tone, icon: Icon, title, body }: StatusCardProps) => {
+  const t = TONE_CLASSES[tone];
+  return (
+    <div
+      className={`w-full max-w-sm rounded-lg border p-6 text-center ${t.wrap}`}
+    >
+      <div
+        className={`mx-auto mb-4 flex size-12 items-center justify-center rounded-full ${t.iconWrap}`}
+      >
+        <Icon className={`size-6 ${t.icon}`} aria-hidden />
+      </div>
+      <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+      <p className="mt-2 text-sm text-muted-foreground">{body}</p>
+    </div>
+  );
+};

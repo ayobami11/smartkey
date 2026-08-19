@@ -244,7 +244,7 @@ The RPC runs the risk engine, generates the code, and writes the audit entry ato
 
 **Errors**: `403` requester not authorised for this key · `409` active request already exists for this key · `422` outside operational hours (weekend requests) · `500` RPC failure
 
-For a `WEEKDAY` request, fires a fire-and-forget `sendCollectionCodeEmail` to the requester. For a `WEEKEND` request, fires a fire-and-forget `sendWeekendSubmittedEmail` to the key's unit's Dean (resolved via `getDeanRecipientForKey`) — no-op for Administration (`authoriser='CSO'`) keys, which have no Dean. Neither send can fail the response.
+For a `WEEKDAY` request, fires a fire-and-forget `sendCollectionCodeEmail` to the requester. For a `WEEKEND` request, fires a fire-and-forget `sendWeekendSubmittedEmail` to the key's unit's Dean (resolved via `getDeanRecipientForKey`) — no-op for Administration (`authoriser='CSO'`) keys, which have no Dean. When a Dean recipient does resolve, a `decision_token` is minted and persisted on the request first, and the email's `decisionLink` points at `/dean-decision/[token]` — the one-click Approve/Decline flow (see "Public one-click Dean decision" below). Neither send can fail the response.
 
 ---
 
@@ -599,6 +599,58 @@ Returns a short-lived (5-minute) signed URL for a request's uploaded authorisati
 **Response `data`**: `{ "url": "<signed-url>" }`
 
 **Errors**: `403` not a Dean/CSO, or not the request's unit · `404` request has no letter/stamp for the requested `type` · `500` signing failure
+
+---
+
+### Public one-click Dean decision (email Approve/Decline)
+
+Lets a Dean act on a **registered requester's** Dean-authorised weekend request straight from the "New weekend request" email — no login. Reuses the same `decideWeekendRequest` core as `POST /api/requests/hod-decision` (`src/lib/requests/decide-weekend.ts`), so verification, mismatch-holding, the CSO mismatch email, and the requester notification all behave identically to the dashboard flow. Scoped to Dean-authorised units only — guest requests (approval needs a key assigned, which this can't supply) and Administration/CSO-routed requests (no submission email exists for those today) never receive a `decision_token` and so 404 here.
+
+Security note: `GET` is strictly read-only. It must never mutate state — mail scanners (Outlook Safe Links, Gmail, etc.) prefetch every link in an email, so if a page load could decide the request, the scanner itself would silently approve or decline it before a human opened the email. The actual decision only happens on `POST`, triggered by an explicit button click on `/dean-decision/[token]`.
+
+#### GET /api/public/dean-decision/[token]
+
+**File**: `src/app/api/public/dean-decision/[token]/route.ts`
+**Roles**: ALL (unauthenticated)
+
+Read-only. Looks up the request by `decision_token` (admin client) and returns the fields the confirmation page needs, including short-lived (5-minute) signed URLs for the letter/stamp if present (same signing approach as `GET /api/requests/[id]/letter`).
+
+**Response `data`**:
+
+```json
+{
+  "request_id": "<uuid>",
+  "status": "PENDING_HOD",
+  "decidable": true,
+  "requested_for": "2026-08-22",
+  "requester_name": "Dr. Bakare",
+  "key": { "code": "NS-304", "room_name": "Senate Hall A" },
+  "letter_url": "<signed-url>",
+  "stamp_url": null
+}
+```
+
+`decidable` is `status === 'PENDING_HOD'` — the page renders Approve/Decline only when `true`; otherwise it renders the terminal state named by `status`.
+
+**Errors**: `404` token not found or malformed
+
+---
+
+#### POST /api/public/dean-decision/[token]
+
+**File**: `src/app/api/public/dean-decision/[token]/route.ts`
+**Roles**: ALL (unauthenticated)
+
+| Field      | Type                       | Required |
+| ---------- | -------------------------- | -------- |
+| `decision` | `'APPROVED' \| 'DECLINED'` | yes      |
+| `note`     | `string`                   | no       |
+
+Re-resolves the **current** Dean of the request's unit at decision time (not an identity captured when the email was sent, so a Dean handover in between is handled correctly), reads `letter_url`/`stamp_url` off the request row itself as the submitted signature/stamp (server-side source of truth — unlike the dashboard route, there is no client to supply these), then calls the same `decideWeekendRequest` core as `POST /api/requests/hod-decision`.
+
+**Response `data`**: identical shape to `POST /api/requests/hod-decision` — `{ "request_id": "<uuid>", "status": "APPROVED" | "DECLINED" }`, or the held-mismatch shape `{ "request_id": "<uuid>", "status": "HELD_SIGNATURE_MISMATCH", "mismatches": {...}, "message": "..." }` (still HTTP 200).
+
+**Errors**: `403` the unit is no longer Dean-authorised, or has no Dean · `404` token not found, or the request has no `key_id` · `409` request is no longer `PENDING_HOD` (already decided — the page refetches to show the real terminal state) · `422` validation
 
 ---
 
