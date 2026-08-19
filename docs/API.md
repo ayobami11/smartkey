@@ -286,7 +286,7 @@ Returns requests for the Dean's faculty with `status = 'PENDING_HOD'`, including
 | `submitted_stamp_url`     | `string` (url)             | no — triggers stamp verification     |
 | `cso_override`            | `boolean`                  | CSO resolving a held mismatch only   |
 
-For approvals, the route runs pixel-level verification for whichever of `submitted_signature_url` / `submitted_stamp_url` is present — independent checks; either, both, or neither may run (see `docs/AI.md` §3). If **either** check fails its threshold, the approval is **held** — the RPC is never called — and a `SIGNATURE_MISMATCH` audit entry is written instead, with a nested payload `{ signature: {ref_url, submitted_url, mismatch_pct} | null, stamp: {...} | null, threshold_pct }`. The response in this case is `{ "request_id": "<uuid>", "status": "HELD_SIGNATURE_MISMATCH", "mismatches": { "signature"?: <number>, "stamp"?: <number> } }` (still HTTP 200 — this is not a route-level error; only the failing check(s) appear in `mismatches`).
+For approvals, the route runs pixel-level verification for whichever of `submitted_signature_url` / `submitted_stamp_url` is present — independent checks; either, both, or neither may run (see `docs/AI.md` §3). If **either** check fails its threshold, the approval is **held** — the RPC is never called — and a `SIGNATURE_MISMATCH` audit entry is written instead, with a nested payload `{ signature: {ref_url, submitted_url, mismatch_pct} | null, stamp: {...} | null, threshold_pct }`. The response in this case is `{ "request_id": "<uuid>", "status": "HELD_SIGNATURE_MISMATCH", "mismatches": { "signature"?: <number>, "stamp"?: <number> } }` (still HTTP 200 — this is not a route-level error; only the failing check(s) appear in `mismatches`). Alongside the audit entry, every `ACTIVE` CSO opted in to `notification_preferences.signature_mismatch_email` (default true) is emailed via `sendCsoSignatureMismatchEmail` (fire-and-forget; a send failure is logged, never surfaces to the Dean's response).
 
 For an external (guest) request (`guest_id` set), the route requires a `key_id` in the body and calls `approve_guest_weekend` instead — the Dean assigns the key at approval, and both checks are skipped (guests have no Dean reference signature or stamp; the Dean reviews the uploaded letter manually). The decline path reuses `decline_weekend` unchanged.
 
@@ -1048,11 +1048,11 @@ If the mismatch exceeds `SIGNATURE_DIFF_THRESHOLD` (default 15%), the reference 
 ### GET /api/profile/notification-preferences
 
 **File**: `src/app/api/profile/notification-preferences/route.ts`
-**Roles**: ALL (authenticated) — shared by the Requester and Dean settings UIs; each only reads the fields it displays
+**Roles**: ALL (authenticated) — shared by the Requester, Dean, and CSO settings UIs; each only reads the fields it displays
 
-RLS-scoped direct read of the caller's own `notification_preferences` row. Returns defaults (all `true`) if no row exists yet — a row is only created on first save, not on read.
+RLS-scoped direct read of the caller's own `notification_preferences` row. Returns defaults (all `true` except `digest_email`) if no row exists yet — a row is only created on first save, not on read.
 
-**Response `data`**: `{ "key_issued_in_app": true, "overdue_email": true, "weekend_decided_email": true, "weekend_submitted_in_app": true, "weekend_submitted_email": true, "digest_email": false }`
+**Response `data`**: `{ "key_issued_in_app": true, "overdue_email": true, "weekend_decided_email": true, "weekend_submitted_in_app": true, "weekend_submitted_email": true, "signature_mismatch_email": true, "digest_email": false }`
 
 **Errors**: `401` unauthenticated · `500` read failure
 
@@ -1070,6 +1070,7 @@ RLS-scoped direct read of the caller's own `notification_preferences` row. Retur
 | `weekend_decided_email`    | `boolean` | no — Requester field |
 | `weekend_submitted_in_app` | `boolean` | no — Dean field      |
 | `weekend_submitted_email`  | `boolean` | no — Dean field      |
+| `signature_mismatch_email` | `boolean` | no — CSO field       |
 | `digest_email`             | `boolean` | no — Dean/CSO field  |
 
 All fields are individually optional but at least one is required. Upserts the caller's own row (RLS-scoped, `onConflict: 'profile_id'`) — Postgrest only touches the columns present in the body, so a Dean's PATCH never disturbs the Requester-only columns and vice versa. No RPC, no audit entry — self-service preference data at the same trust level as `PATCH /api/profile/me`. There is no `code_email` field: the collection-code email can't be disabled. `digest_email` **defaults to `false`** — the opposite convention from every other field here.

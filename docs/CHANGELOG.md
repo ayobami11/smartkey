@@ -8,6 +8,35 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-19 — CSO Notifications tab: real signature-mismatch email, dead mock toggles removed
+
+- **Why**: same audit-then-implement pass already run for the Requester and Dean tabs (2026-08-12
+  entries below), now applied to CSO. `hod-decision`'s held-mismatch response told the Dean
+  "Approval held: mismatch detected. The CSO has been notified" — but no email was ever sent to
+  any CSO, only an audit entry (which powers the in-app alert feed). `notification-settings.tsx`
+  under `/cso/settings` was a `useState` mock with three fake toggles ("Anomaly alerts" in-app/
+  email, "Signature mismatches" email) — none persisted or did anything.
+- Extended `notification_preferences` with `signature_mismatch_email` (default true, opt-out
+  convention). New `sendCsoSignatureMismatchEmail` in `src/lib/email/otp.ts` and a new
+  `getCsoRecipients` in `src/lib/email/request-recipient.ts` (multi-recipient — there can be more
+  than one active CSO — modeled on the `daily-digest` cron's loop, not the single-Dean resolvers).
+  Wired into the existing held-mismatch branch of `POST /api/requests/hod-decision`, fire-and-forget,
+  reusing the already-computed mismatch percentages and threshold rather than refetching.
+- Deliberately did **not** add an email for HIGH-risk-tier requests in general, or a preference
+  column for the in-app anomaly feeds — by the user's call. The risk-alerts and
+  signature-mismatch-alerts dashboards are core security-monitoring surfaces, not optional
+  notifications, so nothing gates them; inventing a column that persists but gates nothing (like
+  `weekend_submitted_in_app`) wasn't warranted here since there was no existing UI promising it.
+  The unimplemented HIGH-risk-email toggle was removed from the settings UI rather than left mocked.
+- `notification-settings.tsx` rebuilt to the same real load/save pattern as the Dean/Requester tabs.
+  CSO Settings → Notifications now has exactly two real toggles: "Signature mismatches" (new) and
+  "Daily digest of building-wide activity" (pre-existing, unchanged).
+- Verified locally: `npm run db:types` regenerated `src/types/database.ts` after the migration;
+  `npm run typecheck && npm run lint` clean.
+- Applied to production (`ocpsklbbksuymjdbfpja`) via the Supabase MCP server (`apply_migration`),
+  same as the Requester/Dean passes — verified the column exists (`boolean not null default true`)
+  before calling this done. `get_advisors` (security) showed no new findings from the change.
+
 ### 2026-08-19 — Dean signature/stamp reference replacement: stale-cache bugs
 
 - **Why**: Deans reported the reference-image card not showing the new image after a successful

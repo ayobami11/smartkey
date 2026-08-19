@@ -419,6 +419,64 @@ export const sendWeekendSubmittedEmail = async ({
     `,
   });
 
+export const sendCsoSignatureMismatchEmail = async ({
+  to,
+  fullName,
+  requesterName,
+  keyCode,
+  roomName,
+  mismatches,
+  thresholdPct,
+  link,
+}: {
+  to: string;
+  fullName: string;
+  requesterName: string;
+  keyCode: string;
+  roomName: string;
+  mismatches: { signature?: number; stamp?: number };
+  thresholdPct: number;
+  link: string;
+}) => {
+  const mismatchLines = [
+    mismatches.signature !== undefined
+      ? `Signature: ${mismatches.signature}% different`
+      : null,
+    mismatches.stamp !== undefined
+      ? `Stamp: ${mismatches.stamp}% different`
+      : null,
+  ].filter((line): line is string => line !== null);
+
+  return transporter.sendMail({
+    from: `"SmartKey" <${process.env.GMAIL_USER}>`,
+    to,
+    subject: 'Signature/stamp mismatch held for review',
+    html: `
+      <div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:400px;margin:0 auto;padding:32px 16px;">
+        ${emailHeader}
+        <div style="background:#fff;border:1px solid #E2E8F0;border-top:none;padding:32px 24px;border-radius:0 0 8px 8px;">
+          <p style="margin:0 0 8px;color:#0F172A;font-size:16px;font-weight:600;">
+            Approval held, ${fullName}
+          </p>
+          <p style="margin:0 0 8px;color:#475569;font-size:14px;">
+            <strong>${requesterName}</strong>'s weekend approval for
+            <strong>${roomName} (${keyCode})</strong> is on hold — the
+            submitted signature and/or stamp didn't match the Dean's
+            reference within the ${thresholdPct}% threshold.
+          </p>
+          <p style="margin:0 0 24px;color:#475569;font-size:14px;">
+            ${mismatchLines.join(' · ')}
+          </p>
+          <a href="${link}"
+            style="display:inline-block;background:#7B1F2D;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">
+            Review on the dashboard
+          </a>
+        </div>
+      </div>
+    `,
+  });
+};
+
 // The digest emails carry more institutional weight than a transactional OTP
 // or confirmation mail — they read as a daily operational report
 const digestHeader = `

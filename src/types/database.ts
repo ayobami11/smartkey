@@ -326,6 +326,7 @@ export type Database = {
           key_issued_in_app: boolean;
           overdue_email: boolean;
           profile_id: string;
+          signature_mismatch_email: boolean;
           updated_at: string;
           weekend_decided_email: boolean;
           weekend_submitted_email: boolean;
@@ -336,6 +337,7 @@ export type Database = {
           key_issued_in_app?: boolean;
           overdue_email?: boolean;
           profile_id: string;
+          signature_mismatch_email?: boolean;
           updated_at?: string;
           weekend_decided_email?: boolean;
           weekend_submitted_email?: boolean;
@@ -346,6 +348,7 @@ export type Database = {
           key_issued_in_app?: boolean;
           overdue_email?: boolean;
           profile_id?: string;
+          signature_mismatch_email?: boolean;
           updated_at?: string;
           weekend_decided_email?: boolean;
           weekend_submitted_email?: boolean;

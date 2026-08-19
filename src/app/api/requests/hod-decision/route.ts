@@ -7,10 +7,15 @@ import {
 } from '@/lib/ai/signature/verifier';
 import { writeAuditEntry } from '@/lib/audit';
 import {
+  sendCsoSignatureMismatchEmail,
   sendGuestWeekendApprovedEmail,
   sendWeekendApprovedEmail,
   sendWeekendDeclinedEmail,
 } from '@/lib/email/otp';
+import {
+  getCsoRecipients,
+  getRequestRecipient,
+} from '@/lib/email/request-recipient';
 import { logger } from '@/lib/logger';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
@@ -393,6 +398,48 @@ export const POST = async (request: NextRequest) => {
             }
           );
         }
+
+        // Fire-and-forget — makes the "The CSO has been notified" claim
+        // below actually true. Failures are logged, never surfaced; the
+        // hold itself already succeeded via the audit entry above.
+        const mismatchThresholdPct = parseFloat(
+          (DEFAULT_THRESHOLD * 100).toFixed(2)
+        );
+        const mismatchAdmin = createAdminClient();
+        void Promise.all([
+          getCsoRecipients(mismatchAdmin),
+          getRequestRecipient(mismatchAdmin, request_id),
+        ])
+          .then(([recipients, reqInfo]) => {
+            if (recipients.length === 0 || !reqInfo) return;
+            return Promise.all(
+              recipients.map((recipient) =>
+                sendCsoSignatureMismatchEmail({
+                  to: recipient.to,
+                  fullName: recipient.fullName,
+                  requesterName: reqInfo.fullName,
+                  keyCode: reqInfo.keyCode,
+                  roomName: reqInfo.roomName,
+                  mismatches: {
+                    ...(signatureCheck && !signatureCheck.passed
+                      ? { signature: signatureCheck.mismatch_pct }
+                      : {}),
+                    ...(stampCheck && !stampCheck.passed
+                      ? { stamp: stampCheck.mismatch_pct }
+                      : {}),
+                  },
+                  thresholdPct: mismatchThresholdPct,
+                  link: `${siteUrl}/cso/dashboard`,
+                })
+              )
+            );
+          })
+          .catch((e: unknown) => {
+            logger.error('hod-decision: cso signature-mismatch email failed', {
+              requestId: request_id,
+              err: e instanceof Error ? e.message : String(e),
+            });
+          });
 
         return NextResponse.json(
           ok({

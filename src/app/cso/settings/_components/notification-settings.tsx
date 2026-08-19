@@ -12,16 +12,30 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 
-// Unchanged from the original mockup — local-only, no persistence, no
-// onChange handler. Only "Daily digest" below is real; these three are a
-// separate, still-open audit (see docs/REVIEW_ACTIONS_BACKEND.md).
-const mockNotificationToggles = [
-  { id: 'anomaly_inapp', label: 'Anomaly alerts (in-app)', enabled: true },
-  { id: 'anomaly_email', label: 'Anomaly alerts (email)', enabled: true },
+type Prefs = {
+  signature_mismatch_email: boolean;
+  digest_email: boolean;
+};
+
+const DEFAULTS: Prefs = {
+  signature_mismatch_email: true,
+  digest_email: false,
+};
+
+const toggleableItems: {
+  id: keyof Prefs;
+  label: string;
+  channel: string;
+}[] = [
   {
-    id: 'signature_email',
-    label: 'Signature mismatches (email)',
-    enabled: true,
+    id: 'signature_mismatch_email',
+    label: 'Signature mismatches',
+    channel: 'email',
+  },
+  {
+    id: 'digest_email',
+    label: 'Daily digest of building-wide activity',
+    channel: 'email',
   },
 ];
 
@@ -32,8 +46,8 @@ export const NotificationSettings = () => {
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const [digestEmail, setDigestEmail] = useState(false);
-  const [savedDigestEmail, setSavedDigestEmail] = useState(false);
+  const [prefs, setPrefs] = useState<Prefs>(DEFAULTS);
+  const [savedPrefs, setSavedPrefs] = useState<Prefs>(DEFAULTS);
 
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -41,17 +55,19 @@ export const NotificationSettings = () => {
 
   useEffect(() => {
     let cancelled = false;
-    apiFetch<{ digest_email: boolean }>(
-      '/api/profile/notification-preferences'
-    ).then((result) => {
+    apiFetch<Prefs>('/api/profile/notification-preferences').then((result) => {
       if (cancelled) return;
       if (!result.data) {
         setLoadError(result.error ?? 'Something went wrong. Please try again.');
         setLoadState('error');
         return;
       }
-      setDigestEmail(result.data.digest_email);
-      setSavedDigestEmail(result.data.digest_email);
+      const loaded = {
+        signature_mismatch_email: result.data.signature_mismatch_email,
+        digest_email: result.data.digest_email,
+      };
+      setPrefs(loaded);
+      setSavedPrefs(loaded);
       setLoadState('ready');
     });
     return () => {
@@ -64,21 +80,33 @@ export const NotificationSettings = () => {
     setReloadKey((k) => k + 1);
   };
 
-  const isDirty = digestEmail !== savedDigestEmail;
+  const toggle = (id: keyof Prefs) => {
+    setPrefs((prev) => ({ ...prev, [id]: !prev[id] }));
+    if (saveState === 'success' || saveState === 'error') setSaveState('idle');
+  };
+
+  const isDirty = JSON.stringify(prefs) !== JSON.stringify(savedPrefs);
 
   const handleSave = async () => {
     setSaveState('submitting');
-    const result = await apiFetch<{ digest_email: boolean }>(
+    const result = await apiFetch<Prefs>(
       '/api/profile/notification-preferences',
-      { method: 'PATCH', body: { digest_email: digestEmail } }
+      {
+        method: 'PATCH',
+        body: prefs,
+      }
     );
     if (!result.data) {
       setSaveError(result.error ?? 'Something went wrong. Please try again.');
       setSaveState('error');
       return;
     }
-    setDigestEmail(result.data.digest_email);
-    setSavedDigestEmail(result.data.digest_email);
+    const saved = {
+      signature_mismatch_email: result.data.signature_mismatch_email,
+      digest_email: result.data.digest_email,
+    };
+    setPrefs(saved);
+    setSavedPrefs(saved);
     setSaveState('success');
   };
 
@@ -90,7 +118,7 @@ export const NotificationSettings = () => {
             Notifications
           </h2>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Choose which events trigger in-app and email alerts.
+            Choose which events trigger email alerts.
           </p>
         </div>
         <Separator />
@@ -127,53 +155,50 @@ export const NotificationSettings = () => {
           Notifications
         </h2>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          Choose which events trigger in-app and email alerts.
+          Choose which events trigger email alerts. Anomaly and signature alerts
+          always appear on your dashboard — these settings only control email.
         </p>
       </div>
 
       <Separator />
 
       <div className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
-        {mockNotificationToggles.map((item) => (
-          <div
-            key={item.id}
-            className="flex items-center justify-between px-5 py-4"
-          >
-            <Label
-              htmlFor={item.id}
-              className="cursor-pointer text-sm font-normal text-foreground"
-            >
-              {item.label}
-            </Label>
-            <Switch id={item.id} defaultChecked={item.enabled} />
-          </div>
-        ))}
-
-        {loadState === 'loading' ? (
-          <div className="flex items-center justify-between px-5 py-4">
-            <Skeleton className="h-4 w-40" />
-            <Skeleton className="h-5 w-9 rounded-full" />
-          </div>
-        ) : (
-          <div className="flex items-center justify-between px-5 py-4">
-            <Label
-              htmlFor="digest_email"
-              className="cursor-pointer text-sm font-normal text-foreground"
-            >
-              Daily digest at 08:00
-            </Label>
-            <Switch
-              id="digest_email"
-              checked={digestEmail}
-              onCheckedChange={(checked) => {
-                setDigestEmail(checked);
-                if (saveState === 'success' || saveState === 'error')
-                  setSaveState('idle');
-              }}
-              aria-label="Daily digest at 08:00 (email)"
-            />
-          </div>
-        )}
+        {loadState === 'loading'
+          ? toggleableItems.map((item) => (
+              <div
+                key={item.id}
+                className="flex items-center justify-between px-5 py-4"
+              >
+                <div className="min-w-0 flex-1">
+                  <Skeleton className="h-4 w-48" />
+                </div>
+                <Skeleton className="h-5 w-9 rounded-full" />
+              </div>
+            ))
+          : toggleableItems.map((item) => (
+              <div
+                key={item.id}
+                className="flex items-center justify-between px-5 py-4"
+              >
+                <div>
+                  <Label
+                    htmlFor={item.id}
+                    className="cursor-pointer text-sm font-normal text-foreground"
+                  >
+                    {item.label}
+                  </Label>
+                  <p className="text-xs capitalize text-muted-foreground">
+                    {item.channel}
+                  </p>
+                </div>
+                <Switch
+                  id={item.id}
+                  checked={prefs[item.id]}
+                  onCheckedChange={() => toggle(item.id)}
+                  aria-label={`${item.label} (${item.channel})`}
+                />
+              </div>
+            ))}
       </div>
 
       {saveState === 'success' && (
