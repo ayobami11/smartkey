@@ -76,7 +76,8 @@ export const POST = async (request: NextRequest) => {
   if (currentRefUrl) {
     let currentRefBuffer: Buffer;
     try {
-      const res = await fetch(currentRefUrl);
+      const cacheBustedUrl = `${currentRefUrl}${currentRefUrl.includes('?') ? '&' : '?'}cb=${Date.now()}`;
+      const res = await fetch(cacheBustedUrl, { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       currentRefBuffer = Buffer.from(await res.arrayBuffer());
     } catch (e) {

@@ -8,6 +8,23 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-19 — Dean signature/stamp reference replacement: stale-cache bugs
+
+- **Why**: Deans reported the reference-image card not showing the new image after a successful
+  replace, and inconsistent hold/success results when re-uploading against the same reference —
+  both traced to the same cause. `signature_ref_url`/`stamp_ref_url` are a fixed storage path
+  reused on every replace (`upsert: true`), carrying Supabase Storage's default 1-hour
+  `Cache-Control`. A successful replace returns the exact same URL string as before, so (1) the
+  `<img>` tag never re-fetches and the browser keeps serving its cached copy, and (2)
+  `POST /api/profile/signature`'s own comparison fetch (`fetch(currentRefUrl)`) could pull a stale
+  cached copy of the "current" reference rather than the one just saved, so a second replacement in
+  quick succession was sometimes compared against the wrong baseline.
+- Backend: the reference fetch in `src/app/api/profile/signature/route.ts` now appends a
+  cache-busting query param and passes `cache: 'no-store'`.
+- Frontend: `signature-and-stamp-settings.tsx` now cache-busts every reference URL it displays
+  (both the initial load from `/api/profile/me` and the URL returned after a successful replace),
+  so the new image always renders immediately.
+
 ### 2026-08-18 — E2E OTP mailbox: Gmail was routing the codes to Spam
 
 - **Why**: with local credentials and the app-under-test's SMTP config both confirmed correct, CSO/

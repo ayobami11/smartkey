@@ -16,6 +16,10 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 
+
+const cacheBust = (url: string | null): string | null =>
+  url ? `${url}${url.includes('?') ? '&' : '?'}v=${Date.now()}` : null;
+
 type CardPhase =
   | { phase: 'idle' }
   | { phase: 'previewing'; file: File; previewUrl: string }
@@ -45,7 +49,7 @@ const SignatureCard = ({
 
   // Sync the displayed URL if the parent re-fetches
   useEffect(() => {
-    setCurrentUrl(initialRefUrl);
+    setCurrentUrl(cacheBust(initialRefUrl));
   }, [initialRefUrl]);
 
   const handleReplaceClick = () => {
@@ -101,7 +105,7 @@ const SignatureCard = ({
     }
 
     if (result.data.new_url) {
-      setCurrentUrl(result.data.new_url);
+      setCurrentUrl(cacheBust(result.data.new_url));
     }
     setState({ phase: 'success' });
   };
