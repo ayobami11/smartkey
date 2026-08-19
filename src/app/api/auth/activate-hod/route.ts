@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { assessPlausibility } from '@/lib/ai/signature/verifier';
 import { logger } from '@/lib/logger';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
@@ -47,6 +48,40 @@ export const POST = async (request: NextRequest) => {
     });
   }
 
+  // Read once here and reuse for both the plausibility check below and the
+  // storage upload further down — no need to re-read the File a second time.
+  const sigBytes = await signature.arrayBuffer();
+  const stampBytes = await stamp.arrayBuffer();
+
+  // Coarse sanity check that these actually look like a signature/stamp
+  // before anything else happens — fails fast with no side effects (no
+  // password change, no storage write) if the upload is obviously wrong
+  // (blank, or an unrelated dense image).
+  const sigPlausibility = await assessPlausibility(Buffer.from(sigBytes));
+  if (!sigPlausibility.plausible) {
+    return NextResponse.json(
+      err(
+        sigPlausibility.reason === 'too_sparse'
+          ? "This doesn't look like a signature — the image appears blank. Please upload a clear photo or scan of just your signature."
+          : "This doesn't look like a signature — the image has too much dark content. Please upload a clear, cropped photo of just your signature.",
+        422
+      ),
+      { status: 422 }
+    );
+  }
+  const stampPlausibility = await assessPlausibility(Buffer.from(stampBytes));
+  if (!stampPlausibility.plausible) {
+    return NextResponse.json(
+      err(
+        stampPlausibility.reason === 'too_sparse'
+          ? "This doesn't look like a stamp — the image appears blank. Please upload a clear photo or scan of just your stamp."
+          : "This doesn't look like a stamp — the image has too much dark content. Please upload a clear, cropped photo of just your stamp.",
+        422
+      ),
+      { status: 422 }
+    );
+  }
+
   // Session is established by /api/auth/callback after the invite link is clicked.
   const {
     data: { user },
@@ -91,7 +126,6 @@ export const POST = async (request: NextRequest) => {
   const adminClient = createAdminClient();
 
   // Upload signature
-  const sigBytes = await signature.arrayBuffer();
   const sigExt = signature.name.split('.').pop() ?? 'png';
   const sigPath = `${userId}/signature.${sigExt}`;
 
@@ -110,7 +144,6 @@ export const POST = async (request: NextRequest) => {
   }
 
   // Upload stamp
-  const stampBytes = await stamp.arrayBuffer();
   const stampExt = stamp.name.split('.').pop() ?? 'png';
   const stampPath = `${userId}/stamp.${stampExt}`;
 

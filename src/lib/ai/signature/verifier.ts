@@ -24,6 +24,54 @@ export type VerifyResult = {
   passed: boolean;
 };
 
+export type PlausibilityResult = {
+  plausible: boolean;
+  ink_coverage_pct: number;
+  reason: 'too_sparse' | 'too_dense' | null;
+};
+
+// Wants calibration against real Dean signature/stamp samples during the
+// pilot, same caveat as DEFAULT_THRESHOLD above. Deliberately generous: the
+// goal is to catch obviously-wrong uploads (blank page, solid/near-solid
+// image, an unrelated busy photo), not to finely tell signatures from
+// stamps — stamps run denser than handwritten signatures.
+const MIN_INK_COVERAGE_PCT = parseFloat(
+  process.env.SIGNATURE_MIN_INK_COVERAGE_PCT ?? '0.1'
+);
+const MAX_INK_COVERAGE_PCT = parseFloat(
+  process.env.SIGNATURE_MAX_INK_COVERAGE_PCT ?? '30'
+);
+
+/**
+ * Coarse sanity check that an uploaded image plausibly *is* a signature or
+ * stamp, before it's accepted as a reference or compared against one.
+ *
+ * Measured on the whole image exactly as submitted — deliberately not
+ * built on `preprocess()`, which trims to the ink bounding box and resizes
+ * for cross-image comparison (a different job). A real signature or stamp
+ * photographed on a page is mostly blank with a small dark mark; a blank
+ * page has ~0% ink, and an unrelated photo or solid/near-solid image runs
+ * far denser than a real mark ever does.
+ */
+export const assessPlausibility = async (
+  buffer: Buffer
+): Promise<PlausibilityResult> => {
+  const raw = await sharp(buffer).greyscale().threshold(128).raw().toBuffer();
+  let ink = 0;
+  for (let i = 0; i < raw.length; i++) {
+    if (raw[i] < 128) ink++;
+  }
+  const ink_coverage_pct = parseFloat(((ink / raw.length) * 100).toFixed(2));
+
+  if (ink_coverage_pct < MIN_INK_COVERAGE_PCT) {
+    return { plausible: false, ink_coverage_pct, reason: 'too_sparse' };
+  }
+  if (ink_coverage_pct > MAX_INK_COVERAGE_PCT) {
+    return { plausible: false, ink_coverage_pct, reason: 'too_dense' };
+  }
+  return { plausible: true, ink_coverage_pct, reason: null };
+};
+
 type InkMask = {
   /** RGBA buffer for pixelmatch (WIDTH × HEIGHT × 4). */
   rgba: Uint8Array;

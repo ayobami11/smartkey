@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import {
+  assessPlausibility,
   DEFAULT_THRESHOLD,
   verifySignature,
 } from '@/lib/ai/signature/verifier';
@@ -67,6 +68,22 @@ export const POST = async (request: NextRequest) => {
 
   const imageBytes = await image.arrayBuffer();
   const imageBuffer = Buffer.from(imageBytes);
+
+  // Coarse sanity check that this actually looks like a signature/stamp
+  // before anything else — no point comparing garbage against the current
+  // reference, or accepting it as a new one.
+  const plausibility = await assessPlausibility(imageBuffer);
+  if (!plausibility.plausible) {
+    return NextResponse.json(
+      err(
+        plausibility.reason === 'too_sparse'
+          ? `This doesn't look like a ${type} — the image appears blank. Please upload a clear photo or scan of just your ${type}.`
+          : `This doesn't look like a ${type} — the image has too much dark content. Please upload a clear, cropped photo of just your ${type}.`,
+        422
+      ),
+      { status: 422 }
+    );
+  }
 
   const currentRefUrl =
     type === 'signature' ? profile.signature_ref_url : profile.stamp_ref_url;

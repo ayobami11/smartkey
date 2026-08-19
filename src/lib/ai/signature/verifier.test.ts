@@ -1,7 +1,11 @@
 import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULT_THRESHOLD, verifySignature } from './verifier';
+import {
+  assessPlausibility,
+  DEFAULT_THRESHOLD,
+  verifySignature,
+} from './verifier';
 
 const W = 800;
 const H = 400;
@@ -68,6 +72,35 @@ const blankPage = () =>
       background: { r: 255, g: 255, b: 255 },
     },
   })
+    .png()
+    .toBuffer();
+
+// A solid block covering most of the canvas — stands in for an unrelated
+// busy photo or a scan gone wrong, far denser than any real signature/stamp.
+const denseImage = () =>
+  sharp(
+    Buffer.from(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
+         <rect width="100%" height="100%" fill="white"/>
+         <rect x="5%" y="5%" width="90%" height="90%" fill="black"/>
+       </svg>`
+    )
+  )
+    .png()
+    .toBuffer();
+
+// A filled circle at moderate density — stands in for a real ink stamp,
+// which runs denser than a handwritten signature but should still pass.
+const stampLikeImage = () =>
+  sharp(
+    Buffer.from(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
+         <rect width="100%" height="100%" fill="white"/>
+         <circle cx="${W / 2}" cy="${H / 2}" r="90" fill="none" stroke="black" stroke-width="10"/>
+         <text x="${W / 2}" y="${H / 2}" font-size="20" text-anchor="middle" fill="black">STAMP</text>
+       </svg>`
+    )
+  )
     .png()
     .toBuffer();
 
@@ -173,6 +206,34 @@ describe('verifySignature', () => {
       Math.min(1, mismatch_ratio * 1.5)
     );
     expect(lenient.passed).toBe(true);
+  });
+});
+
+describe('assessPlausibility', () => {
+  it('accepts a realistic signature stroke', async () => {
+    const result = await assessPlausibility(await strokeImage(SIG_A));
+    expect(result.plausible).toBe(true);
+    expect(result.reason).toBeNull();
+  });
+
+  it('rejects a blank page as too sparse', async () => {
+    const result = await assessPlausibility(await blankPage());
+    expect(result.plausible).toBe(false);
+    expect(result.reason).toBe('too_sparse');
+  });
+
+  it('rejects a solid/near-solid image as too dense', async () => {
+    const result = await assessPlausibility(await denseImage());
+    expect(result.plausible).toBe(false);
+    expect(result.reason).toBe('too_dense');
+  });
+
+  it('accepts a denser stamp-like mark', async () => {
+    // Confirms the upper band isn't tuned so tight it rejects a real stamp,
+    // which runs denser than a handwritten signature.
+    const result = await assessPlausibility(await stampLikeImage());
+    expect(result.plausible).toBe(true);
+    expect(result.reason).toBeNull();
   });
 });
 

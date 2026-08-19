@@ -8,6 +8,34 @@ Each entry: date, brief title, what changed, why.
 
 ## Entries
 
+### 2026-08-19 — Reject non-signature/stamp uploads at Dean onboarding and profile replacement
+
+- **Why**: Deans upload two reference images — their signature and their departmental stamp — that
+  every future weekend-approval comparison is measured against. Nothing validated that an upload
+  actually looked like a signature or stamp, only file type and size; a wrong or accidental upload
+  would silently become the ground truth reference.
+- New `assessPlausibility` in `src/lib/ai/signature/verifier.ts`: a coarse, deterministic
+  ink-coverage check (not an LLM call, matching the project's existing preference for
+  rule-based/explainable methods — see the risk engine, ADR-0003) measured on the whole image
+  exactly as submitted, deliberately independent of the trim/resize pipeline `verifySignature`
+  already uses for cross-image comparison. Bounds via two new env vars,
+  `SIGNATURE_MIN_INK_COVERAGE_PCT` (default 0.1%) and `SIGNATURE_MAX_INK_COVERAGE_PCT` (default
+  30%) — generous on purpose, since the goal is only to catch obviously-wrong uploads (blank page,
+  solid/dense image), not to finely separate signatures from stamps.
+- Wired into the two points that **establish** a reference: `POST /api/auth/activate-hod`
+  (onboarding — checked before the password update or any storage write, so a bad image fails with
+  no side effects) and `POST /api/profile/signature` (replacement — checked before the existing
+  pixel-mismatch comparison against the current reference). Both return `422` with a plain,
+  retry-able message; no audit entry, since this is input validation, not a security event.
+- Deliberately **not** applied to the requester's submission-time letter/stamp upload or the guest
+  weekend-access letter upload — the former is already caught naturally by the existing
+  mismatch-hold flow, the latter has no reference to compare against in the first place. Also not
+  implemented: any Gemini/LLM-based content classification, in case the heuristic proves too
+  permissive in practice.
+- 4 new unit tests in `src/lib/ai/signature/verifier.test.ts` (realistic stroke, blank page,
+  solid/dense image, stamp-like density) alongside the existing 9 `verifySignature` tests, all
+  passing. `npm run typecheck && npm run lint` clean on the changed files.
+
 ### 2026-08-19 — CSO Notifications tab: real signature-mismatch email, dead mock toggles removed
 
 - **Why**: same audit-then-implement pass already run for the Requester and Dean tabs (2026-08-12
