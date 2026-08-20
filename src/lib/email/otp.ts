@@ -417,17 +417,19 @@ export const sendWeekendSubmittedEmail = async ({
       <div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:400px;margin:0 auto;padding:32px 16px;">
         ${emailHeader}
         <div style="background:#fff;border:1px solid #E2E8F0;border-top:none;padding:32px 24px;border-radius:0 0 8px 8px;">
-          <p style="margin:0 0 8px;color:#0F172A;font-size:16px;font-weight:600;">
-            New weekend request, ${fullName}
+          <p style="margin:0 0 4px;color:#0F172A;font-size:16px;font-weight:600;">
+            Weekend access request
+          </p>
+          <p style="margin:0 0 20px;color:#475569;font-size:14px;">
+            Dear ${fullName},
           </p>
           <p style="margin:0 0 24px;color:#475569;font-size:14px;">
             <strong>${requesterName}</strong>${
               isGuest
                 ? ` <span style="display:inline-block;background:#CFFAFE;color:#0E7490;font-size:11px;font-weight:600;padding:2px 8px;border-radius:9999px;vertical-align:middle;">External</span>`
                 : ''
-            } has requested weekend access to
-            <strong>${roomLabel}</strong> in ${unitName} for
-            <strong>${requestedFor}</strong>. It's awaiting your review.
+            } has requested <strong>${roomLabel}</strong> in ${unitName}
+            for <strong>${requestedFor}</strong>.
           </p>
           ${
             decisionLink
@@ -449,8 +451,7 @@ export const sendWeekendSubmittedEmail = async ({
             </tr>
           </table>
           <p style="margin:16px 0 0;color:#94A3B8;font-size:12px;">
-            Both buttons open a confirmation page — nothing is decided until
-            you click Approve or Decline there.
+            Nothing is decided until you confirm on the next page.
           </p>
           <a href="${link}" style="display:inline-block;margin-top:16px;color:#7B1F2D;font-size:13px;font-weight:600;text-decoration:underline;">
             Or review on the dashboard
