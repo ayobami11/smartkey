@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 import { config as loadEnv } from 'dotenv';
 
-// Next.js loads .env.local itself for the `npm run start` server this config
+// Next.js loads .env.local itself for the `bun run start` server this config
 // spawns below, but the Playwright test runner is a separate process — without
 // this, TEST_*/E2E_OTP_* are empty here even though the server sees them fine.
 // No-ops harmlessly in CI, where .env.local doesn't exist and the real values
@@ -68,7 +68,7 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: 'npm run start',
+    command: 'bun run start',
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

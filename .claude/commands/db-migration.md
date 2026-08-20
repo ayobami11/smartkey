@@ -16,7 +16,7 @@ Steps:
 4. If the change touches `audit_log`, require explicit confirmation — the audit log is append-only and changes here need a code review.
 5. If the change adds a new event type, also update `src/lib/audit/events.ts` with the new event name and zod schema.
 6. Update `docs/DATABASE.md` and `docs/CHANGELOG.md`.
-7. Run `npm run db:migrate` against the local Supabase instance to verify the migration applies cleanly.
-8. Run `npm run typecheck` to confirm generated types still match.
+7. Run `bun run db:migrate` against the local Supabase instance to verify the migration applies cleanly.
+8. Run `bun run typecheck` to confirm generated types still match.
 
 Show me the migration plan before writing the SQL.

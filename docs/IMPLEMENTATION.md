@@ -174,7 +174,7 @@ All five ADRs live in `docs/adr/`, are dated 2026-05, and are marked **accepted*
 
 **Decision**: adopt Google Labs' DESIGN.md specification (Apache 2.0) as the sole source of truth, living at `design-system/DESIGN.md`. The accompanying CLI (`@google/design.md`) lints the file's structure and WCAG contrast, and exports it to a Tailwind config and W3C DTCG design tokens. Tailwind config and `globals.css` are meant to be **generated from DESIGN.md, never hand-authored**. Stitch reads `DESIGN.md` natively as persistent project context, so every UI generation is conditioned on the same tokens the codebase uses.
 
-**Consequences**: one file is the single truth for both designers and developers; a token change follows a defined flow — edit → `npm run design:lint` → `npm run design:export` → regenerate downstream files; the team is committed to an alpha-stage external spec (mitigated by pinning the CLI version and reviewing spec changes before upgrading). As documented in §12, the export step (`tailwind.theme.json` / `tokens.dtcg.json`) has not actually been run yet — the tokens currently live only as prose/tables inside `DESIGN.md` itself.
+**Consequences**: one file is the single truth for both designers and developers; a token change follows a defined flow — edit → `bun run design:lint` → `bun run design:export` → regenerate downstream files; the team is committed to an alpha-stage external spec (mitigated by pinning the CLI version and reviewing spec changes before upgrading). As documented in §12, the export step (`tailwind.theme.json` / `tokens.dtcg.json`) has not actually been run yet — the tokens currently live only as prose/tables inside `DESIGN.md` itself.
 
 ### Auth and role gating
 
@@ -526,8 +526,8 @@ Screen-specific compound components (dialogs and tables used on exactly one dash
 
 Two GitHub Actions workflows in `.github/workflows/`:
 
-- **`ci.yml`** — runs on every push/PR to `main`: checkout → Node 24 setup → `npm ci` → `npm run typecheck` → `npm run lint` → `npm test` → `npm run build`.
-- **`e2e.yml`** — runs on PRs to `main`, skipping pure `docs/**`/`supabase/**`/`**/*.md` changes: checkout → Node setup → `npm ci` → cached Playwright chromium install → cached `.next` build cache → `npm run build` → `npm run test:e2e -- --project=chromium` with per-role test credentials injected as secrets (`TEST_CSO_*`, `TEST_HOD_*`, `TEST_VERIFIER_*`, `TEST_REQUESTER_*`) → Playwright HTML report uploaded as an artifact on failure, retained 7 days.
+- **`ci.yml`** — runs on every push/PR to `main`: checkout → Bun setup → `bun install --frozen-lockfile` → `bun run typecheck` → `bun run lint` → `bun run test` → `bun run build`.
+- **`e2e.yml`** — runs on PRs to `main`, skipping pure `docs/**`/`supabase/**`/`**/*.md` changes: checkout → Bun setup → `bun install --frozen-lockfile` → cached Playwright chromium install → cached `.next` build cache → `bun run build` → `bun run test:e2e -- --project=chromium` with per-role test credentials injected as secrets (`TEST_CSO_*`, `TEST_HOD_*`, `TEST_VERIFIER_*`, `TEST_REQUESTER_*`) → Playwright HTML report uploaded as an artifact on failure, retained 7 days.
 
 ---
 

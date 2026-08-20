@@ -20,6 +20,6 @@ Stitch reads DESIGN.md natively as persistent context; every UI generation is co
 ## Consequences
 
 - One file, one truth. Designers and developers refer to the same source.
-- Token changes flow: edit DESIGN.md → `pnpm design:lint` → `pnpm design:export` → `globals.css` and `tailwind.config.ts` regenerate → components automatically pick up new values.
+- Token changes flow: edit DESIGN.md → `bun run design:lint` → `bun run design:export` → `globals.css` and `tailwind.config.ts` regenerate → components automatically pick up new values.
 - We commit to the (alpha) DESIGN.md spec. Risk: the spec evolves and breaks our file. Mitigation: pin the CLI version; review spec changes before upgrading.
 - Hand-authoring Tailwind config or `globals.css` is forbidden; use the generator.

@@ -14,7 +14,7 @@ SmartKey commits to WCAG 2.2 AA across every flow. This is the floor, not the ce
 - Body text ≥ 4.5:1 against its background.
 - Large text (≥ 18px regular or ≥ 14px bold) ≥ 3:1.
 - Icons that convey meaning ≥ 3:1.
-- The DESIGN.md linter validates this for every component pair. Run `pnpm design:lint` if you change colours.
+- The DESIGN.md linter validates this for every component pair. Run `bun run design:lint` if you change colours.
 
 ### Keyboard navigation
 
@@ -66,7 +66,7 @@ Before marking UI work as done:
 2. **Run axe-core in the browser**. No violations.
 3. **Test with NVDA on Windows or VoiceOver on iOS** for at least one screen per flow. Form labels announce, status badges announce, errors announce.
 4. **Toggle reduce-motion in OS settings** and confirm animations disable or shorten.
-5. **Run `pnpm test:e2e`** — Playwright runs axe-core checks on every test.
+5. **Run `bun run test:e2e`** — Playwright runs axe-core checks on every test.
 
 ## Common mistakes Claude makes
 

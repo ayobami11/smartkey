@@ -26,7 +26,7 @@ For the design system see @design-system/DESIGN.md.
 ## Directory map
 
 - `src/app/` — App Router routes (one folder per role: `(public)`, `(cso)`, `(hod)`, `(verifier)`, `(requester)`)
-- `src/components/ui/` — shadcn/ui primitives (do not edit by hand; use `npx shadcn@latest add`)
+- `src/components/ui/` — shadcn/ui primitives (do not edit by hand; use `bunx shadcn@latest add`)
 - `src/components/smartkey/` — SmartKey-specific components (KeyTile, RiskTierBadge, VerificationCodeDisplay, etc.)
 - `src/lib/` — Shared utilities, Supabase client, AI integrations
 - `src/lib/ai/` — Risk engine, Gemini client, signature verifier
@@ -41,19 +41,19 @@ For the design system see @design-system/DESIGN.md.
 ## Commands
 
 ```bash
-npm run dev          # Start development server at http://localhost:3000
-npm run build        # Production build
-npm run lint         # Run ESLint
-npm run lint:fix     # Run ESLint with auto-fix
-npm run format       # Format src/** with Prettier
-npm run format:check # Check formatting without writing
-npm run typecheck    # tsc --noEmit
-npm run db:migrate   # Apply Supabase migrations
-npm test             # Run unit tests
-npm run test:e2e     # Run Playwright E2E with axe-core checks
+bun run dev          # Start development server at http://localhost:3000
+bun run build        # Production build
+bun run lint         # Run ESLint
+bun run lint:fix     # Run ESLint with auto-fix
+bun run format       # Format src/** with Prettier
+bun run format:check # Check formatting without writing
+bun run typecheck    # tsc --noEmit
+bun run db:migrate   # Apply Supabase migrations
+bun run test         # Run unit tests
+bun run test:e2e     # Run Playwright E2E with axe-core checks
 ```
 
-`npm run design:lint` / `npm run design:export` are not real scripts — no `design:*` entry exists in `package.json`. To validate `design-system/DESIGN.md`, run `npx @google/design.md lint DESIGN.md` directly (see `design-system/prompts/README.md`); there is no equivalent export command wired up yet.
+`bun run design:lint` / `bun run design:export` are not real scripts — no `design:*` entry exists in `package.json`. To validate `design-system/DESIGN.md`, run `bunx @google/design.md lint DESIGN.md` directly (see `design-system/prompts/README.md`); there is no equivalent export command wired up yet.
 
 ## Coding conventions
 
@@ -89,7 +89,7 @@ The design system is in @design-system/DESIGN.md. **Do not invent colours, typog
 
 - **Every push to a branch must include a `docs/CHANGELOG.md` entry.** No exceptions — this applies to fixes, refactors, docs and config changes, not just features. Add the entry in the same commit as the change where practical, or as a follow-up commit before pushing. Each entry: dated heading, a **Why** line explaining the reason the change was needed (not just what changed), then the specifics. Newest entry goes at the top of `## Entries`.
 - **Use plan mode** for anything that touches more than one file. Show the plan before writing code.
-- After any change, run `npm run typecheck && npm run lint` before considering the task done.
+- After any change, run `bun run typecheck && bun run lint` before considering the task done.
 - For new screens, **read @docs/SCREEN_CHECKLIST.md** first — it covers states (empty, loading, error, offline, content) you must design for every async surface.
 - For new components, check `src/components/smartkey/` first. Reuse before creating.
 - For database changes, write a migration in `supabase/migrations/` and update RLS policies. Document the change in `docs/CHANGELOG.md`.

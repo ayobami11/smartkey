@@ -6,7 +6,7 @@ Arguments: `$ARGUMENTS` (route path, e.g. `/verifier`)
 
 Steps:
 
-1. Run the dev server (`npm run dev`) if not running.
+1. Run the dev server (`bun run dev`) if not running.
 2. Navigate to the route.
 3. Run axe-core via the Playwright E2E test for the screen, or directly via the browser devtools axe extension.
 4. Report violations grouped by severity.

@@ -20,26 +20,26 @@ Always import the typed client, never instantiate it inline.
 
 ```typescript
 // Server (API routes, Server Components, Server Actions)
-import { createServerClient } from '@/lib/supabase/server'
+import { createServerClient } from '@/lib/supabase/server';
 
 export async function POST(req: NextRequest) {
-  const supabase = await createServerClient()
+  const supabase = await createServerClient();
   // supabase is fully typed against the database schema
 }
 ```
 
 ```typescript
 // Client (hooks, Client Components)
-import { createBrowserClient } from '@/lib/supabase/client'
+import { createBrowserClient } from '@/lib/supabase/client';
 
-const supabase = createBrowserClient()
+const supabase = createBrowserClient();
 // Use only for reads and Realtime subscriptions — never for writes that bypass RLS
 ```
 
 ```typescript
 // WRONG: instantiating inline with the raw package
-import { createClient } from '@supabase/supabase-js'
-const supabase = createClient(url, key) // no type safety, no cookie handling
+import { createClient } from '@supabase/supabase-js';
+const supabase = createClient(url, key); // no type safety, no cookie handling
 ```
 
 ## Service layer pattern
@@ -48,39 +48,42 @@ Business logic that is reused across multiple routes lives in `src/lib/` as a pu
 
 ```typescript
 // src/lib/requests/create-request.ts
-import { createServerClient } from '@/lib/supabase/server'
-import { type Database } from '@/types/database'
+import { createServerClient } from '@/lib/supabase/server';
+import { type Database } from '@/types/database';
 
 type CreateRequestInput = {
-  keyId: string
-  requesterId: string
-  type: 'WEEKDAY' | 'WEEKEND'
-  returnDeadline: Date
-}
+  keyId: string;
+  requesterId: string;
+  type: 'WEEKDAY' | 'WEEKEND';
+  returnDeadline: Date;
+};
 
 export const createRequest = async (input: CreateRequestInput) => {
-  const supabase = await createServerClient()
+  const supabase = await createServerClient();
 
   const { data, error } = await supabase.rpc('create_request', {
     p_key_id: input.keyId,
     p_requester_id: input.requesterId,
     p_type: input.type,
     p_return_time: input.returnDeadline.toISOString(),
-  })
+  });
 
-  if (error) throw new Error(error.message)
-  return data
-}
+  if (error) throw new Error(error.message);
+  return data;
+};
 ```
 
 ```typescript
 // src/app/api/requests/route.ts — thin route
-import { createRequest } from '@/lib/requests/create-request'
+import { createRequest } from '@/lib/requests/create-request';
 
 export async function POST(req: NextRequest) {
   // auth + validation above
-  const result = await createRequest(parsed.data)
-  return NextResponse.json({ data: result, error: null, status: 201 }, { status: 201 })
+  const result = await createRequest(parsed.data);
+  return NextResponse.json(
+    { data: result, error: null, status: 201 },
+    { status: 201 }
+  );
 }
 ```
 
@@ -142,23 +145,27 @@ $$;
 Use the logger from `src/lib/logger.ts` — never `console.log` or `console.error`.
 
 ```typescript
-import { logger } from '@/lib/logger'
+import { logger } from '@/lib/logger';
 
 try {
-  const result = await issueKey({ requestId, verifierId })
-  return NextResponse.json({ data: result, error: null, status: 200 })
+  const result = await issueKey({ requestId, verifierId });
+  return NextResponse.json({ data: result, error: null, status: 200 });
 } catch (err) {
-  const ref = crypto.randomUUID().slice(0, 8)
+  const ref = crypto.randomUUID().slice(0, 8);
   logger.error('issue_key failed', {
     ref,
     requestId,
     verifierId,
     message: err instanceof Error ? err.message : String(err),
-  })
+  });
   return NextResponse.json(
-    { data: null, error: `Something went wrong. Reference: ${ref}`, status: 500 },
-    { status: 500 },
-  )
+    {
+      data: null,
+      error: `Something went wrong. Reference: ${ref}`,
+      status: 500,
+    },
+    { status: 500 }
+  );
 }
 ```
 
@@ -170,24 +177,24 @@ Jobs that must run on a schedule — overdue key checks, daily shift summaries �
 
 ```typescript
 // supabase/functions/overdue-key-check/index.ts
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 Deno.serve(async () => {
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-  )
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  );
 
   // Mark overdue: status='out' AND expected_return < now()
-  const { error } = await supabase.rpc('mark_overdue_keys')
+  const { error } = await supabase.rpc('mark_overdue_keys');
 
   if (error) {
-    console.error('mark_overdue_keys failed', error.message)
-    return new Response('error', { status: 500 })
+    console.error('mark_overdue_keys failed', error.message);
+    return new Response('error', { status: 500 });
   }
 
-  return new Response('ok')
-})
+  return new Response('ok');
+});
 ```
 
 Register the cron schedule in `supabase/config.toml`:
@@ -207,10 +214,10 @@ const { data } = await supabase
   .from('requests')
   .select('id, status, key_id, requester_id, risk_tier')
   .eq('status', 'CODE_ISSUED')
-  .order('created_at', { ascending: false })
+  .order('created_at', { ascending: false });
 
 // BAD
-const { data } = await supabase.from('requests').select('*')
+const { data } = await supabase.from('requests').select('*');
 ```
 
 Batch lookups to avoid N+1 queries. If you need user details for a list of requests, join in the select — do not loop and fetch one by one.
@@ -220,7 +227,7 @@ Batch lookups to avoid N+1 queries. If you need user details for a list of reque
 const { data } = await supabase
   .from('requests')
   .select('id, status, profiles!requester_id(full_name, photo_url)')
-  .eq('status', 'CODE_ISSUED')
+  .eq('status', 'CODE_ISSUED');
 
 // BAD: N+1
 for (const request of requests) {
@@ -228,7 +235,7 @@ for (const request of requests) {
     .from('profiles')
     .select('full_name')
     .eq('id', request.requester_id)
-    .single()
+    .single();
 }
 ```
 
@@ -236,16 +243,16 @@ for (const request of requests) {
 
 Risk weights, thresholds, and operational hours are stored as environment variables — not hardcoded. Read them via `process.env` on the server only; never access `SUPABASE_SERVICE_ROLE_KEY` from client code.
 
-| Variable | Purpose | Default |
-|---|---|---|
-| `SUPABASE_URL` | DB connection | required |
-| `SUPABASE_ANON_KEY` | Public client | required |
-| `SUPABASE_SERVICE_ROLE_KEY` | Edge Functions only | required |
-| `GEMINI_API_KEY` | Shift reports | required |
-| `RISK_SCORE_THRESHOLD` | Risk engine cutoff | `0.60` |
-| `SIGNATURE_DIFF_THRESHOLD` | Pixel mismatch tolerance | `0.15` |
-| `OPERATING_HOURS_START` | Risk rule reference | `07:00` |
-| `OPERATING_HOURS_END` | Risk rule reference | `18:00` |
+| Variable                    | Purpose                  | Default  |
+| --------------------------- | ------------------------ | -------- |
+| `SUPABASE_URL`              | DB connection            | required |
+| `SUPABASE_ANON_KEY`         | Public client            | required |
+| `SUPABASE_SERVICE_ROLE_KEY` | Edge Functions only      | required |
+| `GEMINI_API_KEY`            | Shift reports            | required |
+| `RISK_SCORE_THRESHOLD`      | Risk engine cutoff       | `0.60`   |
+| `SIGNATURE_DIFF_THRESHOLD`  | Pixel mismatch tolerance | `0.15`   |
+| `OPERATING_HOURS_START`     | Risk rule reference      | `07:00`  |
+| `OPERATING_HOURS_END`       | Risk rule reference      | `18:00`  |
 
 ## Backend checklist
 
@@ -259,4 +266,4 @@ Before merging server-side code:
 - [ ] No N+1 queries — use joins or `.in()` batch lookups
 - [ ] Scheduled work is an Edge Function, not a timer in a route
 - [ ] Service-role key never used from browser-reachable code
-- [ ] `npm run typecheck && npm run lint` pass
+- [ ] `bun run typecheck && bun run lint` pass

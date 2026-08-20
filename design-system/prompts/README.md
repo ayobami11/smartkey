@@ -103,7 +103,7 @@ If a route, role name, or shared flow changes again: edit `_shared-blocks.md` **
 If the design system changes, update `DESIGN.md` directly and re-validate:
 
 ```
-npx @google/design.md lint DESIGN.md
+bunx @google/design.md lint DESIGN.md
 ```
 
 Token changes do not need prompt-file updates — they reference DESIGN.md by name and Stitch picks up new tokens automatically. Structural changes (routes, screens, flows) do need the propagation described above.

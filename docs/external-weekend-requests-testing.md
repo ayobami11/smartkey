@@ -5,13 +5,13 @@ levels: a **fast DB-only smoke test** (no UI, ~30s) and a **full manual UI walkt
 across all four touchpoints. Plus edge cases, security checks, and cleanup.
 
 Everything is already applied to the remote Supabase project `ocpsklbbksuymjdbfpja` and
-the code passes `npm run typecheck` and `npm run lint`.
+the code passes `bun run typecheck` and `bun run lint`.
 
 ---
 
 ## 0. Prerequisites
 
-- Run the app locally: `npm run dev` → http://localhost:3000. `.env.local` must hold the
+- Run the app locally: `bun run dev` → http://localhost:3000. `.env.local` must hold the
   live Supabase URL + anon key + **service-role key** (the public guest routes and the
   letter upload run server-side via the admin client).
 - Accounts already seeded on the remote project (use your own known passwords):
@@ -219,5 +219,5 @@ delete from public.guest_requesters where email = 'YOUR_TEST_EMAIL';
 
 Per the plan, a Playwright happy-path + error-path with axe-core for `/weekend-access`
 is still outstanding, and the Playwright harness (`playwright.config.ts`, `tests/`) is not
-scaffolded yet. `npm run test:e2e` will not do anything useful until that's set up. The
+scaffolded yet. `bun run test:e2e` will not do anything useful until that's set up. The
 risk engine has Vitest coverage; no new pure logic was added that needs a unit test.

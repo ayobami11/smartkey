@@ -1,2 +1,2 @@
 . "$(dirname -- "$0")/load-node.sh"
-npm run build
+bun run build

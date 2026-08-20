@@ -12,6 +12,6 @@ Steps:
 4. Update the audit RPC in `supabase/migrations/` if the event needs server-side validation.
 5. Add a unit test for the new event's writer in `src/lib/audit/audit.test.ts`.
 6. Update `docs/AUDIT_EVENTS.md` with a one-line description.
-7. Run `npm run typecheck && npm test`.
+7. Run `bun run typecheck && bun run test`.
 
 Show me the changes before writing.

@@ -16,7 +16,7 @@ This is the "how do I actually hit it" companion to [`docs/API.md`](../API.md), 
 1. Postman → **Import** → drop both JSON files in.
 2. Select the **SmartKey — Local** environment (top-right dropdown).
 3. Fill in the credential variables for whichever role(s) you're testing.
-4. Start the app: `npm run dev` (defaults to `http://localhost:3000`).
+4. Start the app: `bun run dev` (defaults to `http://localhost:3000`).
 
 Testing against a deployed environment: change `baseUrl` only. Everything else is relative.
 
