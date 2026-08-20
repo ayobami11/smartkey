@@ -6,6 +6,34 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-08-20 — Fixed intermittently-undelivered notification emails (Vercel `after()`)
+
+- **Why**: a Dean reported never receiving the "New weekend request" email for a guest request, even
+  though an earlier request to a different Dean had arrived fine. Root cause: every notification email
+  in the app (Dean weekend-submission alerts, requester approve/decline emails, collection-code emails,
+  CSO signature-mismatch alerts) was sent as an unawaited `void promise.then().catch()` fire-and-forget,
+  immediately followed by the route handler returning its response. On Vercel, a serverless function is
+  free to freeze as soon as the response is sent, so an unawaited background promise has no guarantee of
+  finishing the SMTP round-trip first — a race, not a reliable failure, which is exactly why it looked
+  intermittent rather than broken outright.
+- Replaced every such `void <promise>` fire-and-forget with `after(() => <promise>)` from `next/server`
+  (stable in this repo's Next 16.2.3), which keeps the background work alive until it completes even
+  after the response has streamed back. No response shape, RPC, or email content changed — 8
+  fire-and-forget blocks across `src/app/api/requests/submit/route.ts`,
+  `src/app/api/public/weekend-request/route.ts`,
+  `src/app/api/public/weekend-request/[token]/code/route.ts`,
+  `src/app/api/requests/weekend-code/route.ts`, and `src/lib/requests/decide-weekend.ts` (the shared
+  `notifyRequester` helper plus the CSO signature-mismatch send).
+- Also simplified the "New weekend request" Dean-notification email copy (`sendWeekendSubmittedEmail`
+  in `src/lib/email/otp.ts`): replaced the run-on "New weekend request, {name}... It's awaiting your
+  review" headline with a plain heading, a proper "Dear {name}," greeting, and a single tight fact
+  sentence, and shortened the confirmation-page disclaimer under the Approve/Decline buttons.
+- Also fixed `.env.local`'s `NEXT_PUBLIC_SITE_URL`, which pointed at `http://localhost:3000` while
+  `NEXT_PUBLIC_SUPABASE_URL` pointed at the production project — any email link built while running
+  `npm run dev` against prod carried a localhost link (this is what produced the earlier "password
+  reset went to prod but weekend-decision emails went to localhost" report). Set to the production
+  Vercel URL so local runs against prod build correct links.
+
 ### 2026-08-19 — Decided against Lighthouse CI; removed remaining references
 
 - **Why**: the 2026-08-05 entry above left Lighthouse CI as an open gap inherited from the examiner
