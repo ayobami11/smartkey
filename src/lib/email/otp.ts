@@ -434,24 +434,12 @@ export const sendWeekendSubmittedEmail = async ({
           ${
             decisionLink
               ? `
-          <table role="presentation" style="border-collapse:collapse;">
-            <tr>
-              <td style="padding-right:8px;">
-                <a href="${decisionLink}"
-                  style="display:inline-block;background:#7B1F2D;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">
-                  Approve
-                </a>
-              </td>
-              <td>
-                <a href="${decisionLink}"
-                  style="display:inline-block;background:#fff;color:#7B1F2D;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;border:1px solid #7B1F2D;">
-                  Decline
-                </a>
-              </td>
-            </tr>
-          </table>
+          <a href="${decisionLink}"
+            style="display:inline-block;background:#7B1F2D;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">
+            Make a decision
+          </a>
           <p style="margin:16px 0 0;color:#94A3B8;font-size:12px;">
-            Nothing is decided until you confirm on the next page.
+            You'll approve or decline on the next page — nothing is decided yet.
           </p>
           <a href="${link}" style="display:inline-block;margin-top:16px;color:#7B1F2D;font-size:13px;font-weight:600;text-decoration:underline;">
             Or review on the dashboard

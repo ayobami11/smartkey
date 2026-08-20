@@ -6,6 +6,20 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-08-20 — Replaced Approve/Decline email buttons with a single "Make a decision" button
+
+- **Why**: the "New weekend request" Dean-notification email rendered separate "Approve" and "Decline"
+  buttons, but clicking either one only ever opens the read-only `/dean-decision/[token]` confirmation
+  page (both links point at the same URL — see `docs/API.md`'s "Public one-click Dean decision" section
+  for why a `GET` must never itself decide anything: mail scanners prefetch every link in an email). The
+  two-button layout implied the decision happened right there in the inbox, which is misleading — the
+  Dean still has to land on the page and click again to actually approve or decline.
+- `sendWeekendSubmittedEmail` (`src/lib/email/otp.ts`) now renders a single primary button, "Make a
+  decision", linking to the same `decisionLink`. Helper copy underneath was reworded from "Nothing is
+  decided until you confirm on the next page" to "You'll approve or decline on the next page — nothing
+  is decided yet" to make the two-step flow explicit. The secondary "Or review on the dashboard" link is
+  unchanged. No change to the confirmation page itself or to the underlying `GET`/`POST` behaviour.
+
 ### 2026-08-20 — Fixed intermittently-undelivered notification emails (Vercel `after()`)
 
 - **Why**: a Dean reported never receiving the "New weekend request" email for a guest request, even

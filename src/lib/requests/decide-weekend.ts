@@ -426,7 +426,7 @@ export const decideWeekendRequest = async (
       );
       after(() =>
         Promise.all([
-          getCsoRecipients(admin),
+          getCsoRecipients(admin, 'signature_mismatch_email'),
           getRequestRecipient(admin, requestId),
         ])
           .then(([recipients, reqInfo]) => {

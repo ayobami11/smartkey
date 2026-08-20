@@ -100,12 +100,9 @@ export const getDeanRecipientForKey = async (
   return getDeanRecipientForUnit(admin, key.unit_id);
 };
 
-// Every active CSO opted in to signature_mismatch_email (absent preference
-// row = opted in, same convention as getDeanRecipientForUnit above). There
-// can be more than one CSO, unlike the single-Dean resolvers, so this
-// mirrors the multi-recipient loop in POST /api/cron/daily-digest instead.
 export const getCsoRecipients = async (
-  admin: ReturnType<typeof createAdminClient>
+  admin: ReturnType<typeof createAdminClient>,
+  prefKey?: 'signature_mismatch_email'
 ): Promise<{ to: string; fullName: string }[]> => {
   const { data: profiles } = await admin
     .from('profiles')
@@ -116,15 +113,21 @@ export const getCsoRecipients = async (
   const ids = (profiles ?? []).map((p) => p.id);
   if (ids.length === 0) return [];
 
-  const { data: prefs } = await admin
-    .from('notification_preferences')
-    .select('profile_id, signature_mismatch_email')
-    .in('profile_id', ids);
-
-  const prefByProfile = new Map((prefs ?? []).map((p) => [p.profile_id, p]));
+  let excludedIds = new Set<string>();
+  if (prefKey) {
+    const { data: prefs } = await admin
+      .from('notification_preferences')
+      .select(`profile_id, ${prefKey}`)
+      .in('profile_id', ids);
+    excludedIds = new Set(
+      (prefs ?? [])
+        .filter((p) => (p as Record<string, unknown>)[prefKey] === false)
+        .map((p) => p.profile_id)
+    );
+  }
 
   return (profiles ?? [])
     .filter((p) => !!p.institutional_email)
-    .filter((p) => prefByProfile.get(p.id)?.signature_mismatch_email !== false)
+    .filter((p) => !excludedIds.has(p.id))
     .map((p) => ({ to: p.institutional_email, fullName: p.full_name }));
 };
