@@ -6,6 +6,43 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-08-20 — CSO notified for Administration weekend requests; audit_log exported to Vercel Blob
+
+- **Why (CSO notification)**: guest and registered weekend requests routed to an Administration unit
+  (`authoriser='CSO'`, no Dean) notified nobody at submission time — `getDeanRecipientForUnit`/
+  `getDeanRecipientForKey` resolve to `null` for those units and both submission routes silently
+  no-oped on `null`. Documented as a known gap in `docs/API.md` ("no submission email exists for
+  those today"); same silent-failure class as the `after()` fix below it in this file.
+- `getCsoRecipients` (`src/lib/email/request-recipient.ts`) now takes an optional preference-column
+  filter (`prefKey`), defaulting to none — sends to every active CSO unconditionally when omitted, since
+  there's no dedicated preference column for this notification yet. The existing signature-mismatch call
+  site now passes `'signature_mismatch_email'` explicitly to keep its original filtered behaviour.
+- `POST /api/public/weekend-request` and `POST /api/requests/submit` (weekend branch) both now check the
+  target unit's `authoriser` before resolving a recipient: `DEAN` keeps the existing Dean flow unchanged,
+  `CSO` sends the same `sendWeekendSubmittedEmail` template to every active CSO with **no** one-click
+  `decisionLink` (that token flow is deliberately Dean-only) and a `link` pointing at
+  `/cso/weekend-requests` instead of `/dean/weekend-requests`.
+- **Why (audit-log export)**: `docs/DATABASE.md` flagged a known, unimplemented gap — Supabase's managed
+  backups were the only copy of `audit_log`, so the evidentiary record shared a failure domain with the
+  database it documents. A TTL-based auto-expiry was considered and explicitly rejected — it would defeat
+  the audit trail's purpose and require bypassing the RLS immutability guarantee (`audit_log` denies
+  UPDATE/DELETE for every role, including service). The fix is durability, not retention: export a copy
+  somewhere else, never delete the original.
+- New `audit_export_state` singleton table tracks export progress (`last_exported_through`) — `audit_log`
+  itself can never record its own export status, so progress lives separately. RLS-enabled with no
+  policies (default-deny for `anon`/`authenticated`); only the service-role admin client touches it.
+- New `POST /api/cron/audit-export` route exports every fully-completed UTC calendar day since the
+  watermark as newline-delimited JSON to Vercel Blob (`audit-log/YYYY-MM-DD.ndjson`, `access: 'private'`),
+  advancing the watermark one day at a time so a mid-run failure only loses progress on the day that
+  failed. Capped at 20,000 rows per invocation. New `audit-log-export` pg_cron job (daily, 02:00 UTC)
+  triggers it — same `net.http_post` + `weekend_cron_secret` Vault-secret pattern as the other three cron
+  jobs. First run backfills the whole table (watermark defaults to year 2000); trigger it manually if the
+  table's large enough by deploy time to risk the cron invocation's 25s timeout.
+- New dependency `@vercel/blob`. New env var `BLOB_READ_WRITE_TOKEN` — requires a Blob store created in
+  the Vercel dashboard for this project (not done as part of this change; Vercel auto-injects the token
+  into the project's env vars on link, needs manually copying into `.env.local` for local runs).
+- `shift_reports` durability remains an open, undecided gap — not covered by this export.
+
 ### 2026-08-20 — Replaced Approve/Decline email buttons with a single "Make a decision" button
 
 - **Why**: the "New weekend request" Dean-notification email rendered separate "Approve" and "Decline"

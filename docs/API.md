@@ -1294,6 +1294,21 @@ No request body.
 
 ---
 
+### POST /api/cron/audit-export
+
+**File**: `src/app/api/cron/audit-export/route.ts`
+**Roles**: SYSTEM (pg_cron; no user session)
+
+Not user-facing. Called by the `audit-log-export` pg_cron job at 02:00 UTC daily — same `CRON_SECRET` bearer-auth pattern as the other cron routes. Exports `audit_log` rows to Vercel Blob (`access: 'private'`), a store genuinely outside the Supabase project, as newline-delimited JSON partitioned by UTC calendar day (`audit-log/YYYY-MM-DD.ndjson`). Only exports fully-completed days — a day is exported exactly once, since Blob has no append. Progress is tracked in the separate `audit_export_state` singleton table (`docs/DATABASE.md`), never on `audit_log` itself, which stays append-only and immutable (RLS denies UPDATE/DELETE for every role). Capped at 20,000 rows per invocation; the watermark defaults to year 2000, so the first run backfills the whole table.
+
+No request body.
+
+**Response `data`**: `{ "exported_days": 1, "exported_rows": 42 }`
+
+**Errors**: `401` missing/incorrect bearer secret · `500` `CRON_SECRET`/`BLOB_READ_WRITE_TOKEN` not configured, or query/upload failure
+
+---
+
 ## 7. AI
 
 ### GET /api/ai/risk-alerts

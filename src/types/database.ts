@@ -34,6 +34,27 @@ export type Database = {
   };
   public: {
     Tables: {
+      audit_export_state: {
+        Row: {
+          id: string;
+          last_exported_through: string;
+          last_run_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          last_exported_through?: string;
+          last_run_at?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          last_exported_through?: string;
+          last_run_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       audit_log: {
         Row: {
           actor_department: string | null;

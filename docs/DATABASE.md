@@ -271,11 +271,15 @@ Guest analogues of the registered-user weekend flow. All are `SECURITY DEFINER`,
 - `expire_guest_request(access_token)` — flips a genuinely-expired CODE_ISSUED request → EXPIRED, clears the code, audit `REQUEST_EXPIRED`. Idempotent.
 - `request_return_guest(access_token)` — guest analogue of `request_return`. For the guest's own `KEY_ISSUED` request (looked up by `access_token`, `FOR UPDATE` locked), generates a 6-digit return code (15-min expiry), writes it to `return_code`/`return_code_expires_at`, and writes a `RETURN_CODE_GENERATED` audit entry via `_write_audit_guest`. Status stays `KEY_ISSUED`. Raises `NOT_FOUND` if the token doesn't resolve to a request, `CONFLICT` if the request isn't `KEY_ISSUED`. Called by `POST /api/public/weekend-request/[token]/return-code`.
 
-## Backup and retention — known gap
+## Backup and retention
 
-Supabase's managed backups are currently the only copy of `audit_log`. Nothing is exported outside the project, so the evidentiary record shares a failure domain with the database it documents: project deletion, a bad restore, or corruption takes the audit trail with it. RLS protects the log from application roles; it does nothing for this.
+`audit_log` is exported daily to Vercel Blob — storage genuinely outside the Supabase project, so the evidentiary record no longer shares a single failure domain with the database it documents. This is additive durability, not a retention/deletion policy: `audit_log` stays append-only and immutable in Postgres forever (a TTL that deleted rows was considered and rejected — it would defeat the audit trail's purpose and require bypassing the RLS immutability guarantee for every role including service).
 
-Recommended direction, not implemented and not yet decided: a lightweight periodic export of `audit_log` (and `shift_reports`) to storage outside the Supabase project — a scheduled job appending newline-delimited JSON to a versioned or object-locked bucket, partitioned by date so exports accumulate rather than overwrite. Recorded here so the decision is visible, not to prescribe the design.
+- **`audit_export_state`**: a singleton watermark table (`last_exported_through`) tracking export progress. `audit_log` itself can never record its own export status — RLS denies UPDATE/DELETE for every role — so progress lives in this separate table instead. RLS-enabled with no policies (default-deny for `anon`/`authenticated`); only the service-role admin client touches it.
+- **`POST /api/cron/audit-export`**: reads the watermark, exports every fully-completed UTC calendar day since it as newline-delimited JSON to `audit-log/YYYY-MM-DD.ndjson` in Vercel Blob (`access: 'private'`), then advances the watermark one day at a time so a mid-run failure only loses progress on the day that failed. Capped at 20,000 rows per invocation — fine at pilot scale, revisit if that ever binds.
+- **`audit-log-export` pg_cron job**: daily at 02:00 UTC, same `net.http_post` + `weekend_cron_secret` Vault-secret pattern as the other three cron jobs (see `20260820120100_audit_log_export_cron.sql`). The watermark defaults to year 2000, so the first run backfills the whole table — trigger that one manually if the table has grown enough to risk the 25s cron timeout.
+
+`shift_reports` durability remains an open gap — not covered by this export, and not yet decided.
 
 ## Migrations workflow
 
