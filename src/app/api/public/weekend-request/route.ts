@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { after, NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { sendGuestWeekendEmail, sendWeekendSubmittedEmail } from '@/lib/email/otp';
@@ -195,47 +195,52 @@ export const POST = async (request: NextRequest) => {
     });
   }
 
-  void getDeanRecipientForUnit(adminClient, parsed.data.department_id)
-    .then(async (recipient) => {
-      if (!recipient) return;
+  after(() =>
+    getDeanRecipientForUnit(adminClient, parsed.data.department_id)
+      .then(async (recipient) => {
+        if (!recipient) return;
 
-      // One-click email Approve/Decline — same mechanism as the registered
-      // flow. Mint and persist the token before sending so the email link
-      // is never dead on arrival.
-      const decisionToken = crypto.randomUUID();
-      const { error: tokenError } = await adminClient
-        .from('requests')
-        .update({ decision_token: decisionToken })
-        .eq('id', result.request_id);
-      if (tokenError) {
-        logger.error('guest weekend-request: failed to persist decision_token', {
-          requestId: result.request_id,
-          err: tokenError.message,
+        // One-click email Approve/Decline — same mechanism as the registered
+        // flow. Mint and persist the token before sending so the email link
+        // is never dead on arrival.
+        const decisionToken = crypto.randomUUID();
+        const { error: tokenError } = await adminClient
+          .from('requests')
+          .update({ decision_token: decisionToken })
+          .eq('id', result.request_id);
+        if (tokenError) {
+          logger.error(
+            'guest weekend-request: failed to persist decision_token',
+            {
+              requestId: result.request_id,
+              err: tokenError.message,
+            }
+          );
+        }
+
+        return sendWeekendSubmittedEmail({
+          to: recipient.to,
+          fullName: recipient.fullName,
+          requesterName: parsed.data.full_name,
+          unitName: recipient.unitName,
+          // No key exists yet — this is the guest's free-text ask; the Dean
+          // assigns the actual key at approval.
+          roomLabel: parsed.data.requested_room,
+          requestedFor: parsed.data.weekend_date,
+          link: `${siteUrl}/dean/weekend-requests`,
+          isGuest: true,
+          decisionLink: tokenError
+            ? undefined
+            : `${siteUrl}/dean-decision/${decisionToken}`,
         });
-      }
-
-      return sendWeekendSubmittedEmail({
-        to: recipient.to,
-        fullName: recipient.fullName,
-        requesterName: parsed.data.full_name,
-        unitName: recipient.unitName,
-        // No key exists yet — this is the guest's free-text ask; the Dean
-        // assigns the actual key at approval.
-        roomLabel: parsed.data.requested_room,
-        requestedFor: parsed.data.weekend_date,
-        link: `${siteUrl}/dean/weekend-requests`,
-        isGuest: true,
-        decisionLink: tokenError
-          ? undefined
-          : `${siteUrl}/dean-decision/${decisionToken}`,
-      });
-    })
-    .catch((e: unknown) => {
-      logger.error('guest weekend-request: dean notification failed', {
-        requestId: result.request_id,
-        err: e instanceof Error ? e.message : String(e),
-      });
-    });
+      })
+      .catch((e: unknown) => {
+        logger.error('guest weekend-request: dean notification failed', {
+          requestId: result.request_id,
+          err: e instanceof Error ? e.message : String(e),
+        });
+      })
+  );
 
   return NextResponse.json(
     ok(

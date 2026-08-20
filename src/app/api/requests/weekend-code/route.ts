@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { after, NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { sendCollectionCodeEmail } from '@/lib/email/otp';
@@ -88,24 +88,29 @@ export const POST = async (request: NextRequest) => {
     });
   }
 
-  void getRequestRecipient(createAdminClient(), result.request_id)
-    .then((recipient) => {
-      if (!recipient) return;
-      return sendCollectionCodeEmail({
-        to: recipient.to,
-        fullName: recipient.fullName,
-        code: result.code,
-        codeExpiresAt: result.code_expires_at,
-        keyCode: recipient.keyCode,
-        roomName: recipient.roomName,
-      });
-    })
-    .catch((e: unknown) => {
-      logger.error('weekend-code: collection-code email failed', {
-        requestId: result.request_id,
-        err: e instanceof Error ? e.message : String(e),
-      });
-    });
+  // Runs via after() rather than a bare fire-and-forget promise — Vercel
+  // may freeze the function as soon as the response below is sent, so an
+  // unawaited promise here can be silently cut off mid-send.
+  after(() =>
+    getRequestRecipient(createAdminClient(), result.request_id)
+      .then((recipient) => {
+        if (!recipient) return;
+        return sendCollectionCodeEmail({
+          to: recipient.to,
+          fullName: recipient.fullName,
+          code: result.code,
+          codeExpiresAt: result.code_expires_at,
+          keyCode: recipient.keyCode,
+          roomName: recipient.roomName,
+        });
+      })
+      .catch((e: unknown) => {
+        logger.error('weekend-code: collection-code email failed', {
+          requestId: result.request_id,
+          err: e instanceof Error ? e.message : String(e),
+        });
+      })
+  );
 
   return NextResponse.json(
     ok({

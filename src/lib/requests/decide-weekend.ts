@@ -1,3 +1,5 @@
+import { after } from 'next/server';
+
 import {
   DEFAULT_THRESHOLD,
   verifySignature,
@@ -214,7 +216,7 @@ export const decideWeekendRequest = async (
     }
 
     const result = Array.isArray(data) ? data[0] : data;
-    void notifyRequester(result.request_id, 'APPROVED');
+    after(() => notifyRequester(result.request_id, 'APPROVED'));
     return { ok: true, requestId: result.request_id, status: 'APPROVED' };
   }
 
@@ -244,7 +246,7 @@ export const decideWeekendRequest = async (
     }
 
     const result = Array.isArray(data) ? data[0] : data;
-    void notifyRequester(result.request_id, 'DECLINED', note);
+    after(() => notifyRequester(result.request_id, 'DECLINED', note));
     return { ok: true, requestId: result.request_id, status: 'DECLINED' };
   }
 
@@ -281,7 +283,7 @@ export const decideWeekendRequest = async (
     }
 
     const result = Array.isArray(data) ? data[0] : data;
-    void notifyRequester(result.request_id, 'APPROVED');
+    after(() => notifyRequester(result.request_id, 'APPROVED'));
     return { ok: true, requestId: result.request_id, status: 'APPROVED' };
   }
 
@@ -413,46 +415,54 @@ export const decideWeekendRequest = async (
         );
       }
 
-      // Fire-and-forget — makes the "The CSO has been notified" claim
-      // above actually true. Failures are logged, never surfaced; the
-      // hold itself already succeeded via the audit entry above.
+      // Makes the "The CSO has been notified" claim above actually true.
+      // Failures are logged, never surfaced; the hold itself already
+      // succeeded via the audit entry above. Runs via after() rather than a
+      // bare fire-and-forget promise — Vercel may freeze the function once
+      // the response is sent, so an unawaited promise here can be silently
+      // cut off mid-send.
       const mismatchThresholdPct = parseFloat(
         (DEFAULT_THRESHOLD * 100).toFixed(2)
       );
-      void Promise.all([
-        getCsoRecipients(admin),
-        getRequestRecipient(admin, requestId),
-      ])
-        .then(([recipients, reqInfo]) => {
-          if (recipients.length === 0 || !reqInfo) return;
-          return Promise.all(
-            recipients.map((recipient) =>
-              sendCsoSignatureMismatchEmail({
-                to: recipient.to,
-                fullName: recipient.fullName,
-                requesterName: reqInfo.fullName,
-                keyCode: reqInfo.keyCode,
-                roomName: reqInfo.roomName,
-                mismatches: {
-                  ...(signatureCheck && !signatureCheck.passed
-                    ? { signature: signatureCheck.mismatch_pct }
-                    : {}),
-                  ...(stampCheck && !stampCheck.passed
-                    ? { stamp: stampCheck.mismatch_pct }
-                    : {}),
-                },
-                thresholdPct: mismatchThresholdPct,
-                link: `${siteUrl}/cso/dashboard`,
-              })
-            )
-          );
-        })
-        .catch((e: unknown) => {
-          logger.error('decide-weekend: cso signature-mismatch email failed', {
-            requestId,
-            err: e instanceof Error ? e.message : String(e),
-          });
-        });
+      after(() =>
+        Promise.all([
+          getCsoRecipients(admin),
+          getRequestRecipient(admin, requestId),
+        ])
+          .then(([recipients, reqInfo]) => {
+            if (recipients.length === 0 || !reqInfo) return;
+            return Promise.all(
+              recipients.map((recipient) =>
+                sendCsoSignatureMismatchEmail({
+                  to: recipient.to,
+                  fullName: recipient.fullName,
+                  requesterName: reqInfo.fullName,
+                  keyCode: reqInfo.keyCode,
+                  roomName: reqInfo.roomName,
+                  mismatches: {
+                    ...(signatureCheck && !signatureCheck.passed
+                      ? { signature: signatureCheck.mismatch_pct }
+                      : {}),
+                    ...(stampCheck && !stampCheck.passed
+                      ? { stamp: stampCheck.mismatch_pct }
+                      : {}),
+                  },
+                  thresholdPct: mismatchThresholdPct,
+                  link: `${siteUrl}/cso/dashboard`,
+                })
+              )
+            );
+          })
+          .catch((e: unknown) => {
+            logger.error(
+              'decide-weekend: cso signature-mismatch email failed',
+              {
+                requestId,
+                err: e instanceof Error ? e.message : String(e),
+              }
+            );
+          })
+      );
 
       return {
         ok: true,
@@ -495,7 +505,7 @@ export const decideWeekendRequest = async (
     }
 
     const result = Array.isArray(data) ? data[0] : data;
-    void notifyRequester(result.request_id, 'APPROVED');
+    after(() => notifyRequester(result.request_id, 'APPROVED'));
     return { ok: true, requestId: result.request_id, status: 'APPROVED' };
   }
 
@@ -523,6 +533,6 @@ export const decideWeekendRequest = async (
   }
 
   const result = Array.isArray(data) ? data[0] : data;
-  void notifyRequester(result.request_id, 'APPROVED');
+  after(() => notifyRequester(result.request_id, 'APPROVED'));
   return { ok: true, requestId: result.request_id, status: 'APPROVED' };
 };

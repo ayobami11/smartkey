@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { after, NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { DEFAULT_RISK_CONFIG } from '@/lib/ai/risk/default-config';
@@ -227,52 +227,57 @@ export const POST = async (request: NextRequest) => {
   }
 
   if (type === 'WEEKEND') {
-    // Fire-and-forget — resolves to null (no send) for Administration
-    // (authoriser='CSO') keys, which have no Dean.
-    void getDeanRecipientForKey(adminClient, key_id)
-      .then(async (recipient) => {
-        if (!recipient) return;
-        const siteUrl =
-          process.env.NEXT_PUBLIC_SITE_URL ??
-          'https://smartkey-ochre.vercel.app';
+    // Resolves to null (no send) for Administration (authoriser='CSO')
+    // keys, which have no Dean. Runs via after() rather than a bare
+    // fire-and-forget promise — Vercel may freeze the function as soon as
+    // the response below is sent, so an unawaited promise here can be
+    // silently cut off mid-send. after() keeps it alive until it finishes.
+    after(() =>
+      getDeanRecipientForKey(adminClient, key_id)
+        .then(async (recipient) => {
+          if (!recipient) return;
+          const siteUrl =
+            process.env.NEXT_PUBLIC_SITE_URL ??
+            'https://smartkey-ochre.vercel.app';
 
-        // One-click email Approve/Decline — only for this (registered,
-        // Dean-routed) case. Mint and persist the token before sending so
-        // the email link is never dead on arrival.
-        const decisionToken = crypto.randomUUID();
-        const { error: tokenError } = await adminClient
-          .from('requests')
-          .update({ decision_token: decisionToken })
-          .eq('id', result.request_id);
-        if (tokenError) {
-          logger.error('submit: failed to persist decision_token', {
-            requestId: result.request_id,
-            err: tokenError.message,
+          // One-click email Approve/Decline — only for this (registered,
+          // Dean-routed) case. Mint and persist the token before sending so
+          // the email link is never dead on arrival.
+          const decisionToken = crypto.randomUUID();
+          const { error: tokenError } = await adminClient
+            .from('requests')
+            .update({ decision_token: decisionToken })
+            .eq('id', result.request_id);
+          if (tokenError) {
+            logger.error('submit: failed to persist decision_token', {
+              requestId: result.request_id,
+              err: tokenError.message,
+            });
+          }
+
+          return sendWeekendSubmittedEmail({
+            to: recipient.to,
+            fullName: recipient.fullName,
+            requesterName: profile.full_name,
+            unitName: recipient.unitName,
+            roomLabel:
+              keyRes.data?.room_name && keyRes.data.code
+                ? `${keyRes.data.room_name} (${keyRes.data.code})`
+                : recipient.unitName,
+            requestedFor: weekend_date ?? '',
+            link: `${siteUrl}/dean/weekend-requests`,
+            decisionLink: tokenError
+              ? undefined
+              : `${siteUrl}/dean-decision/${decisionToken}`,
           });
-        }
-
-        return sendWeekendSubmittedEmail({
-          to: recipient.to,
-          fullName: recipient.fullName,
-          requesterName: profile.full_name,
-          unitName: recipient.unitName,
-          roomLabel:
-            keyRes.data?.room_name && keyRes.data.code
-              ? `${keyRes.data.room_name} (${keyRes.data.code})`
-              : recipient.unitName,
-          requestedFor: weekend_date ?? '',
-          link: `${siteUrl}/dean/weekend-requests`,
-          decisionLink: tokenError
-            ? undefined
-            : `${siteUrl}/dean-decision/${decisionToken}`,
-        });
-      })
-      .catch((e: unknown) => {
-        logger.error('submit: weekend-submitted email failed', {
-          requestId: result.request_id,
-          err: e instanceof Error ? e.message : String(e),
-        });
-      });
+        })
+        .catch((e: unknown) => {
+          logger.error('submit: weekend-submitted email failed', {
+            requestId: result.request_id,
+            err: e instanceof Error ? e.message : String(e),
+          });
+        })
+    );
 
     return NextResponse.json(
       ok({
@@ -284,27 +289,31 @@ export const POST = async (request: NextRequest) => {
     );
   }
 
-  // Fire-and-forget — a failed send must not fail an otherwise-successful
-  // request. The code is already usable in-app regardless of email delivery.
+  // A failed send must not fail an otherwise-successful request — the code
+  // is already usable in-app regardless of email delivery. Runs via after()
+  // rather than a bare fire-and-forget promise; see the comment above the
+  // weekend-submitted email send further up in this file.
   if (result.code && result.code_expires_at) {
-    void getRequestRecipient(adminClient, result.request_id)
-      .then((recipient) => {
-        if (!recipient) return;
-        return sendCollectionCodeEmail({
-          to: recipient.to,
-          fullName: recipient.fullName,
-          code: result.code!,
-          codeExpiresAt: result.code_expires_at!,
-          keyCode: recipient.keyCode,
-          roomName: recipient.roomName,
-        });
-      })
-      .catch((e: unknown) => {
-        logger.error('submit: collection-code email failed', {
-          requestId: result.request_id,
-          err: e instanceof Error ? e.message : String(e),
-        });
-      });
+    after(() =>
+      getRequestRecipient(adminClient, result.request_id)
+        .then((recipient) => {
+          if (!recipient) return;
+          return sendCollectionCodeEmail({
+            to: recipient.to,
+            fullName: recipient.fullName,
+            code: result.code!,
+            codeExpiresAt: result.code_expires_at!,
+            keyCode: recipient.keyCode,
+            roomName: recipient.roomName,
+          });
+        })
+        .catch((e: unknown) => {
+          logger.error('submit: collection-code email failed', {
+            requestId: result.request_id,
+            err: e instanceof Error ? e.message : String(e),
+          });
+        })
+    );
   }
 
   return NextResponse.json(
