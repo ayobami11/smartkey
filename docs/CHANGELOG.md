@@ -6,6 +6,52 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-08-20 — Trial migration from npm to Bun (branch `chore/bun-migration`)
+
+- **Why**: evaluating whether Bun is viable as this project's package manager and script runner, on an
+  isolated branch, before any decision to adopt it. The two real unknowns going in were whether Bun's
+  install-script security gate would break `sharp` (the signature-verification AI pipeline's native
+  dependency) and whether Playwright would behave reliably under Bun — both were tested directly rather
+  than assumed.
+- **Sharp/build**: confirmed clean. `sharp` loads and processes images correctly under Bun with no
+  `trustedDependencies` entry needed (its own install script is just a prebuilt-binary verifier, not a
+  compile step). All 20 `src/lib/ai/signature/verifier.test.ts` tests pass, and `bun run build` compiles,
+  typechecks, and generates all 82 routes cleanly — including Next's own separately-bundled `sharp` copy
+  used by `next/image`.
+- **Unit tests**: full suite clean under Bun (36 files, 355/356 tests, 1 pre-existing skip).
+- **Playwright**: full suite run project-by-project. `chromium` (the only project CI actually runs),
+  `firefox`, and `mobile` each reached a clean pass (0 failures) after retries; failures along the way
+  were either ordinary Gmail SMTP flakiness (`Greeting never received`/timeouts against the real OTP
+  mailbox — reproduced identically under npm, confirming it wasn't Bun-related) or a pre-existing UI
+  timing flake in `cso/admin-keys.spec.ts`'s default 5s assertion timeout (same class of flake already
+  fixed once before for `forgot-password.spec.ts`, per the 2026-08-09 entry below). `webkit` hit two
+  reproducible hangs early on at the identical point (`return-key.spec.ts`'s last test, right after an
+  Escape-key dialog close) but did not recur across four further attempts, which then hit the same
+  ordinary SMTP flakiness as the other projects — treated as a WebKit-on-Windows Playwright limitation,
+  not a Bun issue, especially since CI never runs the `webkit` project at all.
+- **Diagnosed along the way, unrelated to Bun**: mid-session, outbound SMTP (port 587) became completely
+  unreachable — confirmed via direct TCP tests and by reproducing the identical failure under a clean
+  npm install, ruling out Bun/credentials/IMAP setup. Root cause was the machine being tethered to a
+  phone hotspot, which was blocking that port at the carrier level; switching to a normal network
+  resolved it immediately.
+- **Converted**: `package.json` (`packageManager: "bun@1.4.0"`, `design:lint` → `bunx`), `bun.lock`
+  replacing `package-lock.json`, `playwright.config.ts`'s `webServer.command`, `.husky/*` (pre-commit,
+  pre-push, commit-msg → `bunx`/`bun run`; `load-node.sh`'s fallback now checks for `bun` instead of the
+  now-unused `npx`/`fnm` path), `.github/workflows/{ci,e2e}.yml` (→ `oven-sh/setup-bun`, `bun install
+--frozen-lockfile`, `bun run`/`bunx` throughout; both `e2e.yml` cache keys now hash `bun.lock` instead
+  of the deleted `package-lock.json`), `.claude/settings.json` (Bun-prefixed permission-allowlist twins
+  added alongside the npm ones for the trial period), and every doc/skill file that referenced `npm`/
+  `pnpm` commands (`CLAUDE.md`, `docs/SCREEN_CHECKLIST.md`, `docs/TESTING.md`, `design-system/README.md`,
+  six `.claude/skills/*/SKILL.md` files, `docs/DATABASE.md`, `docs/IMPLEMENTATION.md`,
+  `docs/external-weekend-requests-testing.md`, `docs/adr/0005-design-md-as-source-of-truth.md`,
+  `docs/postman/README.md`) — this pass also fixed a pre-existing, unrelated `pnpm` inconsistency in
+  several of those files. `docs/GITHUB.md`'s `npm` references are all inside Section 3's historical
+  `gh issue create` templates and were deliberately left untouched, same reasoning as this changelog's
+  own append-only convention.
+- **Not done yet**: opening a PR (which would also trigger a Vercel preview build under Bun, since
+  Vercel auto-detects the package manager from `bun.lock` with no `vercel.json` override) is a
+  deliberate, separately-confirmed checkpoint, not yet taken.
+
 ### 2026-08-20 — Rebuilt letter/stamp and signature/stamp previews on the shadcn Attachment component
 
 - **Why**: the project added the shadcn `Attachment` component (`src/components/ui/attachment.tsx`) but

@@ -47,7 +47,7 @@ For each piece of data that loads or mutates, the screen must handle:
 - [ ] Realtime updates announce via `aria-live="polite"`.
 - [ ] Touch targets ≥ 44×44px on mobile.
 - [ ] Reduced-motion respected.
-- [ ] axe-core passes (run `pnpm test:e2e` or the browser extension).
+- [ ] axe-core passes (run `bun run test:e2e` or the browser extension).
 
 ## Mutations
 
@@ -73,8 +73,8 @@ For each piece of data that loads or mutates, the screen must handle:
 
 ## Final
 
-- [ ] `pnpm typecheck` passes.
-- [ ] `pnpm lint` passes.
-- [ ] `pnpm test` passes.
-- [ ] `pnpm test:e2e` passes for at least the new screen.
+- [ ] `bun run typecheck` passes.
+- [ ] `bun run lint` passes.
+- [ ] `bun run test` passes.
+- [ ] `bun run test:e2e` passes for at least the new screen.
 - [ ] Manual: tab through, check focus, toggle theme, simulate offline.

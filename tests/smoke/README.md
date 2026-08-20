@@ -7,9 +7,9 @@ as soon as Vercel reports a deployment ready.
 
 Implements item 8 of [`docs/REVIEW_ACTIONS_BACKEND.md`](../../docs/REVIEW_ACTIONS_BACKEND.md).
 
-Zero dependencies — Node 20+ built-ins only. No `npm ci` needed, deliberately:
-a broken dependency tree must not be able to break the thing that tells you
-whether production is up.
+Zero dependencies — Node 20+ built-ins only. No dependency install step
+needed, deliberately: a broken dependency tree must not be able to break the
+thing that tells you whether production is up.
 
 ---
 

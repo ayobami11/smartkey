@@ -10,7 +10,7 @@ This project uses shadcn/ui as the component layer beneath every screen. **Alway
 ## Adding a new shadcn primitive
 
 ```bash
-npx shadcn@latest add <component-name>
+bunx shadcn@latest add <component-name>
 ```
 
 The CLI installs to `src/components/ui/`. **Do not edit files in this directory by hand** — they are managed by shadcn. Customisation happens in two layers:
@@ -98,4 +98,4 @@ Check `src/components/smartkey/` for existing components before creating new one
 
 ## After making changes
 
-Run `pnpm typecheck && pnpm lint` and confirm the component renders in both light and dark themes by visual inspection (Storybook or the dev server).
+Run `bun run typecheck && bun run lint` and confirm the component renders in both light and dark themes by visual inspection (Storybook or the dev server).

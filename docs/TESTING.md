@@ -48,17 +48,17 @@ Verifier specs time out on the OTP screen exactly as documented in
 
 ## Commands
 
-- `npm test` — unit and component tests (Vitest)
-- `npm run test:watch` — watch mode
-- `npm run test:e2e` — Playwright headless
-- `npm run test:e2e:headed` — Playwright with browser visible
+- `bun run test` — unit and component tests (Vitest)
+- `bun run test:watch` — watch mode
+- `bun run test:e2e` — Playwright headless
+- `bun run test:e2e:headed` — Playwright with browser visible
 - No `test:db` command exists yet — see the Database row above.
 
 ## CI
 
 Two separate GitHub Actions workflows, not one combined pipeline:
 
-- **`.github/workflows/ci.yml`** — runs on every push/PR to `main`: `npm run typecheck` → `npm run lint` → `npm test` → `npm run build`.
-- **`.github/workflows/e2e.yml`** — PR-only. Skipped when every changed file matches `docs/**`, `supabase/**`, or `**/*.md` (a PR that also touches app code still runs). Builds the app, then runs `npm run test:e2e -- --project=chromium` (Chromium only in CI; the `mobile`/Pixel 5 project defined in `playwright.config.ts` is not run in CI) against test-account credentials injected as secrets.
+- **`.github/workflows/ci.yml`** — runs on every push/PR to `main`: `bun run typecheck` → `bun run lint` → `bun run test` → `bun run build`.
+- **`.github/workflows/e2e.yml`** — PR-only. Skipped when every changed file matches `docs/**`, `supabase/**`, or `**/*.md` (a PR that also touches app code still runs). Builds the app, then runs `bun run test:e2e -- --project=chromium` (Chromium only in CI; the `mobile`/Pixel 5 project defined in `playwright.config.ts` is not run in CI) against test-account credentials injected as secrets.
 
 Neither workflow runs `design:lint` — no such script exists in `package.json`; it remains aspirational until added. Lighthouse CI was considered and deliberately not pursued — see `docs/CHANGELOG.md`.

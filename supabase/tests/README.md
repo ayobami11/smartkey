@@ -21,14 +21,14 @@ whatever seed data the database holds, and re-runnable without cleanup.
 ## Running them
 
 ```bash
-npm run test:db     # supabase test db
+bun run test:db     # supabase test db
 ```
 
 This needs a **local** Supabase stack, which needs Docker:
 
 ```bash
 supabase start      # boots Postgres on :54322 and the rest of the stack
-npm run test:db
+bun run test:db
 ```
 
 `supabase test db` runs every `*.sql` file in this directory through `pg_prove`
@@ -68,7 +68,7 @@ them against a database seeded however you like, or with seeding disabled
 
 ## Not wired into CI
 
-`npm run test:db` is deliberately **not** referenced by any workflow in
+`bun run test:db` is deliberately **not** referenced by any workflow in
 `.github/workflows/` yet. CI wiring is being handled separately; do not add it here.
 
 ## Conventions for new test files
