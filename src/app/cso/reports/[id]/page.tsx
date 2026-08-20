@@ -202,7 +202,6 @@ export default async function ReportDetailPage({
         </div>
       ) : (
         <>
-          {/* Report body */}
           <section className="rounded-lg border border-border bg-card p-6 shadow-[0_2px_4px_rgba(15,23,42,0.06)]">
             <Markdown
               remarkPlugins={[remarkGfm]}
@@ -237,7 +236,6 @@ export default async function ReportDetailPage({
             </div>
           </section>
 
-          {/* Timeline */}
           <section className="flex flex-col gap-3">
             <h2 className="text-sm font-semibold text-foreground">
               Event timeline
@@ -247,7 +245,6 @@ export default async function ReportDetailPage({
             </div>
           </section>
 
-          {/* Comments */}
           <section className="flex flex-col gap-3">
             <h2 className="text-sm font-semibold text-foreground">
               Comments {comments.length > 0 && `(${comments.length})`}

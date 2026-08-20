@@ -17,7 +17,6 @@ export const UsersTableSkeleton = () => (
       <Skeleton className="h-9 w-24" />
     </div>
 
-    {/* Table */}
     <div className="rounded-lg border border-border bg-card shadow-[0_2px_4px_rgba(15,23,42,0.06)]">
       <Table>
         <TableHeader>

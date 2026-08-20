@@ -24,8 +24,6 @@ import {
 import { apiFetch } from '@/lib/api';
 import { otpSchema, type OtpInput } from '@/lib/validation/schemas';
 
-// Constants
-
 const ROLE_REDIRECTS: Record<string, string> = {
   CSO: '/cso/dashboard',
   DEAN: '/dean/dashboard',
@@ -33,15 +31,11 @@ const ROLE_REDIRECTS: Record<string, string> = {
   REQUESTER: '/requester/dashboard',
 };
 
-// Helpers
-
 const maskEmail = (email: string) => {
   const [local, domain] = email.split('@');
   if (!domain || local.length <= 3) return email;
   return `${local.slice(0, 3)}***@${domain}`;
 };
-
-// Types
 
 type OtpFormProps = {
   pendingEmail: string;
@@ -50,8 +44,6 @@ type OtpFormProps = {
   deliveryFailed?: boolean;
   onBack: () => void;
 };
-
-// Component
 
 export const OtpForm = ({
   pendingEmail,

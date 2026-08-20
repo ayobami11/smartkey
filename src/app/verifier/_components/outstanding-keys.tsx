@@ -34,8 +34,6 @@ import { ReturnKeyForm } from '@/app/verifier/_components/return-key-form';
 import { ReturnKeyOverrideForm } from '@/app/verifier/_components/return-key-override-form';
 import { formatDeadline, formatTime, relativeTime } from '@/lib/dates';
 
-// Types
-
 type OutstandingKey = {
   id: string;
   key: {
@@ -52,8 +50,6 @@ type OutstandingKey = {
 
 type ReturnStep = 'confirm' | 'returning' | 'success';
 type ReturnMode = 'code' | 'override';
-
-// Component
 
 export const OutstandingKeys = () => {
   const status = useConnectionStatus();
@@ -160,15 +156,12 @@ export const OutstandingKeys = () => {
     setReturnStep('success');
   };
 
-  // Render
-
   return (
     <section className="flex flex-col gap-4">
       <h2 className="text-sm font-semibold text-foreground">
         Outstanding keys
       </h2>
 
-      {/* Loading */}
       {loading && (
         <div
           className="flex flex-col gap-3"
@@ -182,7 +175,6 @@ export const OutstandingKeys = () => {
         </div>
       )}
 
-      {/* Error */}
       {!loading && fetchError && (
         <div
           className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
@@ -201,7 +193,6 @@ export const OutstandingKeys = () => {
         </div>
       )}
 
-      {/* Empty */}
       {!loading && !fetchError && keys.length === 0 && (
         <Empty className="border border-border bg-card">
           <EmptyHeader>

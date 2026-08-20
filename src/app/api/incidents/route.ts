@@ -130,7 +130,6 @@ export const POST = async (request: NextRequest) => {
 
   const adminSupabase = createAdminClient();
 
-  // Get current active shift for linking.
   const { data: currentShift } = await adminSupabase
     .from('shifts')
     .select('id')

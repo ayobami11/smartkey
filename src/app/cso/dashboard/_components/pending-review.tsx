@@ -24,8 +24,6 @@ import {
 } from '@/app/cso/dashboard/_components/helpers';
 import { SectionCardHeader } from '@/components/smartkey/section-card-header';
 
-// Types
-
 type CsoRequest = {
   id: string;
   status: string;
@@ -35,8 +33,6 @@ type CsoRequest = {
   requester?: { full_name: string } | null;
   risk_factors?: unknown[];
 };
-
-// Component
 
 export const PendingReview = () => {
   const queryClient = useQueryClient();

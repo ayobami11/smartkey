@@ -37,7 +37,6 @@ export const POST = async (request: NextRequest) => {
 
   const { key_id, note } = parsed.data;
 
-  // Verify the key exists.
   const { data: key, error: keyError } = await supabase
     .from('keys')
     .select('id, code, status')
@@ -54,7 +53,6 @@ export const POST = async (request: NextRequest) => {
     });
   }
 
-  // Retire the key.
   const { error: updateError } = await supabase
     .from('keys')
     .update({ status: 'RETIRED', retired_at: new Date().toISOString() })

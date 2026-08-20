@@ -34,7 +34,6 @@ export const POST = async (request: NextRequest) => {
 
   const { current_password, new_password } = parsed.data;
 
-  // Verify the current password by re-authenticating
   const { error: verifyError } = await supabase.auth.signInWithPassword({
     email: user.email,
     password: current_password,

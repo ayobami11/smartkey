@@ -18,8 +18,6 @@ import { apiFetch } from '@/lib/api';
 import { useConnectionStatus } from '@/hooks/use-connection-status';
 import { formatDate, formatTime } from '@/lib/dates';
 
-// Types
-
 type Shift = {
   id: string;
   shift_number: number;
@@ -41,8 +39,6 @@ type OutstandingKey = {
 };
 
 type PageStep = 'loading' | 'no-shift' | 'ready' | 'success' | 'error';
-
-// Component
 
 export const HandoverView = () => {
   const router = useRouter();
@@ -74,8 +70,6 @@ export const HandoverView = () => {
     : someAcknowledged
       ? 'indeterminate'
       : false;
-
-  // Fetch
 
   const fetchData = async () => {
     setStep('loading');
@@ -115,8 +109,6 @@ export const HandoverView = () => {
       setStep(fetchedShift ? 'ready' : 'no-shift');
     });
   }, []);
-
-  // Handlers
 
   const toggleKey = (id: string) => {
     setAcknowledged((prev) => {
@@ -175,11 +167,8 @@ export const HandoverView = () => {
     router.push('/verifier');
   };
 
-  // Render
-
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
-      {/* Page heading */}
       <div>
         <h1 className="text-xl font-semibold text-foreground">
           {step === 'no-shift' ? 'Start shift' : 'Shift handover'}
@@ -191,7 +180,6 @@ export const HandoverView = () => {
         </p>
       </div>
 
-      {/* Loading */}
       {step === 'loading' && (
         <div
           className="flex flex-col gap-4"
@@ -206,7 +194,6 @@ export const HandoverView = () => {
         </div>
       )}
 
-      {/* Error */}
       {step === 'error' && (
         <div
           className="rounded-lg border border-destructive/30 bg-destructive/5 p-5"
@@ -227,7 +214,6 @@ export const HandoverView = () => {
         </div>
       )}
 
-      {/* No active shift — start a new one */}
       {step === 'no-shift' && (
         <div className="flex flex-col gap-6">
           <div className="overflow-hidden rounded-lg border border-border bg-card shadow-[0_2px_4px_rgba(15,23,42,0.06)]">
@@ -337,7 +323,6 @@ export const HandoverView = () => {
         </div>
       )}
 
-      {/* Success */}
       {step === 'success' && (
         <div className="flex flex-col items-center gap-6 rounded-lg border border-emerald-200 bg-emerald-50/80 p-10 text-center dark:border-emerald-900/60 dark:bg-emerald-950/30">
           <div className="flex size-16 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/40">
@@ -370,10 +355,8 @@ export const HandoverView = () => {
         </div>
       )}
 
-      {/* Ready state */}
       {step === 'ready' && (
         <div className="flex flex-col gap-6">
-          {/* Outgoing shift summary */}
           {shift && (
             <div className="overflow-hidden rounded-lg border border-border bg-card shadow-[0_2px_4px_rgba(15,23,42,0.06)]">
               <div className="border-b border-border bg-muted/50 px-5 py-2.5">
@@ -400,7 +383,6 @@ export const HandoverView = () => {
             </div>
           )}
 
-          {/* Outstanding keys checklist */}
           <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-foreground">
@@ -436,7 +418,6 @@ export const HandoverView = () => {
                 </div>
               ) : (
                 <>
-                  {/* Select-all header row */}
                   <div className="flex items-center gap-4 border-b border-border px-5 py-3">
                     <Checkbox
                       id="select-all-keys"
@@ -540,7 +521,6 @@ export const HandoverView = () => {
             </p>
           )}
 
-          {/* Actions */}
           <div className="flex flex-col gap-2.5">
             {/* Per-key acknowledge — enabled only when all are checked */}
             {outstandingKeys.length > 0 && (
@@ -567,7 +547,6 @@ export const HandoverView = () => {
               </Tooltip>
             )}
 
-            {/* No outstanding keys — complete handover directly */}
             {outstandingKeys.length === 0 && (
               <Tooltip>
                 <TooltipTrigger asChild>

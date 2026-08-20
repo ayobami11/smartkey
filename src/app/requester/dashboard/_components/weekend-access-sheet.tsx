@@ -39,8 +39,6 @@ import {
   type WeekendRequestFormInput,
 } from '@/lib/validation/schemas';
 
-// Types
-
 type AvailableKey = {
   key: { id: string; code: string; room_name: string; status: string };
 };
@@ -56,8 +54,6 @@ type WeekendAccessSheetProps = {
   isOffline: boolean;
   onSubmitted: () => void;
 };
-
-// Component
 
 export const WeekendAccessSheet = ({
   userId,

@@ -23,8 +23,6 @@ import {
 
 type Props = { keyId: string };
 
-// Component
-
 export const KeyHistory = ({ keyId }: Props) => {
   const [extra, setExtra] = useState<Transaction[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);

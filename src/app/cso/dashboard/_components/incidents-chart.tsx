@@ -24,8 +24,6 @@ import {
 } from '@/components/ui/empty';
 import { Skeleton } from '@/components/ui/skeleton';
 
-// Types
-
 type Incident = { severity: 'LOW' | 'MEDIUM' | 'HIGH' };
 type IncidentsResponse = { incidents: Incident[]; next_cursor: string | null };
 
@@ -55,8 +53,6 @@ type IncidentsChartProps = { range: DateRange };
 
 const QUERY_KEY_BASE = ['cso', 'incident-severity'];
 const MAX_PAGES = 3; // safety net if the window's volume ever exceeds one page
-
-// Component
 
 export const IncidentsChart = ({ range }: IncidentsChartProps) => {
   const connectionStatus = useConnectionStatus();

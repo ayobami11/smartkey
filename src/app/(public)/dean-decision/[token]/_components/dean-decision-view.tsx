@@ -45,8 +45,6 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { GuestBadge } from '@/components/smartkey/guest-badge';
 
-// Types
-
 type AvailableKey = { id: string; code: string; room_name: string };
 
 type DecisionStatusData = {
@@ -107,8 +105,6 @@ const TERMINAL_COPY: Record<string, { title: string; body: string }> = {
     body: 'The requester cancelled this request.',
   },
 };
-
-// Component
 
 export const DeanDecisionView = ({ token }: DeanDecisionViewProps) => {
   const [data, setData] = useState<DecisionStatusData | null>(null);
@@ -181,8 +177,6 @@ export const DeanDecisionView = ({ token }: DeanDecisionViewProps) => {
     setResult(res.data);
   };
 
-  // Loading
-
   if (loading) {
     return (
       <div className="w-full max-w-sm space-y-4">
@@ -191,8 +185,6 @@ export const DeanDecisionView = ({ token }: DeanDecisionViewProps) => {
       </div>
     );
   }
-
-  // Not found
 
   if (notFound) {
     return (
@@ -204,8 +196,6 @@ export const DeanDecisionView = ({ token }: DeanDecisionViewProps) => {
       />
     );
   }
-
-  // Fetch error
 
   if (fetchError || !data) {
     return (
@@ -273,8 +263,6 @@ export const DeanDecisionView = ({ token }: DeanDecisionViewProps) => {
       />
     );
   }
-
-  // Decidable — show the request and Approve/Decline
 
   return (
     <div className="w-full max-w-sm space-y-5">
@@ -509,8 +497,6 @@ export const DeanDecisionView = ({ token }: DeanDecisionViewProps) => {
     </div>
   );
 };
-
-// Sub-components
 
 type StatusTone = 'success' | 'warning' | 'error' | 'neutral';
 

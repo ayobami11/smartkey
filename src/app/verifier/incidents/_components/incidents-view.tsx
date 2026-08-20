@@ -21,8 +21,6 @@ import {
   type IncidentFormInput,
 } from '@/lib/validation/schemas';
 
-// Types
-
 type FormStep = 'form' | 'submitting' | 'success';
 
 const INCIDENT_TYPE_DETAILS: {
@@ -74,8 +72,6 @@ const SEVERITIES: {
     hint: 'Requires immediate CSO attention',
   },
 ];
-
-// Component
 
 export const IncidentsView = () => {
   const [step, setStep] = useState<FormStep>('form');

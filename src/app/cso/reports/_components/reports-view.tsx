@@ -19,11 +19,7 @@ import {
   type Report,
 } from '@/app/cso/reports/_components/reports-list';
 
-// Types
-
 type DateFilter = 'all' | '7d' | '30d';
-
-// Helpers
 
 function mapReport(r: Record<string, unknown>): Report {
   const meta =
@@ -62,8 +58,6 @@ const DATE_FILTER_LABELS: Record<DateFilter, string> = {
   '7d': 'Last 7 days',
   '30d': 'Last 30 days',
 };
-
-// Component
 
 export const ReportsView = () => {
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
@@ -106,8 +100,6 @@ export const ReportsView = () => {
 
   const allReports = reportsData?.pages.flatMap((p) => p.reports) ?? [];
   const reportGroups = groupByDay(allReports);
-
-  // Render
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
@@ -165,7 +157,6 @@ export const ReportsView = () => {
         </button>
       </div>
 
-      {/* Loading */}
       {reportsLoading && (
         <div className="flex flex-col gap-4" aria-busy="true">
           {[0, 1, 2].map((i) => (
@@ -174,7 +165,6 @@ export const ReportsView = () => {
         </div>
       )}
 
-      {/* Error */}
       {reportsIsError && (
         <div
           className="rounded-lg border border-destructive/30 bg-destructive/5 p-4"
@@ -199,7 +189,6 @@ export const ReportsView = () => {
         </div>
       )}
 
-      {/* Content */}
       {!reportsLoading &&
         !reportsIsError &&
         (reportGroups.length === 0 ? (

@@ -27,8 +27,6 @@ import { todayDateISO } from '@/lib/dates';
 import { createBrowserClient } from '@/lib/supabase/client';
 import { AuthorizationLetterUpload } from '@/app/(public)/weekend-access/_components/authorization-letter-upload';
 
-// Types
-
 type DepartmentOption = { id: string; name: string };
 
 const FALLBACK_RETURN_DEADLINE_TIME = '17:00';
@@ -36,8 +34,6 @@ const FALLBACK_RETURN_DEADLINE_TIME = '17:00';
 type GuestWeekendRequestFormProps = {
   departments: DepartmentOption[];
 };
-
-// Component
 
 export const GuestWeekendRequestForm = ({
   departments,
@@ -112,8 +108,6 @@ export const GuestWeekendRequestForm = ({
     setAccessToken(result.data.access_token);
   };
 
-  // Success confirmation
-
   if (accessToken) {
     const statusUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/weekend-access/${accessToken}`;
 
@@ -183,8 +177,6 @@ export const GuestWeekendRequestForm = ({
       </div>
     );
   }
-
-  // Empty state — no departments could be loaded
 
   const noDepartments = departments.length === 0;
 

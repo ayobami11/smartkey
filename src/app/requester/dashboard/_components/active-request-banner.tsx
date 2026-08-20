@@ -17,8 +17,6 @@ import { apiFetch } from '@/lib/api';
 import { createBrowserClient } from '@/lib/supabase/client';
 import { formatCountdown, secondsRemaining } from '@/lib/dates';
 
-// Types
-
 type ActiveRequest = {
   id: string;
   status: 'CODE_ISSUED';
@@ -26,8 +24,6 @@ type ActiveRequest = {
   code_expires_at: string | null;
   key: { code: string; room_name: string } | null;
 };
-
-// Component
 
 export const ActiveRequestBanner = () => {
   const queryClient = useQueryClient();
@@ -40,8 +36,6 @@ export const ActiveRequestBanner = () => {
   // Guards the auto-expire call so it fires once per request, not every tick.
   const expiredFiredRef = useRef<string | null>(null);
 
-  // Resolve user ID once on mount
-
   useEffect(() => {
     createBrowserClient()
       .auth.getUser()
@@ -49,8 +43,6 @@ export const ActiveRequestBanner = () => {
         if (user) setUserId(user.id);
       });
   }, []);
-
-  // Fetch active request via TanStack Query
 
   const { data: request = null, isLoading: loading } = useQuery({
     queryKey: ['active-request', userId],
@@ -93,8 +85,6 @@ export const ActiveRequestBanner = () => {
       }
     },
   });
-
-  // Countdown timer — tick drives re-renders; countdown is derived each render
 
   useEffect(() => {
     if (!activeExpiry) return;
@@ -145,8 +135,6 @@ export const ActiveRequestBanner = () => {
     userId,
   ]);
 
-  // Cancel
-
   const handleCancel = async () => {
     if (!request) return;
     setCancelling(true);
@@ -157,8 +145,6 @@ export const ActiveRequestBanner = () => {
     queryClient.invalidateQueries({ queryKey: ['active-request', userId] });
     setCancelling(false);
   };
-
-  // Render
 
   if (loading) {
     return <Skeleton className="h-24 rounded-lg" />;

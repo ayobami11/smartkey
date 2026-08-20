@@ -13,8 +13,6 @@ import { type KeyStatus, type Zone } from '@/lib/constants';
 export type { KeyStatus };
 export type KeyZone = Zone;
 
-// Types
-
 export type Key = {
   id: string;
   code: string;
@@ -25,16 +23,12 @@ export type Key = {
   key_count?: number;
 };
 
-// Constants
-
 const statusConfig: Record<KeyStatus, { label: string; cls: string }> = {
   AVAILABLE: { label: 'Available', cls: 'bg-emerald-100 text-emerald-700' },
   ISSUED: { label: 'Issued', cls: 'bg-primary/10 text-primary' },
   OVERDUE: { label: 'Overdue', cls: 'bg-destructive/10 text-destructive' },
   RETIRED: { label: 'Retired', cls: 'bg-muted text-muted-foreground' },
 };
-
-// Component
 
 type Props = {
   keyItem: Key;

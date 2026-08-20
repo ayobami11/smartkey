@@ -63,7 +63,6 @@ test.describe('Verifier shift handover', () => {
 
     const selectAll = page.getByRole('checkbox', { name: /select all keys/i });
     if (!(await selectAll.isVisible().catch(() => false))) {
-      // No outstanding keys — "Complete handover" is offered directly.
       await expect(
         page.getByText(/no keys are currently outstanding/i)
       ).toBeVisible();
@@ -83,7 +82,6 @@ test.describe('Verifier shift handover', () => {
     await expect(selectAll).toBeChecked();
     await expect(bulkButton).toBeEnabled();
 
-    // Every per-key checkbox should now be checked too.
     const perKeyCheckboxes = page.getByRole('checkbox', {
       name: /^acknowledge key/i,
     });
@@ -92,7 +90,6 @@ test.describe('Verifier shift handover', () => {
       await expect(perKeyCheckboxes.nth(i)).toBeChecked();
     }
 
-    // Unchecking one row drops select-all out of the fully-checked state.
     if (count > 0) {
       await perKeyCheckboxes.first().click();
       await expect(selectAll).not.toBeChecked();

@@ -16,8 +16,6 @@ import {
   type ReturnKeyOverrideFormInput,
 } from '@/lib/validation/schemas';
 
-// Types
-
 export type ReturnKeyOverrideFormProps = {
   isOffline: boolean;
   isSubmitting: boolean;
@@ -25,8 +23,6 @@ export type ReturnKeyOverrideFormProps = {
   onSubmit: (reason: string) => Promise<void>;
   onSwitchMode: () => void;
 };
-
-// Component
 
 export const ReturnKeyOverrideForm = ({
   isOffline,

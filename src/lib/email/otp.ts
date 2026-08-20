@@ -128,7 +128,6 @@ export const sendWeekendReminderEmail = async ({
     `,
   });
 
-// Approval notification for a registered requester's weekend request.
 export const sendWeekendApprovedEmail = async ({
   to,
   fullName,
@@ -175,7 +174,6 @@ export const sendWeekendApprovedEmail = async ({
     `,
   });
 
-// Decline notification for a registered requester's weekend request.
 export const sendWeekendDeclinedEmail = async ({
   to,
   fullName,

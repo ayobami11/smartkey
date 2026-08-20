@@ -33,8 +33,6 @@ import { formatLastSignIn } from '@/lib/dates';
 // Re-export so callers that already import from here don't need to change.
 export type { UserRole, UserStatus };
 
-// Types
-
 export type UserRow = {
   id: string;
   full_name: string;
@@ -74,8 +72,6 @@ const sortByElapsedTime: SortingFn<UserRow> = (rowA, rowB, columnId) => {
   return a > b ? -1 : a < b ? 1 : 0;
 };
 
-// Sortable header button
-
 const SortableHeader = ({
   column,
   label,
@@ -105,8 +101,6 @@ const SortableHeader = ({
     </Button>
   );
 };
-
-// Column factory
 
 export const createColumns = (
   callbacks: ColumnCallbacks

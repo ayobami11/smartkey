@@ -23,7 +23,6 @@ export const updateSession = async (
   response: NextResponse;
   supabase: ReturnType<typeof createServerClient<Database>>;
 }> => {
-  // Carry the resolved namespace to downstream server code via a request header.
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set(NAMESPACE_HEADER, namespace);
 

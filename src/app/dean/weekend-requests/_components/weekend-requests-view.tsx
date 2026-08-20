@@ -68,8 +68,6 @@ import {
   relativeTimeCompact as relativeTime,
 } from '@/lib/dates';
 
-// Types
-
 type Requester = {
   id: string;
   full_name: string;
@@ -118,8 +116,6 @@ const initials = (name: string) =>
     .slice(0, 2)
     .toUpperCase();
 
-// Component
-
 export const WeekendRequestsView = () => {
   const queryClient = useQueryClient();
   const connectionStatus = useConnectionStatus();
@@ -138,7 +134,6 @@ export const WeekendRequestsView = () => {
   const [dismissingId, setDismissingId] = useState<string | null>(null);
   const [listError, setListError] = useState<string | null>(null);
 
-  // Letter / stamp preview
   const [letterUrl, setLetterUrl] = useState<string | null>(null);
   const [letterLoading, setLetterLoading] = useState(false);
   const [stampUrl, setStampUrl] = useState<string | null>(null);
@@ -325,7 +320,6 @@ export const WeekendRequestsView = () => {
         </p>
       </div>
 
-      {/* Loading */}
       {loading && (
         <div className="flex flex-col gap-3">
           {[0, 1, 2].map((i) => (
@@ -334,7 +328,6 @@ export const WeekendRequestsView = () => {
         </div>
       )}
 
-      {/* Fetch error */}
       {!loading && fetchError && (
         <div
           className="rounded-lg border border-destructive/30 bg-destructive/5 p-4"
@@ -361,7 +354,6 @@ export const WeekendRequestsView = () => {
         </p>
       )}
 
-      {/* Empty */}
       {!loading && !fetchError && visibleRequests.length === 0 && (
         <Empty className="flex-none border border-border bg-card">
           <EmptyHeader>
@@ -376,7 +368,6 @@ export const WeekendRequestsView = () => {
         </Empty>
       )}
 
-      {/* Request list */}
       {!loading && !fetchError && visibleRequests.length > 0 && (
         <div className="flex flex-col gap-3">
           {visibleRequests.map((req) => {
@@ -489,7 +480,6 @@ export const WeekendRequestsView = () => {
         </div>
       )}
 
-      {/* Detail sheet */}
       <Sheet open={!!selected} onOpenChange={(open) => !open && handleClose()}>
         <SheetContent
           side="right"
@@ -578,7 +568,6 @@ export const WeekendRequestsView = () => {
                 </Card>
               ) : (
                 <>
-                  {/* Requester / guest */}
                   <div className="flex items-center gap-3">
                     <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-semibold text-muted-foreground">
                       {initials(displayName(selected))}
@@ -596,7 +585,6 @@ export const WeekendRequestsView = () => {
                     </div>
                   </div>
 
-                  {/* Guest identity */}
                   {selected.guest && (
                     <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/40 p-4">
                       <div className="flex items-center gap-2 text-xs font-medium text-foreground">
@@ -691,7 +679,6 @@ export const WeekendRequestsView = () => {
                     </div>
                   )}
 
-                  {/* Request details */}
                   <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/40 p-4">
                     {selected.key ? (
                       <div className="flex items-center gap-2 text-xs">
@@ -807,7 +794,6 @@ export const WeekendRequestsView = () => {
                     />
                   )}
 
-                  {/* High-risk warning */}
                   {selected.risk_tier === 'HIGH' && (
                     <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 p-4">
                       <AlertTriangleIcon
@@ -835,7 +821,6 @@ export const WeekendRequestsView = () => {
                     </p>
                   )}
 
-                  {/* Note */}
                   <Controller
                     name="note"
                     control={form.control}

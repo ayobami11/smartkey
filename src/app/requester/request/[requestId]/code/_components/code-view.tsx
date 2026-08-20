@@ -19,8 +19,6 @@ import { CodeCountdown } from '@/app/requester/request/[requestId]/code/_compone
 import { CodeSkeleton } from '@/app/requester/request/[requestId]/code/_components/code-skeleton';
 import { createBrowserClient } from '@/lib/supabase/client';
 
-// Types
-
 type RequestDetail = {
   id: string;
   status:
@@ -37,8 +35,6 @@ type RequestDetail = {
   return_deadline: string | null;
   key: { code: string; room_name: string; zone: string } | null;
 };
-
-// Helpers
 
 const secondsRemaining = (isoExpiry: string) =>
   Math.max(0, Math.floor((new Date(isoExpiry).getTime() - Date.now()) / 1000));
@@ -66,8 +62,6 @@ const statusMessage: Record<string, string> = {
   EXPIRED: 'This request has expired.',
 };
 
-// Component
-
 export const CodeView = () => {
   const { requestId } = useParams<{ requestId: string }>();
   const queryClient = useQueryClient();
@@ -78,8 +72,6 @@ export const CodeView = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
 
-  // Resolve user ID once on mount
-
   useEffect(() => {
     createBrowserClient()
       .auth.getUser()
@@ -87,8 +79,6 @@ export const CodeView = () => {
         if (user) setUserId(user.id);
       });
   }, []);
-
-  // Fetch request via TanStack Query
 
   const { data: request = null, isLoading: loading } = useQuery({
     queryKey: ['request', requestId, userId],
@@ -123,8 +113,6 @@ export const CodeView = () => {
       }
     },
   });
-
-  // Countdown timer — re-renders every second; countdown derived from expiry
 
   useEffect(() => {
     if (!request?.code_expires_at) return;
@@ -198,8 +186,6 @@ export const CodeView = () => {
     }
   };
 
-  // Render
-
   if (loading) {
     return <CodeSkeleton />;
   }
@@ -235,8 +221,6 @@ export const CodeView = () => {
     request.code_expires_at !== null &&
     countdown === 0;
 
-  // KEY_ISSUED
-
   if (request.status === 'KEY_ISSUED') {
     return (
       <div className="flex flex-1 overflow-y-auto flex-col items-center justify-center gap-4 p-6">
@@ -270,8 +254,6 @@ export const CodeView = () => {
       </div>
     );
   }
-
-  // APPROVED — weekend code rolled back after expiry; let the requester generate again.
 
   if (request.status === 'APPROVED') {
     return (
@@ -312,8 +294,6 @@ export const CodeView = () => {
     );
   }
 
-  // Non-active statuses
-
   if (request.status !== 'CODE_ISSUED' || isExpired) {
     const statusKey = isExpired ? 'EXPIRED' : request.status;
     const msg = statusMessage[statusKey] ?? 'This request is no longer active.';
@@ -342,12 +322,9 @@ export const CodeView = () => {
     );
   }
 
-  // CODE_ISSUED
-
   return (
     <div className="flex flex-1 overflow-y-auto flex-col items-center justify-center gap-6 p-6">
       <div className="w-full max-w-sm space-y-6">
-        {/* Key context */}
         {request.key && (
           <div className="text-center">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -362,7 +339,6 @@ export const CodeView = () => {
           </div>
         )}
 
-        {/* Code card */}
         <Card className="border-primary/20 bg-primary/5" aria-live="polite">
           <div>
             <CardHeader className="pb-0 text-center">
@@ -389,7 +365,6 @@ export const CodeView = () => {
           </CardContent>
         </Card>
 
-        {/* Confirmation badge */}
         <div className="flex justify-center">
           <Badge className="gap-1.5 border-transparent bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">
             <CheckCircleIcon className="size-3.5" aria-hidden="true" />

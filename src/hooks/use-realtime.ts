@@ -61,13 +61,10 @@ export const useRealtime = <
   useEffect(() => {
     const { table, filter } = optionsRef.current;
 
-    // Create a deterministic channel name based on table and filter
     const channelName = `realtime:${table}${
       filter ? `:${filter.column}=eq.${filter.value}` : ''
     }`;
 
-    // 1. Create a subscriber interface for this specific hook instance
-    // It reads from optionsRef.current to always fire the latest callback closures
     // The registry is non-generic (it holds subscribers from callers with
     // different T), so bridge its base payload to this instance's generic
     // callbacks. The cast is sound: T is the row shape for `table`, which is
@@ -83,7 +80,6 @@ export const useRealtime = <
 
     let registry = channelRegistry.get(channelName);
 
-    // 2. If channel doesn't exist, create it and set up the connection logic
     if (!registry) {
       const supabase = createBrowserClient();
       let retryCount = 0;
@@ -101,7 +97,6 @@ export const useRealtime = <
         const channel = supabase.channel(channelName);
         channelRef = channel;
 
-        // Subscribe to all changes (*) on this table/filter once
         channel
           .on(
             'postgres_changes',
@@ -115,7 +110,6 @@ export const useRealtime = <
               const currentRegistry = channelRegistry.get(channelName);
               if (!currentRegistry) return;
 
-              // Broadcast to all registered hook instances
               currentRegistry.subscribers.forEach((sub) => {
                 if (payload.eventType === 'INSERT') sub.onInsert?.(payload);
                 else if (payload.eventType === 'UPDATE')
@@ -198,10 +192,8 @@ export const useRealtime = <
       });
     }
 
-    // 3. Register this component instance to the shared channel
     registry.subscribers.add(subscriber);
 
-    // 4. Cleanup on unmount or on dependency changes
     return () => {
       const currentRegistry = channelRegistry.get(channelName);
       if (currentRegistry) {

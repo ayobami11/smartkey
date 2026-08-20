@@ -99,16 +99,13 @@ export const createKeyFormSchema = z.object({
 export type CreateKeyFormInput = z.infer<typeof createKeyFormSchema>;
 
 export const authoriseCollectorSchema = z.object({
-  /** UUID of the key to authorise the requester for. */
   key_id: z.string().min(1, 'Key is required'),
-  /** UUID of the REQUESTER profile to add to the slot. */
   requester_id: z.string().min(1, 'Requester is required'),
 });
 
 // Requests
 
 export const submitRequestSchema = z.object({
-  /** UUID of the key being requested. */
   key_id: z.string().min(1, 'Key is required'),
   type: z.enum(['WEEKDAY', 'WEEKEND']),
   /** ISO 8601 timestamp — when the requester plans to return the key. */
@@ -214,7 +211,6 @@ export const cancelRequestSchema = z.object({
 });
 
 export const hodDecisionSchema = z.object({
-  /** UUID of the request being decided. */
   request_id: z.string().min(1, 'Request ID is required'),
   decision: z.enum(['APPROVED', 'DECLINED']),
   note: z.string().optional(),
@@ -243,7 +239,6 @@ export const hodWeekendDecisionFormSchema = z
   });
 
 export const csoDecisionSchema = z.object({
-  /** UUID of the request being decided. */
   request_id: z.string().min(1, 'Request ID is required'),
   decision: z.enum(['APPROVED', 'DECLINED']),
   note: z.string().optional(),
@@ -283,7 +278,6 @@ export const collectKeySchema = z.object({
 export const returnKeySchema = z.object({
   /** UUID of the request (not the key) being returned. */
   request_id: z.string().min(1, 'Request ID is required'),
-  /** UUID of the verifier receiving the key. */
   verifier_id: z.string().min(1, 'Verifier ID is required'),
   /** UUID of the person returning the key, if different from the original requester. */
   returner_id: z.string().optional(),
@@ -346,18 +340,14 @@ export const logIncidentSchema = z.object({
   description: z.string().min(1, 'Description is required'),
   /** ISO 8601 timestamp of when the incident occurred. */
   occurred_at: z.string().min(1, 'Occurred at is required'),
-  /** Optional UUID of a related key. */
   related_key_id: z.string().optional(),
-  /** Optional UUID of a related person (profile). */
   related_person_id: z.string().optional(),
 });
 
 // Shifts
 
 export const shiftHandoverSchema = z.object({
-  /** UUID of the outgoing shift being handed over. */
   outgoing_shift_id: z.string().min(1, 'Outgoing shift ID is required'),
-  /** Array of key UUIDs being acknowledged at handover. */
   key_ids: z.array(z.string()),
   /** true = all keys acknowledged in one confirmation, false = per-key. */
   bulk: z.boolean(),
@@ -366,7 +356,6 @@ export const shiftHandoverSchema = z.object({
 // Reports
 
 export const generateReportSchema = z.object({
-  /** UUID of the shift to generate a report for. */
   shift_id: z.string().min(1, 'Please select a shift.'),
 });
 

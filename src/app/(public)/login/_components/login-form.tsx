@@ -26,16 +26,12 @@ import { apiFetch } from '@/lib/api';
 import { loginSchema, type LoginInput } from '@/lib/validation/schemas';
 import { OtpForm } from '@/app/(public)/login/_components/otp-form';
 
-// Constants
-
 const ROLE_REDIRECTS: Record<string, string> = {
   CSO: '/cso/dashboard',
   DEAN: '/dean/dashboard',
   VERIFIER: '/verifier/dashboard',
   REQUESTER: '/requester/dashboard',
 };
-
-// Component
 
 export const LoginForm = () => {
   const router = useRouter();

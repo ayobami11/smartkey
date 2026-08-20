@@ -59,7 +59,6 @@ export const GET = async () => {
     });
   }
 
-  // Filter based on role
   let filteredRequests = requests ?? [];
   if (profile.role === 'DEAN') {
     filteredRequests = filteredRequests.filter((r) => {

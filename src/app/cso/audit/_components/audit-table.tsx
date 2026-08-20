@@ -75,8 +75,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
-// Types
-
 type AuditEntry = {
   id: string;
   type: AuditEventType;
@@ -87,8 +85,6 @@ type AuditEntry = {
   keyCode?: string;
   timestamp: string;
 };
-
-// Constants
 
 const eventConfig: Record<
   AuditEventType,
@@ -187,8 +183,6 @@ const ROLE_OPTIONS: { value: RoleFilterValue; label: string }[] = [
   { value: 'GUEST', label: 'Guest' },
 ];
 
-// Helpers
-
 export function mapRow(e: Record<string, unknown>): AuditEntry {
   const payload =
     typeof e.payload === 'object' && e.payload !== null
@@ -269,8 +263,6 @@ export function buildPageNumbers(
   return result;
 }
 
-// Column definitions
-
 const columns: ColumnDef<AuditEntry>[] = [
   {
     id: 'type',
@@ -346,8 +338,6 @@ const columns: ColumnDef<AuditEntry>[] = [
     ),
   },
 ];
-
-// Component
 
 // Cap an export to a sane upper bound — the audit log can grow unbounded and a
 // CSV is meant for a working slice, not a full archive dump.
@@ -569,10 +559,8 @@ export const AuditTable = ({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Loading */}
       {isLoading && <AuditTableSkeleton />}
 
-      {/* Error */}
       {isError && (
         <div
           className="rounded-lg border border-destructive/30 bg-destructive/5 p-4"
@@ -590,7 +578,6 @@ export const AuditTable = ({
         </div>
       )}
 
-      {/* Filter bar */}
       {!isLoading && !isError && (
         <div className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -710,7 +697,6 @@ export const AuditTable = ({
         </div>
       )}
 
-      {/* Table */}
       {!isLoading && !isError && (
         <div className="rounded-lg border border-border bg-card shadow-[0_2px_4px_rgba(15,23,42,0.06)]">
           <Table>
@@ -759,7 +745,6 @@ export const AuditTable = ({
         </div>
       )}
 
-      {/* Pagination */}
       {!isLoading && !isError && (
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">

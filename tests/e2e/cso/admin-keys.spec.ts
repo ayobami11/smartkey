@@ -66,7 +66,6 @@ test.describe('CSO admin-keys collector management', () => {
 
     const addButton = page.getByRole('button', { name: /add collector/i });
     if (!(await addButton.isVisible().catch(() => false))) {
-      // No vacant slot on this key.
       test.skip();
       return;
     }
@@ -107,7 +106,6 @@ test.describe('CSO admin-keys collector management', () => {
       .getByRole('button', { name: /^remove /i })
       .first();
     if (!(await removeButton.isVisible().catch(() => false))) {
-      // No filled slot on this key.
       test.skip();
       return;
     }

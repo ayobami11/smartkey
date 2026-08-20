@@ -23,8 +23,6 @@ import {
 } from '@/app/cso/dashboard/_components/helpers';
 import { SectionCardHeader } from '@/components/smartkey/section-card-header';
 
-// Types
-
 type RiskAlert = {
   id: string;
   risk_tier: string;
@@ -33,8 +31,6 @@ type RiskAlert = {
   requester?: { full_name: string } | null;
   risk_factors?: unknown[];
 };
-
-// Component
 
 export const RiskAlerts = () => {
   const queryClient = useQueryClient();

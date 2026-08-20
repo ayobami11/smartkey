@@ -30,8 +30,7 @@ import {
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 // Zod already guarantees YYYY-MM-DD by the time this runs (form won't submit
-// otherwise), so a plain split is enough — same technique already used for
-// weekendRequestFormSchema's Saturday/Sunday refine.
+// otherwise), so a plain split is enough.
 const parseDateInput = (v: string): Date => {
   const [y, m, d] = v.split('-').map(Number);
   return new Date(y, m - 1, d);

@@ -10,8 +10,6 @@ import { HistoryEmpty } from '@/app/requester/history/_components/history-empty'
 import { HistorySkeleton } from '@/app/requester/history/_components/history-skeleton';
 import { RequestList } from '@/app/requester/history/_components/request-list';
 
-// Types
-
 type ApiResponse = {
   requests: RequestRow[];
   next_cursor: string | null;

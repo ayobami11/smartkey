@@ -23,8 +23,6 @@ import { ExpiredBadge } from '@/components/smartkey/expired-badge';
 import { GuestBadge } from '@/components/smartkey/guest-badge';
 import { SectionCardHeader } from '@/components/smartkey/section-card-header';
 
-// Types
-
 type PendingRequest = {
   id: string;
   requester: { full_name: string } | null;
@@ -35,8 +33,6 @@ type PendingRequest = {
 };
 
 const QUERY_KEY = ['requests', 'pending-weekend'];
-
-// Component
 
 export const WeekendRequests = () => {
   const queryClient = useQueryClient();
