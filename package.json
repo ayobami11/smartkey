@@ -11,7 +11,7 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
-    "design:lint": "npx @google/design.md lint design-system/DESIGN.md",
+    "design:lint": "bunx @google/design.md lint design-system/DESIGN.md",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
