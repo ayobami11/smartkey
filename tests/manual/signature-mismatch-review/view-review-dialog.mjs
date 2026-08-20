@@ -1,6 +1,6 @@
 // Mints a CSO session and drives a real headless browser to /cso/dashboard,
 // screenshots the signature-mismatch alert and its review dialog, then
-// declines it. Requires `npm run dev` running against the local stack and
+// declines it. Requires `bun run dev` running against the local stack and
 // trigger-mismatch.mjs to have already produced a held alert (see ../README.md).
 import { chromium } from 'playwright-core';
 import { mintSessionCookies } from './trigger-mismatch.mjs';

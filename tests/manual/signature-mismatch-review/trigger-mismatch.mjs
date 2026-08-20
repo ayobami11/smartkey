@@ -3,7 +3,7 @@
 // client so the resulting cookies match a real browser login byte-for-byte.
 // Exports mintSessionCookies() for reuse, and — run directly — POSTs to
 // /api/requests/hod-decision as the Dean to produce a real
-// HELD_SIGNATURE_MISMATCH. Requires `npm run dev` running against the local
+// HELD_SIGNATURE_MISMATCH. Requires `bun run dev` running against the local
 // stack (see ../README.md).
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
