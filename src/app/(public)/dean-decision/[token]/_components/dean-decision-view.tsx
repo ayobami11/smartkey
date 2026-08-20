@@ -1,12 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Controller, useForm } from 'react-hook-form';
 
 import {
   AlertCircleIcon,
   CalendarClockIcon,
   CheckCircleIcon,
   ClockIcon,
+  ExternalLinkIcon,
+  FileTextIcon,
   FileWarningIcon,
   IdCardIcon,
   MapPinIcon,
@@ -16,7 +20,19 @@ import {
 
 import { apiFetch } from '@/lib/api';
 import { formatDateLong } from '@/lib/dates';
+import {
+  hodWeekendDecisionFormSchema,
+  type HodWeekendDecisionFormInput,
+} from '@/lib/validation/schemas';
 
+import {
+  Attachment,
+  AttachmentContent,
+  AttachmentDescription,
+  AttachmentMedia,
+  AttachmentTitle,
+  AttachmentTrigger,
+} from '@/components/ui/attachment';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import {
@@ -67,6 +83,12 @@ type DeanDecisionViewProps = {
   token: string;
 };
 
+// Neither letter_url nor stamp_url carries a stored MIME type — only the
+// upload's original extension survives, baked into the storage path. Strip
+// the signed URL's query string before checking it.
+const isPdfUrl = (url: string): boolean =>
+  url.split('?')[0].toLowerCase().endsWith('.pdf');
+
 const TERMINAL_COPY: Record<string, { title: string; body: string }> = {
   APPROVED: {
     title: 'Already approved',
@@ -94,8 +116,10 @@ export const DeanDecisionView = ({ token }: DeanDecisionViewProps) => {
   const [notFound, setNotFound] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
-  const [note, setNote] = useState('');
-  const [keyId, setKeyId] = useState('');
+  const form = useForm<HodWeekendDecisionFormInput>({
+    resolver: zodResolver(hodWeekendDecisionFormSchema),
+    defaultValues: { note: '', key_id: '', is_guest: false },
+  });
   const [submitting, setSubmitting] = useState<'APPROVED' | 'DECLINED' | null>(
     null
   );
@@ -115,6 +139,7 @@ export const DeanDecisionView = ({ token }: DeanDecisionViewProps) => {
       setFetchError(res.error ?? 'Could not load this request.');
       return;
     }
+    form.reset({ note: '', key_id: '', is_guest: res.data.is_guest });
     setData(res.data);
   };
 
@@ -123,7 +148,10 @@ export const DeanDecisionView = ({ token }: DeanDecisionViewProps) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  const handleDecide = async (decision: 'APPROVED' | 'DECLINED') => {
+  const handleDecide = async (
+    decision: 'APPROVED' | 'DECLINED',
+    values: HodWeekendDecisionFormInput
+  ) => {
     setSubmitting(decision);
     setSubmitError(null);
     const res = await apiFetch<DecideResponse>(
@@ -132,9 +160,9 @@ export const DeanDecisionView = ({ token }: DeanDecisionViewProps) => {
         method: 'POST',
         body: {
           decision,
-          note: note || undefined,
+          note: values.note?.trim() || undefined,
           ...(data?.is_guest && decision === 'APPROVED'
-            ? { key_id: keyId }
+            ? { key_id: values.key_id }
             : {}),
         },
       }
@@ -298,83 +326,154 @@ export const DeanDecisionView = ({ token }: DeanDecisionViewProps) => {
       )}
 
       {(data.letter_url || data.stamp_url) && (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-2">
           {data.letter_url && (
-            <a
-              href={data.letter_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex flex-col items-center gap-1.5 rounded-lg border border-border p-2 text-xs font-medium text-primary underline-offset-4 hover:underline"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={data.letter_url}
-                alt="Uploaded authorisation letter"
-                className="aspect-[3/4] w-full rounded-md border border-border object-cover"
-              />
-              View letter
-            </a>
+            <Attachment className="w-full">
+              <AttachmentMedia
+                variant={isPdfUrl(data.letter_url) ? 'icon' : 'image'}
+              >
+                {isPdfUrl(data.letter_url) ? (
+                  <FileTextIcon aria-hidden="true" />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={data.letter_url}
+                    alt="Uploaded authorisation letter"
+                  />
+                )}
+              </AttachmentMedia>
+              <AttachmentContent>
+                <AttachmentTitle>Authorisation letter</AttachmentTitle>
+                <AttachmentDescription className="flex items-center gap-1">
+                  Tap to view
+                  <ExternalLinkIcon className="size-3" aria-hidden="true" />
+                </AttachmentDescription>
+              </AttachmentContent>
+              <AttachmentTrigger asChild>
+                <a
+                  href={data.letter_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Open uploaded authorisation letter"
+                />
+              </AttachmentTrigger>
+            </Attachment>
           )}
           {data.stamp_url && (
-            <a
-              href={data.stamp_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex flex-col items-center gap-1.5 rounded-lg border border-border p-2 text-xs font-medium text-primary underline-offset-4 hover:underline"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={data.stamp_url}
-                alt="Uploaded departmental stamp"
-                className="aspect-[3/4] w-full rounded-md border border-border object-cover"
-              />
-              View stamp
-            </a>
+            <Attachment className="w-full">
+              <AttachmentMedia
+                variant={isPdfUrl(data.stamp_url) ? 'icon' : 'image'}
+              >
+                {isPdfUrl(data.stamp_url) ? (
+                  <FileTextIcon aria-hidden="true" />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={data.stamp_url} alt="Uploaded departmental stamp" />
+                )}
+              </AttachmentMedia>
+              <AttachmentContent>
+                <AttachmentTitle>Departmental stamp</AttachmentTitle>
+                <AttachmentDescription className="flex items-center gap-1">
+                  Tap to view
+                  <ExternalLinkIcon className="size-3" aria-hidden="true" />
+                </AttachmentDescription>
+              </AttachmentContent>
+              <AttachmentTrigger asChild>
+                <a
+                  href={data.stamp_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Open uploaded departmental stamp"
+                />
+              </AttachmentTrigger>
+            </Attachment>
           )}
         </div>
       )}
 
       {data.is_guest && (
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="assign-key">Assign a key (required to approve)</Label>
-          <Select value={keyId} onValueChange={setKeyId}>
-            <SelectTrigger id="assign-key" className="w-full">
-              <SelectValue placeholder="Select a key" />
-            </SelectTrigger>
-            <SelectContent position="popper">
-              {data.available_keys.map((k) => (
-                <SelectItem key={k.id} value={k.id}>
-                  <div className="flex w-full min-w-0 flex-col gap-0.5">
-                    <span className="truncate font-mono text-sm font-medium">
-                      {k.code}
-                    </span>
-                    <span className="truncate text-xs text-muted-foreground">
-                      {k.room_name}
-                    </span>
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {data.available_keys.length === 0 && (
-            <p className="text-xs text-muted-foreground">
-              No keys available in this unit — use the SmartKey dashboard
-              instead.
-            </p>
-          )}
-        </div>
+        <Controller
+          name="key_id"
+          control={form.control}
+          render={({ field, fieldState }) => {
+            const selectedKey = data.available_keys.find(
+              (k) => k.id === field.value
+            );
+            return (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="assign-key">
+                  Assign a key (required to approve)
+                </Label>
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger
+                    id="assign-key"
+                    className="w-full"
+                    aria-invalid={fieldState.invalid}
+                  >
+                    {selectedKey ? (
+                      <span className="flex items-center gap-1.5 overflow-hidden">
+                        <span className="shrink-0 font-mono font-medium">
+                          {selectedKey.code}
+                        </span>
+                        <span className="shrink-0 text-muted-foreground">
+                          ·
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                          {selectedKey.room_name}
+                        </span>
+                      </span>
+                    ) : (
+                      <SelectValue placeholder="Select a key" />
+                    )}
+                  </SelectTrigger>
+                  <SelectContent position="popper">
+                    {data.available_keys.map((k) => (
+                      <SelectItem key={k.id} value={k.id}>
+                        <div className="flex w-full min-w-0 flex-col gap-0.5">
+                          <span className="truncate font-mono text-sm font-medium">
+                            {k.code}
+                          </span>
+                          <span className="truncate text-xs text-muted-foreground">
+                            {k.room_name}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {data.available_keys.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    No keys available in this unit — use the SmartKey dashboard
+                    instead.
+                  </p>
+                )}
+                {fieldState.invalid && (
+                  <p className="text-xs text-destructive" role="alert">
+                    {fieldState.error?.message}
+                  </p>
+                )}
+              </div>
+            );
+          }}
+        />
       )}
 
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="decision-note">Note (optional)</Label>
-        <Textarea
-          id="decision-note"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="Add a note for the requester, e.g. a reason for declining"
-          rows={3}
-        />
-      </div>
+      <Controller
+        name="note"
+        control={form.control}
+        render={({ field }) => (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="decision-note">Note (optional)</Label>
+            <Textarea
+              id="decision-note"
+              placeholder="Add a note for the requester, e.g. a reason for declining"
+              rows={5}
+              className="max-h-40 resize-none overflow-y-auto text-sm"
+              {...field}
+            />
+          </div>
+        )}
+      />
 
       {submitError && (
         <p className="text-sm text-destructive" role="alert">
@@ -384,8 +483,10 @@ export const DeanDecisionView = ({ token }: DeanDecisionViewProps) => {
 
       <div className="flex flex-col gap-2">
         <Button
-          onClick={() => void handleDecide('APPROVED')}
-          disabled={submitting !== null || (data.is_guest && !keyId)}
+          onClick={form.handleSubmit((values) =>
+            handleDecide('APPROVED', values)
+          )}
+          disabled={submitting !== null}
           aria-busy={submitting === 'APPROVED'}
           className="w-full"
         >
@@ -393,7 +494,7 @@ export const DeanDecisionView = ({ token }: DeanDecisionViewProps) => {
         </Button>
         <Button
           variant="outline"
-          onClick={() => void handleDecide('DECLINED')}
+          onClick={() => void handleDecide('DECLINED', form.getValues())}
           disabled={submitting !== null}
           aria-busy={submitting === 'DECLINED'}
           className="w-full"

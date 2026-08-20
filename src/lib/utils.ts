@@ -5,6 +5,13 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+export function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb.toFixed(kb < 10 ? 1 : 0)} KB`;
+  return `${(kb / 1024).toFixed(1)} MB`;
+}
+
 // Parses a keystroke's raw input string into a number for a controlled
 // numeric text field (see the callers for why type="number" isn't used).
 // A cleared field displays a literal "0", so the next keystroke can land

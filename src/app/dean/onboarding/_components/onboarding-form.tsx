@@ -8,6 +8,13 @@ import { Controller, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import * as z from 'zod';
 
+import {
+  Attachment,
+  AttachmentContent,
+  AttachmentDescription,
+  AttachmentMedia,
+  AttachmentTitle,
+} from '@/components/ui/attachment';
 import { Button } from '@/components/ui/button';
 import {
   Field,
@@ -21,7 +28,9 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from '@/components/ui/input-group';
+import { useObjectUrl } from '@/hooks/use-object-url';
 import { apiFetch } from '@/lib/api';
+import { formatFileSize } from '@/lib/utils';
 import { password } from '@/lib/validation/primitives';
 
 const onboardingSchema = z
@@ -54,6 +63,8 @@ export const OnboardingForm = ({
 }: OnboardingFormProps) => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const sigPreviewUrl = useObjectUrl(sigFile);
+  const stampPreviewUrl = useObjectUrl(stampFile);
 
   const form = useForm<OnboardingValues>({
     resolver: zodResolver(onboardingSchema),
@@ -95,30 +106,30 @@ export const OnboardingForm = ({
 
       {/* Preview thumbnails */}
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="flex flex-col gap-2 rounded-lg border border-border p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Signature
-          </p>
-          {/* Local blob: preview of an unsaved upload — next/image can't optimize it. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={URL.createObjectURL(sigFile)}
-            alt="Signature reference"
-            className="h-24 w-full object-contain"
-          />
-        </div>
-        <div className="flex flex-col gap-2 rounded-lg border border-border p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Departmental stamp
-          </p>
-          {/* Local blob: preview of an unsaved upload — next/image can't optimize it. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={URL.createObjectURL(stampFile)}
-            alt="Stamp reference"
-            className="h-24 w-full object-contain"
-          />
-        </div>
+        <Attachment className="w-full">
+          <AttachmentMedia variant="image">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={sigPreviewUrl} alt="Signature reference" />
+          </AttachmentMedia>
+          <AttachmentContent>
+            <AttachmentTitle>Signature</AttachmentTitle>
+            <AttachmentDescription>
+              {formatFileSize(sigFile.size)}
+            </AttachmentDescription>
+          </AttachmentContent>
+        </Attachment>
+        <Attachment className="w-full">
+          <AttachmentMedia variant="image">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={stampPreviewUrl} alt="Stamp reference" />
+          </AttachmentMedia>
+          <AttachmentContent>
+            <AttachmentTitle>Departmental stamp</AttachmentTitle>
+            <AttachmentDescription>
+              {formatFileSize(stampFile.size)}
+            </AttachmentDescription>
+          </AttachmentContent>
+        </Attachment>
       </div>
 
       {/* Password fields */}

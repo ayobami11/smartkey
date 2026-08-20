@@ -6,6 +6,27 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-08-20 — Rebuilt letter/stamp and signature/stamp previews on the shadcn Attachment component
+
+- **Why**: the project added the shadcn `Attachment` component (`src/components/ui/attachment.tsx`) but
+  nothing used it yet. The Dean decision page's letter/stamp preview and the Dean onboarding wizard's file
+  pickers were both hand-rolled `<a><img></a>`/custom dashed-border markup, and the onboarding previews
+  additionally leaked a `blob:` URL on every render (`URL.createObjectURL` called inline with no
+  `revokeObjectURL` cleanup).
+- `src/app/(public)/dean-decision/[token]/_components/dean-decision-view.tsx`: the letter/stamp preview is
+  now `Attachment`/`AttachmentMedia`/`AttachmentTrigger` cards, full width, with an external-link icon cue.
+  PDF vs. image is inferred from the signed URL's file extension, since no MIME type is stored anywhere for
+  these uploads.
+- New `src/hooks/use-object-url.ts` (`useObjectUrl`) — derives a blob URL via `useMemo` and revokes it only
+  in an effect's cleanup function, fixing the leak everywhere it's used without tripping the React
+  Compiler's `set-state-in-effect` rule.
+- New `formatFileSize` in `src/lib/utils.ts`.
+- New `src/components/smartkey/image-upload-field.tsx` (`ImageUploadField`) — shared idle/preview/replace
+  picker built on `Attachment`, now used by both `signature-upload-step.tsx` and `stamp-upload-step.tsx`
+  (each shrank from ~150 near-duplicate lines to just form wiring).
+- `onboarding-form.tsx`'s confirm-step thumbnails also rebuilt on `Attachment` (read-only, no replace
+  action) for the same consistency and leak-fix reasons.
+
 ### 2026-08-20 — CSO notified for Administration weekend requests; audit_log exported to Vercel Blob
 
 - **Why (CSO notification)**: guest and registered weekend requests routed to an Administration unit
