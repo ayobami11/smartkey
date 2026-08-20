@@ -16,7 +16,7 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   workers: process.env.CI ? 1 : undefined,
-  reporter: process.env.CI ? 'github' : 'html',
+  reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'html',
   // Default is 30s. MFA specs (Dean/Verifier/CSO) wait on a real Gmail SMTP
   // send inside beforeEach — the send itself succeeds, but on a slow DNS path
   // resolving smtp.gmail.com alone can take ~20-25s, leaving no room under the
@@ -28,6 +28,7 @@ export default defineConfig({
   use: {
     baseURL,
     trace: 'on-first-retry',
+    screenshot: 'only-on-failure',
   },
 
   projects: [
