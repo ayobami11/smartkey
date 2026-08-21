@@ -6,6 +6,14 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-08-21 — Dependency update via `bun audit`
+
+- **Why**: routine dependency maintenance — `bun audit` flagged `next` as outdated; bumping keeps the
+  project on a patched release rather than accumulating version drift.
+- **Changed**: `next` `16.2.3` → `16.2.11` (`package.json`, `bun.lock`). Transitive `bun.lock` updates
+  from the re-resolve: `@img/sharp-*` optional platform binaries bumped to match Next's own bundled
+  `sharp` range, and `react-is` deduped to `17.0.2` at the top level.
+
 ### 2026-08-20 — Trial migration from npm to Bun (branch `chore/bun-migration`)
 
 - **Why**: evaluating whether Bun is viable as this project's package manager and script runner, on an
