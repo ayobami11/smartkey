@@ -6,6 +6,36 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-08-21 — Remove dead code across the frontend
+
+- **Why**: a dead-code sweep across every frontend-owned area (`src/app/**` excluding `src/app/api/**`,
+  `src/components/**`, `src/hooks/**`, `src/lib/**`) found a small, high-confidence set of genuinely
+  unused code, each independently re-verified by reading the file and re-running the relevant import
+  greps before removal — no architectural decisions, just deletion of confirmed-unreferenced code.
+- **Two orphaned files deleted**: `src/app/cso/_components/sidebar-header.tsx` (a stale near-duplicate
+  of the real, actually-used `src/components/smartkey/sidebar-brand.tsx`) and `src/hooks/use-profile.ts`
+  (superseded by the profile-fetch logic already inlined in `dashboard-header-avatar.tsx`, which fetches
+  via `GET /api/profile/me` instead).
+- **Two unused shadcn primitives deleted**: `src/components/ui/calendar.tsx` and
+  `src/components/ui/collapsible.tsx` — confirmed zero imports anywhere; date inputs in this codebase
+  use plain `<input type="date">`, not a calendar widget. Trivially reinstallable via
+  `bunx shadcn@latest add calendar collapsible` if ever needed.
+- **Two dead entries removed** from the `ROUTES` lookup map in
+  `src/app/verifier/_components/dashboard-header.tsx`: `/verifier/issue` and `/verifier/return` don't
+  exist as routes — those flows are `Sheet` overlays, not pages.
+- **`src/lib/validation/schemas.ts`**: removed 11 unused Zod schemas (and their 11 derived `z.infer`
+  types) that were meant to mirror API route validation but never got wired up — every route defines
+  its own inline `bodySchema` instead of importing these. Also trimmed the file's header comment, which
+  claimed schemas here "are the exact Zod object used in the corresponding route handler" — a pattern
+  that was never actually adopted; the schemas that remain are pure client-form schemas.
+- **`src/lib/constants.ts`**: removed `INCIDENT_SEVERITY_LABELS`, `HOD_DECISIONS`/`HodDecision`,
+  `AUTHORISER_TYPES`/`AuthoriserType`, `AUDIT_EVENTS`/`AuditEvent` (superseded by the actively-used
+  `EVENT_TYPE_MAP`/`AuditEventType` in `src/lib/audit/event-types.ts`), and
+  `INCIDENT_STATUSES`/`IncidentStatus` (a same-named but distinct, unused local copy — the
+  `IncidentStatus` type actually in use comes from `@/types/database`).
+- **Verified**: typecheck, lint (0 errors, same 8 pre-existing warnings), and unit tests (355/356,
+  unchanged) all clean; production build succeeds. 524 lines removed across 7 files.
+
 ### 2026-08-21 — Server-seed Verifier and Requester dashboard initial data
 
 - **Why**: both dashboards rendered an empty shell and fetched everything client-side after

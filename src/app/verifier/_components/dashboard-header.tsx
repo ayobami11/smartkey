@@ -16,8 +16,6 @@ import { ModeToggle } from '@/components/smartkey/mode-toggle';
 
 const ROUTES: Record<string, string> = {
   '/verifier/dashboard': 'Dashboard',
-  '/verifier/issue': 'Issue Key',
-  '/verifier/return': 'Return Key',
   '/verifier/handover': 'Handover',
   '/verifier/incidents': 'Incidents',
 };

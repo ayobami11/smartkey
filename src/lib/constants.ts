@@ -131,11 +131,6 @@ export const INCIDENT_SEVERITIES = [
 
 export type IncidentSeverity = (typeof INCIDENT_SEVERITIES)[number]['value'];
 
-export const INCIDENT_SEVERITY_LABELS: Record<IncidentSeverity, string> =
-  Object.fromEntries(
-    INCIDENT_SEVERITIES.map(({ value, label }) => [value, label])
-  ) as Record<IncidentSeverity, string>;
-
 /** Tailwind badge classes for incident severity pills. */
 export const INCIDENT_SEVERITY_CLASSES: Record<IncidentSeverity, string> = {
   LOW: 'bg-muted text-muted-foreground',
@@ -143,55 +138,6 @@ export const INCIDENT_SEVERITY_CLASSES: Record<IncidentSeverity, string> = {
   HIGH: 'bg-destructive/10 text-destructive',
 };
 
-// Incident statuses
-
-export const INCIDENT_STATUSES = ['OPEN', 'RESOLVED', 'ESCALATED'] as const;
-
-export type IncidentStatus = (typeof INCIDENT_STATUSES)[number];
-
 // Risk tiers
 
 export type { RiskTier } from '@/lib/ai/risk/types';
-
-// HOD decisions
-
-export const HOD_DECISIONS = ['APPROVED', 'DECLINED'] as const;
-
-export type HodDecision = (typeof HOD_DECISIONS)[number];
-
-// Department authoriser types
-
-export const AUTHORISER_TYPES = ['DEAN', 'CSO'] as const;
-
-export type AuthoriserType = (typeof AUTHORISER_TYPES)[number];
-
-// Audit event names
-
-export const AUDIT_EVENTS = [
-  'LOGIN_SUCCEEDED',
-  'REQUEST_CREATED',
-  'REQUEST_CANCELLED',
-  'REQUEST_EXPIRED',
-  'CODE_ISSUED',
-  'REQUEST_APPROVED_CSO',
-  'REQUEST_DECLINED_CSO',
-  'HOD_APPROVED',
-  'HOD_DECLINED',
-  'KEY_ISSUED',
-  'KEY_RETURNED',
-  'KEY_RETURNED_UNVERIFIED',
-  'KEY_OVERDUE',
-  'RETURN_CODE_GENERATED',
-  'HANDOVER_KEY_ACKNOWLEDGED',
-  'USER_PROVISIONED',
-  'USER_DEACTIVATED',
-  'USER_UPDATED',
-  'PASSWORD_CHANGED',
-  'SIGNATURE_MISMATCH',
-  'SHIFT_REPORT_INITIATED',
-  'REPORT_COMMENT_ADDED',
-  'RISK_CONFIG_UPDATED',
-  'OPERATIONAL_CONFIG_UPDATED',
-] as const;
-
-export type AuditEvent = (typeof AUDIT_EVENTS)[number];
