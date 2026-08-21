@@ -21,8 +21,6 @@ import {
   type ReturnKeyFormInput,
 } from '@/lib/validation/schemas';
 
-// Types
-
 export type ReturnKeyFormProps = {
   requesterName: string;
   isOffline: boolean;
@@ -31,8 +29,6 @@ export type ReturnKeyFormProps = {
   onSubmit: (code: string) => Promise<void>;
   onSwitchMode: () => void;
 };
-
-// Component
 
 export const ReturnKeyForm = ({
   requesterName,

@@ -17,8 +17,8 @@ Dean/CSO/Requester.
 ## Prerequisites
 
 - Local Supabase running: `supabase start`
-- Playwright's Chromium installed: `npx playwright install chromium` (plus
-  `sudo npx playwright install-deps chromium` the first time, for OS libs)
+- Playwright's Chromium installed: `bunx playwright install chromium` (plus
+  `sudo bunx playwright install-deps chromium` the first time, for OS libs)
 
 ## Run it
 
@@ -27,7 +27,7 @@ Dean/CSO/Requester.
 NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321 \
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<local anon key from `supabase status`> \
 SUPABASE_SERVICE_ROLE_KEY=<local service_role key from `supabase status`> \
-npm run dev
+bun run dev
 
 # 2. In another terminal, from the repo root:
 node tests/manual/signature-mismatch-review/seed.mjs

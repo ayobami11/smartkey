@@ -31,8 +31,6 @@ import {
   secondsRemaining,
 } from '@/lib/dates';
 
-// Types
-
 type GuestRequestStatus =
   | 'PENDING_HOD'
   | 'APPROVED'
@@ -60,8 +58,6 @@ type GuestWeekendStatusProps = {
   token: string;
 };
 
-// Component
-
 export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
   const [data, setData] = useState<GuestStatusData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -73,7 +69,6 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
   const [copied, setCopied] = useState(false);
   const [, forceUpdate] = useState(0);
 
-  // Return-code state (KEY_ISSUED phase)
   const [returnCode, setReturnCode] = useState<string | null>(null);
   const [returnCodeExpiresAt, setReturnCodeExpiresAt] = useState<string | null>(
     null
@@ -84,8 +79,6 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
   );
 
   const expiredFiredRef = useRef(false);
-
-  // Fetch status
 
   const fetchStatus = useCallback(async () => {
     const result = await apiFetch<GuestStatusData>(
@@ -141,8 +134,6 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
     return () => window.removeEventListener('focus', handleFocus);
   }, [fetchStatus]);
 
-  // Countdown ticker for an active code
-
   useEffect(() => {
     if (!data?.code_expires_at) return;
     expiredFiredRef.current = false;
@@ -176,8 +167,6 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
     }
   }, [data?.status, data?.code_expires_at, countdown, token, fetchStatus]);
 
-  // Generate / mint a collection code
-
   const handleGenerate = async () => {
     setGenerating(true);
     setGenerateError(null);
@@ -198,8 +187,6 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
-
-  // Generate a return code when handing back the key (KEY_ISSUED phase)
 
   const returnCountdown = returnCodeExpiresAt
     ? secondsRemaining(returnCodeExpiresAt)
@@ -225,8 +212,6 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
     setReturnCodeExpiresAt(result.data.return_code_expires_at);
   };
 
-  // Loading
-
   if (loading) {
     return (
       <div className="w-full max-w-sm space-y-4">
@@ -236,8 +221,6 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
       </div>
     );
   }
-
-  // Not found
 
   if (notFound) {
     return (
@@ -252,7 +235,6 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
   }
 
   // Fetch error (page-level)
-
   if (fetchError || !data) {
     return (
       <div
@@ -282,8 +264,6 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
 
   const firstName = data.full_name.split(' ')[0];
 
-  // PENDING_Dean
-
   if (data.status === 'PENDING_HOD') {
     return (
       <Shell onRefresh={() => void fetchStatus()}>
@@ -301,8 +281,6 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
     );
   }
 
-  // DECLINED
-
   if (data.status === 'DECLINED') {
     return (
       <Shell onRefresh={() => void fetchStatus()}>
@@ -315,8 +293,6 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
       </Shell>
     );
   }
-
-  // CANCELLED / EXPIRED / KEY_RETURNED — terminal
 
   if (
     data.status === 'CANCELLED' ||
@@ -355,15 +331,12 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
     );
   }
 
-  // KEY_ISSUED — show return code generator
-
   if (data.status === 'KEY_ISSUED') {
     const hasActiveReturnCode =
       returnCode !== null && returnCodeExpiresAt !== null && !returnCodeExpired;
 
     return (
       <Shell onRefresh={() => void fetchStatus()}>
-        {/* Key context */}
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-center dark:border-emerald-900 dark:bg-emerald-950/30">
           <div className="flex items-center justify-center gap-2">
             <KeyRoundIcon
@@ -387,7 +360,6 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
           )}
         </div>
 
-        {/* Return-code section */}
         {hasActiveReturnCode && returnCode && returnCodeExpiresAt ? (
           <Card className="border-primary/20 bg-primary/5" aria-live="polite">
             <div>
@@ -457,8 +429,6 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
     );
   }
 
-  // APPROVED
-
   if (data.status === 'APPROVED') {
     const collectToday = isTodayDate(data.requested_for);
     return (
@@ -511,8 +481,6 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
       </Shell>
     );
   }
-
-  // CODE_ISSUED
 
   const isExpired = data.code_expires_at !== null && countdown === 0;
 
@@ -580,8 +548,6 @@ export const GuestWeekendStatus = ({ token }: GuestWeekendStatusProps) => {
     </Shell>
   );
 };
-
-// Sub-components
 
 type StatusTone = 'success' | 'warning' | 'error' | 'neutral';
 

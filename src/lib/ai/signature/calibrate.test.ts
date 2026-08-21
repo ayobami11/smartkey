@@ -170,9 +170,9 @@ describe('equalErrorRate', () => {
 //
 // Skipped unless SIGNATURE_CALIBRATION_DIR points at a labelled sample set.
 // This is the half of the task that needs pilot data; everything above runs
-// on every `npm test`.
+// on every `bun run test`.
 //
-//   SIGNATURE_CALIBRATION_DIR=/path/to/samples npx vitest run calibrate
+//   SIGNATURE_CALIBRATION_DIR=/path/to/samples bunx vitest run calibrate
 //
 // Expected layout — one reference per Dean, samples grouped by ground truth:
 //

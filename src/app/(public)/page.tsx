@@ -21,8 +21,6 @@ export const metadata = {
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 
-// Data
-
 const stats = [
   { value: '2', label: 'Building zones' },
   { value: '100+', label: 'Keys managed' },
@@ -66,12 +64,9 @@ const steps = [
   },
 ];
 
-// Page
-
 export default function LandingPage() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      {/* Header */}
       <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
           <div>
@@ -94,7 +89,6 @@ export default function LandingPage() {
       </header>
 
       <main className="flex-1">
-        {/* Hero */}
         <section className="border-b border-border bg-muted/30">
           <div className="mx-auto max-w-7xl px-4 py-24 sm:px-6 sm:py-32 lg:px-8 lg:py-40">
             <p className="mb-5 text-xs font-medium uppercase tracking-widest text-primary">
@@ -124,7 +118,6 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* Stats bar */}
         <section className="border-b border-border bg-card">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <dl className="grid grid-cols-2 sm:grid-cols-4">
@@ -150,7 +143,6 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* Features */}
         <section className="bg-background">
           <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
             <div className="mb-14 max-w-2xl">
@@ -186,7 +178,6 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* How it works */}
         <section className="border-t border-border bg-muted/40">
           <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
             <div className="mb-14 max-w-2xl">
@@ -222,7 +213,6 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* Closing CTA */}
         <section className="border-t border-border bg-secondary">
           <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
             <div className="flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
@@ -254,7 +244,6 @@ export default function LandingPage() {
         </section>
       </main>
 
-      {/* Footer */}
       <footer className="border-t border-border bg-background">
         <div className="mx-auto max-w-7xl px-4 pt-10 pb-8 sm:px-6 lg:px-8">
           <div className="flex flex-col gap-8 sm:flex-row sm:items-start sm:justify-between">

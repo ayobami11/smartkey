@@ -19,8 +19,6 @@ import { useRealtime } from '@/hooks/use-realtime';
 const formatFullDate = (date: Date): string =>
   format(date, 'EEEE, d MMMM yyyy');
 
-// Types
-
 type ZoneStat = {
   name: string;
   zone: string;
@@ -46,8 +44,6 @@ const zoneChartConfig: ChartConfig = {
   available: { label: 'Available' },
   overdue: { label: 'Overdue' },
 };
-
-// Component
 
 export const KeysChart = () => {
   const [zones, setZones] = useState<ZoneStat[]>([]);

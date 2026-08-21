@@ -30,7 +30,7 @@ type ImageUploadFieldProps = {
   label: string;
   /** e.g. "Signature preview" — the preview image's alt text. */
   previewAlt: string;
-  /** Sets the field's error message — same instant type/size feedback the previous inline handler gave, ahead of the zod resolver's on-submit check. */
+  /** Sets the field's error message for instant type/size feedback, ahead of the zod resolver's on-submit check. */
   setError: (message: string) => void;
   clearError: () => void;
 };

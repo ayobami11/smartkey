@@ -212,4 +212,4 @@ Before merging a new or modified route:
 - [ ] Response matches `{ data, error, status }` envelope
 - [ ] Errors log via `logger`, not `console.log`
 - [ ] No stack traces or Supabase error messages in the response body
-- [ ] `npm run typecheck && npm run lint` pass
+- [ ] `bun run typecheck && bun run lint` pass

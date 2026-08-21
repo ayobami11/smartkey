@@ -23,5 +23,5 @@ runner for why. Keep framing/cropping consistent across photos.
 ## Running it
 
 ```bash
-SIGNATURE_CALIBRATION_DIR=tests/signature-calibration-samples npx vitest run calibrate
+SIGNATURE_CALIBRATION_DIR=tests/signature-calibration-samples bunx vitest run calibrate
 ```

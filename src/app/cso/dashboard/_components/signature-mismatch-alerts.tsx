@@ -23,8 +23,6 @@ import { formatTime } from '@/app/cso/dashboard/_components/helpers';
 import { SectionCardHeader } from '@/components/smartkey/section-card-header';
 import { SignatureMismatchDetailDialog } from '@/app/cso/dashboard/_components/signature-mismatch-detail-dialog';
 
-// Types
-
 export type MismatchCheck = {
   ref_url: string;
   submitted_url: string;
@@ -43,8 +41,6 @@ export type SignatureMismatchAlert = {
 };
 
 const QUERY_KEY = ['cso', 'signature-alerts'];
-
-// Component
 
 export const SignatureMismatchAlerts = () => {
   const queryClient = useQueryClient();

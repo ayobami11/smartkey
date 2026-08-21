@@ -1,2 +1,2 @@
 . "$(dirname -- "$0")/load-node.sh"
-npx --no -- commitlint --edit $1
+bunx --no -- commitlint --edit $1

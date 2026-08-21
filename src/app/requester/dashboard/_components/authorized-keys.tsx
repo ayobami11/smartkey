@@ -38,8 +38,6 @@ import {
   type WeekdayRequestFormInput,
 } from '@/lib/validation/schemas';
 
-// Types
-
 type AuthorisedKey = {
   key: {
     id: string;
@@ -51,8 +49,6 @@ type AuthorisedKey = {
 };
 
 type RequestStep = 'weekday_form' | 'submitting' | 'error';
-
-// Helpers
 
 const todayMin = () => {
   const d = new Date();
@@ -86,14 +82,11 @@ const zoneLabel = (zone: string) =>
 const zoneStripe = (zone: string) =>
   zone === 'NEW_SENATE' ? 'bg-primary' : 'bg-blue-500';
 
-// Component
-
 export const AuthorizedKeys = () => {
   const router = useRouter();
   const connectionStatus = useConnectionStatus();
   const isOffline = connectionStatus === 'offline';
 
-  // Dialog state
   const [weekdayOpen, setWeekdayOpen] = useState(false);
   const [step, setStep] = useState<RequestStep>('weekday_form');
   const [selectedKeyId, setSelectedKeyId] = useState<string>('');
@@ -119,8 +112,6 @@ export const AuthorizedKeys = () => {
     },
     staleTime: 5 * 60_000,
   });
-
-  // Fetch authorized keys
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['requester', 'authorized-keys'],
@@ -151,8 +142,6 @@ export const AuthorizedKeys = () => {
   const keys = data?.keys ?? [];
   const userId = data?.userId ?? null;
 
-  // Overlay helpers
-
   const openWeekdaySheet = (keyId: string) => {
     setSelectedKeyId(keyId);
     weekdayForm.reset({
@@ -172,8 +161,6 @@ export const AuthorizedKeys = () => {
     setSubmitError(null);
     setStep('weekday_form');
   };
-
-  // Submit weekday request
 
   const handleWeekdaySubmit = async (values: WeekdayRequestFormInput) => {
     setStep('submitting');
@@ -212,17 +199,12 @@ export const AuthorizedKeys = () => {
     router.push(`/requester/request/${result.data.request_id}/code`);
   };
 
-  // Derived values
-
   const selectedKey = keys.find((k) => k.key.id === selectedKeyId)?.key;
-
-  // Render
 
   return (
     <section className="flex flex-col gap-4">
       <h2 className="text-sm font-semibold text-foreground">Authorised keys</h2>
 
-      {/* Loading */}
       {isLoading && (
         <div
           className="flex flex-col gap-3"
@@ -236,7 +218,6 @@ export const AuthorizedKeys = () => {
         </div>
       )}
 
-      {/* Error */}
       {isError && (
         <div
           className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
@@ -257,7 +238,6 @@ export const AuthorizedKeys = () => {
         </div>
       )}
 
-      {/* Empty */}
       {!isLoading && !isError && keys.length === 0 && (
         <Empty className="border border-border bg-card">
           <EmptyHeader>
@@ -291,7 +271,6 @@ export const AuthorizedKeys = () => {
         </div>
       )}
 
-      {/* Key grid */}
       {!isLoading && !isError && keys.length > 0 && (
         <div className="flex flex-col gap-3">
           {keys.map((authorised) => {
@@ -353,7 +332,6 @@ export const AuthorizedKeys = () => {
         </div>
       )}
 
-      {/* Weekday Request Sheet */}
       <Sheet
         open={weekdayOpen}
         onOpenChange={(open) => {
@@ -369,14 +347,12 @@ export const AuthorizedKeys = () => {
           </SheetHeader>
 
           <div className="flex flex-1 flex-col overflow-y-auto p-6">
-            {/* Weekday form */}
             {step === 'weekday_form' && selectedKey && (
               <form
                 id="weekday-form"
                 onSubmit={weekdayForm.handleSubmit(handleWeekdaySubmit)}
                 className="flex flex-col gap-5"
               >
-                {/* Key context */}
                 <div className="rounded-lg border border-border bg-muted/40 p-4">
                   <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                     <KeyRoundIcon className="size-3.5" aria-hidden="true" />
@@ -390,7 +366,6 @@ export const AuthorizedKeys = () => {
                   </p>
                 </div>
 
-                {/* Return deadline */}
                 <Controller
                   name="return_deadline"
                   control={weekdayForm.control}
@@ -419,7 +394,6 @@ export const AuthorizedKeys = () => {
               </form>
             )}
 
-            {/* Submitting */}
             {step === 'submitting' && (
               <div className="flex flex-1 items-center justify-center">
                 <p className="text-sm text-muted-foreground">
@@ -429,7 +403,6 @@ export const AuthorizedKeys = () => {
             )}
           </div>
 
-          {/* Sticky footer */}
           {step === 'weekday_form' && (
             <div className="border-t border-border p-6 pt-4">
               {submitError && (

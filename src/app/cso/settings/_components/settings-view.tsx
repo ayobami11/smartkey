@@ -97,7 +97,6 @@ export const SettingsView = () => {
         ))}
       </TabsList>
       <Separator orientation="vertical" className="hidden lg:block" />
-      {/* Section content */}
       <div className="flex flex-1 flex-col gap-6">
         <TabsContent value="operational">
           <OperationalSettings />

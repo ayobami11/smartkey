@@ -86,7 +86,6 @@ export const POST = async (request: NextRequest) => {
 
   const reportId: string = result.report_id;
 
-  // Fetch the shift's audit events to feed the report generator.
   const { data: shift } = await supabase
     .from('shifts')
     .select('started_at')

@@ -28,8 +28,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ExpiredBadge } from '@/components/smartkey/expired-badge';
 import { SectionCardHeader } from '@/components/smartkey/section-card-header';
 
-// Types
-
 type WeekendRequest = {
   id: string;
   created_at: string;
@@ -38,8 +36,6 @@ type WeekendRequest = {
   requester_name: string;
   key_code: string | null;
 };
-
-// Component
 
 export const WeekendRequests = () => {
   const queryClient = useQueryClient();

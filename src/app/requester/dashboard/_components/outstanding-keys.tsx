@@ -38,8 +38,6 @@ import { apiFetch } from '@/lib/api';
 import { createBrowserClient } from '@/lib/supabase/client';
 import { formatCountdown, formatDeadline, relativeTime } from '@/lib/dates';
 
-// Types
-
 type OutstandingKey = {
   id: string;
   status: 'KEY_ISSUED' | 'KEY_OVERDUE';
@@ -91,7 +89,6 @@ const ReturnCodeDisplay = ({
     Math.floor((new Date(expiresAt).getTime() - now) / 1000)
   );
 
-  // Fire onExpired once when countdown hits 0
   useEffect(() => {
     if (countdown === 0) {
       onExpiredRef.current();
@@ -143,8 +140,6 @@ const ReturnCodeDisplay = ({
   );
 };
 
-// Component
-
 export const OutstandingKeys = () => {
   const queryClient = useQueryClient();
   const connectionStatus = useConnectionStatus();
@@ -158,8 +153,6 @@ export const OutstandingKeys = () => {
   // Stale-closure-safe ref for the currently-selected key ID
   const selectedKeyIdRef = useRef<string | null>(null);
 
-  // Resolve user ID once on mount
-
   useEffect(() => {
     createBrowserClient()
       .auth.getUser()
@@ -167,8 +160,6 @@ export const OutstandingKeys = () => {
         if (user) setUserId(user.id);
       });
   }, []);
-
-  // Fetch outstanding keys
 
   const {
     data: keys = [],
@@ -232,8 +223,6 @@ export const OutstandingKeys = () => {
     },
   });
 
-  // Sheet helpers
-
   const openReturnSheet = (item: OutstandingKey) => {
     setSelectedKey(item);
     selectedKeyIdRef.current = item.id;
@@ -285,8 +274,6 @@ export const OutstandingKeys = () => {
     queryClient.invalidateQueries({ queryKey: ['outstanding-keys', userId] });
   };
 
-  // Render
-
   const isOverdue = (item: OutstandingKey) => item.status === 'KEY_OVERDUE';
   const selectedIsOverdue = selectedKey ? isOverdue(selectedKey) : false;
 
@@ -296,7 +283,6 @@ export const OutstandingKeys = () => {
         Outstanding keys
       </h2>
 
-      {/* Loading */}
       {loading && (
         <div
           className="flex flex-col gap-3"
@@ -310,7 +296,6 @@ export const OutstandingKeys = () => {
         </div>
       )}
 
-      {/* Error */}
       {!loading && fetchError && (
         <div
           className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
@@ -329,7 +314,6 @@ export const OutstandingKeys = () => {
         </div>
       )}
 
-      {/* Empty */}
       {!loading && !fetchError && keys.length === 0 && (
         <Empty className="border border-border bg-card">
           <EmptyMedia variant="icon">
@@ -344,7 +328,6 @@ export const OutstandingKeys = () => {
         </Empty>
       )}
 
-      {/* Key rows */}
       {!loading && !fetchError && keys.length > 0 && (
         <div className="flex flex-col gap-3">
           {keys.map((item) => {
@@ -418,7 +401,6 @@ export const OutstandingKeys = () => {
         </div>
       )}
 
-      {/* Return key sheet */}
       <Sheet
         open={sheetOpen}
         onOpenChange={(open) => {
@@ -465,7 +447,6 @@ export const OutstandingKeys = () => {
                   )}
                 </div>
 
-                {/* Phase: idle */}
                 {sheetPhase.phase === 'idle' && (
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -487,14 +468,12 @@ export const OutstandingKeys = () => {
                   </Tooltip>
                 )}
 
-                {/* Phase: generating */}
                 {sheetPhase.phase === 'generating' && (
                   <Button className="w-full" disabled aria-busy="true">
                     Generating...
                   </Button>
                 )}
 
-                {/* Phase: code_active */}
                 {sheetPhase.phase === 'code_active' && (
                   <ReturnCodeDisplay
                     key={sheetPhase.expires_at}
@@ -504,7 +483,6 @@ export const OutstandingKeys = () => {
                   />
                 )}
 
-                {/* Phase: expired */}
                 {sheetPhase.phase === 'expired' && (
                   <Card>
                     <CardContent className="flex flex-col items-center gap-4 py-10 text-center">
@@ -532,7 +510,6 @@ export const OutstandingKeys = () => {
                   </Card>
                 )}
 
-                {/* Phase: returned */}
                 {sheetPhase.phase === 'returned' && (
                   <Card>
                     <CardContent className="flex flex-col items-center gap-4 py-10 text-center">
@@ -561,7 +538,6 @@ export const OutstandingKeys = () => {
                   </Card>
                 )}
 
-                {/* Phase: error */}
                 {sheetPhase.phase === 'error' && (
                   <div className="flex flex-col gap-3">
                     <p className="text-xs text-destructive" role="alert">

@@ -70,7 +70,8 @@ export const POST = async (request: NextRequest) => {
     return NextResponse.json(err('Code has expired', 404), { status: 404 });
   }
 
-  // IMPORTANT FIX: Use server-verified user.id instead of trusting client payload
+  // Server-verified user.id, never a client-supplied value — a verifier must
+  // not be able to attribute a collection to someone else's session.
   const { data: rpcData, error: rpcError } = await supabase.rpc('issue_key', {
     p_request_id: req.id,
     p_verifier_id: user.id,
@@ -131,7 +132,7 @@ export const POST = async (request: NextRequest) => {
         key: {
           code: keyData?.code ?? null,
           room_name: keyData?.room_name ?? null,
-          key_count: (keyData as {key_count?: number} | null)?.key_count ?? 1,
+          key_count: (keyData as { key_count?: number } | null)?.key_count ?? 1,
         },
         issued_at: result.issued_at,
       }),
@@ -158,7 +159,7 @@ export const POST = async (request: NextRequest) => {
       key: {
         code: keyData?.code ?? null,
         room_name: keyData?.room_name ?? null,
-        key_count: (keyData as {key_count?: number} | null)?.key_count ?? 1,
+        key_count: (keyData as { key_count?: number } | null)?.key_count ?? 1,
       },
       issued_at: result.issued_at,
     }),

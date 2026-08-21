@@ -104,7 +104,6 @@ export const OnboardingForm = ({
         </p>
       </div>
 
-      {/* Preview thumbnails */}
       <div className="grid gap-4 sm:grid-cols-2">
         <Attachment className="w-full">
           <AttachmentMedia variant="image">
@@ -132,7 +131,6 @@ export const OnboardingForm = ({
         </Attachment>
       </div>
 
-      {/* Password fields */}
       <FieldGroup>
         <Controller
           name="password"
@@ -215,7 +213,6 @@ export const OnboardingForm = ({
         />
       </FieldGroup>
 
-      {/* Confirmation checkbox */}
       <Controller
         name="confirmed"
         control={form.control}

@@ -68,8 +68,6 @@ const STATUS_OPTIONS: { label: string; value: UserStatus }[] = [
   { label: STATUS_LABEL.PENDING_ACTIVATION, value: 'PENDING_ACTIVATION' },
 ];
 
-// Component
-
 type UsersDataTableProps = { data: UserRow[] } & ColumnCallbacks;
 
 export const UsersDataTable = ({

@@ -40,8 +40,6 @@ import {
   type OutstandingKey,
 } from '@/app/cso/keys/_components/outstanding-keys';
 
-// Types
-
 type ActiveTab =
   | 'All'
   | 'NEW_SENATE'
@@ -50,8 +48,6 @@ type ActiveTab =
   | 'Retired';
 
 type Department = { id: string; name: string };
-
-// Constants
 
 const ALL_DEPTS_VALUE = 'All units';
 
@@ -62,8 +58,6 @@ const tabs: { label: string; value: ActiveTab }[] = [
   { label: 'Outstanding', value: 'Outstanding' },
   { label: 'Retired', value: 'Retired' },
 ];
-
-// Component
 
 export const KeysView = () => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('All');
@@ -212,8 +206,6 @@ export const KeysView = () => {
   const deptSuggestions = isFiltering
     ? departments.filter((d) => d.name.toLowerCase().includes(lowerInput))
     : departments;
-
-  // Render
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 pt-0">

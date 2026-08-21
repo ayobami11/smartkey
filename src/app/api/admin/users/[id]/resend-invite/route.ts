@@ -32,7 +32,6 @@ export const POST = async (
   if (profile.role !== 'CSO')
     return NextResponse.json(err('Forbidden', 403), { status: 403 });
 
-  // Fetch the target profile.
   const { data: target, error: fetchError } = await supabase
     .from('profiles')
     .select('id, institutional_email, role, status')

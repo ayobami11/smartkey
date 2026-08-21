@@ -95,8 +95,8 @@ Tailwind defaults `p-1` through `p-24` map directly to the SmartKey spacing scal
 If you find yourself reaching for an arbitrary value, that's a signal the design system needs to extend. Don't bypass — extend:
 
 1. Add the token to `design-system/DESIGN.md` (with prose rationale).
-2. Run `pnpm design:lint` to validate the change.
-3. Run `pnpm design:export` to regenerate the Tailwind config.
+2. Run `bun run design:lint` to validate the change.
+3. Run `bun run design:export` to regenerate the Tailwind config.
 4. Use the new token in your component.
 
 ## Verification

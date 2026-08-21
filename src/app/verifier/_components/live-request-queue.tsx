@@ -49,8 +49,6 @@ import {
 import type { RiskFactor, RiskTier } from '@/lib/ai/risk/types';
 import { formatTime, relativeTime } from '@/lib/dates';
 
-// Types
-
 type QueueRequest = {
   id: string;
   type: 'WEEKDAY' | 'WEEKEND';
@@ -85,8 +83,6 @@ type IssueResult = {
 };
 
 type SheetStep = 'code' | 'success';
-
-// Component
 
 export const LiveRequestQueue = () => {
   const status = useConnectionStatus();
@@ -217,15 +213,12 @@ export const LiveRequestQueue = () => {
     setSheetStep('success');
   });
 
-  // Render
-
   return (
     <section className="flex flex-col gap-4">
       <h2 className="text-sm font-semibold text-foreground">
         Pending requests
       </h2>
 
-      {/* Loading */}
       {loading && (
         <div
           className="flex flex-col gap-3"
@@ -239,7 +232,6 @@ export const LiveRequestQueue = () => {
         </div>
       )}
 
-      {/* Error */}
       {!loading && fetchError && (
         <div
           className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
@@ -262,7 +254,6 @@ export const LiveRequestQueue = () => {
         </div>
       )}
 
-      {/* Empty */}
       {!loading && !fetchError && requests.length === 0 && (
         <Empty className="border border-border bg-card">
           <EmptyHeader>

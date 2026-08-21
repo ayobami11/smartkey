@@ -28,8 +28,6 @@ import { apiFetch } from '@/lib/api';
 import { createBrowserClient } from '@/lib/supabase/client';
 import { KeyHistory } from '@/app/cso/admin-keys/[keyId]/_components/key-history';
 
-// Types
-
 type FilledSlot = {
   filled: true;
   profile_id: string;
@@ -54,8 +52,6 @@ type KeyData = {
   department: { name: string } | null;
 };
 
-// Component
-
 export const KeyIdView = () => {
   const { keyId } = useParams<{ keyId: string }>();
 
@@ -65,13 +61,11 @@ export const KeyIdView = () => {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
-  // Add collector picker state
   const [addPickerOpen, setAddPickerOpen] = useState(false);
   const [selectedCandidateId, setSelectedCandidateId] = useState('');
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
 
-  // Remove confirmation state
   const [removeTarget, setRemoveTarget] = useState<FilledSlot | null>(null);
   const [removing, setRemoving] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
@@ -81,7 +75,6 @@ export const KeyIdView = () => {
     const init = async () => {
       const supabase = createBrowserClient();
 
-      // Get HOD's department
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -95,7 +88,6 @@ export const KeyIdView = () => {
 
       const hodDeptId = (profile?.unit_id as string | null) ?? null;
 
-      // Fetch key details
       const { data: key, error: keyErr } = await supabase
         .from('keys')
         .select('id, code, zone, room_name, department:units!unit_id(name)')
@@ -110,7 +102,6 @@ export const KeyIdView = () => {
 
       setKeyData(key as unknown as KeyData);
 
-      // Fetch current authorisations (slots)
       const { data: auths } = await supabase
         .from('authorisations')
         .select(
@@ -140,14 +131,12 @@ export const KeyIdView = () => {
         }
       );
 
-      // Pad to 3 slots
       const paddedSlots: Slot[] = [
         ...filledSlots,
         ...Array(Math.max(0, 3 - filledSlots.length)).fill({ filled: false }),
       ];
       setSlots(paddedSlots);
 
-      // Fetch candidates (active requesters in Dean's department, excluding already-authorised)
       if (hodDeptId) {
         const authorisedIds = new Set(filledSlots.map((s) => s.profile_id));
         const { data: cands } = await supabase
@@ -332,7 +321,6 @@ export const KeyIdView = () => {
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
-      {/* Key header */}
       <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-5 shadow-[0_2px_4px_rgba(15,23,42,0.06)] sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
@@ -356,7 +344,6 @@ export const KeyIdView = () => {
         </p>
       </div>
 
-      {/* Slot cards */}
       <div>
         <h2 className="mb-3 text-sm font-semibold text-foreground">
           Authorised collectors

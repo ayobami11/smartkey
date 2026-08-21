@@ -95,7 +95,6 @@ export const POST = async (request: NextRequest) => {
 
   const userId = user.id;
 
-  // Confirm this is an HOD profile
   const { data: profileData } = await supabase
     .from('profiles')
     .select('role')
@@ -108,7 +107,6 @@ export const POST = async (request: NextRequest) => {
     return NextResponse.json(err('Forbidden', 403), { status: 403 });
   }
 
-  // Update password
   const { error: pwError } = await supabase.auth.updateUser({ password });
   if (pwError) {
     logger.error('activate-hod: password update failed', {
@@ -125,7 +123,6 @@ export const POST = async (request: NextRequest) => {
   // storage RLS auth-context fragility of the cookie-based server client.
   const adminClient = createAdminClient();
 
-  // Upload signature
   const sigExt = signature.name.split('.').pop() ?? 'png';
   const sigPath = `${userId}/signature.${sigExt}`;
 
@@ -143,7 +140,6 @@ export const POST = async (request: NextRequest) => {
     });
   }
 
-  // Upload stamp
   const stampExt = stamp.name.split('.').pop() ?? 'png';
   const stampPath = `${userId}/stamp.${stampExt}`;
 
@@ -166,7 +162,6 @@ export const POST = async (request: NextRequest) => {
     .from('hod-signatures')
     .getPublicUrl(stampPath);
 
-  // Save references to profile
   const { error: profileError } = await supabase
     .from('profiles')
     .update({

@@ -14,6 +14,6 @@ Steps:
 6. Design tokens come from DESIGN.md via Tailwind utility classes. No hardcoded colours, sizes, or spacing.
 7. Implement empty, loading, error, content, and (where applicable) offline states. Each must be visually verifiable.
 8. Add an E2E test under `tests/e2e/<role>/<screen>.spec.ts` that walks the happy path and checks accessibility with axe-core.
-9. Run `npm run typecheck && npm run lint && npm test` before declaring done.
+9. Run `bun run typecheck && bun run lint && bun run test` before declaring done.
 
 Show me the plan before writing any code.

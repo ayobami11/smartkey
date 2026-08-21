@@ -66,8 +66,6 @@ import {
 } from '@/lib/validation/schemas';
 import { AuditTable } from '@/app/cso/audit/_components/audit-table';
 
-// Types
-
 type Incident = {
   id: string;
   reference: string;
@@ -78,13 +76,9 @@ type Incident = {
   logged_by_name?: string;
 };
 
-// Component
-
 export const AuditView = () => {
-  // Tab
   const [activeTab, setActiveTab] = useState<'audit' | 'incidents'>('audit');
 
-  // Incidents state
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [incidentCursor, setIncidentCursor] = useState<string | null>(null);
   const [incidentState, setIncidentState] = useState<
@@ -101,11 +95,9 @@ export const AuditView = () => {
     range: null,
   });
 
-  // Export
   const auditExportRef = useRef<(() => Promise<void>) | null>(null);
   const [exporting, setExporting] = useState(false);
 
-  // Log incident sheet
   const [logOpen, setLogOpen] = useState(false);
   const [logRef, setLogRef] = useState<string | null>(null);
   const [logServerError, setLogServerError] = useState<string | null>(null);
@@ -122,8 +114,6 @@ export const AuditView = () => {
   });
 
   const watchedSeverity = watch('severity');
-
-  // Fetch incidents
 
   const fetchIncidents = async (reset = true, cursor?: string) => {
     if (reset) setIncidentState('loading');
@@ -176,8 +166,6 @@ export const AuditView = () => {
     fetchIncidents(true);
   }, [incidentRange]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Client-side filtering
-
   const filteredIncidents = incidents.filter((i) => {
     if (incidentTypeFilter.length > 0 && !incidentTypeFilter.includes(i.type))
       return false;
@@ -200,8 +188,6 @@ export const AuditView = () => {
       prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
     );
   };
-
-  // Log incident
 
   const handleLogIncident = async (data: IncidentFormInput) => {
     setLogServerError(null);
@@ -260,8 +246,6 @@ export const AuditView = () => {
     }
   };
 
-  // Render
-
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -293,7 +277,6 @@ export const AuditView = () => {
         </div>
       </div>
 
-      {/* Tab switcher */}
       <div
         className="flex items-center gap-1 border-b border-border"
         role="tablist"
@@ -317,19 +300,15 @@ export const AuditView = () => {
         ))}
       </div>
 
-      {/* Audit Log tab */}
       {activeTab === 'audit' && <AuditTable exportRef={auditExportRef} />}
 
-      {/* Incidents tab */}
       {activeTab === 'incidents' && (
         <>
-          {/* Filters */}
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2">
               <span className="pl-2 text-sm font-semibold text-foreground">
                 Filter by:
               </span>
-              {/* Incident type multi-filter */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -372,7 +351,6 @@ export const AuditView = () => {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* Severity multi-filter */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -422,7 +400,6 @@ export const AuditView = () => {
             />
           </div>
 
-          {/* Loading */}
           {(incidentState === 'loading' || incidentState === 'idle') && (
             <div className="flex flex-col gap-2" aria-busy="true">
               {[0, 1, 2, 3].map((i) => (
@@ -431,7 +408,6 @@ export const AuditView = () => {
             </div>
           )}
 
-          {/* Error */}
           {incidentState === 'error' && (
             <div
               className="rounded-lg border border-destructive/30 bg-destructive/5 p-4"
@@ -451,7 +427,6 @@ export const AuditView = () => {
             </div>
           )}
 
-          {/* Incidents list */}
           {(incidentState === 'ready' || incidentState === 'loadingMore') && (
             <>
               {filteredIncidents.length === 0 ? (
@@ -532,7 +507,6 @@ export const AuditView = () => {
         </>
       )}
 
-      {/* Log incident Sheet */}
       <Sheet
         open={logOpen}
         onOpenChange={(open) => {

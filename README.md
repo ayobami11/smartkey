@@ -80,8 +80,8 @@ as a black-box decision.
 Install dependencies and start the development server:
 
 ```bash
-npm install
-npm run dev
+bun install
+bun run dev
 ```
 
 Open http://localhost:3000.
@@ -105,13 +105,13 @@ total outage.
 ## Common commands
 
 ```bash
-npm run dev          # Start the development server
-npm run build        # Production build
-npm run lint         # Run ESLint
-npm run typecheck    # Type-check with tsc
-npm test             # Unit and component tests
-npm run test:e2e     # Playwright E2E tests
-npm run db:migrate   # Apply Supabase migrations
+bun run dev          # Start the development server
+bun run build        # Production build
+bun run lint         # Run ESLint
+bun run typecheck    # Type-check with tsc
+bun run test         # Unit and component tests
+bun run test:e2e     # Playwright E2E tests
+bun run db:migrate   # Apply Supabase migrations
 ```
 
 ## Project layout

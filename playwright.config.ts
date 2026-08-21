@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 import { config as loadEnv } from 'dotenv';
 
-// Next.js loads .env.local itself for the `npm run start` server this config
+// Next.js loads .env.local itself for the `bun run start` server this config
 // spawns below, but the Playwright test runner is a separate process — without
 // this, TEST_*/E2E_OTP_* are empty here even though the server sees them fine.
 // No-ops harmlessly in CI, where .env.local doesn't exist and the real values
@@ -16,7 +16,7 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   workers: process.env.CI ? 1 : undefined,
-  reporter: process.env.CI ? 'github' : 'html',
+  reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'html',
   // Default is 30s. MFA specs (Dean/Verifier/CSO) wait on a real Gmail SMTP
   // send inside beforeEach — the send itself succeeds, but on a slow DNS path
   // resolving smtp.gmail.com alone can take ~20-25s, leaving no room under the
@@ -28,6 +28,7 @@ export default defineConfig({
   use: {
     baseURL,
     trace: 'on-first-retry',
+    screenshot: 'only-on-failure',
   },
 
   projects: [
@@ -68,7 +69,7 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: 'npm run start',
+    command: 'bun run start',
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

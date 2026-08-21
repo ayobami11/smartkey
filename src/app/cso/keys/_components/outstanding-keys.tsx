@@ -17,8 +17,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 import { KeysEmpty } from '@/app/cso/keys/_components/keys-empty';
 
-// Types
-
 export type OutstandingKey = {
   requestId: string;
   keyId: string;
@@ -30,8 +28,6 @@ export type OutstandingKey = {
   returnDeadline: string;
   isOverdue: boolean;
 };
-
-// Component
 
 type Props = {
   items: OutstandingKey[];

@@ -68,8 +68,6 @@ const STATUS_CONFIG: Record<
   },
 };
 
-// Component
-
 type RequestCardProps = { request: RequestRow };
 
 export const RequestCard = ({ request }: RequestCardProps) => {

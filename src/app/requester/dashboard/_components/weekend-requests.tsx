@@ -29,8 +29,6 @@ import { formatDateShort, isTodayDate } from '@/lib/dates';
 
 import { WeekendAccessSheet } from '@/app/requester/dashboard/_components/weekend-access-sheet';
 
-// Types
-
 type WeekendStatus = 'PENDING_HOD' | 'APPROVED' | 'DECLINED';
 
 type WeekendRequest = {
@@ -39,8 +37,6 @@ type WeekendRequest = {
   requested_for: string;
   key: { code: string; room_name: string } | null;
 };
-
-// Constants
 
 const STATUS_CONFIG: Record<
   WeekendStatus,
@@ -65,8 +61,6 @@ const STATUS_CONFIG: Record<
     stripe: 'bg-destructive',
   },
 };
-
-// Component
 
 export const WeekendRequests = () => {
   const router = useRouter();
@@ -160,7 +154,6 @@ export const WeekendRequests = () => {
         />
       </div>
 
-      {/* Loading */}
       {loading && (
         <div
           className="flex flex-col gap-3"
@@ -174,7 +167,6 @@ export const WeekendRequests = () => {
         </div>
       )}
 
-      {/* Empty */}
       {!loading && requests.length === 0 && (
         <Empty className="border border-border bg-card">
           <EmptyMedia variant="icon">

@@ -46,8 +46,6 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 
-// Types
-
 type EventTypeFilter = AuditEventType | 'ALL';
 type RawBucket = {
   date: string;
@@ -130,8 +128,6 @@ const bucketEvents = (
   });
   return [...buckets.values()];
 };
-
-// Component
 
 export const EventsChart = ({ range }: EventsChartProps) => {
   const connectionStatus = useConnectionStatus();

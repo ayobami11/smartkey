@@ -14,6 +14,6 @@ Steps:
 6. Add JSDoc with one-line description and a usage example.
 7. Co-locate a unit test `<Name>.test.tsx` covering: default render, every variant prop, keyboard interaction (if interactive), and reduced-motion.
 8. If the component has visual variants, add a Storybook story (if Storybook is in the repo).
-9. Run `npm run typecheck && npm run lint && npm test` before declaring done.
+9. Run `bun run typecheck && bun run lint && bun run test` before declaring done.
 
 Show me the plan before writing any code.

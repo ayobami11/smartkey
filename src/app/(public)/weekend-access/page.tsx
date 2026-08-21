@@ -43,7 +43,6 @@ export default async function WeekendAccessPage() {
 
   return (
     <main className="flex min-h-screen flex-col items-center bg-background px-4 py-12">
-      {/* Brand header */}
       <div className="mb-8 text-center">
         <Link
           href="/"

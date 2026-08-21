@@ -65,7 +65,6 @@ export const ProfilePhotoUpload = ({
       return;
     }
 
-    // Revoke any previous blob before creating a new one.
     if (pendingPreview) URL.revokeObjectURL(pendingPreview);
 
     setError(null);

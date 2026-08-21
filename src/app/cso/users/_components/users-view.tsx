@@ -26,10 +26,7 @@ import {
   type UserStatus,
 } from '@/app/cso/users/_components/columns';
 
-// Component
-
 export const UsersView = () => {
-  // Revoke dialog
   const [revokeTarget, setRevokeTarget] = useState<{
     id: string;
     name: string;
@@ -37,13 +34,10 @@ export const UsersView = () => {
   const [revoking, setRevoking] = useState(false);
   const [revokeError, setRevokeError] = useState<string | null>(null);
 
-  // Edit dialog
   const [editTarget, setEditTarget] = useState<UserRow | null>(null);
 
-  // Resend invite
   const [resendingId, setResendingId] = useState<string | null>(null);
 
-  // Fetch users
   const {
     data: users = [],
     isLoading,
@@ -79,7 +73,6 @@ export const UsersView = () => {
     staleTime: 60_000,
   });
 
-  // Revoke access
   const handleRevoke = async () => {
     if (!revokeTarget) return;
     setRevoking(true);
@@ -99,7 +92,6 @@ export const UsersView = () => {
     refetch();
   };
 
-  // Resend invite
   const handleResend = async (user: UserRow) => {
     setResendingId(user.id);
     const result = await apiFetch(`/api/admin/users/${user.id}/resend-invite`, {
@@ -113,7 +105,6 @@ export const UsersView = () => {
     setResendingId(null);
   };
 
-  // Render
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -126,10 +117,8 @@ export const UsersView = () => {
         <ProvisionUserDialog onSuccess={() => refetch()} />
       </div>
 
-      {/* Loading skeleton */}
       {isLoading && <UsersTableSkeleton />}
 
-      {/* Error */}
       {isError && (
         <div
           className="rounded-lg border border-destructive/30 bg-destructive/5 p-4"
@@ -152,7 +141,6 @@ export const UsersView = () => {
         </div>
       )}
 
-      {/* Data table */}
       {!isLoading && !isError && (
         <UsersDataTable
           data={users}
@@ -165,14 +153,12 @@ export const UsersView = () => {
         />
       )}
 
-      {/* Edit user */}
       <EditUserDialog
         user={editTarget}
         onClose={() => setEditTarget(null)}
         onSuccess={() => refetch()}
       />
 
-      {/* Revoke access confirmation */}
       <AlertDialog
         open={revokeTarget !== null}
         onOpenChange={(open) => {

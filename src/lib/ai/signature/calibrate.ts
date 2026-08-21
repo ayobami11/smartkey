@@ -41,9 +41,7 @@ export type SweepRow = {
 };
 
 export type Separation = {
-  /** Highest ratio among genuine samples. */
   maxGenuine: number;
-  /** Lowest ratio among forged samples. */
   minForged: number;
   /**
    * True when every genuine sample scores below every forged one. If so, any
@@ -91,7 +89,6 @@ export const sweepThresholds = (
 
   for (let i = 0; i <= steps; i++) {
     const threshold = i * step;
-    // verifySignature passes when ratio <= threshold.
     const falseAccepts = forged.filter((s) => s.ratio <= threshold).length;
     const falseRejects = genuine.filter((s) => s.ratio > threshold).length;
 

@@ -308,7 +308,7 @@ export default defineConfig({
     { name: 'mobile-chrome', use: { ...devices['Pixel 5'] } }, // Requester is phone-first
   ],
   webServer: {
-    command: 'npm run dev',
+    command: 'bun run dev',
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
@@ -328,12 +328,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: 20
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
+          bun-version: 1.4.0
+      - run: bun install --frozen-lockfile
+      - run: bunx playwright install --with-deps chromium
+      - run: bun run test:e2e
         env:
           BASE_URL: ${{ vars.STAGING_URL }}
           TEST_VERIFIER_EMAIL: ${{ secrets.TEST_VERIFIER_EMAIL }}
@@ -360,4 +360,4 @@ Before marking a screen as complete:
 - [ ] Theme toggle test included
 - [ ] No `waitForTimeout` — all waits are condition-based
 - [ ] POM encapsulates locators; test body has no raw `locator()` calls for repeated elements
-- [ ] `npm run test:e2e` passes locally before pushing
+- [ ] `bun run test:e2e` passes locally before pushing

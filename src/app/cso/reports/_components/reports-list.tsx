@@ -9,8 +9,6 @@ import { formatDate, formatTime } from '@/lib/dates';
 
 export { formatDate, formatTime };
 
-// Types
-
 export type Report = {
   id: string;
   shift: number;
@@ -32,8 +30,6 @@ export function groupByDay(
   });
   return Object.entries(groups).map(([day, items]) => ({ day, items }));
 }
-
-// Component
 
 type Props = {
   reportGroups: { day: string; items: Report[] }[];

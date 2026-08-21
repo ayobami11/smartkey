@@ -286,6 +286,6 @@ Guest analogues of the registered-user weekend flow. All are `SECURITY DEFINER`,
 1. Create migration: `supabase migration new <name>`.
 2. Write SQL.
 3. Update RLS policies if any new table or column.
-4. Update generated TS types: `pnpm db:types`.
-5. Apply locally: `pnpm db:migrate`.
+4. Update generated TS types: `bun run db:types`.
+5. Apply locally: `bun run db:migrate`.
 6. Update `docs/DATABASE.md` and `docs/CHANGELOG.md`.
