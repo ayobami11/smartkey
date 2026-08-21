@@ -278,7 +278,7 @@ components:
     rounded: '{rounded.lg}'
     padding: 32px
 
-  # Key tile (used on HOD key grid and Requester authorised-keys grid)
+  # Key tile (used on Dean key grid and Requester authorised-keys grid)
   key-tile:
     backgroundColor: '{colors.surface}'
     textColor: '{colors.on-surface}'
@@ -311,7 +311,7 @@ components:
 
 ## Overview
 
-SmartKey is a digital key management system for the University of Lagos Senate Building. It replaces a paper logbook used by four roles — Chief Security Officer (CSO), Heads of Department (HOD), security verifiers at the desk, and university staff (requesters) — with role-specific dashboards, immutable audit trails, and three AI components: rule-based risk scoring, Gemini-generated shift reports, and pixel-level signature verification.
+SmartKey is a digital key management system for the University of Lagos Senate Building. It replaces a paper logbook used by four roles — Chief Security Officer (CSO), Deans, security verifiers at the desk, and university staff (requesters) — with role-specific dashboards, immutable audit trails, and three AI components: rule-based risk scoring, Gemini-generated shift reports, and pixel-level signature verification.
 
 The visual language reads as a modern operational tool issued by a heritage institution. UNILAG's deep maroon carries identity; quiet neutrals carry information density; status colours are reserved exclusively for risk, alerts, and confirmations. Brand colour appears only on primary actions, the application bar, and brand surfaces — never decoratively.
 
@@ -352,7 +352,7 @@ The 6-digit verification code is the signature typographic moment of the product
 A 4px base unit with an 8px primary rhythm. Every value in the spacing scale is a multiple of 4px; do not invent intermediate values.
 
 - **Mobile**: single-column, fluid grid. Page padding 16px. Touch targets ≥ 44×44px (WCAG 2.5.5). Primary CTAs stretch full-width and stick to the bottom of the viewport on long flows like the issue-key sheet.
-- **Tablet (≥ 768px)**: two-column layouts available; HOD and Requester key grids expand to 3 columns.
+- **Tablet (≥ 768px)**: two-column layouts available; Dean and Requester key grids expand to 3 columns.
 - **Desktop (≥ 1024px)**: 12-column grid, 24px gutters, max content width 1280px on widest screens. Verifier dashboard splits 60/40 (queue/outstanding); CSO dashboard splits into three columns (live counters, anomaly feed, events stream).
 
 Cards are the primary container. Internal padding is 24px on desktop and 16px on mobile. Cards never nest more than one level deep.
@@ -382,7 +382,7 @@ Components extend the shadcn/ui base library with SmartKey-specific additions. R
 - **Input fields** carry a left-aligned label above (never inside the field as a placeholder, since placeholders disappear on focus and fail screen readers). Helper text below the field. Error state replaces helper text and turns the border and icon to `error`.
 - **Risk tier badges** (`badge-risk-low`, `badge-risk-medium`, `badge-risk-high`) appear on the verifier dashboard for every queued request. The badge is at `heading-md` size — non-trivial — paired with a shield icon. A "View factors" link beneath the badge opens a popover listing each contributing rule and its weight. For high-risk requests, the issue flow inserts an explicit acknowledgement step.
 - **Verification code display** is the requester's anchor moment. The component renders the 6-digit code at `code-display` size (64px JetBrains Mono) inside a generously padded card, with a copy-to-clipboard control and a 10-minute expiry countdown. On expiry, the code is replaced by a "Request a new code" CTA in the same surface.
-- **Key tile** is used in two places: the HOD key grid (showing the three authorisation slots filled or vacant) and the Requester authorised-keys grid. The tile shows zone, room name, and key code; tapping opens slot management (HOD) or the request sheet (Requester).
+- **Key tile** is used in two places: the Dean key grid (showing the three authorisation slots filled or vacant) and the Requester authorised-keys grid. The tile shows zone, room name, and key code; tapping opens slot management (Dean) or the request sheet (Requester).
 - **Offline banner** is persistent, full-bleed, top-of-screen, `warning-soft` background. While shown, destructive and authoritative actions disable; tooltip on a disabled button reads "Available again when you reconnect."
 - **Application bar** is the only place where the maroon `primary` colour spans a large surface. It carries the SmartKey wordmark, the active user identity, the realtime-connection indicator (small green/amber/red dot), and the profile dropdown.
 

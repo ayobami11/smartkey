@@ -58,7 +58,7 @@ For a weekend request, add `weekend_date` and optionally `letter_url`:
 | ------------------------------ | ------ | ------------------------------------------------- |
 | `outside_operational_hours`    | 3      | Request submitted outside zone operating hours    |
 | `outstanding_key_not_returned` | 5      | Requester holds a key they are not authorised for |
-| `weekend_without_memo`         | 4      | Weekend request with no HOD-approved memo         |
+| `weekend_without_memo`         | 4      | Weekend request with no authoriser-approved memo  |
 | `excess_request_frequency`     | 2      | More than 5 requests in the last 24 hours         |
 | `collector_not_whitelisted`    | 5      | Requester not in the key's authorisation slots    |
 
@@ -77,7 +77,7 @@ the verifier can issue the key.
 ## 2. Signature Verification (Sharp + Pixelmatch)
 
 **Triggered by:** `POST /api/requests/hod-decision`  
-**Who calls it:** Dean (role: HOD) or CSO  
+**Who calls it:** Dean (role: DEAN) or CSO  
 **When it runs:** Only when `submitted_signature_url` is present in the request body.
 
 ### Request body that triggers verification

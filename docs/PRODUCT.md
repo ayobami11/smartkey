@@ -12,11 +12,11 @@ A paper logbook at the University of Lagos Senate Building security desk, used t
 - No real-time check on whether a collector is currently authorised.
 - No detection of keys collected outside permitted hours.
 - Slow incident investigations because records are physical and not searchable.
-- Dean (HOD) authorisations sent as paper memos minuted by the CSO.
+- Dean authorisations sent as paper memos minuted by the CSO.
 
 ## What SmartKey provides
 
-- Role-specific dashboards for CSO, Dean (HOD), Verifier, Requester.
+- Role-specific dashboards for CSO, Dean, Verifier, Requester.
 - Immutable digital audit trail.
 - Three AI components: rule-based risk scoring, Gemini-generated shift reports, pixel-level signature verification.
 - Real-time updates via Supabase Realtime.
@@ -38,7 +38,7 @@ Faculty Dean, mixed device usage. One per faculty (2 pilot faculties at launch, 
 
 **Goals**: whitelist up to three authorised collectors per faculty key; approve weekend access requests; upload signature and stamp on first sign-in; track faculty activity.
 
-**Routes**: /hod, /hod/keys/:keyId, /hod/weekend-requests, /hod/onboarding, /hod/profile.
+**Routes**: /dean/dashboard, /dean/keys/:keyId, /dean/weekend-requests, /dean/onboarding, /dean/settings.
 
 ### Security Personnel (Verifier)
 
@@ -54,7 +54,7 @@ Departmental staff, primary device a phone. Lowest visit frequency, lowest toler
 
 **Goals**: see authorised keys; request a key; receive a 6-digit code by email; present the code at the desk; acknowledge return.
 
-**Routes**: /me, /me/request/:keyId, /me/request/:requestId/code, /me/history, /me/profile.
+**Routes**: /requester/dashboard, /requester/request/:requestId/code, /requester/history, /requester/settings.
 
 ## Operational rules
 

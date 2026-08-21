@@ -4,13 +4,13 @@ SMARTKEY — QUICK REFERENCE CONTEXT
 ROLE NAMING
 
 The faculty approver role is called "Dean" in all user-facing language.
-The DB enum value is `HOD` and internal identifiers (routes, RPCs, audit events,
+The DB enum value is `DEAN`; internal identifiers (routes, RPCs, audit events,
 table names) retain the `hod` prefix for historical continuity. Do not rename
 them — the frontend already uses these paths.
 
-  DB role value : HOD
+  DB role value : DEAN
   Human term    : Dean
-  Routes        : /hod, /api/requests/hod-decision  (unchanged)
+  Routes        : /dean, /api/requests/hod-decision  (unchanged)
   Table         : hod_decisions                      (unchanged)
   Columns       : departments.hod_id, requests.hod_decision_id  (unchanged)
 
@@ -37,7 +37,7 @@ Nodemailer via Gmail SMTP. NOT Resend.
 
 SIGNATURE VERIFICATION
 - Runs server-side only (Sharp + Pixelmatch).
-- Dean uploads reference signature/stamp at /hod/onboarding.
+- Dean uploads reference signature/stamp at /dean/onboarding.
 - Verification runs when a Dean approves a weekend request.
 - Mismatch > 15% → approval held → CSO alert at /cso (signature-alerts feed).
 - CSO resolves via POST /api/requests/hod-decision with cso_override: true.

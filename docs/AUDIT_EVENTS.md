@@ -25,9 +25,9 @@ This is the complete catalogue of audit log event names and payload shapes. Sour
 | `HOD_APPROVED`              | DEAN / CSO | decision_id, signature_verified, signature_mismatch_pct, note, override |
 | `HOD_DECLINED`              | DEAN / CSO | decision_id, note, override                                             |
 | `SIGNATURE_MISMATCH`        | DEAN       | ref_url, submitted_url, mismatch_pct, threshold_pct                     |
-| `collector_authorised`      | HOD        | key_id, collector_id                                                    |
-| `collector_replaced`        | HOD        | key_id, removed_collector_id, added_collector_id                        |
-| `collector_removed`         | HOD        | key_id, removed_collector_id                                            |
+| `collector_authorised`      | DEAN       | key_id, collector_id                                                    |
+| `collector_replaced`        | DEAN       | key_id, removed_collector_id, added_collector_id                        |
+| `collector_removed`         | DEAN       | key_id, removed_collector_id                                            |
 | `shift_started`             | VERIFIER   | shift_id, officer_id                                                    |
 | `shift_handover_completed`  | VERIFIER   | outgoing_shift_id, incoming_officer_id, acknowledged_keys, bulk         |
 | `incident_logged`           | VERIFIER   | incident_id, reference, type, severity                                  |

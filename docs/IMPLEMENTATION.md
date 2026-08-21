@@ -30,12 +30,12 @@ SmartKey is a key management web application built for the security desk at the 
 
 The system serves four distinct roles, each with a purpose-built dashboard:
 
-| Role          | System role name                         | Who they are                                                                     | Primary device |
-| ------------- | ---------------------------------------- | -------------------------------------------------------------------------------- | -------------- |
-| **CSO**       | `CSO`                                    | Chief Security Officer — senior administrator, one per institution               | Desktop        |
-| **Dean**      | `HOD` (historical name, kept internally) | Faculty Dean — authorises collectors and weekend access for their faculty's keys | Mixed          |
-| **Verifier**  | `VERIFIER`                               | Security personnel at the desk, two per 8-hour shift, 24/7                       | Shared desktop |
-| **Requester** | `REQUESTER`                              | University staff who need a key                                                  | Phone          |
+| Role          | System role name | Who they are                                                                     | Primary device |
+| ------------- | ---------------- | -------------------------------------------------------------------------------- | -------------- |
+| **CSO**       | `CSO`            | Chief Security Officer — senior administrator, one per institution               | Desktop        |
+| **Dean**      | `DEAN`           | Faculty Dean — authorises collectors and weekend access for their faculty's keys | Mixed          |
+| **Verifier**  | `VERIFIER`       | Security personnel at the desk, two per 8-hour shift, 24/7                       | Shared desktop |
+| **Requester** | `REQUESTER`      | University staff who need a key                                                  | Phone          |
 
 It is built around three purpose-specific AI components — **not** a single general-purpose model bolted onto everything:
 
@@ -87,7 +87,7 @@ The project was built with heavy Claude Code / AI-agent tooling from very early 
 Goals: see live key counts per zone, review anomaly alerts, generate and download shift reports, manage user accounts, investigate incidents quickly.
 Routes: `/cso`, `/cso/reports`, `/cso/audit`, `/cso/users`, `/cso/keys`, `/cso/settings` (implemented today as `/cso/dashboard`, `/cso/reports`, `/cso/audit`, `/cso/users`, `/cso/keys`, `/cso/admin-keys`, `/cso/weekend-requests`, `/cso/settings`).
 
-**Dean (system role `HOD`)** — faculty Dean, mixed device usage, one per faculty. The Administration group's keys are authorised by the CSO directly (no Dean exists for it).
+**Dean (system role `DEAN`)** — faculty Dean, mixed device usage, one per faculty. The Administration group's keys are authorised by the CSO directly (no Dean exists for it).
 Goals: whitelist up to three authorised collectors per faculty key, approve weekend access requests, upload signature and stamp on first sign-in, track faculty activity.
 Routes: `/dean`, `/dean/keys/:keyId`, `/dean/weekend-requests`, `/dean/onboarding`, `/dean/settings`.
 
@@ -271,7 +271,7 @@ Each dashboard subscribes on mount to the tables relevant to it: the Verifier wa
 
 The schema (fully detailed in `docs/DATABASE.md`, authoritative source in `supabase/migrations/`) currently has 12 core tables:
 
-- **`profiles`** — every person in the system; role enum (`CSO`/`HOD`/`VERIFIER`/`REQUESTER`), status enum (`PENDING_ACTIVATION`/`ACTIVE`/`DEACTIVATED`), signature/stamp reference URLs for Deans.
+- **`profiles`** — every person in the system; role enum (`CSO`/`DEAN`/`VERIFIER`/`REQUESTER`), status enum (`PENDING_ACTIVATION`/`ACTIVE`/`DEACTIVATED`), signature/stamp reference URLs for Deans.
 - **`departments`** (now the "unit" grouping — see below) — each row is a faculty (owns a Dean's Office + Porter's Lodge key) or the single non-faculty "Administration" group; an `authoriser` column (`DEAN`|`CSO`) drives who approves what.
 - **`guest_requesters`** — external, non-registered people who submit a weekend-only key request; deliberately **not** a `profiles`/`auth.users` row, because that would require an auth account and break the chain-of-trust `invited_by` model.
 - **`keys`** — physical keys: code, zone, room name, owning department, status.
@@ -355,7 +355,7 @@ The schema (fully detailed in `docs/DATABASE.md`, authoritative source in `supab
 
 ### Recurring database-design pattern
 
-Across all 42 migrations, the same philosophy repeats: **business rules are enforced by the database engine, not just by application code.** The 3-collector cap is a trigger, not a check in a route handler. Audit-log immutability is both an RLS policy and a `REVOKE`. Every multi-table mutation goes through a `SECURITY DEFINER` RPC with a pinned `search_path` (closing a class of search-path-injection vulnerabilities) rather than the client performing several separate writes that could partially fail. This is the same idea documented in `docs/ARCHITECTURE.md`'s RLS section: "a HOD cannot read another department's data, even via a direct API call that bypasses application-level checks — the database itself enforces the isolation."
+Across all 42 migrations, the same philosophy repeats: **business rules are enforced by the database engine, not just by application code.** The 3-collector cap is a trigger, not a check in a route handler. Audit-log immutability is both an RLS policy and a `REVOKE`. Every multi-table mutation goes through a `SECURITY DEFINER` RPC with a pinned `search_path` (closing a class of search-path-injection vulnerabilities) rather than the client performing several separate writes that could partially fail. This is the same idea behind `docs/ARCHITECTURE.md`'s RLS overview: a Dean cannot read another faculty's data, even via a direct API call that bypasses application-level checks — the database itself enforces the isolation.
 
 ---
 
@@ -518,7 +518,7 @@ Screen-specific compound components (dialogs and tables used on exactly one dash
 
 **33 unit/component test files**: 9 under `src/lib/` (the risk engine, the signature verifier, the report parser/prompts, the audit writer and event-types, date helpers), 14 under `src/tests/smartkey/` (one per shared component — risk-tier-badge, risk-factor-popover, dashboard-header-avatar, change-password-form, offline-banner, profile-photo-upload/preview, guest-badge, section-card-header, shift-timeline, sidebar-nav, mode-toggle, time-range-filter, transaction-status), plus role-scoped tests under `src/tests/public/`, `src/tests/verifier/`, `src/tests/requester/`, `src/tests/dean/`, `src/tests/hooks/`, `src/tests/cso/`, and one co-located with its component at `src/app/cso/audit/_components/audit-table.test.ts`.
 
-**16 Playwright E2E specs** grouped by role under `tests/e2e/`: 4 public (auth, help, forgot-password, reset-password), 4 CSO (dashboard, admin-keys, users, signature-mismatch-alerts), 1 legacy `hod/dashboard.spec.ts` plus 1 `dean/weekend-requests.spec.ts` (see §12 for why both folders exist), 4 verifier (dashboard, issue-key, return-key, handover), 2 requester (dashboard, request-key). Every E2E spec runs an axe-core accessibility scan as part of the test, per `docs/TESTING.md`'s requirement that every screen test include an axe-core pass with no violations.
+**16 Playwright E2E specs** grouped by role under `tests/e2e/`: 4 public (auth, help, forgot-password, reset-password), 4 CSO (dashboard, admin-keys, users, signature-mismatch-alerts), 1 `dean/weekend-requests.spec.ts` (the legacy `hod/dashboard.spec.ts` this snapshot originally described has since been removed — only `dean/` exists now), 4 verifier (dashboard, issue-key, return-key, handover), 2 requester (dashboard, request-key). Every E2E spec runs an axe-core accessibility scan as part of the test, per `docs/TESTING.md`'s requirement that every screen test include an axe-core pass with no violations.
 
 **pgTAP / database tests do not exist yet.** `docs/TESTING.md` and the CI workflow both reference a `test:db` step for RPC/RLS testing, but no `supabase/tests/` directory or pgTAP files exist in the repository at time of writing. This is a real gap between the documented testing strategy and its current implementation — see §12.
 
@@ -527,7 +527,7 @@ Screen-specific compound components (dialogs and tables used on exactly one dash
 Two GitHub Actions workflows in `.github/workflows/`:
 
 - **`ci.yml`** — runs on every push/PR to `main`: checkout → Bun setup → `bun install --frozen-lockfile` → `bun run typecheck` → `bun run lint` → `bun run test` → `bun run build`.
-- **`e2e.yml`** — runs on PRs to `main`, skipping pure `docs/**`/`supabase/**`/`**/*.md` changes: checkout → Bun setup → `bun install --frozen-lockfile` → cached Playwright chromium install → cached `.next` build cache → `bun run build` → `bun run test:e2e -- --project=chromium` with per-role test credentials injected as secrets (`TEST_CSO_*`, `TEST_HOD_*`, `TEST_VERIFIER_*`, `TEST_REQUESTER_*`) → Playwright HTML report uploaded as an artifact on failure, retained 7 days.
+- **`e2e.yml`** — runs on PRs to `main`, skipping pure `docs/**`/`supabase/**`/`**/*.md` changes: checkout → Bun setup → `bun install --frozen-lockfile` → cached Playwright chromium install → cached `.next` build cache → `bun run build` → `bun run test:e2e -- --project=chromium` with per-role test credentials injected as secrets (`TEST_CSO_*`, `TEST_DEAN_*`, `TEST_VERIFIER_*`, `TEST_REQUESTER_*`) → Playwright HTML report uploaded as an artifact on failure, retained 7 days.
 
 ---
 
@@ -609,7 +609,7 @@ Additional PRs that shipped work not in the original issue plan: **#43** (facult
 
 A report that only shows the clean end state would misrepresent how the project was actually built. These are the real gaps, reversals, and mid-flight discoveries surfaced by the git-history and current-state research — included deliberately, because they demonstrate genuine engineering iteration and debugging rather than a project that arrived fully-formed.
 
-**The HOD→Dean rename is incomplete outside the core app.** The database enum, the app route tree (`src/app/dean/`), and the design-system prompt folder (`design-system/prompts/dean/`) were all updated. But `tests/e2e/hod/dashboard.spec.ts` still exists as a separate file alongside `tests/e2e/dean/weekend-requests.spec.ts`, and the E2E CI workflow (`.github/workflows/e2e.yml`) still injects `TEST_HOD_EMAIL`/`TEST_HOD_PASSWORD` rather than `TEST_DEAN_*`. Internally this is a deliberate, documented choice for _database identifiers_ — the CHANGELOG explicitly states that `hod_decisions`, `hod_id`, `HOD_APPROVED`/`HOD_DECLINED` audit event names, and the `/api/requests/hod-decision` route path were kept as-is "to avoid data-migration risk" — but the leftover `hod/` E2E folder and CI env-var names look more like an incomplete sweep than an intentional choice, and are worth flagging as a cleanup item in the report.
+**The HOD→Dean rename was briefly incomplete outside the core app — since fixed.** At one point the database enum, the app route tree (`src/app/dean/`), and the design-system prompt folder (`design-system/prompts/dean/`) had all been updated, but `tests/e2e/hod/dashboard.spec.ts` still existed as a separate file alongside `tests/e2e/dean/weekend-requests.spec.ts`, and the E2E CI workflow (`.github/workflows/e2e.yml`) still injected `TEST_HOD_EMAIL`/`TEST_HOD_PASSWORD` rather than `TEST_DEAN_*` — a leftover-sweep gap, not an intentional choice. That gap was closed on 2026-08-09 (see `docs/CHANGELOG.md`): the legacy `hod/` E2E folder is gone and CI now injects `TEST_DEAN_*`. Internally, this remains a deliberate, documented choice for _database identifiers_ — the CHANGELOG explicitly states that `hod_decisions`, `hod_id`, `HOD_APPROVED`/`HOD_DECLINED` audit event names, and the `/api/requests/hod-decision` route path were kept as-is "to avoid data-migration risk," and that part was never a gap.
 
 **The two Supabase Edge Functions are effectively vestigial.** `overdue-key-check` and `daily-shift-summary` are still deployed under `supabase/functions/`, but migration 32 (`cron_jobs_direct_sql`) discovered that the mechanism they depended on — reading a custom Postgres setting (`current_setting('app.supabase_url')`) set via `ALTER DATABASE ... SET` — isn't permitted on managed Supabase at all. Per the CHANGELOG's own words, this meant the scheduled jobs had **"silently never fired since launch."** The fix moved both jobs' actual logic into direct-SQL pg_cron functions; the Edge Function files remain in the repo and (presumably) still deployed, but are no longer the code path that actually runs on a schedule.
 
@@ -643,5 +643,5 @@ Against the original 5-milestone roadmap recorded in `docs/GITHUB.md` (Foundatio
 
 - No `supabase/tests/` pgTAP suite exists, despite being referenced by `docs/TESTING.md` and CI workflow comments.
 - No `tailwind.theme.json` or `tokens.dtcg.json` design-token export exists — `design-system/DESIGN.md` remains the only machine- or human-readable source of truth for tokens; the CLI export step described in ADR 0005 has not yet been run.
-- The `tests/e2e/hod/` folder and `TEST_HOD_*` CI secrets have not been renamed to match the `dean/` rename elsewhere in the codebase.
+- ~~The `tests/e2e/hod/` folder and `TEST_HOD_*` CI secrets have not been renamed to match the `dean/` rename elsewhere in the codebase.~~ Fixed 2026-08-09 — see `docs/CHANGELOG.md`.
 - The `resend` npm package remains a listed dependency despite not being the active email provider.

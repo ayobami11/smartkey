@@ -37,10 +37,10 @@ Browser ──┬── Server Components / Server Actions ──┬── Supab
 src/
 ├── app/
 │   ├── (public)/        # landing, login, activation, forgot-password, help
-│   ├── (cso)/           # /cso/*
-│   ├── (hod)/           # /hod/*
-│   ├── (verifier)/      # /verifier/*
-│   ├── (requester)/     # /me/*
+│   ├── cso/             # /cso/*
+│   ├── dean/            # /dean/*
+│   ├── verifier/        # /verifier/*
+│   ├── requester/       # /requester/*
 │   ├── api/             # server actions and route handlers
 │   ├── globals.css
 │   └── layout.tsx

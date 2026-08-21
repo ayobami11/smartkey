@@ -5,7 +5,7 @@ Apply this checklist to every new or modified screen in SmartKey.
 ## Before writing code
 
 - [ ] The screen is documented in `design-system/screens.md`. If not, get the spec first.
-- [ ] The route follows the IA: `/cso/*`, `/hod/*`, `/verifier/*`, `/me/*`, public.
+- [ ] The route follows the IA: `/cso/*`, `/dean/*`, `/verifier/*`, `/requester/*`, public.
 - [ ] The role's middleware gate is correct (only the right role can reach this URL).
 - [ ] You have read the relevant skills:
   - `.claude/skills/design-token-discipline/SKILL.md`

@@ -18,9 +18,9 @@ the code passes `bun run typecheck` and `bun run lint`.
   | Role | Email | Notes |
   | --- | --- | --- |
   | CSO | `mohammedfirdous682@gmail.com` | audit log, oversight |
-  | HOD | `tunwaseayobami11@gmail.com` | department `...0002` — approves guest requests |
+  | DEAN | `tunwaseayobami11@gmail.com` | department `...0002` — approves guest requests |
   | VERIFIER | `rojes87653@lidugw.com` | issues the key at the desk |
-- Seed IDs handy for SQL: HOD dept `10000000-0000-4000-8000-000000000002`, a key in that
+- Seed IDs handy for SQL: Dean dept `10000000-0000-4000-8000-000000000002`, a key in that
   dept `20000000-0000-4000-8000-000000000007`.
 - **Key timing rule:** a guest collection code can only be minted **on the requested
   date** (`requested_for = current_date`). The public form only accepts a future Sat/Sun,
@@ -48,10 +48,10 @@ begin
     now() + interval '8 hours', 'weekend-letters/smoke.png', 'Lab 102'
   );
 
-  -- 2. HOD approves and assigns a key in their department
+  -- 2. Dean approves and assigns a key in their department
   perform public.approve_guest_weekend(
     v_req,
-    (select id from public.profiles where role='HOD' limit 1),
+    (select id from public.profiles where role='DEAN' limit 1),
     '20000000-0000-4000-8000-000000000007', 'looks good'
   );
 
@@ -108,16 +108,16 @@ select public.create_guest_weekend_request(
 2. From the landing page or `/login`, click **"Request weekend access"** → `/weekend-access`.
 3. Fill the form: name, email (use one you can open), optional phone, ID document type +
    number, **Requested Room** (enter a room name/number like "Lab 102"), **department**
-   (pick the HOD's department), **weekend date** (an upcoming Sat/Sun), and **upload a
+   (pick the Dean's department), **weekend date** (an upcoming Sat/Sun), and **upload a
    letter** (any small PNG/JPG/PDF ≤ 5 MB).
 4. Submit. Expect a **persistent confirmation card** with a status link and a "check your
-   email" note, then a redirect to `/weekend-access/<token>` showing **"Awaiting HOD
-   authorisation"** (status `PENDING_HOD`). The status email should also arrive.
+   email" note, then a redirect to `/weekend-access/<token>` showing **"Awaiting
+   approval"** (status `PENDING_HOD`). The status email should also arrive.
 
-### Step 2 — HOD assigns a key and approves
+### Step 2 — Dean assigns a key and approves
 
-1. New normal window → log in as the **HOD** (`tunwaseayobami11@gmail.com`).
-2. Go to `/hod/weekend-requests`. The new request appears flagged **"External"** with the
+1. New normal window → log in as the **Dean** (`tunwaseayobami11@gmail.com`).
+2. Go to `/dean/weekend-requests`. The new request appears flagged **"External"** with the
    guest's name, email, ID type + number, the **Requested Room** name/number, and a
    **"View authorisation letter"** button (opens a signed URL in a new tab).
 3. Pick a **key** from the department in the key selector — the **Approve** button stays
@@ -153,7 +153,7 @@ select public.create_guest_weekend_request(
 
 1. Log in as **CSO** → `/cso/audit`.
 2. You should see `REQUEST_CREATED` and `CODE_ISSUED` attributed to **"<name> (external)"**
-   (no linked profile), plus `HOD_APPROVED` (the HOD) and the key-issued event (the
+   (no linked profile), plus `HOD_APPROVED` (the Dean) and the key-issued event (the
    verifier). This proves guest actions are journaled even though the actor isn't a user.
 
 ---
@@ -164,9 +164,9 @@ select public.create_guest_weekend_request(
   letter > 5 MB → inline errors; oversized letter returns `413`.
 - **Unknown token:** open `/weekend-access/<random-uuid>` → graceful "not found" state
   (the API returns `404`).
-- **Approve without a key:** confirm the HOD Approve button is disabled until a key is
+- **Approve without a key:** confirm the Dean Approve button is disabled until a key is
   picked (guests only).
-- **Decline path:** decline a guest request as HOD → guest status shows `DECLINED`.
+- **Decline path:** decline a guest request as Dean → guest status shows `DECLINED`.
 - **Code reuse:** after the verifier issues, the code is cleared — re-entering it fails.
 
 ---
@@ -190,7 +190,7 @@ select public.create_guest_weekend_request(
   `route.ts` only. Grep the client bundle / `"use client"` files — the service key must
   never appear there.
 - **Letter privacy:** `/api/requests/[id]/letter` returns a 5-minute signed URL and is
-  gated to the HOD whose department owns the request; another HOD gets `403`.
+  gated to the Dean whose department owns the request; another Dean gets `403`.
 
 ---
 

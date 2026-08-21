@@ -6,6 +6,35 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-08-21 — Fix stale HOD→Dean / /hod/ / /me/ documentation
+
+- **Why**: the role rename (HOD → Dean, `/hod/*` → `/dean/*`, `/me/*` → `/requester/*`) never
+  fully propagated through the docs. A full audit, cross-checked against the real route tree and
+  RPC/audit-event names, separated genuine staleness from the internal identifiers (`hod_decisions`,
+  `HOD_APPROVED`, `PENDING_HOD`, `/api/*/hod-decision`) that correctly retain the old name for
+  historical continuity, per `CLAUDE.md`'s own note.
+- **Fixed**: `docs/SCREEN_CHECKLIST.md`, `docs/PRODUCT.md`, `docs/DATABASE.md`, `docs/AI.md`,
+  `docs/AI_TRIGGERS.md`, `docs/ARCHITECTURE.md` (also corrected stale route-group parens in the
+  folder-structure diagram, unrelated to the rename but adjacent), `docs/AUDIT_EVENTS.md`,
+  `docs/CONTEXT.txt`, `docs/external-weekend-requests-testing.md` (including a broken piece of
+  example SQL filtering `role='HOD'`, which would return zero rows against the real `DEAN` enum
+  value), `design-system/DESIGN.md`, and `design-system/screens.md` (the most concentrated cluster —
+  Sections 1–3's role/route tables and flows; Sections 4–10 were already correct).
+- **`docs/IMPLEMENTATION.md`** needed two kinds of fix: straightforward terminology swaps, plus two
+  paragraphs that were factually false rather than just outdated — a "the HOD→Dean rename is
+  incomplete outside the core app" paragraph and a stale CI-secrets/test-folder claim, both fixed by
+  the 2026-08-09 entry below but never updated to say so. Rewrote both to state the current, resolved
+  reality while preserving the historical narrative. Dated project-history narrative elsewhere in the
+  same doc (describing the rename as it actually happened) was left untouched, same as CHANGELOG
+  entries below.
+- **Confirmed clean, no action needed**: this file's own historical entries, `docs/GITHUB.md` (every
+  match sits inside a historical `gh issue create` template), `docs/GLOSSARY.md`, `docs/API.md`,
+  `docs/postman/*`, `design-system/prompts/**` (already correctly documents the rename).
+- **Deliberately out of scope**: `docs/BACKEND.md` — this doc describes a fictional schema/route set
+  that never matched the real implementation (invented tables, routes like `/api/admin/create-hod`
+  that don't exist), not just stale terminology. Fixing HOD→Dean text there wouldn't address the
+  deeper problem; a full rewrite to match reality is a separate, much larger task, deferred.
+
 ### 2026-08-21 — Remove dead code across the frontend
 
 - **Why**: a dead-code sweep across every frontend-owned area (`src/app/**` excluding `src/app/api/**`,

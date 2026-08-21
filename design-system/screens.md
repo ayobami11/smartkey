@@ -18,7 +18,7 @@ This file is the companion to `DESIGN.md`. Where `DESIGN.md` describes the visua
 SmartKey is a four-role web application replacing the paper-based key management workflow at the University of Lagos Senate Building. The roles are:
 
 - **Chief Security Officer (CSO)**: senior administrator. Desktop-primary. Oversight, reports, audit log, user management.
-- **Dean (system role: HOD)**: faculty Dean. Mixed device usage. Authorises up to three collectors per faculty key, signs weekend approvals.
+- **Dean (system role: DEAN)**: faculty Dean. Mixed device usage. Authorises up to three collectors per faculty key, signs weekend approvals.
 - **Verifier (security personnel)**: 24/7 desk staff in 8-hour shifts. Shared desktop at the security desk. Issues and receives keys, performs shift handover.
 - **Requester (university staff)**: lowest-frequency user. Phone-primary. Requests a key, receives a 6-digit code by email, presents it at the desk.
 
@@ -56,11 +56,11 @@ Success criteria: 80–90% reduction in end-to-end request processing time vs th
 
 ### 2.3 Dean area
 
-- `/hod` — Dashboard home: key grid for the faculty, weekend requests requiring action.
-- `/hod/keys/:keyId` — Manage authorised collectors (max 3) for one key.
-- `/hod/weekend-requests` — Review and decide weekend access requests.
-- `/hod/onboarding` — One-time signature and stamp upload (forced on first login).
-- `/hod/profile` — Profile, theme, notifications.
+- `/dean/dashboard` — Dashboard home: key grid for the faculty, weekend requests requiring action.
+- `/dean/keys/:keyId` — Manage authorised collectors (max 3) for one key.
+- `/dean/weekend-requests` — Review and decide weekend access requests.
+- `/dean/onboarding` — One-time signature and stamp upload (forced on first login).
+- `/dean/settings` — Profile, theme, notifications.
 
 ### 2.4 Verifier area
 
@@ -72,11 +72,10 @@ Success criteria: 80–90% reduction in end-to-end request processing time vs th
 
 ### 2.5 Requester area
 
-- `/me` — Dashboard home: authorised keys grid, active request status.
-- `/me/request/:keyId` — Request a key (weekday or weekend).
-- `/me/request/:requestId/code` — Active code display with countdown.
-- `/me/history` — Personal history of past requests.
-- `/me/profile` — Profile, theme, notifications.
+- `/requester/dashboard` — Dashboard home: authorised keys grid, active request status. Requesting a key (weekday or weekend) is a `Sheet` opened from a key tile, not a separate route.
+- `/requester/request/:requestId/code` — Active code display with countdown.
+- `/requester/history` — Personal history of past requests.
+- `/requester/settings` — Profile, theme, notifications.
 
 ---
 
@@ -87,17 +86,17 @@ Success criteria: 80–90% reduction in end-to-end request processing time vs th
 1. User receives provisioning email from CSO with activation link.
 2. User clicks link → `/activate/:token`; sets password and accepts terms.
 3. System sends 6-digit email OTP; user enters it.
-4. Privileged roles (CSO, Dean/HOD, Verifier) confirm MFA preference (email OTP).
-5. Deans are routed to `/hod/onboarding` to upload signature and stamp before any other action.
+4. Privileged roles (CSO, Dean, Verifier) confirm MFA preference (email OTP).
+5. Deans are routed to `/dean/onboarding` to upload signature and stamp before any other action.
 6. User lands on their role dashboard home.
 
 ### 3.2 Requester: standard weekday key request
 
-Three interactions from `/me` to a code on screen.
+Three interactions from `/requester/dashboard` to a code on screen.
 
-1. On `/me`, tap an authorised key tile → opens the request sheet.
+1. On `/requester/dashboard`, tap an authorised key tile → opens the request sheet.
 2. Confirm intended return time (defaults to end of business day, 17:00) and tap "Request key".
-3. Code displays on `/me/request/:requestId/code` and is also emailed. 10-minute countdown starts.
+3. Code displays on `/requester/request/:requestId/code` and is also emailed. 10-minute countdown starts.
 
 Exit conditions:
 
@@ -106,19 +105,19 @@ Exit conditions:
 
 ### 3.3 Requester: weekend access request
 
-1. On `/me`, tap "Request weekend access" → form opens.
+1. On `/requester/dashboard`, tap "Request weekend access" → form opens.
 2. Select key, weekend date, work activity description, submit.
 3. Confirmation card shows pending Dean approval; user notified by email when decision is made.
 
 ### 3.4 Dean: authorise a collector
 
-1. On `/hod`, tap a key tile in the grid → opens slot management for that key.
+1. On `/dean/dashboard`, tap a key tile in the grid → opens slot management for that key.
 2. Tap a vacant slot (max 3) → search staff by name or email; select.
 3. Confirm authorisation; the staff member is now whitelisted for that key.
 
 ### 3.5 Dean: review weekend access request
 
-1. On `/hod`, the weekend-requests panel shows pending items with badge count in nav.
+1. On `/dean/dashboard`, the weekend-requests panel shows pending items with badge count in nav.
 2. Tap a request → detail sheet shows requester, key, date, description.
 3. Choose Approve or Decline (with optional note). Approval auto-expires after 24 hours.
 
