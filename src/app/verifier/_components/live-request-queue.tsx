@@ -84,11 +84,19 @@ type IssueResult = {
 
 type SheetStep = 'code' | 'success';
 
-export const LiveRequestQueue = () => {
+type LiveRequestQueueProps = {
+  initialRequests: QueueRequest[] | null;
+};
+
+export const LiveRequestQueue = ({
+  initialRequests,
+}: LiveRequestQueueProps) => {
   const status = useConnectionStatus();
   const isOffline = status === 'offline';
-  const [requests, setRequests] = useState<QueueRequest[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [requests, setRequests] = useState<QueueRequest[]>(
+    initialRequests ?? []
+  );
+  const [loading, setLoading] = useState(initialRequests === null);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   const issueForm = useForm<IssueKeyFormInput>({
@@ -135,6 +143,9 @@ export const LiveRequestQueue = () => {
   };
 
   useEffect(() => {
+    // A server-seeded array (including an empty one) means the initial load
+    // is already answered — don't refetch it on mount.
+    if (initialRequests !== null) return;
     void apiFetch<{ requests: QueueRequest[] }>(
       '/api/requests/live-queue'
     ).then((result) => {
@@ -145,6 +156,7 @@ export const LiveRequestQueue = () => {
       }
       setRequests(result.data?.requests ?? []);
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useRealtime<{ id: string; status: string }>({

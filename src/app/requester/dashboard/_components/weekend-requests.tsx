@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -62,26 +62,21 @@ const STATUS_CONFIG: Record<
   },
 };
 
-export const WeekendRequests = () => {
+type WeekendRequestsProps = {
+  userId: string | null;
+};
+
+export const WeekendRequests = ({ userId }: WeekendRequestsProps) => {
   const router = useRouter();
   const queryClient = useQueryClient();
   const connectionStatus = useConnectionStatus();
   const isOffline = connectionStatus === 'offline';
 
-  const [userId, setUserId] = useState<string | null>(null);
   const [generatingId, setGeneratingId] = useState<string | null>(null);
   const [errorId, setErrorId] = useState<{
     id: string;
     message: string;
   } | null>(null);
-
-  useEffect(() => {
-    createBrowserClient()
-      .auth.getUser()
-      .then(({ data: { user } }) => {
-        if (user) setUserId(user.id);
-      });
-  }, []);
 
   const { data: requests = [], isLoading: loading } = useQuery({
     queryKey: ['weekend-requests', userId],

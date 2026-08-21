@@ -140,26 +140,21 @@ const ReturnCodeDisplay = ({
   );
 };
 
-export const OutstandingKeys = () => {
+type OutstandingKeysProps = {
+  userId: string | null;
+};
+
+export const OutstandingKeys = ({ userId }: OutstandingKeysProps) => {
   const queryClient = useQueryClient();
   const connectionStatus = useConnectionStatus();
   const isOffline = connectionStatus === 'offline';
 
-  const [userId, setUserId] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [selectedKey, setSelectedKey] = useState<OutstandingKey | null>(null);
   const [sheetPhase, setSheetPhase] = useState<SheetPhase>({ phase: 'idle' });
 
   // Stale-closure-safe ref for the currently-selected key ID
   const selectedKeyIdRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    createBrowserClient()
-      .auth.getUser()
-      .then(({ data: { user } }) => {
-        if (user) setUserId(user.id);
-      });
-  }, []);
 
   const {
     data: keys = [],

@@ -25,24 +25,19 @@ type ActiveRequest = {
   key: { code: string; room_name: string } | null;
 };
 
-export const ActiveRequestBanner = () => {
+type ActiveRequestBannerProps = {
+  userId: string | null;
+};
+
+export const ActiveRequestBanner = ({ userId }: ActiveRequestBannerProps) => {
   const queryClient = useQueryClient();
   const connectionStatus = useConnectionStatus();
   const isOffline = connectionStatus === 'offline';
-  const [userId, setUserId] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   const [cancelling, setCancelling] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Guards the auto-expire call so it fires once per request, not every tick.
   const expiredFiredRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    createBrowserClient()
-      .auth.getUser()
-      .then(({ data: { user } }) => {
-        if (user) setUserId(user.id);
-      });
-  }, []);
 
   const { data: request = null, isLoading: loading } = useQuery({
     queryKey: ['active-request', userId],

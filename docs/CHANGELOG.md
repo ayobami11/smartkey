@@ -6,6 +6,38 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-08-21 — Server-seed Verifier and Requester dashboard initial data
+
+- **Why**: both dashboards rendered an empty shell and fetched everything client-side after
+  hydration, so every page load — including a hard refresh — showed loading skeletons before real
+  data appeared. The Verifier dashboard is the design system's explicitly highest-stakes surface
+  ("must read instantly under time pressure at a 24/7 security desk") and the one CI actually
+  exercises in E2E; the Requester dashboard is the highest-frequency-of-visits role (100–500
+  phone-primary staff), where a client-fetch waterfall costs the most on weaker connections.
+- **Requester dashboard**: `page.tsx` now resolves `userId` server-side and prefetches all four
+  widgets' data using TanStack Query's documented Next.js App Router pattern —
+  `queryClient.prefetchQuery()` with the exact client-side query key, `dehydrate()`, and a
+  `<HydrationBoundary>` wrapping the tree. The client's existing `useQuery` calls pick up the seeded
+  cache automatically once the key matches; no `initialData` prop-threading needed.
+  `active-request-banner.tsx`, `outstanding-keys.tsx`, and `weekend-requests.tsx` now take a
+  `userId` prop instead of resolving it via their own `useEffect` + `auth.getUser()` round trip.
+  `authorized-keys.tsx` needed zero changes — its query key (`['requester', 'authorized-keys']`)
+  isn't keyed by `userId`, so hydration alone was sufficient.
+- **Verifier dashboard**: its data comes from `/api/requests/live-queue` and `/api/keys/out`, which
+  use a session-client-for-auth + admin-client-for-query pattern (bypassing RLS) — not something a
+  Server Component can call directly without either editing those routes or duplicating their
+  logic. New `src/lib/queries/verifier-dashboard.ts` deliberately duplicates the query/role-check/
+  overdue-derivation logic from both routes (with a header comment explaining why, and that it
+  needs manual updates if either route changes) rather than touching `src/app/api/**`.
+  `live-request-queue.tsx` takes a plain `initialRequests` prop (it uses raw `useState`, not React
+  Query, so hydration doesn't apply); `outstanding-keys.tsx` needed zero changes, same reasoning as
+  the Requester dashboard's `authorized-keys.tsx`.
+- New shared `src/lib/queries/get-query-client.ts` — one `QueryClient` per server request via
+  `React.cache()`, so a prefetched cache never leaks between users.
+- **Verified**: typecheck, lint (0 errors), and unit tests (355/356, unchanged) all clean; production
+  build succeeds with both dashboard routes correctly rendering as dynamic (`ƒ`); both dashboards'
+  E2E specs pass (11/11) against a real browser, real login flow, and real Supabase data.
+
 ### 2026-08-21 — Dependency update via `bun audit`
 
 - **Why**: routine dependency maintenance — `bun audit` flagged `next` as outdated; bumping keeps the
