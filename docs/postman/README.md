@@ -1,6 +1,6 @@
 # SmartKey — Postman collection
 
-An importable Postman collection covering **every** server-side route in SmartKey: 58 unique method + path combinations across 65 requests, grouped by the role that calls them.
+An importable Postman collection covering **every** server-side route in SmartKey: 69 unique method + path combinations across 78 requests, grouped by the role that calls them.
 
 This is the "how do I actually hit it" companion to [`docs/API.md`](../API.md), which stays the spec-level reference.
 
@@ -113,7 +113,7 @@ The weekend variant differs in an important way: approval does **not** mint a co
 - **There is no `PENDING_CSO` status.** `cso-queue` is a review surface over already-issuable requests, not an approval gate. `cso-decision` with `APPROVED` changes no state at all — it records that the CSO looked and let it stand.
 - **`GET /api/admin/users` takes no query params and doesn't paginate.** It returns every non-deactivated profile; the CSO table filters client-side. `docs/API.md` used to promise cursor pagination here — it doesn't exist.
 - **`POST /api/requests/collect` ignores any client-supplied `verifier_id`.** The verifier comes from the session, so a collection can't be attributed to another officer.
-- **`register` and `activate-hod` have no `token` field.** The invite link resolves through `GET /api/auth/callback` into an `activate`-namespace session first; those routes only read it. They aren't directly runnable from Postman without doing the browser step.
+- **`register` and `activate-hod` have no `token` field.** The invite link resolves through `GET /auth/confirm` into an `activate`-namespace session first; those routes only read it. They aren't directly runnable from Postman without doing the browser step. (`GET /api/auth/callback` handles the PKCE `?code=...` shape instead — it's a dead-but-harmless fallback no in-app flow currently triggers.)
 - **`DELETE /api/admin/authorisations/...` returns 204 with no body.** `apiFetch` normalises that to `{ data: null, error: null, status: 204 }`.
 
 ---

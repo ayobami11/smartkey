@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "5f2a7c10-9d34-4b8e-a1c6-7e0b2d4f6a81",
     "name": "SmartKey API",
-    "description": "<div style=\"color:#111827;\">Every server-side route in SmartKey (60 handlers across 54 files), grouped by the role that calls it.\n\n## Read this before your first request\n\n**1. Auth is cookie-based, not Bearer.** `POST /api/auth/login` writes a Supabase session into a role-namespaced cookie (`sb-<project-ref>-cso`, `-dean`, `-verifier`, `-requester`). Postman's cookie jar stores it automatically. Do not set an `Authorization` header on user routes; it is ignored.\n\n**2. Every authenticated request MUST send a `Referer` header.** This is the non-obvious part. For `/api/*` paths the middleware cannot derive the role namespace from the URL, so it falls back to the `Referer` (see `src/lib/supabase/middleware.ts` and `namespaceFromReferer` in `src/lib/supabase/cookies.ts`). With no `Referer`, the request resolves to the transient `activate` namespace, finds no session, and returns 401 — even though you are logged in.\n\nEvery request in this collection already carries the correct `Referer`. If you copy a request elsewhere, carry the header with it:\n\n| Calling role | Referer value |\n| --- | --- |\n| CSO | `{{baseUrl}}/cso` |\n| Dean | `{{baseUrl}}/dean` |\n| Verifier | `{{baseUrl}}/verifier` |\n| Requester | `{{baseUrl}}/requester` |\n\nThe `x-smartkey-namespace` header is set by the middleware and overwritten on every request, so sending it yourself does nothing.\n\n**3. CSO, Dean and Verifier require email OTP.** Login returns `mfa_required: true` and mails a 6-digit code; the session is not usable until `POST /api/auth/verify-otp` succeeds. Requester skips MFA and is signed in straight from login.\n\n**4. Response envelope.** Every route returns `{ data, error, status }`. On success `error` is null; on failure `data` is null and `error` is a user-facing string. 204 responses have no body.\n\nSee `docs/postman/README.md` for the full walkthrough and `docs/API.md` for the per-route reference.</div>",
+    "description": "<div style=\"color:#111827;\">Every server-side route in SmartKey (78 requests covering 69 unique method + path combinations across 63 route files), grouped by the role that calls it.\n\n## Read this before your first request\n\n**1. Auth is cookie-based, not Bearer.** `POST /api/auth/login` writes a Supabase session into a role-namespaced cookie (`sb-<project-ref>-cso`, `-dean`, `-verifier`, `-requester`). Postman's cookie jar stores it automatically. Do not set an `Authorization` header on user routes; it is ignored.\n\n**2. Every authenticated request MUST send a `Referer` header.** This is the non-obvious part. For `/api/*` paths the middleware cannot derive the role namespace from the URL, so it falls back to the `Referer` (see `src/lib/supabase/middleware.ts` and `namespaceFromReferer` in `src/lib/supabase/cookies.ts`). With no `Referer`, the request resolves to the transient `activate` namespace, finds no session, and returns 401 — even though you are logged in.\n\nEvery request in this collection already carries the correct `Referer`. If you copy a request elsewhere, carry the header with it:\n\n| Calling role | Referer value |\n| --- | --- |\n| CSO | `{{baseUrl}}/cso` |\n| Dean | `{{baseUrl}}/dean` |\n| Verifier | `{{baseUrl}}/verifier` |\n| Requester | `{{baseUrl}}/requester` |\n\nThe `x-smartkey-namespace` header is set by the middleware and overwritten on every request, so sending it yourself does nothing.\n\n**3. CSO, Dean and Verifier require email OTP.** Login returns `mfa_required: true` and mails a 6-digit code; the session is not usable until `POST /api/auth/verify-otp` succeeds. Requester skips MFA and is signed in straight from login.\n\n**4. Response envelope.** Every route returns `{ data, error, status }`. On success `error` is null; on failure `data` is null and `error` is a user-facing string. 204 responses have no body.\n\nSee `docs/postman/README.md` for the full walkthrough and `docs/API.md` for the per-route reference.</div>",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -70,6 +70,11 @@
       "key": "serviceRoleKey",
       "value": "",
       "description": "<div style=\"color:#111827;\">SUPABASE_SERVICE_ROLE_KEY. System folder only — never ships to a browser.</div>"
+    },
+    {
+      "key": "decisionToken",
+      "value": "",
+      "description": "<div style=\"color:#111827;\">decision_token from the \"New weekend request\" Dean email; paste from the request row or the email link. Public folder only.</div>"
     }
   ],
   "item": [
@@ -559,6 +564,80 @@
           ]
         },
         {
+          "name": "Confirm link (invite / reset / re-invite)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/confirm?token_hash=TOKEN_HASH&type=invite&next=/dean/onboarding",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "confirm"],
+              "query": [
+                {
+                  "key": "token_hash",
+                  "value": "TOKEN_HASH",
+                  "description": "<div style=\"color:#111827;\">The hashed_token from admin.generateLink() &mdash; not runnable standalone from Postman since it requires a real link minted server-side by provision_user / resend-invite / reset-password.</div>"
+                },
+                {
+                  "key": "type",
+                  "value": "invite",
+                  "description": "<div style=\"color:#111827;\">verification_type from generateLink: invite, recovery, etc. type=recovery gets its own failure redirect.</div>"
+                },
+                {
+                  "key": "next",
+                  "value": "/dean/onboarding",
+                  "description": "<div style=\"color:#111827;\">Where to send the user after the session is established. Defaults to /.</div>"
+                }
+              ]
+            },
+            "description": "<div style=\"color:#111827;\">Not a JSON API &mdash; a redirect handler, and the <strong>actual</strong> session-establishment mechanism for every emailed one-time link the app generates (invite, re-invite, password reset). Calls <code>verifyOtp({type, token_hash})</code> server-side &mdash; no PKCE code_verifier involved, which matters because the link is minted by the admin API, not by a browser that could have stored one. Session lands in the transient <code>activate</code> namespace, then redirects to <code>next</code>.\n\nOn failure: <code>type=recovery</code> redirects to <code>/reset-password?error=expired</code>; everything else redirects to <code>/login?error=invalid-link</code>.\n\nNot directly runnable from Postman with a fabricated <code>token_hash</code> &mdash; included so the invite/activation flow reads end to end. See docs/API.md.</div>"
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "Temporary Redirect",
+              "code": 307,
+              "_postman_previewlanguage": "text",
+              "header": [
+                {
+                  "key": "Location",
+                  "value": "/dean/onboarding"
+                }
+              ],
+              "cookie": [],
+              "body": ""
+            },
+            {
+              "name": "Error — expired recovery link",
+              "status": "Temporary Redirect",
+              "code": 307,
+              "_postman_previewlanguage": "text",
+              "header": [
+                {
+                  "key": "Location",
+                  "value": "/reset-password?error=expired"
+                }
+              ],
+              "cookie": [],
+              "body": ""
+            },
+            {
+              "name": "Error — invalid link (non-recovery)",
+              "status": "Temporary Redirect",
+              "code": 307,
+              "_postman_previewlanguage": "text",
+              "header": [
+                {
+                  "key": "Location",
+                  "value": "/login?error=invalid-link"
+                }
+              ],
+              "cookie": [],
+              "body": ""
+            }
+          ]
+        },
+        {
           "name": "Auth callback (redirect handler)",
           "request": {
             "method": "GET",
@@ -580,7 +659,7 @@
                 }
               ]
             },
-            "description": "<div style=\"color:#111827;\">Not a JSON API — a redirect handler. Exchanges the emailed one-time PKCE code for a session in the `activate` namespace, then 302s to `next`. On failure redirects to `/forgot-password?error=expired`.\n\nThis is the missing link that makes Register and Activate Dean work; documented so the flow reads end to end.</div>"
+            "description": "<div style=\"color:#111827;\">Not a JSON API &mdash; a redirect handler for the PKCE <code>?code=...</code> shape (<code>exchangeCodeForSession</code>). <strong>Not used by any in-app flow</strong> &mdash; invite, re-invite, and password reset all route through <code>GET /auth/confirm</code> instead (see the \"Confirm link\" request below), because <code>exchangeCodeForSession</code> needs a <code>code_verifier</code> cookie that only exists in a browser that itself started the flow, which is never true for an admin-generated link. Retained only as a dead-but-harmless fallback in case a Supabase-configured redirect ever points here.</div>"
           },
           "response": [
             {
@@ -3059,6 +3138,93 @@
               }
             }
           ]
+        },
+        {
+          "name": "Get operational config",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/cso",
+                "description": "<div style=\"color:#111827;\">Required. Resolves the role cookie namespace for /api/* paths &mdash; without it the request 401s even when signed in.</div>"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/operational-config",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "operational-config"]
+            },
+            "description": "<div style=\"color:#111827;\">Returns the live operational settings backing the `/cso/settings` \"Operational\" screen: per-zone weekday/weekend hours (`zone_hours`) and the singleton `return_deadline_time` / `code_expiry_minutes` (`operational_config`), all times as `HH:MM`.\n\n**Roles**: CSO only.</div>"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test('config loaded', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(res.error, 'error').to.be.null;",
+                  "});",
+                  "",
+                  "pm.test('both zones present', () => {",
+                  "    pm.expect(res.data.zones).to.have.lengthOf(2);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update operational config",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/cso",
+                "description": "<div style=\"color:#111827;\">Required. Resolves the role cookie namespace for /api/* paths &mdash; without it the request 401s even when signed in.</div>"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"zones\": [\n    {\n      \"zone\": \"NEW_SENATE\",\n      \"weekday_open\": \"06:00\",\n      \"weekday_close\": \"22:00\",\n      \"weekend_closed\": true,\n      \"weekend_open\": null,\n      \"weekend_close\": null\n    },\n    {\n      \"zone\": \"OLD_SENATE\",\n      \"weekday_open\": \"06:00\",\n      \"weekday_close\": \"22:00\",\n      \"weekend_closed\": true,\n      \"weekend_open\": null,\n      \"weekend_close\": null\n    }\n  ],\n  \"return_deadline_time\": \"17:00\",\n  \"code_expiry_minutes\": 10\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/operational-config",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "operational-config"]
+            },
+            "description": "<div style=\"color:#111827;\">Replaces zone hours and the return-deadline/code-expiry singleton in one call, via the `update_operational_config` RPC (no table has a direct write policy). One save writes one `OPERATIONAL_CONFIG_UPDATED` audit entry. Takes effect on the next request submission or code-generation call &mdash; requests already in progress keep their original deadline/expiry.\n\n**`zones` must contain exactly one entry per zone value.** Weekend hours are required unless `weekend_closed` is true. Only the collection-code expiry (`code_expiry_minutes`) is affected here &mdash; the separate 15-minute return-code expiry is untouched.\n\n**Roles**: CSO only.\n\n**Errors**: `403` not CSO &middot; `422` bad `HH:MM` value, missing weekend hours while not closed, or `code_expiry_minutes` outside 5&ndash;60.</div>"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "pm.test('config saved', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(res.error, 'error').to.be.null;",
+                  "});"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -3327,12 +3493,95 @@
               "body": "{\n  \"data\": {\n    \"status\": \"HELD_SIGNATURE_MISMATCH\",\n    \"mismatch_pct\": 22.5,\n    \"message\": \"Submitted image does not match the reference on file — replacement held for review.\"\n  },\n  \"error\": null,\n  \"status\": 200\n}"
             }
           ]
+        },
+        {
+          "name": "Get notification preferences",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/cso",
+                "description": "<div style=\"color:#111827;\">Required. Resolves the role cookie namespace for /api/* paths &mdash; without it the request 401s even when signed in.</div>"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/profile/notification-preferences",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "profile", "notification-preferences"]
+            },
+            "description": "<div style=\"color:#111827;\">The caller's own `notification_preferences` row (RLS-scoped, no role check &mdash; the table is role-agnostic and each role's settings screen only reads/writes the columns it displays). Returns defaults (all `true` except `digest_email`) when no row exists yet; a row is only created on first save.\n\nSwap the `Referer` for the calling role: `/cso`, `/dean`, or `/requester`.</div>"
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"key_issued_in_app\": true,\n    \"overdue_email\": true,\n    \"weekend_decided_email\": true,\n    \"weekend_submitted_in_app\": true,\n    \"weekend_submitted_email\": true,\n    \"signature_mismatch_email\": true,\n    \"digest_email\": false\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update notification preferences",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/cso",
+                "description": "<div style=\"color:#111827;\">Required. Resolves the role cookie namespace for /api/* paths &mdash; without it the request 401s even when signed in.</div>"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"digest_email\": true,\n  \"signature_mismatch_email\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/profile/notification-preferences",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "profile", "notification-preferences"]
+            },
+            "description": "<div style=\"color:#111827;\">Upserts the caller's own row. All fields are individually optional but at least one is required; Postgrest only touches the columns present in the body, so one role's PATCH never disturbs another role's columns on the same row shape. No RPC, no audit entry &mdash; same trust level as `PATCH /api/profile/me`. There is no `code_email` field &mdash; the collection-code email can't be disabled.\n\n**Roles**: ALL (authenticated).\n\n**Errors**: `401` unauthenticated &middot; `422` empty body.</div>"
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"digest_email\": true,\n    \"signature_mismatch_email\": false\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            }
+          ]
         }
       ]
     },
     {
       "name": "07 — Public · guest weekend access",
-      "description": "<div style=\"color:#111827;\">No authentication anywhere in this folder. An external person with no SmartKey account requests weekend access; a Dean approves and assigns a key; the guest mints a code on the day. Identified end to end by an unguessable access_token.</div>",
+      "description": "<div style=\"color:#111827;\">No authentication anywhere in this folder. An external person with no SmartKey account requests weekend access; a Dean approves and assigns a key; the guest mints a code on the day. Identified end to end by an unguessable access_token.\n\nAlso in this folder: the one-click Dean decision link from the \"New weekend request\" email (<code>decision_token</code>), which covers both guest and registered-requester weekend requests routed to a Dean-authorised unit &mdash; not guest-only, but unauthenticated in the same way.</div>",
       "item": [
         {
           "name": "Submit guest weekend request",
@@ -3678,6 +3927,106 @@
               "body": "{\n  \"data\": null,\n  \"error\": \"Code has not expired yet\",\n  \"status\": 409\n}"
             }
           ]
+        },
+        {
+          "name": "Dean decision — view request",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/public/dean-decision/{{decisionToken}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "public", "dean-decision", "{{decisionToken}}"]
+            },
+            "description": "<div style=\"color:#111827;\">Read-only. Looks up the request by `decision_token` and returns what the confirmation page needs: requester/guest details, key or requested room, short-lived signed letter/stamp URLs, and &mdash; for a still-`PENDING_HOD` guest request &mdash; `available_keys` for the key picker. Never mutates state (mail-scanner safety: Outlook/Gmail prefetch links, so a GET that decided anything would let a scanner silently approve or decline before a human opens the email).\n\n`decidable` is `status === 'PENDING_HOD'` &mdash; the page renders Approve/Decline only when true.\n\n**Roles**: ALL (unauthenticated).\n\n**Errors**: `404` token not found or malformed.</div>"
+          },
+          "response": [
+            {
+              "name": "Success (registered requester)",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"request_id\": \"<uuid>\",\n    \"status\": \"PENDING_HOD\",\n    \"decidable\": true,\n    \"is_guest\": false,\n    \"requested_for\": \"2026-08-22\",\n    \"requester_name\": \"Dr. Bakare\",\n    \"requested_room\": null,\n    \"id_document_type\": null,\n    \"id_document_number\": null,\n    \"key\": {\n      \"code\": \"NS-304\",\n      \"room_name\": \"Senate Hall A\"\n    },\n    \"available_keys\": [],\n    \"letter_url\": \"<signed-url>\",\n    \"stamp_url\": null\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"Not found\",\n  \"status\": 404\n}"
+            }
+          ]
+        },
+        {
+          "name": "Dean decision — submit decision",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"APPROVED\",\n  \"note\": \"Reviewed the letter, looks fine.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/public/dean-decision/{{decisionToken}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "public", "dean-decision", "{{decisionToken}}"]
+            },
+            "description": "<div style=\"color:#111827;\">Re-resolves the unit's **current** Dean at decision time (handles a Dean handover between the email being sent and acted on), then runs the same `decideWeekendRequest` core as `POST /api/requests/hod-decision` &mdash; verification, mismatch-holding, guest key-assignment, and the requester notification all behave identically to the dashboard flow.\n\nFor a guest request, `key_id` is required when `decision` is `APPROVED` (pick one from the prior GET's `available_keys`). Registered-requester approvals read `letter_url`/`stamp_url` off the request row itself as the submitted signature/stamp.\n\n**Roles**: ALL (unauthenticated).\n\n**Errors**: `403` unit no longer Dean-authorised, or has no Dean &middot; `404` token not found, or resolves to no unit &middot; `409` request no longer `PENDING_HOD` &middot; `422` validation, or (guest `APPROVED`) missing `key_id`.</div>"
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"request_id\": \"<uuid>\",\n    \"status\": \"APPROVED\"\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error — already decided",
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"This request has already been decided.\",\n  \"status\": 409\n}"
+            }
+          ]
         }
       ]
     },
@@ -3735,6 +4084,153 @@
           ]
         },
         {
+          "name": "Overdue reminders (cron)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{cronSecret}}",
+                "description": "<div style=\"color:#111827;\">Shared CRON_SECRET &mdash; not a user session.</div>"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/cron/overdue-reminders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "cron", "overdue-reminders"]
+            },
+            "description": "<div style=\"color:#111827;\">Called by the `overdue-key-check` pg_cron job hourly, right after `mark_key_overdue()` in the same job. Emails every requester (registered and guest) whose `KEY_ISSUED` request has passed its `return_deadline`, skipping registered requesters who opted out via `notification_preferences.overdue_email` (default true; guests have no preference and always receive it). Stamps `overdue_reminder_sent_at` on every processed row, including ones suppressed by preference, so a row is never re-queried every hour.\n\nReturns `{ sent, suppressed, failed }`. Errors: 401 wrong/missing secret &middot; 500 CRON_SECRET not configured.</div>"
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"sent\": 1,\n    \"suppressed\": 1,\n    \"failed\": 0\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"Missing or incorrect bearer secret\",\n  \"status\": 401\n}"
+            }
+          ]
+        },
+        {
+          "name": "Daily digest (cron)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{cronSecret}}",
+                "description": "<div style=\"color:#111827;\">Shared CRON_SECRET &mdash; not a user session.</div>"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/cron/daily-digest",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "cron", "daily-digest"]
+            },
+            "description": "<div style=\"color:#111827;\">Called by the `daily-digest` pg_cron job at 07:00 UTC. For every `ACTIVE` Dean/CSO profile with `notification_preferences.digest_email = true` (absence of a row means **not** opted in &mdash; the opposite default from every other preference column), calls the `get_digest_stats` RPC for the last 24 hours (building-wide for a CSO, per-unit for a Dean) and emails a summary. Skips a recipient whose window has nothing to report in any relevant field.\n\nReturns `{ sent, skipped, failed }`. Errors: 401 wrong/missing secret &middot; 500 CRON_SECRET not configured.</div>"
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"sent\": 1,\n    \"skipped\": 1,\n    \"failed\": 0\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"Missing or incorrect bearer secret\",\n  \"status\": 401\n}"
+            }
+          ]
+        },
+        {
+          "name": "Audit log export (cron)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{cronSecret}}",
+                "description": "<div style=\"color:#111827;\">Shared CRON_SECRET &mdash; not a user session.</div>"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/cron/audit-export",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "cron", "audit-export"]
+            },
+            "description": "<div style=\"color:#111827;\">Called by the `audit-log-export` pg_cron job at 02:00 UTC. Exports fully-completed UTC calendar days of `audit_log` to Vercel Blob (`access: 'private'`) as newline-delimited JSON (`audit-log/YYYY-MM-DD.ndjson`), advancing the `audit_export_state` watermark one day at a time so a mid-run failure only loses progress on the day that failed. `audit_log` itself is never mutated &mdash; RLS denies UPDATE/DELETE for every role, this is additive durability, not a retention policy. Capped at 20,000 rows per invocation.\n\nReturns `{ exported_days, exported_rows }`. Errors: 401 wrong/missing secret &middot; 500 CRON_SECRET / BLOB_READ_WRITE_TOKEN not configured, or upload failure.</div>"
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"exported_days\": 1,\n    \"exported_rows\": 42\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error",
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"Missing or incorrect bearer secret\",\n  \"status\": 401\n}"
+            }
+          ]
+        },
+        {
           "name": "Verify signature (internal)",
           "request": {
             "method": "POST",
@@ -3758,7 +4254,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "ai", "verify-signature"]
             },
-            "description": "<div style=\"color:#111827;\">Exposes the Sharp + Pixelmatch pipeline directly: fetches the Dean's reference and the submitted image, greyscales both, normalises to 800×400, thresholds to binary, then diffs pixel by pixel.\n\nReturns `{ mismatch_ratio, passed }` against `SIGNATURE_DIFF_THRESHOLD` (default 0.15). Useful for calibrating the threshold against real signature samples.\n\nErrors: 403 wrong internal secret · 422 Dean has no reference signature on file.</div>"
+            "description": "<div style=\"color:#111827;\">Exposes the Sharp + Pixelmatch pipeline directly: fetches the Dean's reference and the submitted image, greyscales both, normalises to 800×400, thresholds to binary, then diffs pixel by pixel.\n\nReturns `{ mismatch_ratio, passed }` against `SIGNATURE_DIFF_THRESHOLD` (default 0.55, scored over the ink region only &mdash; see docs/AI.md). Useful for calibrating the threshold against real signature samples.\n\nErrors: 403 wrong internal secret · 422 Dean has no reference signature on file.</div>"
           },
           "response": [
             {
@@ -3774,6 +4270,55 @@
               ],
               "cookie": [],
               "body": "{\n  \"data\": {\n    \"mismatch_ratio\": 0.04,\n    \"passed\": true\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "09 — Ops (uptime monitoring)",
+      "description": "<div style=\"color:#111827;\">No authentication, no cookies, no session. A liveness probe for external uptime monitoring (e.g. UptimeRobot) &mdash; the one thing the statically-rendered landing page can't do, which is fail when the database is unreachable.</div>",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "health"]
+            },
+            "description": "<div style=\"color:#111827;\">Issues a real (RLS-denied, zero-row) query against `keys` using the anon client, proving PostgREST and Postgres are both reachable. Never uses the service role &mdash; this route is public and unauthenticated by design. Reports `degraded` (still HTTP 200) when the round trip exceeds 1000ms, `ok` otherwise.\n\n**Roles**: none (public).\n\n**Errors**: `503` database unreachable, or the Supabase client failed to construct (e.g. missing env vars).</div>"
+          },
+          "response": [
+            {
+              "name": "Healthy",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"status\": \"ok\",\n    \"database\": \"up\",\n    \"latency_ms\": 42,\n    \"timestamp\": \"<iso>\"\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Database unreachable",
+              "status": "Service Unavailable",
+              "code": 503,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"Database unreachable\",\n  \"status\": 503\n}"
             }
           ]
         }

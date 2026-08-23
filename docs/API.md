@@ -1370,18 +1370,35 @@ Returns weekend requests currently held on `PENDING_HOD` with an unresolved `SIG
 ### POST /api/ai/verify-signature
 
 **File**: `src/app/api/ai/verify-signature/route.ts`
-**Roles**: SYSTEM (called internally from `approve_weekend` RPC callback, not directly by clients)
+**Roles**: SYSTEM — not session-authenticated at all. Gated by a header check (`x-internal-secret === SUPABASE_SERVICE_ROLE_KEY`), never reachable from a browser. Despite the name, `POST /api/requests/hod-decision` does **not** call this route — it imports and runs `verifySignature()` from `src/lib/ai/signature/verifier.ts` directly in-process (see `docs/AI.md` §3). This route is a standalone diagnostic/calibration endpoint for exercising the same pipeline over HTTP, e.g. from Postman.
 
 | Field                     | Type            | Required |
 | ------------------------- | --------------- | -------- |
 | `hod_id`                  | `string` (uuid) | yes      |
 | `submitted_signature_url` | `string`        | yes      |
 
-Retrieves the Dean's reference signature from Supabase Storage, runs Sharp preprocessing on both, and runs Pixelmatch. Returns the mismatch ratio.
+Retrieves the Dean's reference signature from Supabase Storage, runs Sharp preprocessing on both, and runs Pixelmatch. Returns the raw mismatch ratio and whether it passes `SIGNATURE_DIFF_THRESHOLD` (default 0.55, scored over the ink region — see `docs/AI.md` §3).
 
 **Response `data`**: `{ "mismatch_ratio": 0.04, "passed": true }`
 
-If `passed = false`, the caller raises a CSO alert and holds the approval.
+**Errors**: `403` missing/incorrect `x-internal-secret` · `422` request body fails validation, or the Dean has no `signature_ref_url` on file · `500` image fetch or verification failure
+
+---
+
+## 8. Ops
+
+### GET /api/health
+
+**File**: `src/app/api/health/route.ts`
+**Roles**: ALL (unauthenticated) — no session, no cookies
+
+Liveness probe for external uptime monitoring (e.g. UptimeRobot). The landing page is statically rendered and returns 200 even with Postgres completely down, so this route exists to issue a real query and fail when the database can't answer it. Uses the anon client — never the service role — and expects RLS to deny the query (zero rows for `anon` on `keys`); a genuine failure comes back as a Supabase error, not an empty result. No counts, identifiers, or row data appear in the response.
+
+`status` is `"degraded"` (still HTTP 200) when the round trip exceeds 1000ms, `"ok"` otherwise.
+
+**Response `data`**: `{ "status": "ok", "database": "up", "latency_ms": 42, "timestamp": "<iso>" }`
+
+**Errors**: `503` database unreachable, or the Supabase client threw (e.g. missing env vars in a misconfigured deploy)
 
 ---
 
