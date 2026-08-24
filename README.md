@@ -57,7 +57,10 @@ for Administration keys) before a code can be generated.
   signature against their onboarded reference at the pixel level to detect gross
   tampering. It is a tamper check, not proof of authorship, and its threshold is
   still calibrated against synthetic fixtures rather than real signatures — see
-  `docs/AI.md`.
+  `docs/AI.md`. A mismatch never auto-blocks: it holds the action (a weekend
+  request approval, or a Dean replacing their own reference signature/stamp) and
+  raises a review item on the CSO dashboard, where the CSO approves or declines
+  it after comparing the images side by side.
 
 All AI runs server-side, and every AI output is inspectable rather than presented
 as a black-box decision.

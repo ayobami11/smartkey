@@ -13,6 +13,15 @@ review were failures of exactly these rules.
 | `02_weekend_expiry_test.sql`         | `expire_stale_weekend_requests()` and the `requests_key_required_after_pending` CHECK constraint — including the batch-abort outage.          |
 | `03_audit_log_immutability_test.sql` | `audit_log` UPDATE/DELETE/INSERT denied for `anon` and `authenticated`, and CSO-only read.                                                    |
 | `04_authoriser_gate_test.sql`        | The Dean-vs-CSO authoriser gate on `nominate_collector`, `remove_collector`, `approve_weekend`, `decline_weekend`, `dismiss_expired_request`. |
+| `05_weekday_lifecycle_test.sql`      | The weekday collect/return loop: `create_request`, `issue_key`, `return_key` (both the verified and override-reason paths), `request_return`. |
+
+Still uncovered: the guest/external weekend flow (`create_guest_weekend_request`,
+`approve_guest_weekend`, `generate_guest_weekend_code`, `expire_guest_request`,
+`request_return_guest`), admin/config RPCs (`update_risk_config`,
+`update_operational_config`, `provision_user`), shift/report RPCs
+(`acknowledge_shift_handover`, `generate_shift_report`, `add_report_comment`),
+and the remaining batch/cron RPCs (`mark_key_overdue`,
+`schedule_pending_shift_report`, `get_digest_stats`, `expire_lapsed_codes`).
 
 Each file is self-contained: it creates its own fixtures inside a single transaction
 and rolls back at the end, so the files are independent of each other, independent of
@@ -47,8 +56,7 @@ create extension if not exists pgtap with schema extensions;
 
 so the suite bootstraps itself on a database where pgTAP has not been enabled. That
 statement is inside the test transaction, so it is rolled back with everything else and
-re-run per file — harmless, but slightly wasteful. Once the migration history is
-reconciled (item 1 of `docs/REVIEW_ACTIONS_BACKEND.md`), the better home for it is a
+re-run per file — harmless, but slightly wasteful. The better home for it is a
 migration:
 
 ```sql
@@ -57,19 +65,14 @@ create extension if not exists pgtap with schema extensions;
 
 and the per-file line can then be dropped.
 
-### If the local stack will not seed
-
-`supabase/seed.sql` is stale: it still inserts into `public.departments` with a
-`department_id` column, both of which were renamed to `units` / `unit_id` by
-`20260627111159_rename_departments_to_units.sql`. `supabase db reset` will fail on it.
-These tests do not depend on seed data — they build their own fixtures — so you can run
-them against a database seeded however you like, or with seeding disabled
+These tests do not depend on seed data — they build their own fixtures — so they run
+against a database seeded however you like, or with seeding disabled
 (`[db.seed] enabled = false` in `supabase/config.toml`).
 
-## Not wired into CI
+## Wired into CI
 
-`bun run test:db` is deliberately **not** referenced by any workflow in
-`.github/workflows/` yet. CI wiring is being handled separately; do not add it here.
+`.github/workflows/ci.yml` runs `supabase start` then `bun run test:db` on every
+push/PR to `main`, between the unit-test step and the build step.
 
 ## Conventions for new test files
 
