@@ -129,6 +129,63 @@ export const POST = async (request: NextRequest) => {
     const threshold_pct = parseFloat((DEFAULT_THRESHOLD * 100).toFixed(2));
 
     if (!verifyResult.passed) {
+      // Held, not discarded: upload the new image to a distinct "-pending"
+      // path and record it so the CSO can review and either approve it in
+      // (replacing the reference) or decline it, instead of the Dean being
+      // permanently stuck re-uploading against a reference that no longer
+      // matches their actual signature/stamp.
+      const admin = createAdminClient();
+      const ext = image.name.split('.').pop() ?? 'png';
+      const pendingStoragePath = `${user.id}/${type}-pending.${ext}`;
+
+      const { error: pendingUploadError } = await admin.storage
+        .from('hod-signatures')
+        .upload(pendingStoragePath, imageBytes, {
+          contentType: image.type,
+          upsert: true,
+        });
+
+      if (pendingUploadError) {
+        const ref = crypto.randomUUID().slice(0, 8);
+        logger.error('signature-replace: pending upload failed', {
+          ref,
+          err: pendingUploadError.message,
+        });
+        return NextResponse.json(err(`Upload failed. Ref: ${ref}`, 500), {
+          status: 500,
+        });
+      }
+
+      const { data: pendingUrlData } = admin.storage
+        .from('hod-signatures')
+        .getPublicUrl(pendingStoragePath);
+      const pendingUrl = pendingUrlData.publicUrl;
+
+      const { error: pendingRowError } = await admin
+        .from('pending_signature_references')
+        .upsert(
+          {
+            profile_id: user.id,
+            type,
+            pending_url: pendingUrl,
+            current_ref_url: currentRefUrl,
+            mismatch_pct,
+            threshold_pct,
+          },
+          { onConflict: 'profile_id,type' }
+        );
+
+      if (pendingRowError) {
+        const ref = crypto.randomUUID().slice(0, 8);
+        logger.error('signature-replace: failed to record pending reference', {
+          ref,
+          err: pendingRowError.message,
+        });
+        return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
+          status: 500,
+        });
+      }
+
       try {
         await writeAuditEntry({
           event: 'SIGNATURE_MISMATCH',
@@ -140,6 +197,7 @@ export const POST = async (request: NextRequest) => {
             context: 'reference_replacement',
             type,
             current_ref_url: currentRefUrl,
+            pending_url: pendingUrl,
             mismatch_pct,
             threshold_pct,
           },
@@ -159,7 +217,7 @@ export const POST = async (request: NextRequest) => {
           status: 'HELD_SIGNATURE_MISMATCH',
           mismatch_pct,
           message:
-            'Reference not updated: the new image looks significantly different from the current one. The CSO has been notified.',
+            'Reference not updated: the new image looks significantly different from the current one. The CSO has been notified and can review it.',
         })
       );
     }

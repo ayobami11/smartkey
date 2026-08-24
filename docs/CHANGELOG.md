@@ -6,6 +6,35 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-08-24 — CSO override for held signature-reference replacements
+
+- **Why**: `POST /api/profile/signature` (a Dean replacing their onboarded reference signature or
+  stamp) discarded the new upload entirely on a mismatch, with no review path — a Dean whose
+  signature genuinely changed (new pen, injury, deliberate change) was permanently stuck, since
+  every future attempt compared against the same stale reference and failed the same way. This
+  mirrors a problem the weekend-request approval flow already solved via a CSO override
+  (`20260701120000_cso_signature_override.sql`); this change extends the same reviewable-hold
+  pattern to reference replacement.
+- **New table** `pending_signature_references` (migration
+  `20260824090000_pending_signature_references.sql`): represents a held reference-replacement
+  mismatch as a row rather than by scraping audit-log history (there's no `request.status` to key
+  a "still unresolved" query off here, unlike the weekend-request case). CSO-only `SELECT` RLS
+  policy; all writes go through the service-role admin client (the route) or the new
+  `resolve_pending_signature_reference` RPC.
+- **`POST /api/profile/signature`**: on a mismatch, the new upload is now stored at a `-pending`
+  Storage path and recorded in `pending_signature_references` instead of being discarded. The
+  current reference stays active in the meantime — no behaviour change for the Dean beyond that.
+- **New route** `POST /api/admin/signature-references/resolve` (CSO-only): approve replaces the
+  reference with the pending upload; decline discards it. Calls the new
+  `resolve_pending_signature_reference` RPC, which writes `SIGNATURE_REFERENCE_UPDATED` or
+  `SIGNATURE_REFERENCE_DECLINED` (both added to `src/lib/audit/event-types.ts`'s `EVENT_TYPE_MAP`
+  — `SIGNATURE_REFERENCE_UPDATED` already existed in code but was missing from the map, a
+  pre-existing gap fixed incidentally here).
+- **`GET /api/ai/signature-alerts`**: response gains a `reference_replacements` array alongside
+  the existing `alerts`. The CSO dashboard's "Signature mismatches" card
+  (`signature-mismatch-alerts.tsx`, `signature-mismatch-detail-dialog.tsx`) now renders both kinds
+  in one list and routes Approve/Decline to the correct endpoint per kind.
+
 ### 2026-08-24 — Fix stale API docs and Postman collection
 
 - **Why**: `docs/API.md` and the Postman collection had drifted from the real implementation —

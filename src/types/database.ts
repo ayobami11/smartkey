@@ -406,6 +406,44 @@ export type Database = {
         };
         Relationships: [];
       };
+      pending_signature_references: {
+        Row: {
+          current_ref_url: string | null;
+          mismatch_pct: number;
+          pending_url: string;
+          profile_id: string;
+          submitted_at: string;
+          threshold_pct: number;
+          type: string;
+        };
+        Insert: {
+          current_ref_url?: string | null;
+          mismatch_pct: number;
+          pending_url: string;
+          profile_id: string;
+          submitted_at?: string;
+          threshold_pct: number;
+          type: string;
+        };
+        Update: {
+          current_ref_url?: string | null;
+          mismatch_pct?: number;
+          pending_url?: string;
+          profile_id?: string;
+          submitted_at?: string;
+          threshold_pct?: number;
+          type?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'pending_signature_references_profile_id_fkey';
+            columns: ['profile_id'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       profiles: {
         Row: {
           activation_token: string | null;
@@ -1099,6 +1137,18 @@ export type Database = {
           request_id: string;
           return_code: string;
           return_code_expires_at: string;
+        }[];
+      };
+      resolve_pending_signature_reference: {
+        Args: {
+          p_decision: string;
+          p_note?: string;
+          p_profile_id: string;
+          p_type: string;
+        };
+        Returns: {
+          new_url: string;
+          status: string;
         }[];
       };
       return_key: {

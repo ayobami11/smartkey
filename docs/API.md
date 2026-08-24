@@ -1118,12 +1118,33 @@ Replaces a Dean's signature or stamp reference image (post-onboarding). If a ref
 | `type`  | `'signature' \| 'stamp'` | yes      |
 | `image` | `File` (image, max 5MB)  | yes      |
 
-If the mismatch exceeds `SIGNATURE_DIFF_THRESHOLD` (default 15%), the reference is **not** replaced — a `SIGNATURE_MISMATCH` audit entry is written (`context: 'reference_replacement'`) and the response reports the held state (still HTTP 200). Otherwise the reference is replaced and a `SIGNATURE_REFERENCE_UPDATED` entry is written.
+If the mismatch exceeds `SIGNATURE_DIFF_THRESHOLD`, the reference is **held, not replaced**: the new upload is stored at a separate `-pending` Storage path, a row is written to `pending_signature_references` (see `docs/DATABASE.md`), and a `SIGNATURE_MISMATCH` audit entry is written (`context: 'reference_replacement'`, including `pending_url`). The response reports the held state (still HTTP 200) and the current reference stays active in the meantime. The CSO reviews the pending upload against the current reference on `/cso/dashboard` (same "Signature mismatches" card as the weekend-request mismatches) and resolves it via `POST /api/admin/signature-references/resolve` — approve to replace the reference, or decline to discard the pending upload. Otherwise (verification passes) the reference is replaced immediately and a `SIGNATURE_REFERENCE_UPDATED` entry is written.
 
 **Response `data`** (held): `{ "status": "HELD_SIGNATURE_MISMATCH", "mismatch_pct": <number>, "message": "..." }`
 **Response `data`** (updated): `{ "status": "updated", "new_url": "<url>" }`
 
 **Errors**: `401` unauthenticated · `403` not DEAN · `422` missing/invalid type or image · `413` over 5MB
+
+---
+
+### POST /api/admin/signature-references/resolve
+
+**File**: `src/app/api/admin/signature-references/resolve/route.ts`
+**Roles**: CSO
+**RPC**: `resolve_pending_signature_reference(profile_id, type, decision, note?)`
+
+Resolves a held reference-replacement mismatch from `POST /api/profile/signature` above. Mirrors `POST /api/requests/hod-decision`'s `cso_override` path for weekend-request mismatches, but for a Dean's own onboarded reference rather than a request. `decision: 'APPROVED'` replaces `profiles.signature_ref_url`/`stamp_ref_url` with the pending upload; `decision: 'DECLINED'` discards it. Either way the pending row is deleted. The RPC raises `NOT_FOUND` if there's no pending row for that `profile_id`/`type`.
+
+| Field        | Type                       | Required |
+| ------------ | -------------------------- | -------- |
+| `profile_id` | `string` (uuid)            | yes      |
+| `type`       | `'signature' \| 'stamp'`   | yes      |
+| `decision`   | `'APPROVED' \| 'DECLINED'` | yes      |
+| `note`       | `string`                   | no       |
+
+**Response `data`**: `{ "status": "APPROVED" | "DECLINED", "new_url": "<url>" | null }` (`new_url` is the new reference URL on approval, `null` on decline)
+
+**Errors**: `401` unauthenticated · `403` not CSO · `404` no pending reference for this profile/type · `422` validation
 
 ---
 
@@ -1327,9 +1348,12 @@ Returns active high-risk access patterns: requests with `risk_tier = 'HIGH'` in 
 **File**: `src/app/api/ai/signature-alerts/route.ts`
 **Roles**: CSO
 
-Returns weekend requests currently held on `PENDING_HOD` with an unresolved `SIGNATURE_MISMATCH` audit entry (written by `POST /api/requests/hod-decision` when a Dean's submitted signature and/or stamp fails verification). Read-only. A request drops off this list once the CSO resolves it via `cso_override` on `POST /api/requests/hod-decision`.
+Returns two independent lists of held signature/stamp mismatches. Read-only.
 
-**Response `data`**: `signature` and/or `stamp` is present depending on which check(s) failed — never both null.
+- `alerts` — weekend requests currently held on `PENDING_HOD` with an unresolved `SIGNATURE_MISMATCH` audit entry (written by `POST /api/requests/hod-decision` when a Dean's submitted signature and/or stamp fails verification). A request drops off this list once the CSO resolves it via `cso_override` on `POST /api/requests/hod-decision`.
+- `reference_replacements` — Dean signature/stamp reference-replacement uploads currently held (written by `POST /api/profile/signature`). Sourced from `pending_signature_references` row existence rather than audit-log scraping (there is no request status to key off here). An entry drops off this list once the CSO resolves it via `POST /api/admin/signature-references/resolve`.
+
+**Response `data`**: `signature` and/or `stamp` is present on an `alerts` entry depending on which check(s) failed — never both null.
 
 ```json
 {
@@ -1360,6 +1384,18 @@ Returns weekend requests currently held on `PENDING_HOD` with an unresolved `SIG
         "room_name": "Senate Hall A",
         "zone": "NEW_SENATE"
       }
+    }
+  ],
+  "reference_replacements": [
+    {
+      "profile_id": "<uuid>",
+      "type": "signature",
+      "dean_name": "Dr. Bakare",
+      "submitted_at": "<iso>",
+      "mismatch_pct": 62.0,
+      "threshold_pct": 55,
+      "current_ref_url": "<url>",
+      "pending_url": "<url>"
     }
   ]
 }
@@ -1404,32 +1440,33 @@ Liveness probe for external uptime monitoring (e.g. UptimeRobot). The landing pa
 
 ## RPC cross-reference
 
-| RPC                             | Called by route                                      | Also writes audit entry |
-| ------------------------------- | ---------------------------------------------------- | ----------------------- |
-| `create_request`                | POST /api/requests/submit                            | yes                     |
-| `issue_key`                     | POST /api/requests/collect                           | yes                     |
-| `generate_weekend_code`         | POST /api/requests/weekend-code                      | yes                     |
-| `expire_request`                | POST /api/requests/expire                            | yes                     |
-| `dismiss_expired_request`       | POST /api/requests/dismiss                           | yes                     |
-| `request_return`                | POST /api/requests/request-return                    | yes                     |
-| `request_return_guest`          | POST /api/public/weekend-request/[token]/return-code | yes                     |
-| `return_key`                    | POST /api/keys/return                                | yes                     |
-| `approve_weekend`               | POST /api/requests/hod-decision                      | yes                     |
-| `approve_guest_weekend`         | POST /api/requests/hod-decision                      | yes                     |
-| `decline_weekend`               | POST /api/requests/hod-decision                      | yes                     |
-| `nominate_collector`            | POST /api/admin/authorisations                       | yes                     |
-| `remove_collector`              | DELETE /api/admin/authorisations/[k]/[r]             | yes                     |
-| `create_guest_weekend_request`  | POST /api/public/weekend-request                     | yes                     |
-| `generate_guest_weekend_code`   | POST /api/public/weekend-request/[token]/code        | yes                     |
-| `expire_guest_request`          | POST /api/public/weekend-request/[token]/expire      | yes                     |
-| `acknowledge_shift_handover`    | POST /api/shifts/handover                            | yes — per key           |
-| `generate_shift_report`         | POST /api/reports/generate                           | yes                     |
-| `add_report_comment`            | POST /api/reports/[id]/comments                      | yes                     |
-| `provision_user`                | POST /api/admin/users                                | yes                     |
-| `update_risk_config`            | PATCH /api/admin/risk-rules                          | yes                     |
-| `update_operational_config`     | PATCH /api/admin/operational-config                  | yes                     |
-| `mark_key_overdue`              | cron only (`pg_cron`, hourly) — no route caller      | yes — per key           |
-| `schedule_pending_shift_report` | cron only (`pg_cron`, daily 18:00) — no route caller | yes — when a CSO exists |
+| RPC                                   | Called by route                                      | Also writes audit entry |
+| ------------------------------------- | ---------------------------------------------------- | ----------------------- |
+| `create_request`                      | POST /api/requests/submit                            | yes                     |
+| `issue_key`                           | POST /api/requests/collect                           | yes                     |
+| `generate_weekend_code`               | POST /api/requests/weekend-code                      | yes                     |
+| `expire_request`                      | POST /api/requests/expire                            | yes                     |
+| `dismiss_expired_request`             | POST /api/requests/dismiss                           | yes                     |
+| `request_return`                      | POST /api/requests/request-return                    | yes                     |
+| `request_return_guest`                | POST /api/public/weekend-request/[token]/return-code | yes                     |
+| `return_key`                          | POST /api/keys/return                                | yes                     |
+| `approve_weekend`                     | POST /api/requests/hod-decision                      | yes                     |
+| `approve_guest_weekend`               | POST /api/requests/hod-decision                      | yes                     |
+| `decline_weekend`                     | POST /api/requests/hod-decision                      | yes                     |
+| `nominate_collector`                  | POST /api/admin/authorisations                       | yes                     |
+| `remove_collector`                    | DELETE /api/admin/authorisations/[k]/[r]             | yes                     |
+| `create_guest_weekend_request`        | POST /api/public/weekend-request                     | yes                     |
+| `generate_guest_weekend_code`         | POST /api/public/weekend-request/[token]/code        | yes                     |
+| `expire_guest_request`                | POST /api/public/weekend-request/[token]/expire      | yes                     |
+| `acknowledge_shift_handover`          | POST /api/shifts/handover                            | yes — per key           |
+| `generate_shift_report`               | POST /api/reports/generate                           | yes                     |
+| `add_report_comment`                  | POST /api/reports/[id]/comments                      | yes                     |
+| `provision_user`                      | POST /api/admin/users                                | yes                     |
+| `update_risk_config`                  | PATCH /api/admin/risk-rules                          | yes                     |
+| `update_operational_config`           | PATCH /api/admin/operational-config                  | yes                     |
+| `resolve_pending_signature_reference` | POST /api/admin/signature-references/resolve         | yes                     |
+| `mark_key_overdue`                    | cron only (`pg_cron`, hourly) — no route caller      | yes — per key           |
+| `schedule_pending_shift_report`       | cron only (`pg_cron`, daily 18:00) — no route caller | yes — when a CSO exists |
 
 All RPCs are defined in `supabase/migrations/`. See `docs/DATABASE.md` for parameter signatures.
 

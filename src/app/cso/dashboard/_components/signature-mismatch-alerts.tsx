@@ -29,7 +29,8 @@ export type MismatchCheck = {
   mismatch_pct: number;
 };
 
-export type SignatureMismatchAlert = {
+export type WeekendRequestMismatch = {
+  kind: 'weekend_request';
   id: string;
   requested_for: string;
   occurred_at: string;
@@ -39,6 +40,29 @@ export type SignatureMismatchAlert = {
   requester?: { full_name: string } | null;
   key?: { code: string; room_name: string } | null;
 };
+
+export type ReferenceReplacementMismatch = {
+  kind: 'reference_replacement';
+  id: string;
+  profile_id: string;
+  type: 'signature' | 'stamp';
+  dean_name: string;
+  submitted_at: string;
+  mismatch_pct: number;
+  threshold_pct: number;
+  current_ref_url: string | null;
+  pending_url: string;
+};
+
+export type SignatureMismatchAlert =
+  | WeekendRequestMismatch
+  | ReferenceReplacementMismatch;
+
+type RawWeekendRequestMismatch = Omit<WeekendRequestMismatch, 'kind'>;
+type RawReferenceReplacementMismatch = Omit<
+  ReferenceReplacementMismatch,
+  'kind' | 'id'
+>;
 
 const QUERY_KEY = ['cso', 'signature-alerts'];
 
@@ -68,12 +92,25 @@ export const SignatureMismatchAlerts = () => {
     queryKey: QUERY_KEY,
     refetchInterval: connectionStatus !== 'connected' ? 10_000 : false,
     queryFn: async () => {
-      const result = await apiFetch<{ alerts: SignatureMismatchAlert[] }>(
-        '/api/ai/signature-alerts'
-      );
+      const result = await apiFetch<{
+        alerts: RawWeekendRequestMismatch[];
+        reference_replacements: RawReferenceReplacementMismatch[];
+      }>('/api/ai/signature-alerts');
       if (result.error || !result.data)
         throw new Error(result.error ?? 'Failed to load signature alerts.');
-      return result.data.alerts ?? [];
+
+      const weekendAlerts: SignatureMismatchAlert[] = (
+        result.data.alerts ?? []
+      ).map((a) => ({ ...a, kind: 'weekend_request' }));
+      const referenceAlerts: SignatureMismatchAlert[] = (
+        result.data.reference_replacements ?? []
+      ).map((a) => ({
+        ...a,
+        kind: 'reference_replacement',
+        id: `${a.profile_id}:${a.type}`,
+      }));
+
+      return [...weekendAlerts, ...referenceAlerts];
     },
   });
 
@@ -135,57 +172,73 @@ export const SignatureMismatchAlerts = () => {
             </Empty>
           ) : (
             <div className="flex flex-col gap-3">
-              {alerts.map((alert) => (
-                <div
-                  key={alert.id}
-                  className="flex w-full overflow-hidden rounded-lg border border-border bg-card shadow-[0_2px_4px_rgba(15,23,42,0.06)]"
-                >
+              {alerts.map((alert) => {
+                const isReference = alert.kind === 'reference_replacement';
+                const label = isReference
+                  ? `${alert.type === 'signature' ? 'Signature' : 'Stamp'} reference update — ${alert.mismatch_pct}%`
+                  : alert.signature && alert.stamp
+                    ? `Signature & stamp mismatch — ${alert.signature.mismatch_pct}% / ${alert.stamp.mismatch_pct}%`
+                    : alert.stamp
+                      ? `Stamp mismatch — ${alert.stamp.mismatch_pct}%`
+                      : alert.signature
+                        ? `Signature mismatch — ${alert.signature.mismatch_pct}%`
+                        : 'Mismatch detected';
+                const subline = isReference
+                  ? 'Reference signature/stamp replacement'
+                  : alert.key
+                    ? `${alert.key.room_name} — ${alert.key.code}`
+                    : 'Unknown key';
+                const personName = isReference
+                  ? alert.dean_name
+                  : (alert.requester?.full_name ?? 'Unknown requester');
+                const occurredAt = isReference
+                  ? alert.submitted_at
+                  : alert.occurred_at;
+
+                return (
                   <div
-                    className="w-1 shrink-0 bg-destructive"
-                    aria-hidden="true"
-                  />
-                  <div className="flex flex-1 flex-col gap-1.5 p-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-1.5">
-                        <FileWarningIcon
-                          className="size-4 shrink-0 text-destructive"
-                          aria-hidden="true"
-                        />
-                        <span className="text-xs font-semibold text-destructive">
-                          {alert.signature && alert.stamp
-                            ? `Signature & stamp mismatch — ${alert.signature.mismatch_pct}% / ${alert.stamp.mismatch_pct}%`
-                            : alert.stamp
-                              ? `Stamp mismatch — ${alert.stamp.mismatch_pct}%`
-                              : alert.signature
-                                ? `Signature mismatch — ${alert.signature.mismatch_pct}%`
-                                : 'Mismatch detected'}
-                        </span>
+                    key={alert.id}
+                    className="flex w-full overflow-hidden rounded-lg border border-border bg-card shadow-[0_2px_4px_rgba(15,23,42,0.06)]"
+                  >
+                    <div
+                      className="w-1 shrink-0 bg-destructive"
+                      aria-hidden="true"
+                    />
+                    <div className="flex flex-1 flex-col gap-1.5 p-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <FileWarningIcon
+                            className="size-4 shrink-0 text-destructive"
+                            aria-hidden="true"
+                          />
+                          <span className="text-xs font-semibold text-destructive">
+                            {label}
+                          </span>
+                        </div>
+                        <time className="shrink-0 font-mono text-xs text-muted-foreground">
+                          {formatTime(occurredAt)}
+                        </time>
                       </div>
-                      <time className="shrink-0 font-mono text-xs text-muted-foreground">
-                        {formatTime(alert.occurred_at)}
-                      </time>
-                    </div>
-                    <p className="text-sm font-medium text-foreground">
-                      {alert.key
-                        ? `${alert.key.room_name} — ${alert.key.code}`
-                        : 'Unknown key'}
-                    </p>
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs text-muted-foreground">
-                        {alert.requester?.full_name ?? 'Unknown requester'}
+                      <p className="text-sm font-medium text-foreground">
+                        {subline}
                       </p>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setSelectedAlert(alert)}
-                        aria-label={`Review signature mismatch for ${alert.requester?.full_name ?? 'this request'}`}
-                      >
-                        Review
-                      </Button>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs text-muted-foreground">
+                          {personName}
+                        </p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSelectedAlert(alert)}
+                          aria-label={`Review signature mismatch for ${personName}`}
+                        >
+                          Review
+                        </Button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </>

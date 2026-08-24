@@ -231,6 +231,19 @@ Added alongside `notification_preferences`. Mirrors `requests.reminder_sent_at` 
 
 Added for the Dean/CSO "daily digest" tabs. **Defaults to `false`** — the opposite convention from every other column on this table (which default `true`). This is an opt-in enhancement, not a core notification; absence of a row means not opted in for this column specifically.
 
+### pending_signature_references
+
+A held reference-replacement mismatch from `POST /api/profile/signature`, awaiting CSO review. Row existence = held; the row is deleted when the CSO resolves it (via `resolve_pending_signature_reference`). Composite PK means a second mismatched upload before the first is resolved just overwrites the pending row — no stacking. RLS: `SELECT` for CSO only (`public.user_role() = 'CSO'`, same shape as `audit_log`'s CSO-read policy); no write policy for any role — the route writes it via the service-role admin client, and `resolve_pending_signature_reference` deletes it.
+
+- Composite PK (`profile_id`, `type`)
+- `profile_id` UUID FK profiles — the Dean whose reference is pending
+- `type` text, `CHECK (type IN ('signature', 'stamp'))`
+- `pending_url` text — Storage URL of the new, unverified upload (at a `-pending` path distinct from the active reference)
+- `current_ref_url` text nullable — snapshot of the reference it was compared against, for display
+- `mismatch_pct` numeric
+- `threshold_pct` numeric
+- `submitted_at` timestamptz
+
 ## RPCs (Postgres functions)
 
 These wrap multi-table mutations in transactions and enforce business rules.
@@ -259,6 +272,7 @@ These wrap multi-table mutations in transactions and enforce business rules.
 - `provision_user(name, email, role, department_id?)` — creates profile, generates activation token, queues email, audit entry.
 - `update_risk_config(rules, medium_min, high_min)` — CSO-only. `rules` is a JSON array of exactly 5 `{rule_key, weight, enabled}` objects, one per `risk_rule_key`. Updates `risk_rule_config` and the `risk_tier_config` singleton in one transaction, writes one `RISK_CONFIG_UPDATED` audit entry (not one per rule). Raises `INVALID_TIER_BOUNDS` if `high_min <= medium_min`, `INVALID_RULES` if `rules` isn't exactly 5 entries or contains an unknown `rule_key`.
 - `update_operational_config(zone_hours, return_deadline_time, code_expiry_minutes)` — CSO-only. `zone_hours` is a JSON array of exactly 2 `{zone, weekday_open, weekday_close, weekend_closed, weekend_open, weekend_close}` objects, one per `public.zone` value. Updates `zone_hours` and the `operational_config` singleton in one transaction, writes one `OPERATIONAL_CONFIG_UPDATED` audit entry. Raises `INVALID_ZONE_HOURS` for a bad/incomplete zone entry (open ≥ close, or missing weekend hours while not closed) and `INVALID_CONFIG` for an out-of-range `code_expiry_minutes` or a null `return_deadline_time`. `create_request`, `generate_weekend_code`, and `generate_guest_weekend_code` all read `code_expiry_minutes` from here instead of each hardcoding their own expiry.
+- `resolve_pending_signature_reference(profile_id, type, decision, note?)` — CSO-only. Resolves a `pending_signature_references` row: on `'APPROVED'`, sets `profiles.signature_ref_url`/`stamp_ref_url` (whichever `type` says) to the pending upload's URL and writes a `SIGNATURE_REFERENCE_UPDATED` audit entry (`resolved_by_cso: true`); on `'DECLINED'`, writes a `SIGNATURE_REFERENCE_DECLINED` entry with no profile change. Either way the pending row is deleted first. Raises `NOT_FOUND` if no pending row exists for that `profile_id`/`type`, `INVALID_DECISION` for a bad `type`/`decision` value.
 
 ### External (guest) weekend RPCs
 

@@ -63,17 +63,30 @@ export const SignatureMismatchDetailDialog = ({
     setResolving(decision);
     setSubmitError(null);
 
-    const result = await apiFetch<{ request_id: string; status: string }>(
-      '/api/requests/hod-decision',
-      {
-        method: 'POST',
-        body: {
-          request_id: alert.id,
-          decision,
-          cso_override: true,
-        },
-      }
-    );
+    const result =
+      alert.kind === 'reference_replacement'
+        ? await apiFetch<{ status: string; new_url: string | null }>(
+            '/api/admin/signature-references/resolve',
+            {
+              method: 'POST',
+              body: {
+                profile_id: alert.profile_id,
+                type: alert.type,
+                decision,
+              },
+            }
+          )
+        : await apiFetch<{ request_id: string; status: string }>(
+            '/api/requests/hod-decision',
+            {
+              method: 'POST',
+              body: {
+                request_id: alert.id,
+                decision,
+                cso_override: true,
+              },
+            }
+          );
 
     setResolving(null);
 
@@ -91,12 +104,26 @@ export const SignatureMismatchDetailDialog = ({
         {alert && !resolvedAs && (
           <>
             <DialogHeader>
-              <DialogTitle>Signature mismatch</DialogTitle>
+              <DialogTitle>
+                {alert.kind === 'reference_replacement'
+                  ? 'Reference signature update'
+                  : 'Signature mismatch'}
+              </DialogTitle>
               <DialogDescription>
-                {alert.requester?.full_name ?? 'This requester'}
-                {alert.key
-                  ? ` — ${alert.key.room_name} (${alert.key.code})`
-                  : ''}
+                {alert.kind === 'reference_replacement' ? (
+                  <>
+                    {alert.dean_name} —{' '}
+                    {alert.type === 'signature' ? 'signature' : 'stamp'}{' '}
+                    reference replacement
+                  </>
+                ) : (
+                  <>
+                    {alert.requester?.full_name ?? 'This requester'}
+                    {alert.key
+                      ? ` — ${alert.key.room_name} (${alert.key.code})`
+                      : ''}
+                  </>
+                )}
               </DialogDescription>
             </DialogHeader>
 
@@ -106,19 +133,60 @@ export const SignatureMismatchDetailDialog = ({
                 aria-hidden="true"
               />
               <p className="text-sm text-destructive">
-                {alert.signature && alert.stamp
-                  ? `Signature ${alert.signature.mismatch_pct}% / stamp ${alert.stamp.mismatch_pct}% mismatch`
-                  : alert.stamp
-                    ? `${alert.stamp.mismatch_pct}% stamp mismatch`
-                    : alert.signature
-                      ? `${alert.signature.mismatch_pct}% signature mismatch`
-                      : 'Mismatch detected'}
-                {alert.threshold_pct !== null &&
+                {alert.kind === 'reference_replacement'
+                  ? `${alert.mismatch_pct}% mismatch (threshold ${alert.threshold_pct}%)`
+                  : alert.signature && alert.stamp
+                    ? `Signature ${alert.signature.mismatch_pct}% / stamp ${alert.stamp.mismatch_pct}% mismatch`
+                    : alert.stamp
+                      ? `${alert.stamp.mismatch_pct}% stamp mismatch`
+                      : alert.signature
+                        ? `${alert.signature.mismatch_pct}% signature mismatch`
+                        : 'Mismatch detected'}
+                {alert.kind === 'weekend_request' &&
+                  alert.threshold_pct !== null &&
                   ` (threshold ${alert.threshold_pct}%)`}
               </p>
             </div>
 
-            {alert.signature && (
+            {alert.kind === 'reference_replacement' && (
+              <div className="flex flex-col gap-2">
+                <p className="text-xs font-semibold text-foreground">
+                  {alert.type === 'signature' ? 'Signature' : 'Stamp'}
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Reference on file
+                    </p>
+                    {alert.current_ref_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={alert.current_ref_url}
+                        alt={`Current reference ${alert.type} on file for ${alert.dean_name}`}
+                        className="aspect-[2/1] w-full rounded-lg border border-border bg-muted object-contain"
+                      />
+                    ) : (
+                      <div className="flex aspect-[2/1] w-full items-center justify-center rounded-lg border border-border bg-muted text-xs text-muted-foreground">
+                        No reference on file
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Submitted (pending)
+                    </p>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={alert.pending_url}
+                      alt={`Submitted ${alert.type} pending review from ${alert.dean_name}`}
+                      className="aspect-[2/1] w-full rounded-lg border border-border bg-muted object-contain"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {alert.kind === 'weekend_request' && alert.signature && (
               <div className="flex flex-col gap-2">
                 <p className="text-xs font-semibold text-foreground">
                   Signature
@@ -152,7 +220,7 @@ export const SignatureMismatchDetailDialog = ({
               </div>
             )}
 
-            {alert.stamp && (
+            {alert.kind === 'weekend_request' && alert.stamp && (
               <div className="flex flex-col gap-2">
                 <p className="text-xs font-semibold text-foreground">Stamp</p>
                 <div className="grid grid-cols-2 gap-3">
@@ -225,7 +293,9 @@ export const SignatureMismatchDetailDialog = ({
                       aria-busy={resolving === 'APPROVED'}
                       onClick={() => handleResolve('APPROVED')}
                     >
-                      Approve anyway
+                      {alert.kind === 'reference_replacement'
+                        ? 'Approve and replace'
+                        : 'Approve anyway'}
                     </Button>
                   </span>
                 </TooltipTrigger>
@@ -251,8 +321,11 @@ export const SignatureMismatchDetailDialog = ({
                   {resolvedAs === 'APPROVED' ? 'Approved' : 'Declined'}
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {alert.requester?.full_name ?? 'The requester'} has been
-                  notified by email.
+                  {alert.kind === 'reference_replacement'
+                    ? resolvedAs === 'APPROVED'
+                      ? `${alert.dean_name}'s ${alert.type} reference has been updated.`
+                      : `The pending ${alert.type} upload has been discarded.`
+                    : `${alert.requester?.full_name ?? 'The requester'} has been notified by email.`}
                 </p>
               </div>
               <Button

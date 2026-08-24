@@ -19,6 +19,8 @@ describe('getEventType', () => {
     ['LOGIN_SUCCEEDED', 'LOGIN'],
     ['USER_PROVISIONED', 'SETTINGS'],
     ['SIGNATURE_MISMATCH', 'SIGNATURE'],
+    ['SIGNATURE_REFERENCE_UPDATED', 'SIGNATURE'],
+    ['SIGNATURE_REFERENCE_DECLINED', 'SIGNATURE'],
   ] as const)('maps %s to %s', (event, type) => {
     expect(getEventType(event)).toBe(type);
   });

@@ -103,5 +103,39 @@ export const GET = async () => {
     .filter((alert): alert is NonNullable<typeof alert> => alert !== null)
     .sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : -1));
 
-  return NextResponse.json(ok({ alerts }), { status: 200 });
+  // Held reference-replacement mismatches (POST /api/profile/signature).
+  // Represented by row existence rather than audit-log scraping — there is
+  // no request.status to key an "unresolved" query off here, unlike the
+  // weekend-request alerts above.
+  const { data: pendingRefs, error: pendingRefsError } = await supabase
+    .from('pending_signature_references')
+    .select(
+      `profile_id, type, pending_url, current_ref_url, mismatch_pct, threshold_pct, submitted_at,
+       profile:profiles!profile_id(full_name)`
+    )
+    .order('submitted_at', { ascending: false });
+
+  if (pendingRefsError) {
+    return NextResponse.json(err('Failed to fetch signature alerts', 500), {
+      status: 500,
+    });
+  }
+
+  const reference_replacements = (pendingRefs ?? []).map((row) => {
+    const profile = Array.isArray(row.profile) ? row.profile[0] : row.profile;
+    return {
+      profile_id: row.profile_id,
+      type: row.type as 'signature' | 'stamp',
+      dean_name: profile?.full_name ?? 'Unknown Dean',
+      submitted_at: row.submitted_at,
+      mismatch_pct: row.mismatch_pct,
+      threshold_pct: row.threshold_pct,
+      current_ref_url: row.current_ref_url,
+      pending_url: row.pending_url,
+    };
+  });
+
+  return NextResponse.json(ok({ alerts, reference_replacements }), {
+    status: 200,
+  });
 };
