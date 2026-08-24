@@ -20,7 +20,9 @@ create policy pending_signature_references_select_cso
   to authenticated
   using (public.user_role() = 'CSO');
 
-
+-- No INSERT/UPDATE/DELETE policy for any role. The route writes the pending
+-- row via the service-role admin client (bypasses RLS); resolving it goes
+-- through the RPC below (SECURITY DEFINER).
 
 create or replace function public.resolve_pending_signature_reference(
   p_profile_id uuid,
