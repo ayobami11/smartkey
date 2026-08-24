@@ -6,6 +6,29 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-08-24 — Fix stale API docs and Postman collection
+
+- **Why**: `docs/API.md` and the Postman collection had drifted from the real implementation —
+  the usual risk of hand-maintained docs sitting alongside a fast-moving route tree.
+- **`docs/API.md`**: `POST /api/ai/verify-signature`'s **Roles** line wrongly said it was called
+  internally from the `approve_weekend` RPC callback — it's actually gated by an
+  `x-internal-secret` header check and never called by `POST /api/requests/hod-decision` (which
+  runs `verifySignature()` in-process instead); corrected the description and the stale `0.15`
+  threshold reference to the current `0.55` ink-region threshold, and added the missing
+  **Errors** line. Added an entirely undocumented `GET /api/health` route under a new `## 8. Ops`
+  section.
+- **Postman collection**: added the 7 endpoint groups missing since the last sync —
+  `GET`/`PATCH /api/admin/operational-config`, `GET`/`PATCH /api/profile/notification-preferences`,
+  `GET`/`POST /api/public/dean-decision/[token]`, the three `/api/cron/*` reminder/digest/export
+  routes, and `GET /api/health` — plus a corrected description for "Auth callback" (it's an unused
+  PKCE fallback, not what makes registration/activation work — that's `GET /auth/confirm`).
+  `docs/postman/README.md` updated to match.
+- **Follow-up fix (same day)**: the route-count prose in the collection's own description and in
+  `docs/postman/README.md` still said "69 unique method + path combinations" (one spot said a much
+  older "58") after the additions above raised the real count to 71. Verified by diffing every
+  route in the collection against every `route.ts` file — the two sides match exactly at 71.
+  Corrected both docs to say 71.
+
 ### 2026-08-21 — Fix stale HOD→Dean / /hod/ / /me/ documentation
 
 - **Why**: the role rename (HOD → Dean, `/hod/*` → `/dean/*`, `/me/*` → `/requester/*`) never
