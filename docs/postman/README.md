@@ -1,6 +1,6 @@
 # SmartKey — Postman collection
 
-An importable Postman collection covering **every** server-side route in SmartKey: 69 unique method + path combinations across 78 requests, grouped by the role that calls them.
+An importable Postman collection covering **every** server-side route in SmartKey: 71 unique method + path combinations across 78 requests, grouped by the role that calls them.
 
 This is the "how do I actually hit it" companion to [`docs/API.md`](../API.md), which stays the spec-level reference.
 
@@ -192,4 +192,4 @@ for f in $(find src/app/api -name route.ts); do
 done | sort -u
 ```
 
-`diff` the two. As of the last sync both sides were 58 and matched exactly.
+`diff` the two. As of the last sync both sides were 71 and matched exactly (63 distinct route files, one path — `/auth/confirm` — implemented outside `src/app/api`).
