@@ -6,6 +6,22 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-08-27 — Add role-based FAQs to the public Help page
+
+- **Why**: `/help` was a thin, role-agnostic FAQ (account provisioning, OTP, password reset,
+  one line on requesting a key) with no guidance at all for Dean, Verifier, or CSO usage —
+  the three roles with the most complex flows (weekend approvals + signature onboarding,
+  issue/return/handover, reports/audit/risk alerts). Rather than a separate onboarding page
+  or a per-dashboard help panel (more surfaces to keep in sync as screens change), the
+  existing public FAQ page was extended in place.
+- The general FAQ (account, OTP, password) stays visible to every visitor. A new
+  "Role-based FAQs" section below it uses a `Tabs` component (`variant="line"`, full width)
+  to switch between four role-specific accordions — Requester, Verifier, Dean, CSO — so a
+  visitor doesn't have to commit to a role before seeing the answers that apply to everyone.
+- Also fixed a stale reference left over from the HOD→Dean rename: the account-provisioning
+  FAQ said "contact your department's Head of Department," now "contact your faculty's Dean,"
+  matching the wording already used on the Requester dashboard's empty state.
+
 ### 2026-08-24 — CSO override for held signature-reference replacements
 
 - **Why**: `POST /api/profile/signature` (a Dean replacing their onboarded reference signature or
