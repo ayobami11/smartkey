@@ -1,7 +1,16 @@
 {
   "mcpServers": {
     "supabase": {
+      "type": "http",
       "url": "https://mcp.supabase.com/mcp"
+    },
+    "postman": {
+      "type": "http",
+      "url": "https://mcp.postman.com/mcp"
+    },
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/"
     }
   }
 }
