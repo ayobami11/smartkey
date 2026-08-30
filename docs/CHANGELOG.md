@@ -6,6 +6,25 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-08-30 — Sign letter/stamp URLs before Dean weekend-approval verification
+
+- **Why**: manual testing (TC-CSO-06) surfaced "Signature verification error. Ref: ..." on every
+  Dean approval that included a signature or stamp upload — both from `/dean/weekend-requests`
+  and from the one-click email approval link. `decideWeekendRequest` (`src/lib/requests/decide-
+weekend.ts`) does a plain unauthenticated `fetch()` against whatever `submittedSignatureUrl`/
+  `submittedStampUrl` it's given, but `requests.letter_url`/`stamp_url` are raw paths in the
+  private `weekend-letters` bucket — an anonymous fetch against a private-bucket path 404s (or
+  is denied), which the verifier's catch block reported as a generic "verification error"
+  rather than the real cause.
+- `src/app/dean/weekend-requests/_components/weekend-requests-view.tsx`: `handleDecision` now
+  fetches short-lived (5-minute) signed URLs via the existing `GET /api/requests/[id]/letter`
+  route for both `letter` and `stamp` immediately before building the approve body (registered,
+  non-guest approvals only), instead of sending the raw `letter_url`/`stamp_url` column values.
+- `src/app/api/public/dean-decision/[token]/route.ts`: the `POST` handler already had a working
+  `signLetterUrl()` helper (used correctly by `GET` for the preview) but wasn't using it before
+  calling `decideWeekendRequest` — now signs both URLs the same way before the call.
+- Both call sites verified via `bun run typecheck` and `bun run lint`.
+
 ### 2026-08-30 — Uptime monitor pointed at `/api/health`; review item #11 closed
 
 - **Why**: `docs/UPTIME_MONITORING.md` had the setup instructions written since 2026-08-10, but
