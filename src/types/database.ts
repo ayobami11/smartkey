@@ -1184,7 +1184,6 @@ export type Database = {
         Args: { p_high_min: number; p_medium_min: number; p_rules: Json };
         Returns: undefined;
       };
-      user_department_id: { Args: never; Returns: string };
       user_role: { Args: never; Returns: string };
       user_unit_id: { Args: never; Returns: string };
     };

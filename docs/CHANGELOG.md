@@ -6,6 +6,131 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-08-30 — Fix a guest-approval authorisation gap; add pgTAP coverage for the guest weekend flow
+
+- **Why**: scoped the pgTAP test-coverage gap (`supabase/tests/README.md` had flagged the guest
+  weekend flow as entirely untested) and, while reading `approve_guest_weekend`'s live definition
+  to write accurate assertions, found the RPC didn't verify the key it assigns actually belongs
+  to the unit the guest requested — only that the acting Dean/CSO owns that key. Confirmed this
+  was a real gap, not just a missing test, before writing anything: a Dean could approve a guest
+  request routed to a different faculty by assigning a key from their own faculty instead. Fixed
+  the RPC first, then wrote the test suite against the fix (not the bug) — a local Supabase stack
+  was already running via Docker, and `bunx supabase test db` works, so every assertion below was
+  actually run, not written blind.
+- **`approve_guest_weekend`** (`20260830103000_fix_approve_guest_weekend_unit_check.sql`): added
+  a check that `requests.requested_unit_id` matches the assigned key's unit, raising `FORBIDDEN`
+  otherwise. Not reachable through the current UI — `POST /api/requests/hod-decision` does an
+  RLS-scoped `SELECT` before calling the RPC, which already blocks a Dean from seeing another
+  faculty's guest request — but the RPC is the authoritative enforcement boundary for a
+  `SECURITY DEFINER` function (it bypasses RLS), so it shouldn't depend on a route-level read
+  happening to mask the gap. Applied to production and backfilled locally to keep the pgTAP run
+  honest. See `docs/DATABASE.md`'s hardening section for the full writeup.
+- **`supabase/tests/06_guest_weekend_lifecycle_test.sql`** (new, 40 assertions): covers all 5
+  guest RPCs — `create_guest_weekend_request`, `approve_guest_weekend` (including the fix above
+  and the existing Dean-vs-CSO authoriser gate), `generate_guest_weekend_code`,
+  `expire_guest_request` (both the terminal-EXPIRED and same-day-rollback-to-APPROVED branches),
+  `request_return_guest`. Full suite: 6 files, 150 assertions, all passing.
+- **`supabase/tests/README.md`** and **`docs/TESTING.md`**: updated coverage tables. Also fixed
+  the README's own drift — its "still uncovered" list had omitted `generate_weekend_code`,
+  `expire_request`, and `resolve_pending_signature_reference` entirely; cross-checked against the
+  full RPC list in `docs/DATABASE.md` rather than trusting the prior list.
+- Still uncovered: registered-user `generate_weekend_code`/`expire_request`, admin/config RPCs
+  (`update_risk_config`, `update_operational_config`, `provision_user`,
+  `resolve_pending_signature_reference`), shift/report RPCs, and the batch/cron RPCs — scoped but
+  not started this pass; see `supabase/tests/README.md`.
+
+### 2026-08-30 — Second backend/docs audit; full Postman collection resync
+
+- **Why**: requested audit of the backend and its docs, plus a resync of the Postman collection —
+  the collection was suspected stale. It was: the published "SmartKey API" collection in Postman
+  had last been touched 2026-08-04, was missing an entire folder and 12 requests present in the
+  repo's own JSON snapshot, and — separately — `docs/postman/README.md` pointed at a collection id
+  (`c7912f2c-...`) that no longer resolves (404), meaning the collection had been deleted and
+  recreated at some point without the doc being updated, silently breaking the "the link never
+  changes" guarantee it documents.
+- **`docs/API.md`**: `POST /api/auth/activate-hod`'s documented response said `"redirect": "/hod"`
+  — a leftover from before the HOD→Dean rename; the route actually returns `/dean`.
+  `GET /api/admin/units`'s documented response fields (`hasActiveHod`/`hasAvailableKey`) don't
+  match what the route returns (`has_hod`/`has_slot_today`) — not just casing, different names
+  entirely. `GET /api/ai/signature-alerts`'s example `threshold_pct` was `15`, left over from
+  before the 2026-08-02 signature-threshold fix (see `docs/AI.md` §3); corrected to `55` to match
+  the actual default and the doc's own other example in the same response.
+- **`docs/DATABASE.md`**: `create_request`'s documented RPC signature
+  (`key_id, return_time, type, weekend_date`) didn't match the live function
+  (`key_id, type, return_deadline, weekend_date?`) — wrong param order and a wrong param name.
+  The `mark_key_overdue()` note claiming execute was granted to `authenticated` ("callable by any
+  signed-in user") was checked against `20260525133712_rpcs.sql` and found false — execute is
+  granted to `service_role` only, with an explicit comment against granting it to `authenticated`;
+  the note was simply wrong, not stale. The claimed three legacy `request_status` enum values
+  (`PENDING`/`SUCCESS`/`ERROR`) couldn't be found in any migration file, including the one the doc
+  named as their source — flagged as unverified from source rather than deleted outright, since it
+  may reflect live production state never captured in a migration.
+- **`docs/TESTING.md`**: the "## CI" section only documented 2 of the repo's 4 GitHub Actions
+  workflows — `changelog.yml` (the changelog-entry PR gate) and `post-deploy-smoke.yml` (the
+  post-deploy smoke test gating production promotion) existed but weren't mentioned. The pgTAP
+  coverage row still said "4 files" and listed the weekday collect/return loop as uncovered;
+  `05_weekday_lifecycle_test.sql` already covers exactly that, so the row was stale by one file.
+- **`docs/AI.md`, `docs/BACKEND.md`, `docs/ARCHITECTURE.md`**: audited, no discrepancies found —
+  risk engine config, Gemini module layout and model default, signature threshold and ink-coverage
+  bounds, §14's implementation status, the pg_net/cron callouts, the folder structure, and the
+  Realtime table list all still match current code.
+- **Postman collection resync** (`docs/postman/SmartKey.postman_collection.json` +
+  `docs/postman/README.md` + the published "SmartKey API" collection, via the Postman MCP server):
+  added the one route missing from both the repo snapshot and the published collection
+  (`POST /api/admin/signature-references/resolve`, shipped 2026-08-24 and never added to either);
+  corrected two stale request bodies/descriptions (`Approve weekend request` and `Signature
+mismatch alerts`, both still describing the pre-stamp-check, 15%-threshold, flat-`mismatch_pct`
+  shape); then brought the published collection's 8-folder, ~60-request snapshot fully in step
+  with the repo's 10-folder, 79-request one — 1 new folder, 12 new requests with response
+  examples, 2 corrected requests, and the top-level description's counts, all applied directly via
+  `createCollectionFolder`/`createCollectionRequest`/`createCollectionResponse`/
+  `updateCollectionRequest`/`updateCollectionResponse`/`patchCollection` rather than a blind
+  `putCollection` replace (its schema drops test scripts and response examples below the top
+  folder level, confirmed by inspection before committing to the approach). `README.md`'s
+  collection-id block now points at the real live id (`ac287f0b-...`) with a note explaining the
+  correction, so the next person to hit a 404 on the old id knows why.
+
+### 2026-08-30 — Security/performance hardening pass from a live Supabase advisor sweep
+
+- **Why**: ran `get_advisors` (security + performance) live against production after a "what's
+  left to work on backend-side" check. Most findings traced back to the same root cause: a
+  function recreated via `CREATE OR REPLACE FUNCTION` after a signature change reacquires
+  Postgres's default `PUBLIC` execute grant, silently undoing an earlier blanket
+  `REVOKE EXECUTE ... FROM anon` — a foot-gun worth documenting since it will recur on the next
+  RPC signature change unless the pattern is known.
+- **`approve_weekend`/`decline_weekend` were anon-executable.** Confirmed live via
+  `has_function_privilege('anon', ...)` before fixing — `REVOKE ... FROM anon` (first attempt)
+  did nothing, since the access came through the implicit `PUBLIC` grant, not an anon-specific
+  one. `REVOKE EXECUTE ... FROM PUBLIC` on both closed it; `authenticated` keeps access via its
+  own explicit grant. Internal role checks would have rejected an anon caller regardless, but
+  there's no reason to let an unauthenticated request reach a `SECURITY DEFINER` function at all.
+- **Dropped `user_department_id()`** — a temporary backwards-compat alias from the
+  departments→units rename (`20260627111159`), explicitly scoped to a deploy window that closed
+  months ago. No application code referenced it (only the generated `src/types/database.ts`
+  type, now removed). It carried the same anon-executable gap as above, plus no `search_path`
+  pinned (a `SECURITY DEFINER` search-path-hijack vector) — dropping it closed both. `user_unit_id()`
+  (its replacement) now has `search_path = public` pinned, matching `approve_weekend`/`decline_weekend`.
+- **Added `idx_requests_guest_id`** — `requests_guest_id_fkey` had no covering index.
+- **5 RLS policies rewritten** to wrap `auth.uid()` in `(select auth.uid())` so Postgres caches
+  it once per query instead of re-evaluating per row (`notification_preferences` ×3,
+  `profiles_update`, `guest_requesters_select_hod`). Logic unchanged.
+- **Consolidated duplicate permissive SELECT policies**: `guest_requesters` (3 → 1) and
+  `requests` (2 → 1), predicates OR'd together verbatim from the originals. Access control is
+  unchanged, only policy count — verified by reading `pg_policies` first and copying `qual`
+  strings exactly rather than retyping them from memory.
+- Two of the seven fixes (the `audit-log-export` cron job apply, and the policy consolidation)
+  were initially blocked by Claude Code's auto-mode classifier — cron jobs with secrets and DDL
+  on access-control tables are exactly the kind of action worth a human confirming. Re-attempted
+  after the user reviewed and approved; both landed clean.
+- **Not fixed**: Supabase Auth's "leaked password protection" (HaveIBeenPwned check) is still
+  disabled — an Auth dashboard setting, not reachable via any available tool.
+- All 5 migrations applied directly to production via the Supabase MCP server, then backfilled
+  into `supabase/migrations/` (`20260830102208` through `20260830102744`) so a fresh
+  `bun run db:migrate` replay reproduces the same state. See `docs/DATABASE.md` "Security and
+  performance hardening" for the full technical writeup.
+- Verified clean via a second `get_advisors` pass: no more `anon_security_definer_function_executable`,
+  `function_search_path_mutable`, `auth_rls_initplan`, or `multiple_permissive_policies` findings.
+
 ### 2026-08-30 — Close the audit-export deploy gap; drop stale post-migration debris
 
 - **Why**: a Supabase audit (via the Supabase MCP server, live against the production project)

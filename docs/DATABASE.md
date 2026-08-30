@@ -302,6 +302,50 @@ Guest analogues of the registered-user weekend flow. All are `SECURITY DEFINER`,
 
 `shift_reports` durability remains an open gap — not covered by this export, and not yet decided.
 
+## Security and performance hardening (2026-08-30)
+
+A live Supabase advisor sweep (`get_advisors`, both `security` and `performance`) found several
+findings from schema drift, not the original design. Fixed via 5 migrations applied directly to
+production and backfilled into `supabase/migrations/`:
+
+- **`approve_weekend`/`decline_weekend` were callable by `anon`.** `20260701120000_cso_signature_override.sql`
+  recreated both via `CREATE OR REPLACE FUNCTION` to add `p_cso_override` — a new function object,
+  which reacquires Postgres's default `PUBLIC` execute grant regardless of the earlier blanket
+  `REVOKE EXECUTE ... FROM anon` (`20260610111721`). `REVOKE ... FROM anon` alone does not undo a
+  `PUBLIC` grant; only an explicit `REVOKE ... FROM PUBLIC` does — confirmed via
+  `has_function_privilege('anon', ...)` before and after. Internal role checks inside both
+  functions would have rejected an unauthenticated actor regardless, but there was no reason to
+  let `anon` reach a `SECURITY DEFINER` function at all.
+- **`user_department_id()` dropped.** Reintroduced in `20260627111159_rename_departments_to_units.sql`
+  as a temporary backwards-compat alias for the renamed `user_unit_id()`, explicitly scoped to "the
+  window between this migration and the frontend deploy" — that window closed months ago and no
+  application code referenced it. It also carried the same implicit-`PUBLIC`-grant gap as above
+  (anon-executable) and had no `search_path` pinned (a `SECURITY DEFINER` search-path-hijack
+  vector). Dropping it closed both at once rather than just tightening its grants.
+- **`user_unit_id()`** now has `search_path = public` pinned, matching `approve_weekend`/`decline_weekend`.
+- **`idx_requests_guest_id`** added — `requests.requests_guest_id_fkey` had no covering index.
+- **5 RLS policies** (`notification_preferences` ×3, `profiles_update`, `guest_requesters_select_hod`)
+  rewritten to wrap `auth.uid()` in `(select auth.uid())` so Postgres caches it once per query
+  instead of re-evaluating per row. Logic unchanged.
+- **Duplicate permissive SELECT policies consolidated**: `guest_requesters`' three SELECT policies
+  → one (`guest_requesters_select`); `requests`' two SELECT policies → one (`requests_select`).
+  Predicates OR'd together verbatim from the originals — access control is unchanged, only policy
+  count.
+- **Not fixed (no tool access)**: Supabase Auth's "leaked password protection" (HaveIBeenPwned
+  check) is still disabled — that's an Auth dashboard setting, not a migration.
+
+A follow-up pass while scoping `supabase/tests/` coverage found a real authorisation gap in
+**`approve_guest_weekend`** (`20260830103000_fix_approve_guest_weekend_unit_check.sql`): it
+checked that the acting Dean/CSO owns the assigned key's unit, but never checked that the
+assigned key's unit matches `requests.requested_unit_id` — the unit the guest actually requested
+access within. At the RPC layer (the authoritative boundary for a `SECURITY DEFINER` function,
+since it bypasses RLS) this let a Dean approve a guest request routed to a _different_ faculty by
+assigning a key from their _own_ faculty instead. Not reachable through the current UI —
+`POST /api/requests/hod-decision` does an RLS-scoped `SELECT` before calling the RPC, and
+`requests_select` blocks a Dean from seeing another faculty's guest request — but the RPC
+shouldn't rely on that as its only enforcement. Added the missing check; regression-tested in
+`supabase/tests/06_guest_weekend_lifecycle_test.sql`.
+
 ## Migrations workflow
 
 1. Create migration: `supabase migration new <name>`.
