@@ -60,7 +60,7 @@ The technology stack was selected to address the precise technical requirements 
 | File Storage          | Supabase Storage        | Free tier                               | Passport photos, signatures, weekend letters; access controlled by same RLS policies                 |
 | Real-time Updates     | Supabase Realtime       | Free tier                               | WebSocket-based; pushes DB change events to Verifier queue and CSO dashboard                         |
 | AI: Pattern Detection | SQL + TypeScript        | In-process                              | No external library; parameterized SQL COUNT/WHERE; weighted risk score function in API route        |
-| AI: Incident Reports  | Google Gemini API       | gemini-3.0-flash (free tier 15 req/min) | Best free-tier LLM for narrative text generation; simple REST call; template fallback if unavailable |
+| AI: Incident Reports  | Google Gemini API       | gemini-3.5-flash (free tier 15 req/min) | Best free-tier LLM for narrative text generation; simple REST call; template fallback if unavailable |
 | AI: Signature Verify  | sharp + pixelmatch      | v0.33 / v6.0                            | Pixel-level comparison; no GPU, no training data, no cost; detects gross tampering reliably          |
 | QR Code               | qrcode.react            | Latest                                  | Generates temporary collection tokens for Security Verifier desk                                     |
 | Background Jobs       | Supabase Edge Functions | Deno runtime                            | Hourly overdue-key alerts; daily shift summary generation                                            |
@@ -327,7 +327,7 @@ Incident report generation is the only task in SmartKey that requires a Large La
 
 Implementation details:
 
-- Model: Google Gemini (gemini-3.0-flash) via REST API.
+- Model: Google Gemini (gemini-3.5-flash) via REST API.
 - Selection rationale: Google offers a free tier of 15 requests per minute with no billing required, sufficient for pilot-scale incident report generation; the flash model excels at structured-data-to-narrative conversion.
 - Invocation: Called from POST /api/ai/generate-report. The route collects data from incident_log, key_transactions, and users tables, assembles a structured prompt including timestamps, names, room codes, transaction status, and prior flags, and sends it to the Gemini REST endpoint via a standard fetch call (no SDK dependency).
 - Output: The LLM returns a formal incident summary in paragraph form. The summary is stored in the ai_summary column of incident_log.
@@ -517,9 +517,9 @@ Track progress here after every merged PR. Update the status column; link the PR
 | Component                                         | Status  | PR  |
 | ------------------------------------------------- | ------- | --- |
 | Supabase project setup + packages                 | ✅ Done | #26 |
-| Database schema (all 12 tables)                   | ✅ Done | #27 |
+| Database schema (all 12 tables)¹                  | ✅ Done | #27 |
 | RLS policies                                      | ✅ Done | #30 |
-| Postgres RPCs (10 functions)                      | ✅ Done | #31 |
+| Postgres RPCs (10 functions)¹                     | ✅ Done | #31 |
 | Supabase client utilities + logger + audit writer | ✅ Done | #29 |
 | Auth middleware (role gating)                     | ✅ Done | #28 |
 | Auth API routes (login, OTP, register, activate)  | ✅ Done | #32 |
@@ -532,10 +532,21 @@ Track progress here after every merged PR. Update the status column; link the PR
 | Signature verification (Sharp + Pixelmatch)       | ✅ Done | #22 |
 | Supabase Storage (photos, signatures, letters)    | ✅ Done | #32 |
 | Shift handover + incident + report API routes     | ✅ Done | #37 |
-| Edge Functions (overdue check + daily summary)    | ✅ Done | #24 |
+| Edge Functions (overdue check + daily summary)²   | ✅ Done | #24 |
 | CI/CD pipeline (GitHub Actions)                   | ✅ Done | #25 |
 
 Statuses: `⬜ Not started` → `🔄 In progress` → `✅ Done`
+
+¹ Counts as of these PRs, not current: the schema has since grown from 12 tables to 20
+(`notification_preferences`, `risk_rule_config`, `risk_tier_config`, `zone_hours`,
+`operational_config`, `pending_signature_references`, `audit_export_state` added later; see
+`docs/DATABASE.md` for the current list), and the RPC count has grown from 10 to ~27 (see
+`docs/DATABASE.md`'s "RPCs" section and `docs/TESTING.md`'s pgTAP coverage table).
+
+² Superseded 2026-08-04: both Edge Functions were removed and replaced by `pg_cron` calling the
+underlying SQL functions (`mark_key_overdue()`, `schedule_pending_shift_report()`) directly —
+see `docs/DATABASE.md`'s RPC list. The background-job feature this row describes is still live;
+the Edge Function implementation specifically is not.
 
 # 15\. Conclusion
 

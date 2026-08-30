@@ -47,11 +47,13 @@ src/
 ├── components/
 │   ├── ui/              # shadcn primitives (do not edit by hand)
 │   └── smartkey/        # SmartKey-specific components
-├── hooks/
-│   ├── useRealtime.ts
-│   ├── useShift.ts
-│   ├── useReducedMotion.ts
-│   └── useConnectionStatus.ts
+├── hooks/               # file names are kebab-case; this list is illustrative, not exhaustive
+│   ├── use-realtime.ts
+│   ├── use-connection-status.ts
+│   ├── use-debounce.ts
+│   ├── use-media-query.ts
+│   ├── use-mobile.ts
+│   └── use-object-url.ts
 ├── lib/
 │   ├── supabase/        # typed client, server, middleware
 │   ├── audit/           # write-only API for audit_log
@@ -60,7 +62,9 @@ src/
 │   │   ├── reports/     # Gemini integration
 │   │   └── signature/   # Sharp + Pixelmatch
 │   ├── email/           # Nodemailer/Gmail SMTP templates and senders
-│   ├── auth/            # MFA flow, session helpers
+│   ├── queries/         # TanStack Query client + role-specific query builders
+│   ├── requests/        # shared request-decision logic (e.g. decide-weekend.ts)
+│   ├── validation/      # shared zod primitives and schemas
 │   └── logger.ts        # structured logging
 ├── types/               # shared types and zod schemas
 └── proxy.ts             # auth + role gating (Next.js 16 `proxy` convention, formerly `middleware.ts`)
@@ -74,8 +78,7 @@ design-system/
 ├── DESIGN.md            # source of truth (Google DESIGN.md spec)
 ├── screens.md           # IA, flows, screen specs
 ├── prompts/             # per-screen Stitch prompt files
-├── tailwind.theme.json  # exported by design.md CLI
-└── tokens.dtcg.json     # exported by design.md CLI
+└── brand/               # logo/mark SVG source files (smartkey-mark.svg, etc.)
 
 docs/
 └── (this folder)
