@@ -6,6 +6,40 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-08-30 — Redesign the 14 transactional/digest email templates
+
+- **Why**: the templates in `src/lib/email/otp.ts` still used the original 2-colour "flat card"
+  layout from the first backend pass — no visual hierarchy beyond a coloured header bar, plain
+  paragraphs for every state (approved, declined, held for review, overdue), and copy that mixed
+  contractions and em dashes inconsistently with the voice conventions `design-system/DESIGN.md`
+  already documents for the rest of the product. None of the 14 emails had inbox preheader text or
+  mobile meta tags either, so every one showed a blank or arbitrary preview line and risked iOS
+  Mail auto-zooming the body copy.
+- Replaced the shared `emailHeader`/`wrap` helpers with a small internal design-token system
+  (`N`, `F_SERIF`/`F_SANS`/`F_MONO`) and a set of layout helpers (`nHeader`, `nFooter`, `nDoc`,
+  `nBadge`, `nCodePanel`, `nNote`, `nDetailPanel`, `nDigestRow`, etc.) matching `DESIGN.md`'s
+  maroon/gold institutional palette. There is no logo asset for the product and inline logo art is
+  unreliable in Outlook and Gmail, so the header is a text wordmark, not a mark. Fonts are
+  email-safe stacks standing in for Fraunces/DM Sans/JetBrains Mono (Georgia / system-sans /
+  system-mono) — no `<link>`, no `@import`, since most inboxes never load external webfonts.
+- Every template now carries a hidden, per-email inbox preheader (built from the function's real
+  parameters, not placeholder text) and `<meta name="viewport">` +
+  `-webkit-text-size-adjust`/`-ms-text-size-adjust` for mobile.
+- Copy pass across all 14 templates: removed every contraction and em dash, fixed a sentence
+  fragment in the collection-code email, converted a passive-voice line in the reinstated-access
+  email to active voice, and fixed a broken parallel structure in the guest-submission email.
+- Status badges (colour + dot + label — never colour alone) now mark approve/decline/held/
+  submitted states, and the six preference-gated templates (weekend approved, weekend submitted,
+  signature mismatch, both digests) reuse the exact "You can turn this off in Settings →
+  Notifications." line the digest emails already shipped, rather than exposing the raw
+  `notification_preferences` column name. `sendWeekendDeclinedEmail` and
+  `sendOverdueReminderEmail` deliberately don't get that line — both are shared with guest
+  recipients, who have no account or settings page.
+- No exported function's name, parameters, or subject line changed — every caller
+  (`hod-decision`/`decide-weekend.ts`, `requests/submit`, `requests/weekend-code`,
+  `public/weekend-request/*`, `admin/users`, `auth/resend-otp`, `auth/reset-password`,
+  `auth/login`, `cron/*`) needed no changes.
+
 ### 2026-08-27 — Add role-based FAQs to the public Help page
 
 - **Why**: `/help` was a thin, role-agnostic FAQ (account provisioning, OTP, password reset,

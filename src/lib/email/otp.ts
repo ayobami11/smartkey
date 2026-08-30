@@ -21,11 +21,251 @@ const transporter = nodemailer.createTransport({
   dnsTimeout: 5_000,
 });
 
-const emailHeader = `
-  <div style="background:#7B1F2D;padding:16px 24px;border-radius:8px 8px 0 0;">
-    <span style="color:#fff;font-size:18px;font-weight:600;">SmartKey</span>
-  </div>
+// ---------------------------------------------------------------------------
+// Design tokens and layout helpers. Mirrors design-system/DESIGN.md (maroon
+// primary, gold accent, status colours) with email-safe font stacks standing
+// in for Fraunces/DM Sans/JetBrains Mono — no external webfonts, since most
+// inboxes (Outlook desktop and Gmail included) never load them. There is no
+// logo asset for the product, and inline logo art is unreliable in Outlook
+// and Gmail, so the header is a text wordmark.
+// ---------------------------------------------------------------------------
+
+type Tone = 'success' | 'warning' | 'error' | 'info' | 'guest';
+
+const N = {
+  envelope: '#EEF2F6',
+  border: '#E4E9EF',
+  ink: '#0F172A',
+  body: '#475569',
+  faint: '#94A3B8',
+  maroon: '#7B1F2D',
+  gold: '#D4A437',
+  success: '#10B981',
+  successSoft: '#ECFDF5',
+  successText: '#047857',
+  warning: '#F59E0B',
+  warningSoft: '#FFF7E6',
+  warningText: '#B45309',
+  error: '#DC2626',
+  errorSoft: '#FEF2F2',
+  errorText: '#B91C1C',
+  info: '#3B82F6',
+  infoSoft: '#EFF6FF',
+  infoText: '#1D4ED8',
+  guest: '#0E7490',
+  guestSoft: '#CFFAFE',
+};
+
+const F_SERIF = `Georgia, 'Times New Roman', Times, serif`;
+const F_SANS = `-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif`;
+const F_MONO = `ui-monospace, SFMono-Regular, Menlo, Consolas, 'Courier New', monospace`;
+
+// Padding after the visible preheader text: a run of zero-width joiners
+// (each preceded by a non-breaking space so clients don't collapse them)
+// stops the inbox preview from bleeding into the email's first visible line.
+const PREHEADER_PAD = '&nbsp;&zwnj;'.repeat(40);
+
+const nHeader = () => `
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;">
+    <tr><td style="background:${N.maroon};border-radius:12px 12px 0 0;padding:26px 30px 22px;">
+      <div style="font-family:${F_SERIF};font-weight:700;font-size:21px;color:#ffffff;letter-spacing:0.01em;">SmartKey</div>
+      <div style="font-family:${F_SANS};font-size:9.5px;letter-spacing:0.15em;text-transform:uppercase;color:${N.gold};margin-top:6px;">Senate Building &middot; University of Lagos</div>
+    </td></tr>
+    <tr><td style="height:3px;line-height:3px;font-size:0;background:${N.gold};">&nbsp;</td></tr>
+  </table>
 `;
+
+const nDigestHeader = () => `
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;">
+    <tr><td style="background:${N.maroon};border-radius:12px 12px 0 0;padding:20px 30px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+        <td style="vertical-align:middle;">
+          <div style="font-family:${F_SERIF};font-weight:700;font-size:18px;color:#ffffff;">SmartKey</div>
+        </td>
+        <td style="text-align:right;vertical-align:middle;">
+          <span style="font-family:${F_SANS};font-size:9.5px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:${N.gold};">Daily digest</span>
+        </td>
+      </tr></table>
+    </td></tr>
+    <tr><td style="height:3px;line-height:3px;font-size:0;background:${N.gold};">&nbsp;</td></tr>
+  </table>
+`;
+
+const nFooter = (opts: { preferenceNote?: boolean } = {}) => `
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;background:#FAFBFC;border:1px solid ${N.border};border-top:none;border-radius:0 0 12px 12px;">
+    <tr><td style="padding:20px 30px 22px;text-align:center;">
+      <p style="margin:0 0 3px;font-family:${F_SERIF};font-size:13px;color:${N.ink};font-weight:600;">SmartKey</p>
+      <p style="margin:0 0 12px;font-family:${F_SANS};font-size:10.5px;color:${N.faint};letter-spacing:0.02em;">Key management for the Senate Building</p>
+      ${
+        opts.preferenceNote
+          ? `<p style="margin:0 0 8px;font-family:${F_SANS};font-size:11px;color:${N.faint};">You can turn this off in Settings &rarr; Notifications.</p>`
+          : ''
+      }
+      <p style="margin:0;font-family:${F_SANS};font-size:10px;color:${N.faint};">University of Lagos &nbsp;&middot;&nbsp; Automated message, please do not reply directly.</p>
+    </td></tr>
+  </table>
+`;
+
+const nDoc = (
+  headerFn: () => string,
+  contentInner: string,
+  opts: { preheader?: string; preferenceNote?: boolean } = {}
+) => `<!doctype html>
+<html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>body{margin:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;}</style>
+</head>
+<body style="margin:0;background:${N.envelope};-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
+  ${
+    opts.preheader
+      ? `<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:${N.envelope};opacity:0;">${opts.preheader}${PREHEADER_PAD}</div>`
+      : ''
+  }
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;background:${N.envelope};">
+    <tr><td align="center" style="padding:36px 16px;">
+      <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="width:480px;max-width:100%;">
+        <tr><td>${headerFn()}</td></tr>
+        <tr><td style="background:#ffffff;border-left:1px solid ${N.border};border-right:1px solid ${N.border};padding:30px 30px 26px;">
+          ${contentInner}
+        </td></tr>
+        <tr><td>${nFooter(opts)}</td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+
+const nWrap = (
+  inner: string,
+  opts?: { preheader?: string; preferenceNote?: boolean }
+) => nDoc(nHeader, inner, opts);
+
+const nWrapDigest = (
+  inner: string,
+  opts?: { preheader?: string; preferenceNote?: boolean }
+) => nDoc(nDigestHeader, inner, opts);
+
+const nEyebrow = (text: string) =>
+  `<p style="margin:0 0 7px;font-family:${F_SANS};font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:${N.maroon};">${text}</p>`;
+
+const nGreeting = (text: string) =>
+  `<p style="margin:0 0 16px;font-family:${F_SERIF};font-size:21px;font-weight:600;color:${N.ink};line-height:1.3;">${text}</p>`;
+
+const nP = (text: string, mb = 16) =>
+  `<p style="margin:0 0 ${mb}px;font-family:${F_SANS};font-size:14px;line-height:1.65;color:${N.body};">${text}</p>`;
+
+const nBtn = (label: string, href: string) => `
+  <table role="presentation" cellpadding="0" cellspacing="0" style="margin:2px 0 20px;"><tr>
+    <td style="border-radius:8px;background:${N.maroon};">
+      <a href="${href}" style="display:inline-block;padding:13px 26px;font-family:${F_SANS};font-size:14px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:8px;letter-spacing:0.01em;">${label}</a>
+    </td>
+  </tr></table>
+`;
+
+const nSecondary = (label: string, href: string) =>
+  `<a href="${href}" style="font-family:${F_SANS};font-size:13px;font-weight:600;color:${N.maroon};text-decoration:underline;">${label}</a>`;
+
+const nBadge = (label: string, tone: Tone) => {
+  const map: Record<Tone, [string, string, string]> = {
+    success: [N.successSoft, N.successText, N.success],
+    warning: [N.warningSoft, N.warningText, N.warning],
+    error: [N.errorSoft, N.errorText, N.error],
+    info: [N.infoSoft, N.infoText, N.info],
+    guest: [N.guestSoft, N.guest, N.guest],
+  };
+  const [bg, text, dot] = map[tone];
+  return `
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 16px;"><tr>
+      <td style="padding:6px 12px 6px 10px;background:${bg};border-radius:999px;">
+        <span style="display:inline-block;width:6px;height:6px;border-radius:999px;background:${dot};margin-right:7px;"></span>
+        <span style="font-family:${F_SANS};font-size:11px;font-weight:700;letter-spacing:0.03em;text-transform:uppercase;color:${text};vertical-align:middle;">${label}</span>
+      </td>
+    </tr></table>
+  `;
+};
+
+// Same visual as nBadge, but without the trailing margin, for placing inline
+// next to another badge (e.g. the guest badge on the guest-approved email).
+const nInlineBadge = (label: string, tone: Tone) =>
+  nBadge(label, tone).replace(
+    'style="margin:0 0 16px;"',
+    'style="display:inline-table;margin:0 0 0 6px;"'
+  );
+
+const nCodePanel = (code: string, caption: string) => `
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin:2px 0 20px;background:#FAFAFB;border:1px solid ${N.border};border-radius:10px;">
+    <tr><td style="padding:22px 24px;text-align:center;">
+      <div style="font-family:${F_MONO};font-size:38px;font-weight:700;letter-spacing:9px;color:${N.ink};">${code}</div>
+      <table role="presentation" cellpadding="0" cellspacing="0" style="margin:12px auto 0;"><tr>
+        <td style="padding:4px 12px;border-radius:999px;background:${N.warningSoft};">
+          <span style="font-family:${F_SANS};font-size:11.5px;font-weight:600;color:${N.warningText};">${caption}</span>
+        </td>
+      </tr></table>
+    </td></tr>
+  </table>
+`;
+
+const nNote = (text: string) => `
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 18px;"><tr>
+    <td style="border-left:3px solid ${N.maroon};background:#FAFAFB;padding:12px 16px;border-radius:0 6px 6px 0;">
+      <span style="font-family:${F_SERIF};font-style:italic;font-size:13.5px;color:${N.body};line-height:1.6;">&ldquo;${text}&rdquo;</span>
+    </td>
+  </tr></table>
+`;
+
+const nSmallLabel = (text: string) =>
+  `<p style="margin:0 0 6px;font-family:${F_SANS};font-size:10.5px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:${N.faint};">${text}</p>`;
+
+const nDetailRow = (label: string, value: string, emph = false) => `
+  <tr>
+    <td style="padding:9px 0;border-bottom:1px solid ${N.border};font-family:${F_SANS};font-size:11px;color:${N.faint};text-transform:uppercase;letter-spacing:0.06em;">${label}</td>
+    <td style="padding:9px 0;border-bottom:1px solid ${N.border};font-family:${F_SANS};font-size:13.5px;font-weight:600;color:${emph ? N.error : N.ink};text-align:right;">${value}</td>
+  </tr>
+`;
+
+const nDetailPanel = (rows: string) =>
+  `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 20px;">${rows}</table>`;
+
+const nMismatchRow = (label: string, pct: number) => `
+  <tr>
+    <td style="padding:8px 0;font-family:${F_SANS};font-size:13px;color:${N.body};">${label}</td>
+    <td style="padding:8px 0;font-family:${F_MONO};font-size:13px;font-weight:700;color:${N.error};text-align:right;">${pct}%</td>
+  </tr>
+`;
+
+const nDigestRow = (label: string, value: number, attention = false) => `
+  <tr>
+    <td style="padding:11px 0;border-bottom:1px solid ${N.border};font-family:${F_SANS};font-size:13.5px;color:${N.body};">
+      ${attention && value > 0 ? `<span style="display:inline-block;width:6px;height:6px;border-radius:999px;background:${N.error};margin-right:8px;"></span>` : ''}${label}
+    </td>
+    <td style="padding:11px 0;border-bottom:1px solid ${N.border};font-family:${F_MONO};font-size:14px;font-weight:700;color:${attention && value > 0 ? N.error : N.ink};text-align:right;">${value}</td>
+  </tr>
+`;
+
+const nGuestBadge = () =>
+  `<span style="display:inline-block;background:${N.guestSoft};color:${N.guest};font-size:10.5px;font-weight:700;letter-spacing:0.02em;text-transform:uppercase;padding:2px 9px;border-radius:9999px;vertical-align:middle;">External</span>`;
+
+const formatDigestDate = (d: Date) => {
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  return `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+};
+
+// ---------------------------------------------------------------------------
+// Email senders
+// ---------------------------------------------------------------------------
 
 export const sendOtpEmail = async ({
   to,
@@ -38,16 +278,17 @@ export const sendOtpEmail = async ({
     from: `"SmartKey" <${process.env.GMAIL_USER}>`,
     to,
     subject: 'Your SmartKey verification code',
-    html: `
-      <div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:400px;margin:0 auto;padding:32px 16px;">
-        ${emailHeader}
-        <div style="background:#fff;border:1px solid #E2E8F0;border-top:none;padding:32px 24px;border-radius:0 0 8px 8px;">
-          <p style="margin:0 0 16px;color:#475569;font-size:14px;">Your sign-in verification code:</p>
-          <div style="letter-spacing:10px;font-size:40px;font-family:monospace;font-weight:700;color:#0F172A;margin-bottom:16px;">${code}</div>
-          <p style="margin:0;color:#94A3B8;font-size:12px;">Expires in 10&nbsp;minutes. Do not share this code.</p>
-        </div>
-      </div>
-    `,
+    html: nWrap(
+      `
+        ${nEyebrow('Sign-in verification')}
+        ${nGreeting('Your verification code')}
+        ${nP('Enter this code to finish signing in to SmartKey.')}
+        ${nCodePanel(code, 'Expires in 10 minutes - do not share')}
+      `,
+      {
+        preheader: `Your SmartKey verification code is ${code}. It expires in 10 minutes.`,
+      }
+    ),
   });
 
 export const sendActivationEmail = async ({
@@ -65,30 +306,28 @@ export const sendActivationEmail = async ({
     subject: isReinvite
       ? 'Your SmartKey access has been restored'
       : 'Activate your SmartKey account',
-    html: `
-      <div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:400px;margin:0 auto;padding:32px 16px;">
-        ${emailHeader}
-        <div style="background:#fff;border:1px solid #E2E8F0;border-top:none;padding:32px 24px;border-radius:0 0 8px 8px;">
-          <p style="margin:0 0 8px;color:#0F172A;font-size:16px;font-weight:600;">
-            ${isReinvite ? 'Your access has been restored' : "You've been invited to SmartKey"}
-          </p>
-          <p style="margin:0 0 24px;color:#475569;font-size:14px;">
-            ${
-              isReinvite
-                ? 'Click the button below to set a new password and log back in.'
-                : 'Click the button below to set up your account. This link expires in 24 hours.'
-            }
-          </p>
-          <a href="${link}"
-            style="display:inline-block;background:#7B1F2D;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">
-            ${isReinvite ? 'Restore access' : 'Activate account'}
-          </a>
-          <p style="margin:24px 0 0;color:#94A3B8;font-size:12px;">
-            If you did not expect this email, you can safely ignore it.
-          </p>
-        </div>
-      </div>
-    `,
+    html: nWrap(
+      isReinvite
+        ? `
+          ${nEyebrow('Access restored')}
+          ${nGreeting('Welcome back')}
+          ${nP('The CSO has reinstated your SmartKey access. Set a new password to log back in.')}
+          ${nBtn('Restore access', link)}
+          ${nP('If you did not expect this email, you can safely ignore it.', 0)}
+        `
+        : `
+          ${nEyebrow('Account invitation')}
+          ${nGreeting('The CSO has invited you to SmartKey')}
+          ${nP('Set a password to activate your account. This link expires in 24 hours.')}
+          ${nBtn('Activate account', link)}
+          ${nP('If you did not expect this email, you can safely ignore it.', 0)}
+        `,
+      {
+        preheader: isReinvite
+          ? 'The CSO has reinstated your SmartKey access. Set a new password to log back in.'
+          : 'The CSO has invited you to SmartKey. Set a password to activate your account.',
+      }
+    ),
   });
 
 export const sendWeekendReminderEmail = async ({
@@ -104,28 +343,19 @@ export const sendWeekendReminderEmail = async ({
     from: `"SmartKey" <${process.env.GMAIL_USER}>`,
     to,
     subject: 'Get your SmartKey collection code today',
-    html: `
-      <div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:400px;margin:0 auto;padding:32px 16px;">
-        ${emailHeader}
-        <div style="background:#fff;border:1px solid #E2E8F0;border-top:none;padding:32px 24px;border-radius:0 0 8px 8px;">
-          <p style="margin:0 0 8px;color:#0F172A;font-size:16px;font-weight:600;">
-            Your weekend access is for today, ${fullName}
-          </p>
-          <p style="margin:0 0 24px;color:#475569;font-size:14px;">
-            Your approved weekend key request is for today. Open the link below to
-            generate your 6-digit collection code, then present it at the security
-            desk. The code is valid for 10&nbsp;minutes once generated.
-          </p>
-          <a href="${link}"
-            style="display:inline-block;background:#7B1F2D;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">
-            Get your collection code
-          </a>
-          <p style="margin:24px 0 0;color:#94A3B8;font-size:12px;">
-            If you no longer need this key, you can ignore this email.
-          </p>
-        </div>
-      </div>
-    `,
+    html: nWrap(
+      `
+        ${nEyebrow('Weekend access &middot; today')}
+        ${nGreeting(`Today is the day, ${fullName}`)}
+        ${nP('Your approved weekend key request is for today. Use the button below to generate your 6-digit collection code, then present it at the security desk.')}
+        ${nBtn('Get your collection code', link)}
+        ${nP('If you no longer need this key, you can safely ignore this email.', 0)}
+      `,
+      {
+        preheader:
+          'Your approved weekend access is for today. Get your collection code.',
+      }
+    ),
   });
 
 export const sendWeekendApprovedEmail = async ({
@@ -147,31 +377,21 @@ export const sendWeekendApprovedEmail = async ({
     from: `"SmartKey" <${process.env.GMAIL_USER}>`,
     to,
     subject: 'Your weekend key request has been approved',
-    html: `
-      <div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:400px;margin:0 auto;padding:32px 16px;">
-        ${emailHeader}
-        <div style="background:#fff;border:1px solid #E2E8F0;border-top:none;padding:32px 24px;border-radius:0 0 8px 8px;">
-          <p style="margin:0 0 8px;color:#0F172A;font-size:16px;font-weight:600;">
-            Request approved, ${fullName}
-          </p>
-          <p style="margin:0 0 8px;color:#475569;font-size:14px;">
-            Your weekend access request for <strong>${roomName} (${keyCode})</strong>
-            on <strong>${requestedFor}</strong> has been approved.
-          </p>
-          <p style="margin:0 0 24px;color:#475569;font-size:14px;">
-            On the day, open the link below to generate your 6-digit collection code.
-            Present it at the security desk. The code is valid for 10&nbsp;minutes once generated.
-          </p>
-          <a href="${link}"
-            style="display:inline-block;background:#7B1F2D;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">
-            View your request
-          </a>
-          <p style="margin:24px 0 0;color:#94A3B8;font-size:12px;">
-            If you no longer need this key, you can cancel the request from the SmartKey app.
-          </p>
-        </div>
-      </div>
-    `,
+    html: nWrap(
+      `
+        ${nEyebrow('Weekend access')}
+        ${nBadge('Approved', 'success')}
+        ${nGreeting(`Request approved, ${fullName}`)}
+        ${nP(`Your weekend access request for <strong>${roomName} (${keyCode})</strong> on <strong>${requestedFor}</strong> has been approved.`)}
+        ${nP('On the day, use the button below to generate your 6-digit collection code and present it at the security desk. The code is valid for 10 minutes once generated.')}
+        ${nBtn('View your request', link)}
+        ${nP('If you no longer need this key, you can cancel the request from the SmartKey app.', 0)}
+      `,
+      {
+        preferenceNote: true,
+        preheader: `Your weekend access request for ${roomName} (${keyCode}) has been approved.`,
+      }
+    ),
   });
 
 export const sendWeekendDeclinedEmail = async ({
@@ -187,23 +407,17 @@ export const sendWeekendDeclinedEmail = async ({
     from: `"SmartKey" <${process.env.GMAIL_USER}>`,
     to,
     subject: 'Your weekend key request was not approved',
-    html: `
-      <div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:400px;margin:0 auto;padding:32px 16px;">
-        ${emailHeader}
-        <div style="background:#fff;border:1px solid #E2E8F0;border-top:none;padding:32px 24px;border-radius:0 0 8px 8px;">
-          <p style="margin:0 0 8px;color:#0F172A;font-size:16px;font-weight:600;">
-            Request not approved, ${fullName}
-          </p>
-          <p style="margin:0 0 ${note ? '8px' : '24px'};color:#475569;font-size:14px;">
-            Your weekend access request has not been approved.
-          </p>
-          ${note ? `<p style="margin:0 0 24px;color:#475569;font-size:14px;">Note from your authoriser: ${note}</p>` : ''}
-          <p style="margin:0;color:#94A3B8;font-size:12px;">
-            Contact your faculty's Dean or the CSO if you believe this is an error.
-          </p>
-        </div>
-      </div>
-    `,
+    // No preferenceNote here: this function also serves guest declines
+    // (guests have no notification_preferences row and no settings page),
+    // so a "turn this off in Settings" line would be inaccurate for them.
+    html: nWrap(`
+      ${nEyebrow('Weekend access')}
+      ${nBadge('Not approved', 'error')}
+      ${nGreeting(`Request not approved, ${fullName}`)}
+      ${nP('Your weekend access request has not been approved.')}
+      ${note ? `${nSmallLabel('Note from your authoriser')}${nNote(note)}` : ''}
+      ${nP("Contact your faculty's Dean or the CSO if you believe this is an error.", 0)}
+    `),
   });
 
 export const sendGuestWeekendApprovedEmail = async ({
@@ -225,32 +439,20 @@ export const sendGuestWeekendApprovedEmail = async ({
     from: `"SmartKey" <${process.env.GMAIL_USER}>`,
     to,
     subject: 'Your weekend access request has been approved',
-    html: `
-      <div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:400px;margin:0 auto;padding:32px 16px;">
-        ${emailHeader}
-        <div style="background:#fff;border:1px solid #E2E8F0;border-top:none;padding:32px 24px;border-radius:0 0 8px 8px;">
-          <p style="margin:0 0 8px;color:#0F172A;font-size:16px;font-weight:600;">
-            Request approved, ${fullName}
-          </p>
-          <p style="margin:0 0 8px;color:#475569;font-size:14px;">
-            Your weekend access request for <strong>${roomName} (${keyCode})</strong>
-            on <strong>${requestedFor}</strong> has been approved.
-          </p>
-          <p style="margin:0 0 24px;color:#475569;font-size:14px;">
-            On the day, use the link below to generate your 6-digit collection code and
-            present it alongside your ID at the security desk. The code is valid for
-            10&nbsp;minutes once generated.
-          </p>
-          <a href="${link}"
-            style="display:inline-block;background:#7B1F2D;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">
-            Get your collection code
-          </a>
-          <p style="margin:24px 0 0;color:#94A3B8;font-size:12px;">
-            Keep this link private. Anyone with it can view your request.
-          </p>
-        </div>
-      </div>
-    `,
+    html: nWrap(
+      `
+        ${nEyebrow('Weekend access &middot; external')}
+        <div style="margin:0 0 10px;">${nGuestBadge()}${nInlineBadge('Approved', 'success')}</div>
+        ${nGreeting(`Request approved, ${fullName}`)}
+        ${nP(`Your weekend access request for <strong>${roomName} (${keyCode})</strong> on <strong>${requestedFor}</strong> has been approved.`)}
+        ${nP('On the day, use the button below to generate your 6-digit collection code and present it alongside your ID at the security desk. The code is valid for 10 minutes once generated.')}
+        ${nBtn('Get your collection code', link)}
+        ${nP('Keep this link private. Anyone with it can view your request.', 0)}
+      `,
+      {
+        preheader: `Your weekend access request for ${roomName} (${keyCode}) has been approved.`,
+      }
+    ),
   });
 
 export const sendPasswordResetEmail = async ({
@@ -264,26 +466,19 @@ export const sendPasswordResetEmail = async ({
     from: `"SmartKey" <${process.env.GMAIL_USER}>`,
     to,
     subject: 'Reset your SmartKey password',
-    html: `
-      <div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:400px;margin:0 auto;padding:32px 16px;">
-        ${emailHeader}
-        <div style="background:#fff;border:1px solid #E2E8F0;border-top:none;padding:32px 24px;border-radius:0 0 8px 8px;">
-          <p style="margin:0 0 8px;color:#0F172A;font-size:16px;font-weight:600;">
-            Reset your password
-          </p>
-          <p style="margin:0 0 24px;color:#475569;font-size:14px;">
-            Click the button below to set a new password. This link expires in 30&nbsp;minutes.
-          </p>
-          <a href="${link}"
-            style="display:inline-block;background:#7B1F2D;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">
-            Reset password
-          </a>
-          <p style="margin:24px 0 0;color:#94A3B8;font-size:12px;">
-            If you did not request a password reset, you can safely ignore this email.
-          </p>
-        </div>
-      </div>
-    `,
+    html: nWrap(
+      `
+        ${nEyebrow('Password reset')}
+        ${nGreeting('Reset your password')}
+        ${nP('Use the button below to set a new password. This link expires in 30 minutes.')}
+        ${nBtn('Reset password', link)}
+        ${nP('If you did not request this, you can safely ignore this email.', 0)}
+      `,
+      {
+        preheader:
+          'Use this link to set a new password for your SmartKey account.',
+      }
+    ),
   });
 
 export const sendCollectionCodeEmail = async ({
@@ -310,24 +505,17 @@ export const sendCollectionCodeEmail = async ({
     from: `"SmartKey" <${process.env.GMAIL_USER}>`,
     to,
     subject: 'Your SmartKey collection code',
-    html: `
-      <div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:400px;margin:0 auto;padding:32px 16px;">
-        ${emailHeader}
-        <div style="background:#fff;border:1px solid #E2E8F0;border-top:none;padding:32px 24px;border-radius:0 0 8px 8px;">
-          <p style="margin:0 0 8px;color:#0F172A;font-size:16px;font-weight:600;">
-            Your collection code, ${fullName}
-          </p>
-          <p style="margin:0 0 16px;color:#475569;font-size:14px;">
-            For <strong>${roomName} (${keyCode})</strong>. Present this code at
-            the security desk to collect the key.
-          </p>
-          <div style="letter-spacing:10px;font-size:40px;font-family:monospace;font-weight:700;color:#0F172A;margin-bottom:16px;">${code}</div>
-          <p style="margin:0;color:#94A3B8;font-size:12px;">
-            Expires at ${expiresAtLabel}. If it expires, request a new code from the app.
-          </p>
-        </div>
-      </div>
-    `,
+    html: nWrap(
+      `
+        ${nEyebrow('Collection code')}
+        ${nGreeting(`Ready for pickup, ${fullName}`)}
+        ${nP(`This code is for <strong>${roomName} (${keyCode})</strong>. Present it at the security desk to collect the key.`)}
+        ${nCodePanel(code, `Expires at ${expiresAtLabel} - request a new one if it lapses`)}
+      `,
+      {
+        preheader: `Your collection code for ${roomName} (${keyCode}) is ${code}.`,
+      }
+    ),
   });
 };
 
@@ -356,24 +544,21 @@ export const sendOverdueReminderEmail = async ({
     from: `"SmartKey" <${process.env.GMAIL_USER}>`,
     to,
     subject: 'Your key is overdue for return',
-    html: `
-      <div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:400px;margin:0 auto;padding:32px 16px;">
-        ${emailHeader}
-        <div style="background:#fff;border:1px solid #E2E8F0;border-top:none;padding:32px 24px;border-radius:0 0 8px 8px;">
-          <p style="margin:0 0 8px;color:#0F172A;font-size:16px;font-weight:600;">
-            Your key is overdue, ${fullName}
-          </p>
-          <p style="margin:0 0 24px;color:#475569;font-size:14px;">
-            <strong>${roomName} (${keyCode})</strong> was due back by
-            <strong>${deadlineLabel}</strong>. Please return it to the security
-            desk as soon as possible.
-          </p>
-          <p style="margin:0;color:#94A3B8;font-size:12px;">
-            This has been logged. Contact the CSO if you believe this is an error.
-          </p>
-        </div>
-      </div>
-    `,
+    // No preferenceNote here: sent to both registered requesters and guests
+    // (guests always receive it, with no preference row or settings page).
+    html: nWrap(
+      `
+        ${nEyebrow('Key overdue')}
+        ${nBadge('Action needed', 'error')}
+        ${nGreeting(`Please return your key, ${fullName}`)}
+        ${nP('This key was due back on the date below. Please return it to the security desk as soon as possible.')}
+        ${nDetailPanel(nDetailRow('Key', `${roomName} (${keyCode})`) + nDetailRow('Due', deadlineLabel, true))}
+        ${nP('This has been logged. Contact the CSO if you believe this is an error.', 0)}
+      `,
+      {
+        preheader: `${roomName} (${keyCode}) is overdue for return.`,
+      }
+    ),
   });
 };
 
@@ -411,48 +596,27 @@ export const sendWeekendSubmittedEmail = async ({
     from: `"SmartKey" <${process.env.GMAIL_USER}>`,
     to,
     subject: 'New weekend access request awaiting your review',
-    html: `
-      <div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:400px;margin:0 auto;padding:32px 16px;">
-        ${emailHeader}
-        <div style="background:#fff;border:1px solid #E2E8F0;border-top:none;padding:32px 24px;border-radius:0 0 8px 8px;">
-          <p style="margin:0 0 4px;color:#0F172A;font-size:16px;font-weight:600;">
-            Weekend access request
-          </p>
-          <p style="margin:0 0 20px;color:#475569;font-size:14px;">
-            Dear ${fullName},
-          </p>
-          <p style="margin:0 0 24px;color:#475569;font-size:14px;">
-            <strong>${requesterName}</strong>${
-              isGuest
-                ? ` <span style="display:inline-block;background:#CFFAFE;color:#0E7490;font-size:11px;font-weight:600;padding:2px 8px;border-radius:9999px;vertical-align:middle;">External</span>`
-                : ''
-            } has requested <strong>${roomLabel}</strong> in ${unitName}
-            for <strong>${requestedFor}</strong>.
-          </p>
-          ${
-            decisionLink
-              ? `
-          <a href="${decisionLink}"
-            style="display:inline-block;background:#7B1F2D;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">
-            Make a decision
-          </a>
-          <p style="margin:16px 0 0;color:#94A3B8;font-size:12px;">
-            You'll approve or decline on the next page — nothing is decided yet.
-          </p>
-          <a href="${link}" style="display:inline-block;margin-top:16px;color:#7B1F2D;font-size:13px;font-weight:600;text-decoration:underline;">
-            Or review on the dashboard
-          </a>
-          `
-              : `
-          <a href="${link}"
-            style="display:inline-block;background:#7B1F2D;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">
-            Review request
-          </a>
-          `
-          }
-        </div>
-      </div>
-    `,
+    html: nWrap(
+      `
+        ${nEyebrow('Weekend request &middot; awaiting review')}
+        ${nGreeting(`Dear ${fullName},`)}
+        ${isGuest ? `<div style="margin:0 0 12px;">${nGuestBadge()}</div>` : ''}
+        ${nP(`<strong>${requesterName}</strong> has requested <strong>${roomLabel}</strong> in ${unitName} for <strong>${requestedFor}</strong>.`)}
+        ${
+          decisionLink
+            ? `
+              ${nBtn('Make a decision', decisionLink)}
+              ${nP('You will approve or decline on the next page. Nothing is decided yet.', 10)}
+              ${nSecondary('Or review on the dashboard', link)}
+            `
+            : nBtn('Review request', link)
+        }
+      `,
+      {
+        preferenceNote: true,
+        preheader: `${requesterName} has requested ${roomLabel} in ${unitName} for ${requestedFor}. Review needed.`,
+      }
+    ),
   });
 
 export const sendCsoSignatureMismatchEmail = async ({
@@ -474,93 +638,41 @@ export const sendCsoSignatureMismatchEmail = async ({
   thresholdPct: number;
   link: string;
 }) => {
-  const mismatchLines = [
+  const mismatchRows = [
     mismatches.signature !== undefined
-      ? `Signature: ${mismatches.signature}% different`
+      ? nMismatchRow('Signature', mismatches.signature)
       : null,
     mismatches.stamp !== undefined
-      ? `Stamp: ${mismatches.stamp}% different`
+      ? nMismatchRow('Stamp', mismatches.stamp)
       : null,
-  ].filter((line): line is string => line !== null);
+  ]
+    .filter((row): row is string => row !== null)
+    .join('');
 
   return transporter.sendMail({
     from: `"SmartKey" <${process.env.GMAIL_USER}>`,
     to,
     subject: 'Signature/stamp mismatch held for review',
-    html: `
-      <div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:400px;margin:0 auto;padding:32px 16px;">
-        ${emailHeader}
-        <div style="background:#fff;border:1px solid #E2E8F0;border-top:none;padding:32px 24px;border-radius:0 0 8px 8px;">
-          <p style="margin:0 0 8px;color:#0F172A;font-size:16px;font-weight:600;">
-            Approval held, ${fullName}
-          </p>
-          <p style="margin:0 0 8px;color:#475569;font-size:14px;">
-            <strong>${requesterName}</strong>'s weekend approval for
-            <strong>${roomName} (${keyCode})</strong> is on hold — the
-            submitted signature and/or stamp didn't match the Dean's
-            reference within the ${thresholdPct}% threshold.
-          </p>
-          <p style="margin:0 0 24px;color:#475569;font-size:14px;">
-            ${mismatchLines.join(' · ')}
-          </p>
-          <a href="${link}"
-            style="display:inline-block;background:#7B1F2D;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">
-            Review on the dashboard
-          </a>
-        </div>
-      </div>
-    `,
+    html: nWrap(
+      `
+        ${nEyebrow('Signature review')}
+        ${nBadge('Held for review', 'warning')}
+        ${nGreeting(`Approval held, ${fullName}`)}
+        ${nP(`<strong>${requesterName}</strong>'s weekend approval for <strong>${roomName} (${keyCode})</strong> is on hold. The submitted signature and/or stamp did not match the Dean's reference within the ${thresholdPct}% threshold.`)}
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 20px;background:#FAFAFB;border:1px solid ${N.border};border-radius:10px;"><tr><td style="padding:6px 18px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;">
+            ${mismatchRows}
+          </table>
+        </td></tr></table>
+        ${nBtn('Review on the dashboard', link)}
+      `,
+      {
+        preferenceNote: true,
+        preheader: `A signature or stamp mismatch is holding ${requesterName}'s weekend approval for ${roomName} (${keyCode}).`,
+      }
+    ),
   });
 };
-
-// The digest emails carry more institutional weight than a transactional OTP
-// or confirmation mail — they read as a daily operational report
-const digestHeader = `
-  <table role="presentation" style="width:100%;border-collapse:collapse;background:#7B1F2D;border-radius:8px 8px 0 0;">
-    <tr>
-      <td style="padding:18px 24px;color:#fff;font-size:16px;font-weight:600;letter-spacing:0.01em;">
-        SmartKey
-      </td>
-      <td style="padding:18px 24px;text-align:right;color:rgba(255,255,255,0.75);font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;">
-        Daily digest
-      </td>
-    </tr>
-  </table>
-`;
-
-const formatDigestDate = (d: Date) => {
-  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const months = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
-  return `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
-};
-
-// Shared stat-row markup for the two digest emails below.
-
-const digestRow = (label: string, value: number, attention = false) => `
-  <tr style="border-bottom:1px solid #F1F5F9;">
-    <td style="padding:10px 0;color:#475569;font-size:14px;">${label}</td>
-    <td style="padding:10px 0;color:${attention && value > 0 ? '#DC2626' : '#0F172A'};font-size:14px;font-weight:600;text-align:right;">${value}</td>
-  </tr>
-`;
-
-const digestFooter = `
-  <p style="margin:16px 0 0;text-align:center;color:#94A3B8;font-size:11px;">
-    SmartKey, University of Lagos Senate Building
-  </p>
-`;
 
 export const sendDeanDigestEmail = async ({
   to,
@@ -581,30 +693,23 @@ export const sendDeanDigestEmail = async ({
     from: `"SmartKey" <${process.env.GMAIL_USER}>`,
     to,
     subject: "Your faculty's daily activity digest",
-    html: `
-      <div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:440px;margin:0 auto;padding:32px 16px;">
-        ${digestHeader}
-        <div style="background:#fff;border:1px solid #E2E8F0;border-top:none;padding:28px 28px 24px;border-radius:0 0 8px 8px;">
-          <p style="margin:0 0 4px;color:#0F172A;font-size:17px;font-weight:600;">
-            Good morning, ${fullName}
-          </p>
-          <p style="margin:0 0 20px;color:#64748B;font-size:12px;">
-            Faculty activity for the last 24 hours (${formatDigestDate(new Date())})
-          </p>
-          <table role="presentation" style="width:100%;border-collapse:collapse;">
-            ${digestRow('Keys issued', stats.issued_count)}
-            ${digestRow('Keys returned', stats.returned_count)}
-            ${digestRow('Keys currently overdue', stats.overdue_count, true)}
-            ${digestRow('Weekend requests submitted', stats.weekend_submitted_count)}
-            ${digestRow('Weekend requests awaiting your decision', stats.weekend_pending_count, true)}
-          </table>
-          <p style="margin:20px 0 0;color:#94A3B8;font-size:12px;">
-            You can turn this off in Settings → Notifications.
-          </p>
-        </div>
-        ${digestFooter}
-      </div>
-    `,
+    html: nWrapDigest(
+      `
+        ${nGreeting(`Good morning, ${fullName}`)}
+        ${nP(`Faculty activity for the last 24 hours &middot; ${formatDigestDate(new Date())}`, 18)}
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;">
+          ${nDigestRow('Keys issued', stats.issued_count)}
+          ${nDigestRow('Keys returned', stats.returned_count)}
+          ${nDigestRow('Keys currently overdue', stats.overdue_count, true)}
+          ${nDigestRow('Weekend requests submitted', stats.weekend_submitted_count)}
+          ${nDigestRow('Weekend requests awaiting your decision', stats.weekend_pending_count, true)}
+        </table>
+      `,
+      {
+        preferenceNote: true,
+        preheader: "Your faculty's activity summary for the last 24 hours.",
+      }
+    ),
   });
 
 export const sendCsoDigestEmail = async ({
@@ -627,31 +732,25 @@ export const sendCsoDigestEmail = async ({
     from: `"SmartKey" <${process.env.GMAIL_USER}>`,
     to,
     subject: "SmartKey's daily activity digest",
-    html: `
-      <div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:440px;margin:0 auto;padding:32px 16px;">
-        ${digestHeader}
-        <div style="background:#fff;border:1px solid #E2E8F0;border-top:none;padding:28px 28px 24px;border-radius:0 0 8px 8px;">
-          <p style="margin:0 0 4px;color:#0F172A;font-size:17px;font-weight:600;">
-            Good morning, ${fullName}
-          </p>
-          <p style="margin:0 0 20px;color:#64748B;font-size:12px;">
-            Building-wide activity for the last 24 hours (${formatDigestDate(new Date())})
-          </p>
-          <table role="presentation" style="width:100%;border-collapse:collapse;">
-            ${digestRow('Keys issued', stats.issued_count)}
-            ${digestRow('Keys returned', stats.returned_count)}
-            ${digestRow('Keys currently overdue', stats.overdue_count, true)}
-            ${digestRow('High-risk requests', stats.high_risk_count, true)}
-            ${digestRow('Signature mismatches', stats.signature_mismatch_count, true)}
-            ${digestRow('Incidents logged', stats.incidents_count, true)}
-          </table>
-          <p style="margin:20px 0 0;color:#94A3B8;font-size:12px;">
-            You can turn this off in Settings → Notifications.
-          </p>
-        </div>
-        ${digestFooter}
-      </div>
-    `,
+    html: nWrapDigest(
+      `
+        ${nGreeting(`Good morning, ${fullName}`)}
+        ${nP(`Building-wide activity for the last 24 hours &middot; ${formatDigestDate(new Date())}`, 18)}
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;">
+          ${nDigestRow('Keys issued', stats.issued_count)}
+          ${nDigestRow('Keys returned', stats.returned_count)}
+          ${nDigestRow('Keys currently overdue', stats.overdue_count, true)}
+          ${nDigestRow('High-risk requests', stats.high_risk_count, true)}
+          ${nDigestRow('Signature mismatches', stats.signature_mismatch_count, true)}
+          ${nDigestRow('Incidents logged', stats.incidents_count, true)}
+        </table>
+      `,
+      {
+        preferenceNote: true,
+        preheader:
+          "SmartKey's building-wide activity summary for the last 24 hours.",
+      }
+    ),
   });
 
 export const sendGuestWeekendEmail = async ({
@@ -667,26 +766,18 @@ export const sendGuestWeekendEmail = async ({
     from: `"SmartKey" <${process.env.GMAIL_USER}>`,
     to,
     subject: 'Your SmartKey weekend access request',
-    html: `
-      <div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:400px;margin:0 auto;padding:32px 16px;">
-        ${emailHeader}
-        <div style="background:#fff;border:1px solid #E2E8F0;border-top:none;padding:32px 24px;border-radius:0 0 8px 8px;">
-          <p style="margin:0 0 8px;color:#0F172A;font-size:16px;font-weight:600;">
-            Request received, ${fullName}
-          </p>
-          <p style="margin:0 0 24px;color:#475569;font-size:14px;">
-            Your weekend access request has been submitted and is awaiting approval.
-            Use the link below to track its status and, once approved, to get your
-            collection code on the day.
-          </p>
-          <a href="${link}"
-            style="display:inline-block;background:#7B1F2D;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">
-            Track your request
-          </a>
-          <p style="margin:24px 0 0;color:#94A3B8;font-size:12px;">
-            Keep this link private. Anyone with it can view your request.
-          </p>
-        </div>
-      </div>
-    `,
+    html: nWrap(
+      `
+        ${nEyebrow('Weekend access &middot; external')}
+        ${nBadge('Submitted', 'info')}
+        ${nGreeting(`Request received, ${fullName}`)}
+        ${nP('Your weekend access request has been submitted and is awaiting approval. Use the button below to track its status and, once approved, to get your collection code on the day.')}
+        ${nBtn('Track your request', link)}
+        ${nP('Keep this link private. Anyone with it can view your request.', 0)}
+      `,
+      {
+        preheader:
+          'Your weekend access request has been submitted and is awaiting approval.',
+      }
+    ),
   });
