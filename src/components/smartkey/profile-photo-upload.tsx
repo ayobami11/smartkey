@@ -122,8 +122,10 @@ export const ProfilePhotoUpload = ({
         return;
       }
 
-      // Cache-bust so the new image (same storage path) shows immediately.
-      const newUrl = `${json.data.photo_url}?t=${Date.now()}`;
+      // Already cache-busted server-side — the photo endpoint returns a proxy
+      // URL carrying its own version param, so appending one here would
+      // corrupt the query string rather than bust the cache.
+      const newUrl: string = json.data.photo_url;
       const blobUrl = pendingPreview;
 
       setPhotoUrl(newUrl);

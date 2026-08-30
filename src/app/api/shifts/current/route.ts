@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { rewriteStorageUrls } from '@/lib/storage/object-url';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
 import { err, ok } from '@/types/api';
@@ -10,14 +11,16 @@ export const GET = async () => {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json(err('Unauthorized', 401), { status: 401 });
+  if (!user)
+    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
 
   const { data: profile } = await supabase
     .from('profiles')
     .select('role, unit_id')
     .eq('id', user.id)
     .single();
-  if (!profile) return NextResponse.json(err('Unauthorized', 401), { status: 401 });
+  if (!profile)
+    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
   if (profile.role !== 'VERIFIER' && profile.role !== 'CSO') {
     return NextResponse.json(err('Forbidden', 403), { status: 403 });
   }
@@ -35,7 +38,7 @@ export const GET = async () => {
     .select(
       `id, shift_number, started_at, ended_at,
        primary_officer:profiles!primary_officer_id(id, full_name, photo_url),
-       secondary_officer:profiles!secondary_officer_id(id, full_name, photo_url)`,
+       secondary_officer:profiles!secondary_officer_id(id, full_name, photo_url)`
     )
     .is('ended_at', null)
     .order('started_at', { ascending: false })
@@ -43,8 +46,10 @@ export const GET = async () => {
     .maybeSingle();
 
   if (error) {
-    return NextResponse.json(err('Failed to fetch current shift', 500), { status: 500 });
+    return NextResponse.json(err('Failed to fetch current shift', 500), {
+      status: 500,
+    });
   }
 
-  return NextResponse.json(ok({ shift }), { status: 200 });
+  return NextResponse.json(ok(rewriteStorageUrls({ shift })), { status: 200 });
 };

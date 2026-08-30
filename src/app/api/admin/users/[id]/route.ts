@@ -79,8 +79,7 @@ export const PATCH = async (
 
   const adminClient = createAdminClient();
 
-  const departmentChanged =
-    isDepartmental && nextUnitId !== target.unit_id;
+  const departmentChanged = isDepartmental && nextUnitId !== target.unit_id;
 
   // Validate the destination department exists, and — for an HOD moving
   // departments — that the destination does not already have a different HOD.

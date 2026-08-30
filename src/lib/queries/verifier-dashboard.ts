@@ -1,6 +1,7 @@
 import { cache } from 'react';
 
 import type { RiskFactor, RiskTier } from '@/lib/ai/risk/types';
+import { rewriteStorageUrls } from '@/lib/storage/object-url';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
 
@@ -86,7 +87,9 @@ export const getLiveQueueSeed = async (): Promise<QueueRequest[] | null> => {
     .order('created_at', { ascending: true });
 
   if (error) return null;
-  return data as unknown as QueueRequest[];
+  // Matches what GET /api/requests/live-queue returns, so the seeded first
+  // paint and the client-side refetch render the same photo URLs.
+  return rewriteStorageUrls(data as unknown as QueueRequest[]);
 };
 
 const deriveOutstandingStatus = <
@@ -133,18 +136,20 @@ export const getOutstandingKeysSeed = async (): Promise<
     now
   );
 
-  return withOverdue.map(({ overdue, ...row }) => {
-    const guest = row.guest as { id: string; full_name: string } | null;
-    const requester =
-      row.requester ??
-      (guest
-        ? { id: guest.id, full_name: guest.full_name, photo_url: null }
-        : null);
-    const { guest: _g, ...rest } = row;
-    return {
-      ...rest,
-      requester,
-      status: overdue ? 'KEY_OVERDUE' : rest.status,
-    } as OutstandingKey;
-  });
+  return rewriteStorageUrls(
+    withOverdue.map(({ overdue, ...row }) => {
+      const guest = row.guest as { id: string; full_name: string } | null;
+      const requester =
+        row.requester ??
+        (guest
+          ? { id: guest.id, full_name: guest.full_name, photo_url: null }
+          : null);
+      const { guest: _g, ...rest } = row;
+      return {
+        ...rest,
+        requester,
+        status: overdue ? 'KEY_OVERDUE' : rest.status,
+      } as OutstandingKey;
+    })
+  );
 };

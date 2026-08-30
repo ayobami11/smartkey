@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { toProxyUrl } from '@/lib/storage/object-url';
 import { createServerClient } from '@/lib/supabase/server';
 import { err, ok } from '@/types/api';
 
@@ -8,6 +9,19 @@ type MismatchCheck = {
   submitted_url: string;
   mismatch_pct: number;
 };
+
+// Audit payloads record canonical storage URLs. Both buckets they point at
+// (`hod-signatures` for the reference, `weekend-letters` for the submitted
+// image) are private, so rewrite them to proxy URLs before they reach the
+// dialog that renders them as <img src>.
+const toRenderableCheck = (check: MismatchCheck | null | undefined) =>
+  check
+    ? {
+        ...check,
+        ref_url: toProxyUrl(check.ref_url),
+        submitted_url: toProxyUrl(check.submitted_url),
+      }
+    : null;
 
 type MismatchPayload = {
   signature?: MismatchCheck | null;
@@ -95,8 +109,8 @@ export const GET = async () => {
       return {
         ...request,
         occurred_at: mismatch.occurred_at,
-        signature: mismatch.payload.signature ?? null,
-        stamp: mismatch.payload.stamp ?? null,
+        signature: toRenderableCheck(mismatch.payload.signature),
+        stamp: toRenderableCheck(mismatch.payload.stamp),
         threshold_pct: mismatch.payload.threshold_pct ?? null,
       };
     })
@@ -130,8 +144,8 @@ export const GET = async () => {
       submitted_at: row.submitted_at,
       mismatch_pct: row.mismatch_pct,
       threshold_pct: row.threshold_pct,
-      current_ref_url: row.current_ref_url,
-      pending_url: row.pending_url,
+      current_ref_url: toProxyUrl(row.current_ref_url),
+      pending_url: toProxyUrl(row.pending_url),
     };
   });
 

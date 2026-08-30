@@ -23,9 +23,13 @@ import { formatTime } from '@/app/cso/dashboard/_components/helpers';
 import { SectionCardHeader } from '@/components/smartkey/section-card-header';
 import { SignatureMismatchDetailDialog } from '@/app/cso/dashboard/_components/signature-mismatch-detail-dialog';
 
+// The URLs are proxy URLs (/api/storage/object?...) rewritten server-side from
+// the canonical storage URLs in the audit payload. Null when the stored value
+// no longer resolves to an object in a known bucket — render the "unavailable"
+// placeholder rather than a broken image.
 export type MismatchCheck = {
-  ref_url: string;
-  submitted_url: string;
+  ref_url: string | null;
+  submitted_url: string | null;
   mismatch_pct: number;
 };
 
@@ -51,7 +55,7 @@ export type ReferenceReplacementMismatch = {
   mismatch_pct: number;
   threshold_pct: number;
   current_ref_url: string | null;
-  pending_url: string;
+  pending_url: string | null;
 };
 
 export type SignatureMismatchAlert =

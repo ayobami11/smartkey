@@ -347,11 +347,18 @@ export const AuthorizedKeys = () => {
           </SheetHeader>
 
           <div className="flex flex-1 flex-col overflow-y-auto p-6">
+            {/* The form below is noValidate so the zod resolver owns
+                validation end to end. The return-time input carries a `min`,
+                and native constraint validation would otherwise block submit
+                before handleSubmit runs, suppressing the field-level error
+                message the form is supposed to show. Matches otp-form and
+                comment-form. */}
             {step === 'weekday_form' && selectedKey && (
               <form
                 id="weekday-form"
                 onSubmit={weekdayForm.handleSubmit(handleWeekdaySubmit)}
                 className="flex flex-col gap-5"
+                noValidate
               >
                 <div className="rounded-lg border border-border bg-muted/40 p-4">
                   <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">

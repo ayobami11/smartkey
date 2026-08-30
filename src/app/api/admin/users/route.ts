@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as z from 'zod';
 
+import { rewriteStorageUrls } from '@/lib/storage/object-url';
 import { sendActivationEmail } from '@/lib/email/otp';
 import { logger } from '@/lib/logger';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -275,5 +276,5 @@ export const GET = async () => {
     last_sign_in_at: last_login_at,
   }));
 
-  return NextResponse.json(ok({ users }), { status: 200 });
+  return NextResponse.json(ok(rewriteStorageUrls({ users })), { status: 200 });
 };

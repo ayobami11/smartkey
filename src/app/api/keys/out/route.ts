@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { rewriteStorageUrls } from '@/lib/storage/object-url';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
 import { err, ok } from '@/types/api';
@@ -77,5 +78,7 @@ export const GET = async (request: NextRequest) => {
     return { ...rest, requester, status: overdue ? 'KEY_OVERDUE' : row.status };
   });
 
-  return NextResponse.json(ok({ outstanding }), { status: 200 });
+  return NextResponse.json(ok(rewriteStorageUrls({ outstanding })), {
+    status: 200,
+  });
 };

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { logger } from '@/lib/logger';
+import { toProxyUrl } from '@/lib/storage/object-url';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
 import { err, ok } from '@/types/api';
@@ -85,7 +86,14 @@ export const POST = async (request: NextRequest) => {
     return NextResponse.json(err('Failed to save photo', 500), { status: 500 });
   }
 
-  return NextResponse.json(ok({ photo_url: photoUrl }), { status: 200 });
+  // The object path is stable across replacements (`{id}/passport.ext`), so
+  // the proxy URL carries a version param to bust the browser cache. Done
+  // server-side because the caller can't safely append to a query string it
+  // doesn't own.
+  return NextResponse.json(
+    ok({ photo_url: toProxyUrl(photoUrl, { version: Date.now() }) }),
+    { status: 200 }
+  );
 };
 
 // Removes the authenticated user's profile photo from storage and clears photo_url.

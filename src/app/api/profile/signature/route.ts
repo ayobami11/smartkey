@@ -7,6 +7,7 @@ import {
 } from '@/lib/ai/signature/verifier';
 import { writeAuditEntry } from '@/lib/audit';
 import { logger } from '@/lib/logger';
+import { downloadStorageObject, toProxyUrl } from '@/lib/storage/object-url';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
 import { err, ok } from '@/types/api';
@@ -93,10 +94,14 @@ export const POST = async (request: NextRequest) => {
   if (currentRefUrl) {
     let currentRefBuffer: Buffer;
     try {
-      const cacheBustedUrl = `${currentRefUrl}${currentRefUrl.includes('?') ? '&' : '?'}cb=${Date.now()}`;
-      const res = await fetch(cacheBustedUrl, { cache: 'no-store' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      currentRefBuffer = Buffer.from(await res.arrayBuffer());
+      // Downloaded through the Storage API rather than fetched over HTTP:
+      // `hod-signatures` is private, so the stored URL is not retrievable
+      // without credentials. Reads straight from the origin, so there is no
+      // CDN cache to bust either.
+      currentRefBuffer = await downloadStorageObject(
+        createAdminClient(),
+        currentRefUrl
+      );
     } catch (e) {
       const ref = crypto.randomUUID().slice(0, 8);
       logger.error('signature-replace: failed to fetch current reference', {
@@ -291,5 +296,12 @@ export const POST = async (request: NextRequest) => {
     );
   }
 
-  return NextResponse.json(ok({ status: 'updated', new_url: newUrl }));
+  // The audit entry above keeps the canonical storage URL as the durable
+  // record; the response carries the proxy URL the browser can render.
+  return NextResponse.json(
+    ok({
+      status: 'updated',
+      new_url: toProxyUrl(newUrl, { version: Date.now() }),
+    })
+  );
 };

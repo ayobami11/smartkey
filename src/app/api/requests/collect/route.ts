@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as z from 'zod';
 
+import { toProxyUrl } from '@/lib/storage/object-url';
 import { logger } from '@/lib/logger';
 import { createServerClient } from '@/lib/supabase/server';
 import { err, ok } from '@/types/api';
@@ -154,7 +155,7 @@ export const POST = async (request: NextRequest) => {
       is_guest: false,
       requester: {
         full_name: requesterProfile?.full_name ?? null,
-        photo_url: requesterProfile?.photo_url ?? null,
+        photo_url: toProxyUrl(requesterProfile?.photo_url),
       },
       key: {
         code: keyData?.code ?? null,

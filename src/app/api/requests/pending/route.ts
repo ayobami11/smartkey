@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { rewriteStorageUrls } from '@/lib/storage/object-url';
 import { logger } from '@/lib/logger';
 import { createServerClient } from '@/lib/supabase/server';
 import { err, ok } from '@/types/api';
@@ -77,5 +78,7 @@ export const GET = async () => {
     });
   }
 
-  return NextResponse.json(ok({ requests: filteredRequests }));
+  return NextResponse.json(
+    ok(rewriteStorageUrls({ requests: filteredRequests }))
+  );
 };

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { rewriteStorageUrls } from '@/lib/storage/object-url';
 import { logger } from '@/lib/logger';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
@@ -63,7 +64,7 @@ export const GET = async (request: NextRequest) => {
       });
     }
 
-    return NextResponse.json(ok({ request: row }));
+    return NextResponse.json(ok(rewriteStorageUrls({ request: row })));
   }
 
   // Full queue fetch — initial load and fallback.
@@ -81,5 +82,5 @@ export const GET = async (request: NextRequest) => {
     });
   }
 
-  return NextResponse.json(ok({ requests }));
+  return NextResponse.json(ok(rewriteStorageUrls({ requests })));
 };

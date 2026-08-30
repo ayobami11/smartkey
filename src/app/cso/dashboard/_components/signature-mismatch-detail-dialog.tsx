@@ -34,6 +34,24 @@ type SignatureMismatchDetailDialogProps = {
 
 type ResolveDecision = 'APPROVED' | 'DECLINED';
 
+// Signature and stamp images are served from private buckets through
+// /api/storage/object, so a src is null whenever the stored URL no longer
+// resolves to a known object. Showing a labelled placeholder keeps the
+// side-by-side comparison legible instead of collapsing to a broken image.
+const MismatchImage = ({ src, alt }: { src: string | null; alt: string }) =>
+  src ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={alt}
+      className="aspect-2/1 w-full rounded-lg border border-border bg-muted object-contain"
+    />
+  ) : (
+    <div className="flex aspect-2/1 w-full items-center justify-center rounded-lg border border-border bg-muted px-2 text-center text-xs text-muted-foreground">
+      Image unavailable
+    </div>
+  );
+
 export const SignatureMismatchDetailDialog = ({
   alert,
   onOpenChange,
@@ -159,11 +177,9 @@ export const SignatureMismatchDetailDialog = ({
                       Reference on file
                     </p>
                     {alert.current_ref_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
+                      <MismatchImage
                         src={alert.current_ref_url}
                         alt={`Current reference ${alert.type} on file for ${alert.dean_name}`}
-                        className="aspect-2/1 w-full rounded-lg border border-border bg-muted object-contain"
                       />
                     ) : (
                       <div className="flex aspect-2/1 w-full items-center justify-center rounded-lg border border-border bg-muted text-xs text-muted-foreground">
@@ -175,11 +191,9 @@ export const SignatureMismatchDetailDialog = ({
                     <p className="text-xs font-medium text-muted-foreground">
                       Submitted (pending)
                     </p>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
+                    <MismatchImage
                       src={alert.pending_url}
                       alt={`Submitted ${alert.type} pending review from ${alert.dean_name}`}
-                      className="aspect-2/1 w-full rounded-lg border border-border bg-muted object-contain"
                     />
                   </div>
                 </div>
@@ -196,24 +210,18 @@ export const SignatureMismatchDetailDialog = ({
                     <p className="text-xs font-medium text-muted-foreground">
                       Reference on file
                     </p>
-                    {/* Regular <img> intentionally — Storage URL preview,
-                        matching the convention in profile-photo-preview.tsx. */}
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
+                    <MismatchImage
                       src={alert.signature.ref_url}
                       alt={`Reference signature on file for ${alert.requester?.full_name ?? 'this requester'}`}
-                      className="aspect-2/1 w-full rounded-lg border border-border bg-muted object-contain"
                     />
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <p className="text-xs font-medium text-muted-foreground">
                       Submitted
                     </p>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
+                    <MismatchImage
                       src={alert.signature.submitted_url}
                       alt={`Submitted signature for the request from ${alert.requester?.full_name ?? 'this requester'}`}
-                      className="aspect-2/1 w-full rounded-lg border border-border bg-muted object-contain"
                     />
                   </div>
                 </div>
@@ -228,22 +236,18 @@ export const SignatureMismatchDetailDialog = ({
                     <p className="text-xs font-medium text-muted-foreground">
                       Reference on file
                     </p>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
+                    <MismatchImage
                       src={alert.stamp.ref_url}
                       alt={`Reference stamp on file for ${alert.requester?.full_name ?? 'this requester'}`}
-                      className="aspect-2/1 w-full rounded-lg border border-border bg-muted object-contain"
                     />
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <p className="text-xs font-medium text-muted-foreground">
                       Submitted
                     </p>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
+                    <MismatchImage
                       src={alert.stamp.submitted_url}
                       alt={`Submitted stamp for the request from ${alert.requester?.full_name ?? 'this requester'}`}
-                      className="aspect-2/1 w-full rounded-lg border border-border bg-muted object-contain"
                     />
                   </div>
                 </div>

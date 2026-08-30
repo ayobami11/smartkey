@@ -5,6 +5,7 @@ import * as z from 'zod';
 
 import { verifySignature } from '@/lib/ai/signature/verifier';
 import { logger } from '@/lib/logger';
+import { downloadStorageObject } from '@/lib/storage/object-url';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { err, ok } from '@/types/api';
 
@@ -50,15 +51,12 @@ export const POST = async (request: NextRequest) => {
   let subBuffer: Buffer;
 
   try {
-    const [refRes, subRes] = await Promise.all([
-      fetch(profile.signature_ref_url),
-      fetch(submitted_signature_url),
+    // Both buckets are private — download through the Storage API rather
+    // than fetching the stored URL over HTTP.
+    [refBuffer, subBuffer] = await Promise.all([
+      downloadStorageObject(admin, profile.signature_ref_url),
+      downloadStorageObject(admin, submitted_signature_url),
     ]);
-    if (!refRes.ok || !subRes.ok) {
-      throw new Error('Failed to fetch one or more signature images');
-    }
-    refBuffer = Buffer.from(await refRes.arrayBuffer());
-    subBuffer = Buffer.from(await subRes.arrayBuffer());
   } catch (e) {
     const ref = crypto.randomUUID();
     logger.error('Signature image fetch failed', {

@@ -16,6 +16,7 @@ import {
   getRequestRecipient,
 } from '@/lib/email/request-recipient';
 import { logger } from '@/lib/logger';
+import { downloadStorageObject } from '@/lib/storage/object-url';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 const siteUrl =
@@ -316,16 +317,13 @@ export const decideWeekendRequest = async (
       refUrl: string,
       submittedUrl: string
     ): Promise<CheckResult> => {
-      const [refRes, subRes] = await Promise.all([
-        fetch(refUrl),
-        fetch(submittedUrl),
-      ]);
-      if (!refRes.ok || !subRes.ok)
-        throw new Error('Failed to fetch reference/submitted images');
-
+      // Downloaded through the Storage API, not fetched over HTTP. The
+      // reference lives in `hod-signatures` and the submitted image in
+      // `weekend-letters` — both private buckets, so a plain fetch of the
+      // stored URL returns an error body rather than image bytes.
       const [refBuffer, subBuffer] = await Promise.all([
-        refRes.arrayBuffer().then(Buffer.from),
-        subRes.arrayBuffer().then(Buffer.from),
+        downloadStorageObject(admin, refUrl),
+        downloadStorageObject(admin, submittedUrl),
       ]);
 
       const verifyResult = await verifySignature(refBuffer, subBuffer);

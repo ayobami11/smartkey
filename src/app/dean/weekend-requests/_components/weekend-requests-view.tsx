@@ -247,13 +247,13 @@ export const WeekendRequestsView = () => {
     setSubmitting(true);
     setSubmitError(null);
 
-    // requests.letter_url/stamp_url are raw paths in the private
-    // weekend-letters bucket — not directly fetchable. The server-side
-    // verifier (decide-weekend.ts) does a plain fetch() against whatever URL
-    // we send, so it needs a signed URL, the same one handleViewLetter uses
-    // for the Dean's own preview. Sign fresh here rather than reusing
-    // letterUrl/stampUrl state: the Dean may approve without ever clicking
-    // "view", and a previously-fetched signed URL is only valid 5 minutes.
+    // requests.letter_url/stamp_url point into the private weekend-letters
+    // bucket. decide-weekend.ts resolves whatever URL we send through the
+    // Storage API, which accepts the signed form as readily as the canonical
+    // one, so send the same signed URL handleViewLetter uses for the Dean's
+    // own preview. Sign fresh here rather than reusing letterUrl/stampUrl
+    // state: the Dean may approve without ever clicking "view", and a
+    // previously-fetched signed URL is only valid 5 minutes.
     let signedSignatureUrl: string | undefined;
     let signedStampUrl: string | undefined;
     if (choice === 'APPROVED' && !isGuest) {

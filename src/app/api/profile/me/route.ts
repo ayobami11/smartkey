@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { toProxyUrl } from '@/lib/storage/object-url';
 import { createServerClient } from '@/lib/supabase/server';
 import { err, ok } from '@/types/api';
 
 // Returns the authenticated user's profile. Used by settings pages to surface
 // role-specific fields such as signature_ref_url and stamp_ref_url for HODs.
 export const GET = async () => {
-
   const supabase = await createServerClient();
 
   const {
@@ -26,7 +26,19 @@ export const GET = async () => {
   if (error || !profile)
     return NextResponse.json(err('Profile not found', 404), { status: 404 });
 
-  return NextResponse.json(ok({ profile }), { status: 200 });
+  // Storage buckets are private; hand the client proxy URLs it can actually
+  // render rather than the raw object URLs stored on the row.
+  return NextResponse.json(
+    ok({
+      profile: {
+        ...profile,
+        photo_url: toProxyUrl(profile.photo_url),
+        signature_ref_url: toProxyUrl(profile.signature_ref_url),
+        stamp_ref_url: toProxyUrl(profile.stamp_ref_url),
+      },
+    }),
+    { status: 200 }
+  );
 };
 
 // Updates the authenticated user's own profile. Only full_name is mutable here;
