@@ -79,45 +79,47 @@ const PREHEADER_PAD = '&nbsp;&zwnj;'.repeat(40);
 const nLogoMark = (size: number) =>
   `<img src="cid:${LOGO_CID}" width="${size}" height="${size}" alt="SmartKey" style="display:inline-block;vertical-align:middle;border:0;margin-right:9px;">`;
 
+// nHeader, nDigestHeader, and nFooter each return bare <tr> rows, not a
+// nested <table> of their own — a nested table set to width:100% is one of
+// the least reliable things in HTML email rendering; plenty of clients
+// shrink it to its content's intrinsic width instead of stretching it to
+// fill the parent cell, which is exactly what made the maroon header render
+// narrower than the white body below it. Returning rows directly means they
+// become rows of nDoc's own fixed-width (480px) table, so their background
+// always spans the true column width — nothing left to shrink.
 const nHeader = () => `
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;">
-    <tr><td style="background:${N.maroon};border-radius:12px 12px 0 0;padding:26px 30px 22px;">
-      <div>${nLogoMark(26)}<span style="font-family:${F_SERIF};font-weight:700;font-size:21px;color:#ffffff;letter-spacing:0.01em;vertical-align:middle;">SmartKey</span></div>
-      <div style="font-family:${F_SANS};font-size:9.5px;letter-spacing:0.15em;text-transform:uppercase;color:${N.gold};margin-top:6px;">Senate Building &middot; University of Lagos</div>
-    </td></tr>
-    <tr><td style="height:3px;line-height:3px;font-size:0;background:${N.gold};">&nbsp;</td></tr>
-  </table>
+  <tr><td style="background:${N.maroon};border-radius:12px 12px 0 0;padding:26px 30px 22px;">
+    <div>${nLogoMark(26)}<span style="font-family:${F_SERIF};font-weight:700;font-size:21px;color:#ffffff;letter-spacing:0.01em;vertical-align:middle;">SmartKey</span></div>
+    <div style="font-family:${F_SANS};font-size:9.5px;letter-spacing:0.15em;text-transform:uppercase;color:${N.gold};margin-top:6px;">Senate Building &middot; University of Lagos</div>
+  </td></tr>
+  <tr><td style="height:3px;line-height:3px;font-size:0;background:${N.gold};">&nbsp;</td></tr>
 `;
 
 const nDigestHeader = () => `
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;">
-    <tr><td style="background:${N.maroon};border-radius:12px 12px 0 0;padding:20px 30px;">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-        <td style="vertical-align:middle;">
-          <div>${nLogoMark(20)}<span style="font-family:${F_SERIF};font-weight:700;font-size:18px;color:#ffffff;vertical-align:middle;">SmartKey</span></div>
-        </td>
-        <td style="text-align:right;vertical-align:middle;">
-          <span style="font-family:${F_SANS};font-size:9.5px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:${N.gold};">Daily digest</span>
-        </td>
-      </tr></table>
-    </td></tr>
-    <tr><td style="height:3px;line-height:3px;font-size:0;background:${N.gold};">&nbsp;</td></tr>
-  </table>
+  <tr><td style="background:${N.maroon};border-radius:12px 12px 0 0;padding:20px 30px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+      <td style="vertical-align:middle;">
+        <div>${nLogoMark(20)}<span style="font-family:${F_SERIF};font-weight:700;font-size:18px;color:#ffffff;vertical-align:middle;">SmartKey</span></div>
+      </td>
+      <td style="text-align:right;vertical-align:middle;">
+        <span style="font-family:${F_SANS};font-size:9.5px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:${N.gold};">Daily digest</span>
+      </td>
+    </tr></table>
+  </td></tr>
+  <tr><td style="height:3px;line-height:3px;font-size:0;background:${N.gold};">&nbsp;</td></tr>
 `;
 
 const nFooter = (opts: { preferenceNote?: boolean } = {}) => `
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;background:#FAFBFC;border:1px solid ${N.border};border-top:none;border-radius:0 0 12px 12px;">
-    <tr><td style="padding:20px 30px 22px;text-align:center;">
-      <p style="margin:0 0 3px;font-family:${F_SERIF};font-size:13px;color:${N.ink};font-weight:600;">SmartKey</p>
-      <p style="margin:0 0 12px;font-family:${F_SANS};font-size:10.5px;color:${N.faint};letter-spacing:0.02em;">Key management for the Senate Building</p>
-      ${
-        opts.preferenceNote
-          ? `<p style="margin:0 0 8px;font-family:${F_SANS};font-size:11px;color:${N.faint};">You can turn this off in Settings &rarr; Notifications.</p>`
-          : ''
-      }
-      <p style="margin:0;font-family:${F_SANS};font-size:10px;color:${N.faint};">University of Lagos &nbsp;&middot;&nbsp; Automated message, please do not reply directly.</p>
-    </td></tr>
-  </table>
+  <tr><td style="background:#FAFBFC;border-left:1px solid ${N.border};border-right:1px solid ${N.border};border-bottom:1px solid ${N.border};border-radius:0 0 12px 12px;padding:20px 30px 22px;text-align:center;">
+    <p style="margin:0 0 3px;font-family:${F_SERIF};font-size:13px;color:${N.ink};font-weight:600;">SmartKey</p>
+    <p style="margin:0 0 12px;font-family:${F_SANS};font-size:10.5px;color:${N.faint};letter-spacing:0.02em;">Key management for the Senate Building</p>
+    ${
+      opts.preferenceNote
+        ? `<p style="margin:0 0 8px;font-family:${F_SANS};font-size:11px;color:${N.faint};">You can turn this off in Settings &rarr; Notifications.</p>`
+        : ''
+    }
+    <p style="margin:0;font-family:${F_SANS};font-size:10px;color:${N.faint};">University of Lagos &nbsp;&middot;&nbsp; Automated message, please do not reply directly.</p>
+  </td></tr>
 `;
 
 const nDoc = (
@@ -137,12 +139,12 @@ const nDoc = (
   }
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;background:${N.envelope};">
     <tr><td align="center" style="padding:36px 16px;">
-      <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="width:480px;max-width:100%;">
-        <tr><td>${headerFn()}</td></tr>
+      <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="width:480px;max-width:100%;border-collapse:collapse;">
+        ${headerFn()}
         <tr><td style="background:#ffffff;border-left:1px solid ${N.border};border-right:1px solid ${N.border};padding:30px 30px 26px;">
           ${contentInner}
         </td></tr>
-        <tr><td>${nFooter(opts)}</td></tr>
+        ${nFooter(opts)}
       </table>
     </td></tr>
   </table>

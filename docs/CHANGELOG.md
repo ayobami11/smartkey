@@ -6,6 +6,20 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-08-30 — Fix the redesigned email header rendering narrower than the body
+
+- **Why**: a rendered password-reset email showed the maroon header noticeably narrower than the
+  white body below it. `nHeader`, `nDigestHeader`, and `nFooter` (added in the same-day email
+  template redesign) each wrapped their background in their own nested `<table width="100%">`.
+  Percentage widths on nested tables are notoriously unreliable in HTML email — several clients
+  shrink them to their content's intrinsic width instead of stretching them to the parent cell,
+  which is exactly what happened to the header.
+- All three now return bare `<tr>` rows instead of a self-contained table, so they become direct
+  rows of `nDoc`'s single fixed-width (480px) table rather than nested tables — nothing left to
+  shrink. `nFooter`'s left/right/bottom border moved from its old nested table onto its own `<td>`
+  as a side effect, which also makes it align exactly with the content section's identical border
+  (previously two separate nested tables, now two rows of the same table).
+
 ### 2026-08-30 — Fix a guest-approval authorisation gap; add pgTAP coverage for the guest weekend flow
 
 - **Why**: scoped the pgTAP test-coverage gap (`supabase/tests/README.md` had flagged the guest
