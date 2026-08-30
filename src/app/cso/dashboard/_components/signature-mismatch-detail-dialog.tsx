@@ -163,10 +163,10 @@ export const SignatureMismatchDetailDialog = ({
                       <img
                         src={alert.current_ref_url}
                         alt={`Current reference ${alert.type} on file for ${alert.dean_name}`}
-                        className="aspect-[2/1] w-full rounded-lg border border-border bg-muted object-contain"
+                        className="aspect-2/1 w-full rounded-lg border border-border bg-muted object-contain"
                       />
                     ) : (
-                      <div className="flex aspect-[2/1] w-full items-center justify-center rounded-lg border border-border bg-muted text-xs text-muted-foreground">
+                      <div className="flex aspect-2/1 w-full items-center justify-center rounded-lg border border-border bg-muted text-xs text-muted-foreground">
                         No reference on file
                       </div>
                     )}
@@ -179,7 +179,7 @@ export const SignatureMismatchDetailDialog = ({
                     <img
                       src={alert.pending_url}
                       alt={`Submitted ${alert.type} pending review from ${alert.dean_name}`}
-                      className="aspect-[2/1] w-full rounded-lg border border-border bg-muted object-contain"
+                      className="aspect-2/1 w-full rounded-lg border border-border bg-muted object-contain"
                     />
                   </div>
                 </div>
@@ -266,7 +266,7 @@ export const SignatureMismatchDetailDialog = ({
                 <TooltipTrigger asChild>
                   <span tabIndex={isOffline ? 0 : -1}>
                     <Button
-                      variant="destructive"
+                      variant="secondary"
                       disabled={
                         isOffline || !acknowledged || resolving !== null
                       }
@@ -310,7 +310,7 @@ export const SignatureMismatchDetailDialog = ({
         )}
 
         {alert && resolvedAs && (
-          <Card className="border-0 shadow-none">
+          <Card className="border-0 shadow-none ring-0">
             <CardContent className="flex flex-col items-center gap-4 py-6 text-center">
               <CheckCircleIcon
                 className="size-10 text-emerald-500"

@@ -6,6 +6,19 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-08-30 — Signature-mismatch dialog: Decline button variant, duplicate confirmation-card border
+
+- **Why**: `Decline` in the CSO signature-mismatch resolve dialog used `variant="destructive"`, but
+  declining here (discarding a pending reference upload, or rejecting a weekend request on a held
+  mismatch) is a normal review outcome, not a delete — per `DESIGN.md`'s own button taxonomy,
+  `button-secondary` is for alternative actions and `button-destructive` is for actions that delete
+  or reverse state. Separately, the resolved-state confirmation card rendered a faint double border:
+  its own `Card` base styles carry `ring-1 ring-foreground/10` independently of `border`/`shadow`,
+  so the card's `className="border-0 shadow-none"` never cancelled it, leaving the card's ring
+  nested inside `DialogContent`'s own `ring-1 ring-foreground/10`.
+- `signature-mismatch-detail-dialog.tsx`: `Decline` changed to `variant="secondary"`; the resolved
+  confirmation `Card` now also sets `ring-0`.
+
 ### 2026-08-30 — Write the missing `docs/E2E_OTP_SETUP.md`
 
 - **Why**: a local `bunx playwright test` run of the auth setup project failed with "No OTP
