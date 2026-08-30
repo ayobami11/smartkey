@@ -1,5 +1,9 @@
 import * as React from 'react';
 
+// Mirrored as a plain SVG string in src/lib/email/logo.ts for the emailed
+// logo (Next.js's App Router graph forbids rendering this via
+// react-dom/server from a Route Handler) — update that string too if this
+// markup changes.
 export const SmartKeyMark = ({ className }: { className?: string }) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"

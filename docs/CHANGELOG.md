@@ -6,6 +6,26 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-08-30 — Fix production build failure from `react-dom/server` in the RSC graph
+
+- **Why**: `bun run build` (and therefore husky's pre-push hook) failed with
+  `You're importing a component that imports react-dom/server` from
+  `src/lib/email/logo.ts`. Next.js's App Router build graph forbids importing
+  `react-dom/server` from any module reachable from a Route Handler when that
+  module also imports a `.tsx` component — `logo.ts` did both (rendering
+  `SmartKeyMark` via `renderToStaticMarkup`), reachable from
+  `POST /api/requests/submit` via `otp.ts` → `layout.ts` → `logo.ts`. This
+  shipped in the 2026-08-30 email-redesign entry above and was never caught
+  locally because `bun run typecheck`/`bun run lint` don't run a production
+  build.
+- **`src/lib/email/logo.ts`**: dropped the `react-dom/server` and
+  `SmartKeyMark` imports; the component's SVG output (static — no props were
+  ever passed) is now inlined as a plain string constant, rasterized by Sharp
+  exactly as before. No behavioural change to the rendered email logo. If
+  `smart-key-mark.tsx`'s markup changes, this string must be updated to match
+  (noted in a comment on both the constant and in `smart-key-mark.tsx`'s
+  future editors should check here).
+
 ### 2026-08-30 — Redesign email templates with an embedded logo
 
 - **Why**: a review of all 15 outgoing emails (OTP, activation, password reset,
