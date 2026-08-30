@@ -6,112 +6,39 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
-### 2026-08-30 — Fix production build failure from `react-dom/server` in the RSC graph
+### 2026-08-30 — Redesign the 14 transactional/digest email templates
 
-- **Why**: `bun run build` (and therefore husky's pre-push hook) failed with
-  `You're importing a component that imports react-dom/server` from
-  `src/lib/email/logo.ts`. Next.js's App Router build graph forbids importing
-  `react-dom/server` from any module reachable from a Route Handler when that
-  module also imports a `.tsx` component — `logo.ts` did both (rendering
-  `SmartKeyMark` via `renderToStaticMarkup`), reachable from
-  `POST /api/requests/submit` via `otp.ts` → `layout.ts` → `logo.ts`. This
-  shipped in the 2026-08-30 email-redesign entry above and was never caught
-  locally because `bun run typecheck`/`bun run lint` don't run a production
-  build.
-- **`src/lib/email/logo.ts`**: dropped the `react-dom/server` and
-  `SmartKeyMark` imports; the component's SVG output (static — no props were
-  ever passed) is now inlined as a plain string constant, rasterized by Sharp
-  exactly as before. No behavioural change to the rendered email logo. If
-  `smart-key-mark.tsx`'s markup changes, this string must be updated to match
-  (noted in a comment on both the constant and in `smart-key-mark.tsx`'s
-  future editors should check here).
-
-### 2026-08-30 — Redesign email templates with an embedded logo
-
-- **Why**: a review of all 15 outgoing emails (OTP, activation, password reset,
-  collection codes, weekend request lifecycle, overdue reminders, signature-mismatch
-  alerts, CSO/Dean daily digests) found an inconsistent, unbranded presentation — a bare
-  maroon `<div>` with the plain text "SmartKey" and no logo, two different header/footer
-  styles across templates, `margin:0 auto` centering that desktop Outlook's Word engine
-  often ignores, no preheader (inbox preview) text, and several word-choice issues (an
-  outlier "Dear {name}," greeting that doesn't match `DESIGN.md`'s own example, "the
-  SmartKey app" for what is a web app, a subject line with an awkward slash).
-- **`src/lib/email/logo.ts`** (new): rasterizes the real `SmartKeyMark` component (the
-  same mark used in every dashboard sidebar) to a PNG via Sharp — already a project
-  dependency for signature verification — and caches it per server process, so the email
-  logo can never drift from the in-app one. Embedded via nodemailer's `cid` attachment
-  mechanism rather than inline `<svg>`, which most email clients strip from HTML mail.
-- **`src/lib/email/layout.ts`** (new): one shared, table-based email shell (`sendBrandedMail`)
-  used by all 15 templates — branded maroon header with the embedded logo + an optional
-  eyebrow label (e.g. "Weekend request", "Daily digest"), consistent institutional footer,
-  hidden preheader text, and a `getGreeting()` helper that computes a real
-  "Good morning/afternoon/evening" from the Africa/Lagos hour (UTC+1, no DST) instead of
-  hardcoding one.
-- **`src/lib/email/transporter.ts`** (new): the nodemailer transport, extracted out of
-  `otp.ts` so both it and `layout.ts` can use it without a circular import.
-- **`src/lib/email/otp.ts`**: refactored to call the new shell; all 15 exported function
-  names and parameter shapes are unchanged (12 call sites import them by name). Copy fixes:
-  the Dean/CSO "Dear {name}," greeting now uses `getGreeting()`; "cancel the request from
-  the SmartKey app" → "cancel it from your SmartKey dashboard"; "Signature/stamp mismatch
-  held for review" subject → "Signature or stamp mismatch — review needed"; preference-gated
-  emails (overdue, weekend-decided, weekend-submitted, signature-mismatch) now tell the
-  recipient they can turn the email off in Settings, tied to the actual
-  `notification_preferences` column that gates them.
-
-### 2026-08-30 — Fix stale backend docs found in a full docs/ audit
-
-- **Why**: a full sweep of `docs/` against the live Supabase schema, actual route
-  implementations, and current code (prompted by a request to check for stale backend docs)
-  turned up several docs teaching outdated or simply wrong facts — most notably a
-  safety-critical signature-mismatch threshold that was 3.7x off, and a documented backup
-  feature that was never actually deployed to production.
-- **`docs/AUDIT_EVENTS.md`**: rewritten. It cited a non-existent source file
-  (`src/lib/audit/events.ts`) and documented every event name in the wrong case
-  (`request_created` instead of the real `REQUEST_CREATED`) — not one documented name matched
-  an actual event string. Rebuilt the table from the real event names (verified by grepping
-  `writeAuditEntry` call sites and the `_write_audit`/`_write_audit_guest` literals in
-  `supabase/migrations/`, plus the live RPC bodies), added ~15 real events that were
-  undocumented entirely, and flagged that `COLLECTOR_NOMINATED`, `COLLECTOR_REMOVED`,
-  `RETURN_CODE_GENERATED`, `SHIFT_REPORT_SCHEDULED`, `CODE_EXPIRED`, and
-  `KEY_RETURNED_UNVERIFIED` are real live events missing from `EVENT_TYPE_MAP`
-  (`src/lib/audit/event-types.ts`) — they currently mis-display under the generic "Settings"
-  category in the CSO audit log. That's a code gap, not fixed here.
-- **`docs/AI_TRIGGERS.md`** and **`docs/CONTEXT.txt`**: both still taught the pre-2026-08-02
-  signature-mismatch threshold of 15% (whole-canvas-scored). The actual default is 55%,
-  scored over the ink region only — see `docs/AI.md` §3 for why the old value was
-  mathematically unreachable and passed every input, including outright forgeries. Also added
-  the independent stamp check (`submitted_stamp_url`/`stamp_ref_url`), which `AI_TRIGGERS.md`
-  omitted entirely.
-- **`docs/DATABASE.md`**: added a callout that the `audit_log` → Vercel Blob daily export it
-  documents as live was never actually applied to production — confirmed via live
-  `list_migrations`/`list_tables`/`cron.job`: `audit_export_state` doesn't exist and no
-  `audit-log-export` cron job is registered, despite both migration files existing in
-  `supabase/migrations/`. `POST /api/cron/audit-export` would fail if invoked today. Also
-  documented 3 dead legacy values (`PENDING`, `SUCCESS`, `ERROR`) on the live
-  `request_status` enum that weren't listed anywhere.
-- **`docs/IMPLEMENTATION.md`**: struck through the stale "no pgTAP suite exists" claims (it's a
-  point-in-time snapshot as of 2026-07-23) — 75 pgTAP tests landed 2026-08-07 per
-  `docs/TESTING.md`/`docs/review.md`, matching the doc's existing strikethrough-correction
-  convention used elsewhere in the same file.
-- **`docs/adr/0004-server-components-default.md`**: "Next.js 15" → "Next.js 16" (version drift
-  only; the decision itself still holds).
-- Confirmed clean and left unchanged: `docs/API.md` (all 64 routes verified against
-  `src/app/api/`), `docs/external-weekend-requests-testing.md`, `docs/SMOKE_TEST_SETUP.md`,
-  `docs/UPTIME_MONITORING.md`, `docs/postman/`, `docs/review.md` (intentionally archival), and
-  ADRs 0001/0002/0003/0005.
-- **`src/lib/audit/event-types.ts`**: `EVENT_TYPE_MAP` was missing 6 real, currently-written
-  event names — `COLLECTOR_NOMINATED`, `COLLECTOR_REMOVED`, `RETURN_CODE_GENERATED`,
-  `SHIFT_REPORT_SCHEDULED`, `CODE_EXPIRED`, `KEY_RETURNED_UNVERIFIED` — so they mis-displayed
-  under the generic "Settings" category in the CSO audit log. Added each under the category of
-  its closest sibling event (`CODE_EXPIRED` → `REQUEST`, alongside `CODE_ISSUED`/
-  `REQUEST_EXPIRED`; `KEY_RETURNED_UNVERIFIED`/`RETURN_CODE_GENERATED` → `RETURN`, alongside
-  `KEY_RETURNED`; `SHIFT_REPORT_SCHEDULED` → `SETTINGS`, alongside `SHIFT_REPORT_INITIATED`;
-  `COLLECTOR_NOMINATED`/`COLLECTOR_REMOVED` → `SETTINGS`, alongside the other admin actions).
-- **`docs/API.md` and `docs/DATABASE.md`**: corrected the `expire_request`/
-  `expire_lapsed_codes`/`expire_guest_request` descriptions — they claimed these RPCs always
-  write a `REQUEST_EXPIRED` audit entry and move the request to `EXPIRED`, but the live RPC
-  bodies actually roll a same-day weekend request back to `APPROVED` (writing `CODE_EXPIRED`
-  instead) so the requester/guest can mint a fresh code, rather than terminating the request.
+- **Why**: the templates in `src/lib/email/otp.ts` still used the original 2-colour "flat card"
+  layout from the first backend pass — no visual hierarchy beyond a coloured header bar, plain
+  paragraphs for every state (approved, declined, held for review, overdue), and copy that mixed
+  contractions and em dashes inconsistently with the voice conventions `design-system/DESIGN.md`
+  already documents for the rest of the product. None of the 14 emails had inbox preheader text or
+  mobile meta tags either, so every one showed a blank or arbitrary preview line and risked iOS
+  Mail auto-zooming the body copy.
+- Replaced the shared `emailHeader`/`wrap` helpers with a small internal design-token system
+  (`N`, `F_SERIF`/`F_SANS`/`F_MONO`) and a set of layout helpers (`nHeader`, `nFooter`, `nDoc`,
+  `nBadge`, `nCodePanel`, `nNote`, `nDetailPanel`, `nDigestRow`, etc.) matching `DESIGN.md`'s
+  maroon/gold institutional palette. There is no logo asset for the product and inline logo art is
+  unreliable in Outlook and Gmail, so the header is a text wordmark, not a mark. Fonts are
+  email-safe stacks standing in for Fraunces/DM Sans/JetBrains Mono (Georgia / system-sans /
+  system-mono) — no `<link>`, no `@import`, since most inboxes never load external webfonts.
+- Every template now carries a hidden, per-email inbox preheader (built from the function's real
+  parameters, not placeholder text) and `<meta name="viewport">` +
+  `-webkit-text-size-adjust`/`-ms-text-size-adjust` for mobile.
+- Copy pass across all 14 templates: removed every contraction and em dash, fixed a sentence
+  fragment in the collection-code email, converted a passive-voice line in the reinstated-access
+  email to active voice, and fixed a broken parallel structure in the guest-submission email.
+- Status badges (colour + dot + label — never colour alone) now mark approve/decline/held/
+  submitted states, and the six preference-gated templates (weekend approved, weekend submitted,
+  signature mismatch, both digests) reuse the exact "You can turn this off in Settings →
+  Notifications." line the digest emails already shipped, rather than exposing the raw
+  `notification_preferences` column name. `sendWeekendDeclinedEmail` and
+  `sendOverdueReminderEmail` deliberately don't get that line — both are shared with guest
+  recipients, who have no account or settings page.
+- No exported function's name, parameters, or subject line changed — every caller
+  (`hod-decision`/`decide-weekend.ts`, `requests/submit`, `requests/weekend-code`,
+  `public/weekend-request/*`, `admin/users`, `auth/resend-otp`, `auth/reset-password`,
+  `auth/login`, `cron/*`) needed no changes.
 
 ### 2026-08-27 — Add role-based FAQs to the public Help page
 
