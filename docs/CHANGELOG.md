@@ -52,9 +52,21 @@ Each entry: date, brief title, what changed, why.
   authenticated user every object in the bucket. Those policies were dormant while the buckets
   were public (a public bucket bypasses RLS on read) and would have become the live rule the
   moment the flag flipped — leaving any signed-in requester able to pull any Dean's reference
-  signature straight from the Storage API. **Not yet applied.** It must not run until the code
-  above is deployed: applied first, it breaks every photo and signature preview in the running
-  app. Flipping the flag is also what invalidates already-circulated public URLs.
+  signature straight from the Storage API. Applied to production 2026-08-30 via the SQL editor,
+  after confirming the proxy route was live — so there is no `supabase_migrations` row for it;
+  the file will still look unapplied to `supabase migration list`.
+- **Correction — the flag flip does not immediately close the hole.** Public objects are served
+  `cache-control: public, max-age=3600` and cached at the Supabase CDN edge. Immediately after
+  the buckets went private, an anonymous GET for a Dean's signature still returned 200 with the
+  full 18KB image and `cf-cache-status: HIT`; a HEAD on the same URL returned 400. Objects not
+  already in cache are denied at once, but anything fetched while the bucket was public stays
+  served until its cached copy expires — within the hour, or immediately if the object is
+  re-uploaded. And neither closes the door on a copy already downloaded: a reference signature
+  that was genuinely exfiltrated has to be re-onboarded before it means anything again.
+- Production already carried `hod_signatures_select` / `passport_photos_select` /
+  `weekend_letters_select` SELECT policies that exist in no committed migration and are already
+  owner-or-privileged-role scoped, so the two policies this migration creates are near-duplicates
+  there. They are kept for environments replayed from migrations alone.
 - `authorized-keys.tsx`: `noValidate` on the weekday request form. The return-time input carries a
   `min`, so native constraint validation blocked submit before `handleSubmit` ran and the zod
   message never appeared — which is what the stale assertion in
