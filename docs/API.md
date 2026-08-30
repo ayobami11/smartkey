@@ -1417,7 +1417,34 @@ Retrieves the Dean's reference signature from Supabase Storage, runs Sharp prepr
 
 **Response `data`**: `{ "mismatch_ratio": 0.04, "passed": true }`
 
-**Errors**: `403` missing/incorrect `x-internal-secret` · `422` request body fails validation, or the Dean has no `signature_ref_url` on file · `500` image fetch or verification failure
+## **Errors**: `403` missing/incorrect `x-internal-secret` · `422` request body fails validation, or the Dean has no `signature_ref_url` on file · `500` image fetch or verification failure
+
+## 7a. Storage
+
+### GET /api/storage/object
+
+**File**: `src/app/api/storage/object/route.ts`
+**Roles**: ALL (authenticated) — authorised per bucket, see below
+
+The authenticated read path for every private storage bucket. Returns the object's **bytes**, not a JSON envelope — it is consumed directly as `<img src="/api/storage/object?...">`.
+
+**Query params**: `bucket` (`passport-photos` | `hod-signatures` | `weekend-letters`) · `path` (must match `{uuid}/{filename}` — one folder segment, one flat filename; nested paths and traversal are rejected) · `v` (optional cache-buster, ignored by the handler)
+
+| Bucket            | Who may read                                                              |
+| ----------------- | ------------------------------------------------------------------------- |
+| `hod-signatures`  | The owning Dean, and the CSO                                              |
+| `passport-photos` | The subject of the photo, plus any CSO, DEAN, or VERIFIER                 |
+| `weekend-letters` | CSO only — the Dean's unit-scoped path is `GET /api/requests/[id]/letter` |
+
+Ownership is derived from the object path's first segment, which is always the profile id (or request id) the object belongs to.
+
+Bytes are streamed behind the session cookie rather than handed out as signed URLs: these images render in dashboards that stay open for a whole shift, so a signed URL would expire mid-shift and leave broken images, and would remain a bearer token for its whole lifetime. A proxied request is re-authorised every time and stops working the moment the session does. Responses carry `Cache-Control: private, max-age=300, must-revalidate` and `X-Content-Type-Options: nosniff`.
+
+Callers never build these URLs by hand — `toProxyUrl` / `rewriteStorageUrls` in `src/lib/storage/object-url.ts` rewrite stored storage URLs at the response boundary, so every route listed in §2–§7 that carries a `photo_url`, `signature_ref_url`, `stamp_ref_url`, `ref_url`, `submitted_url`, `pending_url`, or `current_ref_url` returns a proxy URL rather than a raw Storage URL. The canonical Storage URL is what stays in the database column and in audit payloads.
+
+**Response**: raw image/file bytes on success.
+
+**Errors**: `401` unauthenticated · `403` role not permitted for that bucket · `404` object not found · `422` unknown bucket or malformed `path`
 
 ---
 

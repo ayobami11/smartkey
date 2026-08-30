@@ -6,6 +6,62 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-08-30 — Private storage buckets; all object reads go through an authenticated proxy
+
+- **Why**: `passport-photos` and `hod-signatures` were world-readable — a security review confirmed
+  a Dean's signature reference returns HTTP 200 to an anonymous request. Object paths are
+  deterministic (`{profileId}/signature.png`, `{profileId}/passport.jpg`) and profile UUIDs are
+  handed out routinely in verifier-queue and CSO/Dean listing payloads, so every reference
+  signature was in practice a permanent, unrevocable URL needing no session and leaving no audit
+  trail. For `hod-signatures` that is a control bypass, not just a privacy leak: the reference
+  image is exactly what a forger needs to submit back as their "signed" approval and score a 0%
+  mismatch, passing `SIGNATURE_DIFF_THRESHOLD`. Signature verification only means something while
+  the reference is not obtainable by the party being verified against.
+- The public flag was deliberate, not drift: `20260623000316_make_photo_buckets_public.sql` set it
+  to fix broken images (`getPublicUrl` on a private bucket returns a JSON error body the browser
+  blocks as `ERR_BLOCKED_BY_ORB`). The symptom was real; public buckets were the wrong cure.
+- **New** `GET /api/storage/object?bucket=&path=` (`src/app/api/storage/object/route.ts`): streams
+  object bytes behind the session cookie, authorising per request — `hod-signatures` to the owning
+  Dean and the CSO, `passport-photos` to the subject plus CSO/DEAN/VERIFIER, `weekend-letters` to
+  the CSO. Bucket is allowlisted and `path` must match `{uuid}/{filename}`, so there is no
+  traversal or arbitrary-object read. Streaming rather than signed URLs because these render as
+  `<img src>` in dashboards that stay open for a whole shift — a signed URL would expire mid-shift
+  and leave broken images, and remains a bearer token for its whole lifetime.
+- **New** `src/lib/storage/object-url.ts`: `parseStorageUrl` / `toProxyUrl` rewrite stored URLs
+  (public, signed, or authenticated form) into proxy URLs; `rewriteStorageUrls` deep-walks a
+  response payload so nested joins (`requester.photo_url`, `primary_officer.photo_url`) are
+  covered automatically rather than by hand; `downloadStorageObject` fetches bytes server-side
+  through the Storage API. 22 unit tests in `src/tests/storage/object-url.test.ts`.
+- Response boundaries rewritten to emit proxy URLs: `profile/me`, `profile/photo`,
+  `profile/signature`, `ai/signature-alerts`, `requests/collect`, `requests/live-queue`,
+  `requests/pending`, `requests/cso-queue`, `keys/out`, `shifts/current`, `admin/users`, and
+  `src/lib/queries/verifier-dashboard.ts` (both dashboard seeds). Audit payloads and database
+  columns keep the canonical storage URL — only what goes to a browser is rewritten.
+- **Fixed two live bugs found on the way.** `decide-weekend.ts` and `POST /api/ai/verify-signature`
+  both did a bare `fetch()` on the stored URL to get image bytes; that only ever worked while the
+  bucket was public, and never worked for `weekend-letters`, which has always been private. Both
+  now use `downloadStorageObject`. Separately, the CSO mismatch dialog's "Submitted" images point
+  into `weekend-letters` and so had never rendered at all.
+- `signature-mismatch-detail-dialog.tsx`: six raw `<img>` replaced with a local `MismatchImage`
+  that renders a labelled "Image unavailable" placeholder when a URL does not resolve, keeping the
+  side-by-side comparison legible. `profile-photo-upload.tsx` no longer appends its own `?t=`
+  cache-buster — the photo endpoint now returns a proxy URL that already carries a version param,
+  and appending to it would corrupt the query string.
+- `supabase/migrations/20260830140000_private_storage_buckets.sql`: sets `public = false` on both
+  buckets and replaces the two `*_select_authenticated` storage policies, which granted every
+  authenticated user every object in the bucket. Those policies were dormant while the buckets
+  were public (a public bucket bypasses RLS on read) and would have become the live rule the
+  moment the flag flipped — leaving any signed-in requester able to pull any Dean's reference
+  signature straight from the Storage API. **Not yet applied.** It must not run until the code
+  above is deployed: applied first, it breaks every photo and signature preview in the running
+  app. Flipping the flag is also what invalidates already-circulated public URLs.
+- `authorized-keys.tsx`: `noValidate` on the weekday request form. The return-time input carries a
+  `min`, so native constraint validation blocked submit before `handleSubmit` ran and the zod
+  message never appeared — which is what the stale assertion in
+  `tests/e2e/requester/request-key.spec.ts` was tripping over. Matches `otp-form` and
+  `comment-form`.
+- `bun run typecheck`, `bun run lint`, and `bun run test` (379 passed, 1 skipped) all green.
+
 ### 2026-08-30 — Sign letter/stamp URLs before Dean weekend-approval verification
 
 - **Why**: manual testing (TC-CSO-06) surfaced "Signature verification error. Ref: ..." on every

@@ -346,6 +346,38 @@ assigning a key from their _own_ faculty instead. Not reachable through the curr
 shouldn't rely on that as its only enforcement. Added the missing check; regression-tested in
 `supabase/tests/06_guest_weekend_lifecycle_test.sql`.
 
+### Storage buckets (2026-08-30)
+
+`passport-photos` and `hod-signatures` were public buckets until
+`20260830140000_private_storage_buckets.sql`. Both are now private, and every read goes through
+`GET /api/storage/object`, which authorises per request against the caller's session (see
+`docs/API.md` §7a). `weekend-letters` has been private since it was created.
+
+Two things mattered here beyond the flag itself:
+
+- **A public bucket bypasses RLS on read.** The `hod_signatures_select_authenticated` and
+  `passport_photos_select_authenticated` policies (from `20260605143804_storage_rls_policies.sql`)
+  each granted _every_ authenticated user _every_ object in the bucket. While the buckets were
+  public those policies were dormant; flipping `public = false` would have promoted them to the
+  live authorisation rule, leaving any signed-in requester able to download any Dean's reference
+  signature straight from the Storage API. Both are replaced with owner-or-privileged-role
+  policies in the same migration.
+- **The application does not rely on those policies.** Reads go through the service-role admin
+  client inside the proxy route, which bypasses RLS and applies its own per-role check. The
+  tightened policies are defence in depth for direct Storage API access with a user token.
+
+Uploads are unaffected — the `*_insert_own` / `*_update_own` policies were already folder-scoped to
+`auth.uid()`, and the public flag never governed writes.
+
+Object URLs are still stored in `profiles.photo_url` / `signature_ref_url` / `stamp_ref_url`,
+`requests.letter_url` / `stamp_url`, `pending_signature_references.pending_url` /
+`current_ref_url`, and inside `audit_log` payloads in their canonical
+`/storage/v1/object/public/...` form. That form is no longer directly fetchable, which is
+deliberate: it stays the durable identifier, and
+`src/lib/storage/object-url.ts` resolves it — to a proxy URL for browsers
+(`toProxyUrl`, `rewriteStorageUrls`) or to bytes for server-side verification
+(`downloadStorageObject`). No data migration was needed.
+
 ## Migrations workflow
 
 1. Create migration: `supabase migration new <name>`.
