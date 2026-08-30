@@ -16,11 +16,14 @@ export type StorageObjectRef = {
 const isProxiedBucket = (value: string): value is ProxiedBucket =>
   (PROXIED_BUCKETS as readonly string[]).includes(value);
 
-// Object paths are always `{uuid}/{filename}` — one folder segment keyed by
-// profile or request id, one flat filename. Anything else (nested folders,
-// traversal, absolute paths) is rejected rather than normalised.
+// Object paths are always exactly two segments: one folder, one flat filename.
+// The folder is usually a profile id (`{profileId}/signature.png`), but guest
+// weekend letters upload to a literal `guest/{uuid}.{ext}` folder, so this
+// cannot require a UUID. Nested folders, traversal and absolute paths are
+// rejected rather than normalised; a folder that is not a real profile id
+// simply never matches an owner, leaving only the route's role checks.
 const OBJECT_PATH_PATTERN =
-  /^[0-9a-fA-F-]{36}\/[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/;
+  /^[A-Za-z0-9_-]{1,64}\/[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/;
 
 export const isValidObjectPath = (path: string): boolean =>
   OBJECT_PATH_PATTERN.test(path) && !path.includes('..');

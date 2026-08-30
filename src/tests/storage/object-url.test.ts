@@ -65,6 +65,12 @@ describe('parseStorageUrl', () => {
       parseStorageUrl(`${BASE}/public/hod-signatures/${ID}/nested/sig.png`)
     ).toBeNull();
   });
+
+  it('parses a guest weekend letter, whose folder is not a profile id', () => {
+    expect(
+      parseStorageUrl(`${BASE}/public/weekend-letters/guest/${ID}.pdf`)
+    ).toEqual({ bucket: 'weekend-letters', path: `guest/${ID}.pdf` });
+  });
 });
 
 describe('isValidObjectPath', () => {
@@ -72,11 +78,15 @@ describe('isValidObjectPath', () => {
     expect(isValidObjectPath(`${ID}/signature.png`)).toBe(true);
   });
 
+  it('accepts the literal guest/ folder used by guest weekend letters', () => {
+    expect(isValidObjectPath(`guest/${ID}.pdf`)).toBe(true);
+  });
+
   it.each([
     ['traversal', `${ID}/../other.png`],
     ['nested folders', `${ID}/a/b.png`],
     ['no folder segment', 'signature.png'],
-    ['non-uuid folder', `abc/signature.png`],
+    ['a leading slash', `/${ID}/signature.png`],
     ['empty', ''],
   ])('rejects %s', (_label, path) => {
     expect(isValidObjectPath(path)).toBe(false);
