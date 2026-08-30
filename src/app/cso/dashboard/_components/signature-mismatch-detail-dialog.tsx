@@ -202,7 +202,7 @@ export const SignatureMismatchDetailDialog = ({
                     <img
                       src={alert.signature.ref_url}
                       alt={`Reference signature on file for ${alert.requester?.full_name ?? 'this requester'}`}
-                      className="aspect-[2/1] w-full rounded-lg border border-border bg-muted object-contain"
+                      className="aspect-2/1 w-full rounded-lg border border-border bg-muted object-contain"
                     />
                   </div>
                   <div className="flex flex-col gap-1.5">
@@ -213,7 +213,7 @@ export const SignatureMismatchDetailDialog = ({
                     <img
                       src={alert.signature.submitted_url}
                       alt={`Submitted signature for the request from ${alert.requester?.full_name ?? 'this requester'}`}
-                      className="aspect-[2/1] w-full rounded-lg border border-border bg-muted object-contain"
+                      className="aspect-2/1 w-full rounded-lg border border-border bg-muted object-contain"
                     />
                   </div>
                 </div>
@@ -232,7 +232,7 @@ export const SignatureMismatchDetailDialog = ({
                     <img
                       src={alert.stamp.ref_url}
                       alt={`Reference stamp on file for ${alert.requester?.full_name ?? 'this requester'}`}
-                      className="aspect-[2/1] w-full rounded-lg border border-border bg-muted object-contain"
+                      className="aspect-2/1 w-full rounded-lg border border-border bg-muted object-contain"
                     />
                   </div>
                   <div className="flex flex-col gap-1.5">
@@ -243,7 +243,7 @@ export const SignatureMismatchDetailDialog = ({
                     <img
                       src={alert.stamp.submitted_url}
                       alt={`Submitted stamp for the request from ${alert.requester?.full_name ?? 'this requester'}`}
-                      className="aspect-[2/1] w-full rounded-lg border border-border bg-muted object-contain"
+                      className="aspect-2/1 w-full rounded-lg border border-border bg-muted object-contain"
                     />
                   </div>
                 </div>
