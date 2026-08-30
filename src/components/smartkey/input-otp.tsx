@@ -9,7 +9,9 @@ import {
   InputOTPSeparator,
 } from '@/components/ui/input-otp';
 
-const InputOTP = (props: React.ComponentProps<typeof BaseInputOTP>) => {
+const InputOTP = (
+  props: React.ComponentProps<typeof BaseInputOTP>
+) => {
   const trackedTimerIds = React.useRef<number[]>([]);
 
   React.useLayoutEffect(() => {

@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { err, ok } from '@/types/api';
 
+
 export const POST = async (request: NextRequest) => {
   const secret = process.env.CRON_SECRET;
   if (!secret) {
