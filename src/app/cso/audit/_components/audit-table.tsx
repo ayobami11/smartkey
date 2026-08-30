@@ -183,6 +183,20 @@ const ROLE_OPTIONS: { value: RoleFilterValue; label: string }[] = [
   { value: 'GUEST', label: 'Guest' },
 ];
 
+function formatEventDescription(
+  eventName: string | undefined,
+  actorRole: unknown,
+  payload: Record<string, unknown>
+): string {
+  if (eventName === 'HOD_APPROVED' || eventName === 'HOD_DECLINED') {
+    const verb = eventName === 'HOD_APPROVED' ? 'Approved' : 'Declined';
+    const isCso = actorRole === 'CSO';
+    const overridden = isCso && payload.override === true;
+    return `${isCso ? 'CSO' : 'Dean'} ${verb}${overridden ? ' (override)' : ''}`;
+  }
+  return eventName?.replace(/_/g, ' ') ?? 'Event';
+}
+
 export function mapRow(e: Record<string, unknown>): AuditEntry {
   const payload =
     typeof e.payload === 'object' && e.payload !== null
@@ -225,7 +239,7 @@ export function mapRow(e: Record<string, unknown>): AuditEntry {
         (['CSO', 'VERIFIER'].includes(e.actor_role as string)
           ? 'Security'
           : undefined)),
-    description: eventName?.replace(/_/g, ' ') ?? 'Event',
+    description: formatEventDescription(eventName, e.actor_role, payload),
     keyCode: payload.key_code as string | undefined,
     timestamp: new Date(e.occurred_at as string).toLocaleString('en-GB', {
       year: 'numeric',
