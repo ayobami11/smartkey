@@ -6,6 +6,62 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-08-30 — Write the missing `docs/E2E_OTP_SETUP.md`
+
+- **Why**: a local `bunx playwright test` run of the auth setup project failed with "No OTP
+  email arrived for smartkey.tests+verifier@gmail.com within 30s" — `tests/e2e/utils/otp.ts`
+  correctly refusing to run without `E2E_OTP_IMAP_USER`/`E2E_OTP_IMAP_APP_PASSWORD` configured.
+  Traced this to a real gap: `.env.local.example`, `docs/TESTING.md`, and the source comments in
+  `tests/e2e/utils/otp.ts`/`auth.ts` all point to `docs/E2E_OTP_SETUP.md` for how to arm the
+  shared IMAP mailbox — that file doesn't exist. The 2026-08-09 changelog entry that introduced
+  the OTP mechanism describes writing it but explicitly lists "actually creating the Gmail test
+  mailbox... and setting the resulting values as GitHub secrets" as dashboard/CLI work nobody
+  had access to at the time — the doc itself appears to have fallen out of that same gap and
+  never got written once the mailbox eventually was set up (the failure message's real address,
+  `smartkey.tests+verifier@gmail.com`, differs from the `smartkey.e2e.tests+verifier@gmail.com`
+  the original entry planned, confirming the setup diverged from the plan without a doc update).
+- **`docs/E2E_OTP_SETUP.md`** (new): mirrors `docs/SMOKE_TEST_SETUP.md`'s structure — what the
+  ten required secrets are (`TEST_{CSO,DEAN,VERIFIER,REQUESTER}_{EMAIL,PASSWORD}` +
+  `E2E_OTP_IMAP_USER`/`E2E_OTP_IMAP_APP_PASSWORD`), why one Gmail account with `+`-tagged
+  aliases covers all three MFA roles, step-by-step mailbox/App-Password/`gh secret set`
+  instructions, and a troubleshooting list for "No OTP email arrived" ordered by most to least
+  likely cause. Written directly from the current `tests/e2e/utils/otp.ts`/`auth.ts` source and
+  `.github/workflows/e2e.yml`'s actual secret names, not from the superseded 2026-08-09 plan.
+- Not fixed here (dashboard/CLI action, same category as `docs/SMOKE_TEST_SETUP.md`'s own "not
+  done, and can't be from here" items): the mailbox itself, its App Password, and the three test
+  profiles' credentials remain whatever they currently are in this environment — this entry only
+  writes the doc, it doesn't provision anything.
+
+### 2026-08-30 — Fix `import { z } from 'zod'` resolving to `undefined` under Vitest
+
+- **Why**: `bun run test` was failing 12 of 36 suites with `TypeError: undefined is not an object
+(evaluating 'z.object')` (and `.email`, `.instanceof`) — every failure traced back to zod's
+  `z` object being `undefined` at the point of use. Root-caused with a minimal repro rather than
+  guessing: zod v4's package root does `import * as z from "./v4/classic/external.js";
+export { z };` — re-exporting a namespace import under a new name. Vitest's module-loading
+  pipeline (via `bunx vitest`, independent of `test.environment` — reproduced identically under
+  both `happy-dom` and `node`, and identically for static and dynamic imports) resolves that
+  specific named binding to `undefined`, while every other zod export (the individual
+  `ZodObject`/`ZodString`/etc. classes) resolves fine. Confirmed **not** a production bug: a
+  plain `bun script.mjs` importing zod outside the Vitest harness resolves `z` correctly, and the
+  live deployment's login/validation was already confirmed working in an earlier smoke-test
+  session — this was purely a test-harness resolution quirk with this specific re-export
+  pattern. Ruled out `node_modules/.vite` cache staleness, `optimizeDeps.exclude`, and
+  `server.deps.external` as fixes before landing on the real one below — none of them changed the
+  outcome, which is what confirmed this is Vitest's own module-loading behavior for this exact
+  export shape, not a caching or dep-optimization issue.
+- **Fix**: mechanically replaced `import { z } from 'zod';` → `import * as z from 'zod';` across
+  all 37 affected files under `src/` (verified via repro: the namespace-import form resolves
+  `.object`, `.email`, `.uuid`, `.instanceof`, etc. identically to the named-import form — same
+  runtime object, different import syntax, zero logic changes). 12 files were directly imported
+  by then-failing test suites (`src/lib/validation/primitives.ts`, `src/lib/validation/schemas.ts`,
+  `src/lib/ai/reports/parser.ts`, `src/components/smartkey/profile-photo-upload.tsx`, and others);
+  the remaining 25 are `src/app/api/**/route.ts` files that weren't yet hit by any test import but
+  carried the identical pattern and would have failed the same way the moment a route-level test
+  was added.
+- Full suite now passes clean: `bun run test` → 36/36 test files, 357 passed, 1 skipped, 0 failed.
+- No `vitest.config.ts` change was needed or kept — the import-style fix alone resolves it.
+
 ### 2026-08-30 — Fix the redesigned email header rendering narrower than the body
 
 - **Why**: a rendered password-reset email showed the maroon header noticeably narrower than the

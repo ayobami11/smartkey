@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { writeAuditEntry } from '@/lib/audit';
 import { logger } from '@/lib/logger';

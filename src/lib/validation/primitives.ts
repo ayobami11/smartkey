@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 
 export const email = z.email('Please provide a valid email address.');
 

@@ -13,6 +13,11 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'happy-dom',
+    server: {
+      deps: {
+        external: [/^zod$/],
+      },
+    },
     setupFiles: ['./src/tests/setup.ts'],
     exclude: [
       ...configDefaults.exclude,

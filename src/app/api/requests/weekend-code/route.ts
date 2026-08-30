@@ -1,5 +1,5 @@
 import { after, NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { sendCollectionCodeEmail } from '@/lib/email/otp';
 import { getRequestRecipient } from '@/lib/email/request-recipient';

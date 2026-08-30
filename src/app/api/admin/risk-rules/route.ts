@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import type { RiskRuleKey } from '@/lib/ai/risk/types';
 import { logger } from '@/lib/logger';

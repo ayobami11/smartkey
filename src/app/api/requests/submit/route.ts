@@ -1,5 +1,5 @@
 import { after, NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { DEFAULT_RISK_CONFIG } from '@/lib/ai/risk/default-config';
 import { evaluateRisk } from '@/lib/ai/risk/engine';
