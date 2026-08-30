@@ -246,6 +246,51 @@ export const WeekendRequestsView = () => {
 
     setSubmitting(true);
     setSubmitError(null);
+
+    // requests.letter_url/stamp_url are raw paths in the private
+    // weekend-letters bucket — not directly fetchable. The server-side
+    // verifier (decide-weekend.ts) does a plain fetch() against whatever URL
+    // we send, so it needs a signed URL, the same one handleViewLetter uses
+    // for the Dean's own preview. Sign fresh here rather than reusing
+    // letterUrl/stampUrl state: the Dean may approve without ever clicking
+    // "view", and a previously-fetched signed URL is only valid 5 minutes.
+    let signedSignatureUrl: string | undefined;
+    let signedStampUrl: string | undefined;
+    if (choice === 'APPROVED' && !isGuest) {
+      const [letterResult, stampResult] = await Promise.all([
+        selected.letter_url
+          ? apiFetch<{ url: string }>(
+              `/api/requests/${selected.id}/letter?type=letter`
+            )
+          : Promise.resolve(null),
+        selected.stamp_url
+          ? apiFetch<{ url: string }>(
+              `/api/requests/${selected.id}/letter?type=stamp`
+            )
+          : Promise.resolve(null),
+      ]);
+      if (letterResult) {
+        if (letterResult.error || !letterResult.data) {
+          setSubmitting(false);
+          setSubmitError(
+            letterResult.error ?? 'Could not prepare the letter for review.'
+          );
+          return;
+        }
+        signedSignatureUrl = letterResult.data.url;
+      }
+      if (stampResult) {
+        if (stampResult.error || !stampResult.data) {
+          setSubmitting(false);
+          setSubmitError(
+            stampResult.error ?? 'Could not prepare the stamp for review.'
+          );
+          return;
+        }
+        signedStampUrl = stampResult.data.url;
+      }
+    }
+
     const result = await apiFetch<{
       request_id: string;
       status: string;
@@ -259,12 +304,10 @@ export const WeekendRequestsView = () => {
         ...(choice === 'APPROVED' && isGuest ? { key_id: values.key_id } : {}),
         // For registered requests with an uploaded signature/stamp, trigger
         // pixel-level verification against the Dean's onboarded references.
-        ...(choice === 'APPROVED' && !isGuest && selected.letter_url
-          ? { submitted_signature_url: selected.letter_url }
+        ...(signedSignatureUrl
+          ? { submitted_signature_url: signedSignatureUrl }
           : {}),
-        ...(choice === 'APPROVED' && !isGuest && selected.stamp_url
-          ? { submitted_stamp_url: selected.stamp_url }
-          : {}),
+        ...(signedStampUrl ? { submitted_stamp_url: signedStampUrl } : {}),
       },
     });
     setSubmitting(false);

@@ -196,6 +196,17 @@ export const POST = async (
     );
   }
 
+  // reqRow.letter_url/stamp_url are raw paths in the private weekend-letters
+  // bucket — decideWeekendRequest's verifier does a plain fetch() against
+  // whatever URL it's given, so it needs a signed URL, not the raw path.
+  // Sign the same way GET above does for the preview.
+  const [signedLetterUrl, signedStampUrl] = isGuest
+    ? [null, null]
+    : await Promise.all([
+        signLetterUrl(admin, reqRow.letter_url),
+        signLetterUrl(admin, reqRow.stamp_url),
+      ]);
+
   const result = await decideWeekendRequest({
     requestId: reqRow.id,
     hodId: unit.hod_id,
@@ -207,8 +218,8 @@ export const POST = async (
     // Guests have no HOD reference signature to compare against — the
     // authoriser reviews the uploaded letter manually, same as the
     // dashboard's guest-approval path.
-    submittedSignatureUrl: isGuest ? undefined : (reqRow.letter_url ?? undefined),
-    submittedStampUrl: isGuest ? undefined : (reqRow.stamp_url ?? undefined),
+    submittedSignatureUrl: signedLetterUrl ?? undefined,
+    submittedStampUrl: signedStampUrl ?? undefined,
   });
 
   if (!result.ok) {
