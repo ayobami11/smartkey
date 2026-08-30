@@ -16,7 +16,6 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 
-
 const cacheBust = (url: string | null): string | null =>
   url ? `${url}${url.includes('?') ? '&' : '?'}v=${Date.now()}` : null;
 
@@ -207,7 +206,7 @@ const SignatureCard = ({
         </div>
       )}
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {isReplacing ? (
           <>
             <Button
