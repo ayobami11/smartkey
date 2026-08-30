@@ -6,6 +6,16 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-08-30 — Uptime monitor pointed at `/api/health`; review item #11 closed
+
+- **Why**: `docs/UPTIME_MONITORING.md` had the setup instructions written since 2026-08-10, but
+  pointing an actual monitor at the endpoint was a third-party dashboard action nobody had done
+  yet — tracked as the last open piece of review item #11 in `docs/review.md`.
+- A monitor is now live against `https://smartkey-ochre.vercel.app/api/health` on a 5-minute
+  interval, matching the doc's recommended settings; confirmed up with 100% over the last 24h and
+  7 days, 0 incidents.
+- `docs/review.md`: item #11 flipped to done; its corresponding entry removed from "What is left".
+
 ### 2026-08-30 — Signature-mismatch dialog: Decline button variant, duplicate confirmation-card border
 
 - **Why**: `Decline` in the CSO signature-mismatch resolve dialog used `variant="destructive"`, but

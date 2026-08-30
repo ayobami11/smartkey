@@ -4,15 +4,15 @@ Backend-owned items from the 2026-08-04 system review. Status as of 2026-08-12.
 
 ## Status
 
-| #   | Item                                | Priority | Status                                                                  |
-| --- | ----------------------------------- | -------- | ----------------------------------------------------------------------- |
-| 1   | Reconcile the migration history     | Critical | ✅ Done (2026-08-07)                                                    |
-| 2   | pgTAP tests for RPCs and RLS        | Critical | ✅ Done, 75 tests, wired into CI (2026-08-07)                           |
-| 3   | Protect the signature fixtures      | Critical | ✅ Done                                                                 |
-| 8   | Post-deploy smoke test              | High     | ✅ Done, confirmed on a real deploy (2026-08-10)                        |
-| 10  | Publish `audit_log` to Realtime     | Medium   | ✅ Done (2026-08-05)                                                    |
-| 11  | Uptime and latency monitoring       | High     | 🔄 Latency done; uptime setup doc written, prober not yet pointed at it |
-| 12  | Retire `GET /api/admin/departments` | Medium   | ✅ Done                                                                 |
+| #   | Item                                | Priority | Status                                                    |
+| --- | ----------------------------------- | -------- | --------------------------------------------------------- |
+| 1   | Reconcile the migration history     | Critical | ✅ Done (2026-08-07)                                      |
+| 2   | pgTAP tests for RPCs and RLS        | Critical | ✅ Done, 75 tests, wired into CI (2026-08-07)             |
+| 3   | Protect the signature fixtures      | Critical | ✅ Done                                                   |
+| 8   | Post-deploy smoke test              | High     | ✅ Done, confirmed on a real deploy (2026-08-10)          |
+| 10  | Publish `audit_log` to Realtime     | Medium   | ✅ Done (2026-08-05)                                      |
+| 11  | Uptime and latency monitoring       | High     | ✅ Done (2026-08-30) — monitor live against `/api/health` |
+| 12  | Retire `GET /api/admin/departments` | Medium   | ✅ Done                                                   |
 
 ---
 
@@ -21,15 +21,10 @@ Backend-owned items from the 2026-08-04 system review. Status as of 2026-08-12.
 1. **Rotate exposed credentials** — reported done 2026-08-07, not re-verified (see
    `docs/KEY_ROTATION.md`). Two more passwords have since been typed into chat in plaintext —
    worth rotating.
-2. **Uptime monitoring** — `/api/health` exists and works (verified by reading it: real DB query,
-   `503` on failure, `/` can't do this since it's static and returns `200` through an outage).
-   Setup instructions with exact values written at `docs/UPTIME_MONITORING.md`. Pointing an actual
-   monitor at it is a dashboard action on a third-party site (UptimeRobot, per the route's own
-   docstring) — needs the user to either do it manually or hand over an API key.
-3. **Signature threshold calibration** — threshold confirmed safe (`0.55`); still blocked on
+2. **Signature threshold calibration** — threshold confirmed safe (`0.55`); still blocked on
    real labelled genuine/forged samples from the pilot. Drop folder ready at
    `tests/signature-calibration-samples/`.
-4. **E2E OTP mailbox** (see `docs/E2E_OTP_SETUP.md`) — ✅ Done (2026-08-18). All four test
+3. **E2E OTP mailbox** (see `docs/E2E_OTP_SETUP.md`) — ✅ Done (2026-08-18). All four test
    accounts (CSO/Dean/Verifier/Requester) already existed in production, `ACTIVE`, just
    under `smartkey.tests+<role>@gmail.com`, not the `smartkey.e2e.tests+<role>@gmail.com` the
    doc described — doc corrected. Found and fixed two real bugs: (1)
