@@ -60,7 +60,7 @@ Departmental staff, primary device a phone. Lowest visit frequency, lowest toler
 
 - **Operational hours**: configurable per zone (default 06:00–22:00 weekday, closed weekend). Out-of-hours requests raise risk.
 - **Return SLA**: end of business day (17:00 default), configurable in CSO settings.
-- **Code expiry**: 10 minutes from generation. Expired code → request a new one (no auto-renew).
+- **Code expiry**: 10 minutes from generation (default, configurable 5–60 min in CSO settings — same `operational_config` table as the return deadline above). Expired code → request a new one (no auto-renew).
 - **Authorisation slots**: 3 per key, set by the Dean (for faculty keys) or CSO (for Administration keys).
 - **Weekend access**: separate flow. Dean/CSO-signed approval; code generated for the requested date; expires 24h after the date passes.
 - **Account onboarding**: CSO provisions; user activates via emailed link with 24h validity, then sets password and completes email-OTP. Deans are then forced into signature/stamp onboarding.

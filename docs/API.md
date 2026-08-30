@@ -1260,7 +1260,7 @@ Read-only. No update or delete endpoint exists — the incident log is append-on
 | `related_person_id` | `string` (uuid)                                                                          | no       |
 | `occurred_at`       | `string` (ISO timestamptz)                                                               | yes      |
 
-If `severity = 'HIGH'`, the AI shift-report generation is triggered immediately and a CSO dashboard alert is raised via Realtime.
+If `severity = 'HIGH'`, the AI shift-report generation is triggered immediately and a CSO dashboard alert is raised via Realtime. Returns `201`.
 
 **Response `data`**: `{ "incident_id": "<uuid>", "reference": "INC-2026-0042" }`
 

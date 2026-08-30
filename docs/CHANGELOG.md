@@ -20,6 +20,52 @@ Each entry: date, brief title, what changed, why.
   as a side effect, which also makes it align exactly with the content section's identical border
   (previously two separate nested tables, now two rows of the same table).
 
+### 2026-08-30 — Third docs audit: fix drift in BACKEND.md/ARCHITECTURE.md, revert a wrong same-day doc edit
+
+- **Why**: asked to check docs/ for staleness again ("check well"). Ran 4 parallel fork audits
+  (API.md vs routes, BACKEND/PRODUCT/ARCHITECTURE.md vs code, AI/GLOSSARY/GITHUB/misc docs, and
+  an independent re-verification of the same-day Postman-resync claim) rather than trust prior
+  changelog entries at face value, since this repo currently has multiple sessions editing docs
+  concurrently and at least one same-day edit turned out to be wrong (see below).
+- **`docs/DATABASE.md`**: reverted a same-day edit (by a different session) claiming
+  `mark_key_overdue()`'s execute grant was `service_role`-only and that an earlier version of
+  this doc "claimed" otherwise incorrectly. Checked live via
+  `has_function_privilege('authenticated', ...)` against production: `authenticated` **can**
+  execute it — the earlier doc version was right, the same-day edit was wrong. Restored the
+  accurate claim and noted the grant still doesn't match the "cron-only" description (a candidate
+  for the same `REVOKE ... FROM PUBLIC` tightening already applied to other RPCs, not yet done).
+- **`docs/AI.md`** §3: added a paragraph on `src/lib/ai/signature/calibrate.ts` — a real
+  threshold-calibration tool (scores labelled genuine/forged sample pairs, sweeps candidate
+  `SIGNATURE_DIFF_THRESHOLD` values, reports false-accept/false-reject rates) that already exists
+  but wasn't mentioned, even though the surrounding text says the current 0.55 default "wants
+  calibration against real Dean samples during the pilot."
+- **`docs/BACKEND.md`**: `gemini-3.0-flash` → `gemini-3.5-flash` (2 occurrences, matches
+  `docs/AI.md`'s stated current default). §14 status table: footnoted the "12 tables"/"10
+  functions" PR-era counts as historical (schema is now 20 tables, RPCs now ~27) rather than
+  rewriting the historical PR record; corrected the "Edge Functions ✅ Done" row, which implied
+  Edge Functions are the live implementation — both were removed 2026-08-04 and replaced by
+  `pg_cron` calling the SQL functions directly (`docs/DATABASE.md` already documented this; the
+  status table just hadn't caught up).
+- **`docs/ARCHITECTURE.md`**: folder-structure diagram had drifted furthest of anything checked.
+  `src/hooks/` listed camelCase names, 2 of which (`useShift.ts`, `useReducedMotion.ts`) don't
+  exist under any name; replaced with the real kebab-case files. `src/lib/` claimed an `auth/`
+  subfolder that doesn't exist and omitted `queries/`, `requests/`, `validation/`, which do.
+  `design-system/` claimed `tailwind.theme.json`/`tokens.dtcg.json` exist (they don't) and
+  omitted the real `brand/` folder (logo/mark SVGs).
+- **`docs/API.md`**: `POST /api/incidents` now states it returns `201`, matching sibling entries'
+  style (a completeness gap, not a factual error).
+- **`docs/PRODUCT.md`**: the code-expiry bullet now notes it's CSO-configurable (5–60 min via
+  `operational_config`), matching the adjacent return-SLA bullet's framing for the same table.
+- **Confirmed clean, no changes needed**: `docs/API.md`'s route-by-route detail (all 71 routes
+  checked against `src/app/api/`), `docs/GLOSSARY.md`, `docs/GITHUB.md`, `docs/SCREEN_CHECKLIST.md`,
+  `design-system/screens.md`/`README.md`/`prompts/README.md`, `docs/external-weekend-requests-testing.md`,
+  `docs/SMOKE_TEST_SETUP.md`, `docs/UPTIME_MONITORING.md`, and the Postman collection resync
+  claimed in an earlier same-day entry (independently re-verified: 71 API routes + 1 non-API
+  redirect route = 72, exactly matching the collection; zero missing, zero extra).
+- Not fixed, low priority: `docs/postman/README.md`'s documented diff-recipe command structurally
+  can't see the one non-`src/app/api` route it counts, so following it literally undercounts by
+  one — cosmetic, not a real bug.
+
 ### 2026-08-30 — Fix a guest-approval authorisation gap; add pgTAP coverage for the guest weekend flow
 
 - **Why**: scoped the pgTAP test-coverage gap (`supabase/tests/README.md` had flagged the guest

@@ -102,6 +102,8 @@ Located in `src/lib/ai/signature/`. Server-side only.
 
 Measured separation on stroke fixtures: identical 0%, same signature re-positioned 0%, same signature at 0.85× scale 11%, same signature with a heavier pen 31%, different signature 100%, blank page 100%. The 0.55 default sits in the gap, but still wants calibration against real Dean samples during the pilot (BACKEND.md §13, Sprint 4). Treat a pass as "not obviously tampered", never as proof of authorship.
 
+**Calibration tooling** (`src/lib/ai/signature/calibrate.ts`): built, not yet run against real samples. `sweepThresholds` scores a labelled sample set once (genuine vs forged, `ScoredSample[]` — expensive Sharp+Pixelmatch work) then sweeps candidate thresholds arithmetically over the resulting ratios (cheap), reporting false-accept and false-reject rates per threshold; `recommendThreshold` and `formatReport` turn that into an actionable number. `calibrate.test.ts` doubles as the runner: set `SIGNATURE_CALIBRATION_DIR` to a directory laid out as `reference/<dean>.png`, `genuine/<dean>/*.png`, `forged/<dean>/*.png` and its `describe.skipIf(!CALIBRATION_DIR)` block scores every pair and prints the recommended threshold — skipped entirely (not failed) when the env var is unset, which is why CI never needs real Dean samples to stay green. Nothing in this module touches Sharp or the filesystem directly, so the sweep math itself has ordinary unit tests independent of the env-gated real-sample run.
+
 **On match**: silent. Audit entry `signature_verified`. Approval proceeds.
 
 **On mismatch**: approval held. Audit entry `signature_mismatch`. CSO alert raised with reference + submitted + percentage shown side by side.
