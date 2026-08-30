@@ -1,52 +1,59 @@
 # Audit events
 
-This is the complete catalogue of audit log event names and payload shapes. Source of truth: `src/lib/audit/events.ts` (zod schemas).
+This is the complete catalogue of audit log event names written by SmartKey. There is no
+`AuditEvent` union or per-event zod schema anywhere in the codebase — `writeAuditEntry`'s
+`event` field (`src/lib/audit/index.ts`) is a plain `string`, and the SQL-side `_write_audit`
+/ `_write_audit_guest` helpers (defined across `supabase/migrations/`) take the event name as
+a plain `text` literal too. The closest thing to a registry is
+`src/lib/audit/event-types.ts`'s `EVENT_TYPE_MAP`, which buckets each event name into one of
+8 display categories (`REQUEST`, `ISSUE`, `RETURN`, `ANOMALY`, `HANDOVER`, `LOGIN`, `SETTINGS`,
+`SIGNATURE`) for the CSO audit-log UI — anything not in that map silently falls back to
+`SETTINGS`. All event names below are **UPPER_SNAKE_CASE**, matching what is actually written;
+this table previously documented lowercase_snake names that do not exist anywhere in the code.
 
-| Event                          | Actor role | Payload key fields                                                      |
-| ------------------------------ | ---------- | ----------------------------------------------------------------------- |
-| `account_provisioned`          | CSO        | new_user_id, email, role                                                |
-| `account_activated`            | (any)      | user_id                                                                 |
-| `account_deactivated`          | CSO        | user_id, reason                                                         |
-| `login_success`                | (any)      | session_id                                                              |
-| `login_failure`                | —          | email, reason                                                           |
-| `mfa_challenge_sent`           | (any)      | user_id                                                                 |
-| `mfa_verified`                 | (any)      | user_id                                                                 |
-| `password_reset_requested`     | (any)      | email                                                                   |
-| `password_reset_completed`     | (any)      | user_id                                                                 |
-| `request_created`              | REQUESTER  | request_id, key_id, type, risk_tier, risk_factors                       |
-| `code_generated`               | system     | request_id, code (hashed), expires_at                                   |
-| `code_expired`                 | system     | request_id                                                              |
-| `code_refreshed`               | REQUESTER  | request_id                                                              |
-| `request_cancelled`            | REQUESTER  | request_id, reason                                                      |
-| `key_issued`                   | VERIFIER   | request_id, key_id, collector_id, risk_tier, acknowledged_high_risk     |
-| `key_returned`                 | VERIFIER   | request_id, key_id, returner_id (if not the original collector)         |
-| `key_overdue_flagged`          | system     | request_id, key_id, hours_past                                          |
-| `weekend_request_submitted`    | REQUESTER  | request_id, key_id, weekend_date                                        |
-| `HOD_APPROVED`                 | DEAN / CSO | decision_id, signature_verified, signature_mismatch_pct, note, override |
-| `HOD_DECLINED`                 | DEAN / CSO | decision_id, note, override                                             |
-| `SIGNATURE_MISMATCH`           | DEAN       | ref_url, submitted_url, mismatch_pct, threshold_pct                     |
-| `SIGNATURE_REFERENCE_UPDATED`  | DEAN / CSO | type, new_url, replaced_existing, resolved_by_cso, mismatch_pct, note   |
-| `SIGNATURE_REFERENCE_DECLINED` | CSO        | type, pending_url, note                                                 |
-| `collector_authorised`         | DEAN       | key_id, collector_id                                                    |
-| `collector_replaced`           | DEAN       | key_id, removed_collector_id, added_collector_id                        |
-| `collector_removed`            | DEAN       | key_id, removed_collector_id                                            |
-| `shift_started`                | VERIFIER   | shift_id, officer_id                                                    |
-| `shift_handover_completed`     | VERIFIER   | outgoing_shift_id, incoming_officer_id, acknowledged_keys, bulk         |
-| `incident_logged`              | VERIFIER   | incident_id, reference, type, severity                                  |
-| `incident_resolved`            | (any)      | incident_id, resolution_note                                            |
-| `incident_escalated`           | (any)      | incident_id, escalation_note                                            |
-| `anomaly_detected`             | system     | request_id, severity, rule                                              |
-| `anomaly_resolved`             | CSO        | anomaly_id, resolution_note                                             |
-| `report_generated`             | system     | report_id, shift_id                                                     |
-| `report_comment_added`         | CSO        | report_id, comment_id                                                   |
-| `settings_changed`             | CSO        | key, old_value, new_value                                               |
-| `key_created`                  | CSO        | key_id, code, zone, department_id                                       |
-| `key_retired`                  | CSO        | key_id                                                                  |
+`COLLECTOR_NOMINATED`, `COLLECTOR_REMOVED`, `RETURN_CODE_GENERATED`, `SHIFT_REPORT_SCHEDULED`,
+`CODE_EXPIRED`, and `KEY_RETURNED_UNVERIFIED` were missing from `EVENT_TYPE_MAP` (fixed
+2026-08-30 — see `docs/CHANGELOG.md`) and so displayed under the generic "Settings" category in
+the CSO audit log instead of their correct one.
+
+| Event                          | Written by                                                                                                                                                                                                            | Actor role                   | Payload key fields                                                             |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------ |
+| `REQUEST_CREATED`              | `create_request`, `create_guest_weekend_request` RPCs                                                                                                                                                                 | REQUESTER / guest            | request_id, key_id/type, risk_tier, risk_factors                               |
+| `REQUEST_CANCELLED`            | `POST /api/requests/cancel`                                                                                                                                                                                           | REQUESTER                    | request_id, reason                                                             |
+| `REQUEST_EXPIRED`              | `expire_request`, `expire_lapsed_codes`, `expire_guest_request`, `expire_stale_weekend_requests`, `dismiss_expired_request` RPCs                                                                                      | system / DEAN / CSO          | reason, previous_status, rolled_back_to                                        |
+| `CODE_EXPIRED`                 | `expire_request`, `expire_lapsed_codes`, `expire_guest_request` RPCs — written instead of `REQUEST_EXPIRED` when a lapsed **weekend** code rolls back to `APPROVED` (requested date is today) rather than terminating | system                       | rolled_back_to, reason                                                         |
+| `CODE_ISSUED`                  | `create_request` (weekday), `generate_weekend_code`, `generate_guest_weekend_code` RPCs                                                                                                                               | system                       | request_id, code_expires_at                                                    |
+| `REQUEST_APPROVED_CSO`         | `POST /api/requests/cso-decision`                                                                                                                                                                                     | CSO                          | decision                                                                       |
+| `REQUEST_DECLINED_CSO`         | `POST /api/requests/cso-decision`                                                                                                                                                                                     | CSO                          | decision                                                                       |
+| `HOD_APPROVED`                 | `approve_weekend`, `approve_guest_weekend` RPCs                                                                                                                                                                       | DEAN / CSO                   | decision_id, signature_verified, signature_mismatch_pct, note, cso_override    |
+| `HOD_DECLINED`                 | `decline_weekend` RPC                                                                                                                                                                                                 | DEAN / CSO                   | decision_id, note, cso_override                                                |
+| `KEY_ISSUED`                   | `issue_key` RPC                                                                                                                                                                                                       | VERIFIER                     | request_id, key_id, verifier_id                                                |
+| `KEY_RETURNED`                 | `return_key` RPC — verified path (`code` supplied)                                                                                                                                                                    | VERIFIER                     | request_id, key_id, returner_id                                                |
+| `KEY_RETURNED_UNVERIFIED`      | `return_key` RPC — override path (`override_reason` supplied, no code)                                                                                                                                                | VERIFIER                     | request_id, key_id, override_reason                                            |
+| `KEY_OVERDUE`                  | `mark_key_overdue` RPC (cron, hourly)                                                                                                                                                                                 | system (earliest active CSO) | key_id, request_id                                                             |
+| `HANDOVER_KEY_ACKNOWLEDGED`    | `acknowledge_shift_handover` RPC (per key)                                                                                                                                                                            | VERIFIER                     | outgoing_shift_id, incoming_officer_id, key_id, bulk                           |
+| `USER_PROVISIONED`             | `provision_user` RPC                                                                                                                                                                                                  | CSO                          | new_user_id, institutional_email, role                                         |
+| `USER_DEACTIVATED`             | `PATCH /api/admin/users/[id]/revoke`                                                                                                                                                                                  | CSO                          | profile_id                                                                     |
+| `USER_UPDATED`                 | `PATCH /api/admin/users/[id]`                                                                                                                                                                                         | CSO                          | profile_id, changed fields only                                                |
+| `PASSWORD_CHANGED`             | `POST /api/auth/change-password`                                                                                                                                                                                      | self (any role)              | profile_id                                                                     |
+| `SHIFT_REPORT_INITIATED`       | `generate_shift_report` RPC                                                                                                                                                                                           | CSO                          | report_id, shift_id                                                            |
+| `SHIFT_REPORT_SCHEDULED`       | `schedule_pending_shift_report` RPC (cron, daily 18:00)                                                                                                                                                               | system (earliest active CSO) | shift_id                                                                       |
+| `REPORT_COMMENT_ADDED`         | `add_report_comment` RPC                                                                                                                                                                                              | CSO                          | report_id, comment_id                                                          |
+| `RISK_CONFIG_UPDATED`          | `update_risk_config` RPC                                                                                                                                                                                              | CSO                          | rules, medium_min, high_min                                                    |
+| `OPERATIONAL_CONFIG_UPDATED`   | `update_operational_config` RPC                                                                                                                                                                                       | CSO                          | zones, return_deadline_time, code_expiry_minutes                               |
+| `SIGNATURE_MISMATCH`           | `POST /api/requests/hod-decision` (weekend approval), `POST /api/profile/signature` (reference replacement)                                                                                                           | DEAN                         | signature/stamp {ref_url, submitted_url, mismatch_pct}, threshold_pct, context |
+| `SIGNATURE_REFERENCE_UPDATED`  | `POST /api/profile/signature` (immediate pass), `resolve_pending_signature_reference` RPC (CSO-approved)                                                                                                              | DEAN / CSO                   | type, new_url, replaced_existing, resolved_by_cso                              |
+| `SIGNATURE_REFERENCE_DECLINED` | `resolve_pending_signature_reference` RPC                                                                                                                                                                             | CSO                          | type, pending_url, note                                                        |
+| `LOGIN_SUCCEEDED`              | `POST /api/auth/login` (no-MFA roles), `POST /api/auth/verify-otp` (MFA roles)                                                                                                                                        | self (any role)              | profile_id                                                                     |
+| `COLLECTOR_NOMINATED`          | `nominate_collector` RPC                                                                                                                                                                                              | DEAN / CSO                   | key_id, requester_id, slot_number                                              |
+| `COLLECTOR_REMOVED`            | `remove_collector` RPC                                                                                                                                                                                                | DEAN / CSO                   | key_id, requester_id                                                           |
+| `RETURN_CODE_GENERATED`        | `request_return`, `request_return_guest` RPCs                                                                                                                                                                         | REQUESTER / guest            | request_id, return_code_expires_at                                             |
 
 When adding an event:
 
-1. Add to `AuditEvent` union in `src/lib/audit/events.ts`.
-2. Add zod schema for payload.
+1. Add the event's row to `EVENT_TYPE_MAP` in `src/lib/audit/event-types.ts` so it gets a
+   correct display category instead of the `SETTINGS` fallback.
+2. Write it via `writeAuditEntry` (TypeScript) or `_write_audit` / `_write_audit_guest`
+   (inside a `SECURITY DEFINER` RPC) — never insert into `audit_log` directly.
 3. Update this table.
-4. If validated server-side, update the RPC.
-5. Add a unit test.
+4. Add a test covering the write (unit test for a TS-side write, pgTAP for an RPC-side write).

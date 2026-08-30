@@ -43,6 +43,7 @@ export const ChangePasswordForm = () => {
 
   const { isSubmitting } = form.formState;
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form's watch() is not compiler-memoizable
   const [currentPassword, newPassword, confirmPassword] = form.watch([
     'currentPassword',
     'newPassword',

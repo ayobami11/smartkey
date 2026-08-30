@@ -449,13 +449,13 @@ Requester-initiated. For an `APPROVED` weekend request, on the requested date on
 **Roles**: REQUESTER
 **RPC**: `expire_request(request_id, requester_id)`
 
-Requester-initiated and fired automatically by the UI when a collection code's countdown reaches 0. Flips a genuinely-expired `CODE_ISSUED` request to `EXPIRED`, clears the code, and writes a `REQUEST_EXPIRED` audit entry. Idempotent — returns the current status with no error if the request already moved on.
+Requester-initiated and fired automatically by the UI when a collection code's countdown reaches 0. Flips a genuinely-expired `CODE_ISSUED` request to `EXPIRED`, clears the code, and writes a `REQUEST_EXPIRED` audit entry — **except** for a weekend request whose requested date is today, which instead rolls back to `APPROVED` (so the requester can mint a fresh code via `POST /api/requests/weekend-code`) and writes `CODE_EXPIRED` instead. Idempotent — returns the current status with no error if the request already moved on.
 
 | Field        | Type            | Required |
 | ------------ | --------------- | -------- |
 | `request_id` | `string` (uuid) | yes      |
 
-**Response `data`**: `{ "request_id": "<uuid>", "status": "EXPIRED" }`
+**Response `data`**: `{ "request_id": "<uuid>", "status": "EXPIRED" }` (or `"APPROVED"` on the same-day weekend rollback above)
 
 **Errors**: `403` not the requester's own request · `409` code has not expired yet · `404` request not found
 
@@ -579,9 +579,9 @@ No request body.
 **Roles**: ALL (unauthenticated)
 **RPC**: `expire_guest_request(access_token)`
 
-Fired automatically by the status page when the collection code's countdown reaches 0. Flips a genuinely-expired `CODE_ISSUED` request to `EXPIRED`, clears the code, and writes a `REQUEST_EXPIRED` audit entry. Idempotent — returns the current status with no error if the request already moved on.
+Fired automatically by the status page when the collection code's countdown reaches 0. Flips a genuinely-expired `CODE_ISSUED` request to `EXPIRED`, clears the code, and writes a `REQUEST_EXPIRED` audit entry — **except** for a weekend request whose requested date is today, which instead rolls back to `APPROVED` (so the guest can mint a fresh code) and writes `CODE_EXPIRED` instead. Idempotent — returns the current status with no error if the request already moved on.
 
-**Response `data`**: `{ "request_id": "<uuid>", "status": "EXPIRED" }`
+**Response `data`**: `{ "request_id": "<uuid>", "status": "EXPIRED" }` (or `"APPROVED"` on the same-day weekend rollback above)
 
 **Errors**: `409` code has not expired yet · `404` token not found
 

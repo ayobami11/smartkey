@@ -76,6 +76,7 @@ export const AccountSettings = () => {
       <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-5">
         <h3 className="text-sm font-semibold text-foreground">Profile</h3>
         <ProfilePhotoUpload
+          // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form's watch() is not compiler-memoizable
           name={form.watch('full_name')}
           loading={profileLoading}
           initialUrl={photoUrl}

@@ -90,6 +90,7 @@ export const UsersDataTable = ({
     [onEdit, onRevoke, onResend, resendingId]
   );
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Table's useReactTable() is not compiler-memoizable
   const table = useReactTable({
     data,
     columns,

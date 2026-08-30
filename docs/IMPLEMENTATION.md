@@ -520,7 +520,7 @@ Screen-specific compound components (dialogs and tables used on exactly one dash
 
 **16 Playwright E2E specs** grouped by role under `tests/e2e/`: 4 public (auth, help, forgot-password, reset-password), 4 CSO (dashboard, admin-keys, users, signature-mismatch-alerts), 1 `dean/weekend-requests.spec.ts` (the legacy `hod/dashboard.spec.ts` this snapshot originally described has since been removed — only `dean/` exists now), 4 verifier (dashboard, issue-key, return-key, handover), 2 requester (dashboard, request-key). Every E2E spec runs an axe-core accessibility scan as part of the test, per `docs/TESTING.md`'s requirement that every screen test include an axe-core pass with no violations.
 
-**pgTAP / database tests do not exist yet.** `docs/TESTING.md` and the CI workflow both reference a `test:db` step for RPC/RLS testing, but no `supabase/tests/` directory or pgTAP files exist in the repository at time of writing. This is a real gap between the documented testing strategy and its current implementation — see §12.
+~~**pgTAP / database tests do not exist yet.** `docs/TESTING.md` and the CI workflow both reference a `test:db` step for RPC/RLS testing, but no `supabase/tests/` directory or pgTAP files exist in the repository at time of writing. This is a real gap between the documented testing strategy and its current implementation — see §12.~~ Fixed 2026-08-07 — 75 pgTAP tests landed across 4 files in `supabase/tests/`, wired into `ci.yml`. See `docs/TESTING.md` and `docs/review.md`.
 
 ### CI pipeline
 
@@ -641,7 +641,7 @@ Against the original 5-milestone roadmap recorded in `docs/GITHUB.md` (Foundatio
 
 **Known open gaps at time of writing**:
 
-- No `supabase/tests/` pgTAP suite exists, despite being referenced by `docs/TESTING.md` and CI workflow comments.
+- ~~No `supabase/tests/` pgTAP suite exists, despite being referenced by `docs/TESTING.md` and CI workflow comments.~~ Fixed 2026-08-07 — see `docs/TESTING.md`.
 - No `tailwind.theme.json` or `tokens.dtcg.json` design-token export exists — `design-system/DESIGN.md` remains the only machine- or human-readable source of truth for tokens; the CLI export step described in ADR 0005 has not yet been run.
 - ~~The `tests/e2e/hod/` folder and `TEST_HOD_*` CI secrets have not been renamed to match the `dean/` rename elsewhere in the codebase.~~ Fixed 2026-08-09 — see `docs/CHANGELOG.md`.
 - The `resend` npm package remains a listed dependency despite not being the active email provider.

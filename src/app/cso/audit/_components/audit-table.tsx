@@ -523,6 +523,7 @@ export const AuditTable = ({
     if (exportRef) exportRef.current = exportCsv;
   });
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Table's useReactTable() is not compiler-memoizable
   const table = useReactTable({
     data: data ?? [],
     columns,

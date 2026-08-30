@@ -23,7 +23,7 @@ import { Separator } from '@/components/ui/separator';
 
 const stats = [
   { value: '2', label: 'Building zones' },
-  { value: '100+', label: 'Keys managed' },
+  { value: '50+', label: 'Keys managed' },
   { value: '4', label: 'Roles supported' },
   { value: '0', label: 'Paper logbooks' },
 ];

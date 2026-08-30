@@ -78,7 +78,9 @@ the verifier can issue the key.
 
 **Triggered by:** `POST /api/requests/hod-decision`  
 **Who calls it:** Dean (role: DEAN) or CSO  
-**When it runs:** Only when `submitted_signature_url` is present in the request body.
+**When it runs:** When `submitted_signature_url` and/or `submitted_stamp_url` is present in
+the request body — the two checks are independent; either, both, or neither may run depending
+on what the requester uploaded.
 
 ### Request body that triggers verification
 
@@ -86,32 +88,39 @@ the verifier can issue the key.
 {
   "request_id": "<uuid>",
   "decision": "APPROVED",
-  "submitted_signature_url": "<url-to-signed-letter-in-weekend-letters-bucket>"
+  "submitted_signature_url": "<url-to-signed-letter-in-weekend-letters-bucket>",
+  "submitted_stamp_url": "<url-to-signed-stamp-image-in-weekend-letters-bucket>"
 }
 ```
 
-The `submitted_signature_url` must be a reachable URL to the signature region extracted from
-the Dean's authorisation letter. The Dean's onboarded reference (`profiles.signature_ref_url`)
-is fetched server-side automatically.
+`submitted_signature_url` must be a reachable URL to the signature region extracted from the
+Dean's authorisation letter; `submitted_stamp_url` is a close-up of the departmental stamp,
+uploaded optionally alongside it. The Dean's onboarded references
+(`profiles.signature_ref_url` / `profiles.stamp_ref_url`) are fetched server-side
+automatically for whichever check(s) run.
 
 ### Paths that skip verification
 
-| Condition                        | Why skipped                                                               |
-| -------------------------------- | ------------------------------------------------------------------------- |
-| `submitted_signature_url` absent | No letter was uploaded with the request                                   |
-| Actor is CSO                     | CSO has no reference signature on file                                    |
-| Request has a `guest_id`         | Guest path uses `approve_guest_weekend`; Dean reviews the letter manually |
+| Condition                                                           | Why skipped                                                               |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Neither `submitted_signature_url` nor `submitted_stamp_url` present | No letter/stamp was attached to the request                               |
+| Actor is CSO                                                        | CSO has no reference signature or stamp on file                           |
+| Request has a `guest_id`                                            | Guest path uses `approve_guest_weekend`; Dean reviews the letter manually |
 
 ### Server-side sequence
 
-1. Fetch `profile.signature_ref_url` and `submitted_signature_url` in parallel.
-2. Call `verifySignature(refBuffer, subBuffer)` — Sharp preprocessing (greyscale, 800×400,
-   binary threshold) then Pixelmatch pixel-by-pixel diff.
-3. Returns `{ mismatch_ratio: number, passed: boolean }`.
+1. For each present URL, fetch the matching reference (`signature_ref_url` or
+   `stamp_ref_url`) and the submitted image in parallel.
+2. Call `verifySignature(refBuffer, subBuffer)` independently per check — Sharp preprocessing
+   (greyscale, binary threshold, `trim()` to the ink bounding box, resize to 800×400) then
+   Pixelmatch pixel-by-pixel diff scored over the ink region.
+3. Each call returns `{ mismatch_ratio: number, passed: boolean }`.
 
-### Outcome: passed (`mismatch_ratio ≤ 0.15`)
+### Outcome: every submitted check passed (`mismatch_ratio ≤ 0.55`)
 
-`approve_weekend` RPC is called with `signature_verified: true` and the real `mismatch_pct`.
+`approve_weekend` RPC is called with `signature_verified: true` and the signature check's
+`mismatch_pct` (a stamp mismatch figure, if any, lives only in the audit entry on a hold —
+the RPC param stays signature-specific).
 
 ```json
 {
@@ -121,18 +130,19 @@ is fetched server-side automatically.
 }
 ```
 
-### Outcome: failed (`mismatch_ratio > 0.15`)
+### Outcome: either check failed (`mismatch_ratio > 0.55`)
 
-The RPC is **not called**. A `SIGNATURE_MISMATCH` audit entry is written with both image
-URLs and the mismatch percentage. The CSO sees this in the signature-alerts feed
-(`GET /api/ai/signature-alerts`).
+The RPC is **not called**. A `SIGNATURE_MISMATCH` audit entry is written with a nested
+payload covering whichever check(s) failed —
+`{ signature: {ref_url, submitted_url, mismatch_pct} | null, stamp: {...} | null, threshold_pct }`.
+The CSO sees this in the signature-alerts feed (`GET /api/ai/signature-alerts`).
 
 ```json
 {
   "data": {
     "request_id": "<uuid>",
     "status": "HELD_SIGNATURE_MISMATCH",
-    "mismatch_pct": 22.5,
+    "mismatches": { "signature": 62.0 },
     "message": "Approval held: signature mismatch detected. The CSO has been notified."
   },
   "error": null,
@@ -156,8 +166,10 @@ request — only one that was previously held.
 
 ### Threshold
 
-Default: `0.15` (15% of pixels differ). Configurable via the `SIGNATURE_DIFF_THRESHOLD`
-environment variable (a decimal between 0 and 1).
+Default: `0.55` (55% of ink-region pixels differ — see `docs/AI.md` §3 for why this is scored
+over the ink bounding box rather than the whole canvas, and why the old `0.15` value was
+mathematically unreachable and passed every input including forgeries). Configurable via the
+`SIGNATURE_DIFF_THRESHOLD` environment variable (a decimal between 0 and 1).
 
 ---
 
@@ -214,10 +226,10 @@ The report renders at `/cso/reports/[id]` with the `ShiftTimeline` component and
 
 ## Summary table
 
-| Component              | Route                             | Trigger                                            | Who         |
-| ---------------------- | --------------------------------- | -------------------------------------------------- | ----------- |
-| Risk scoring           | `POST /api/requests/submit`       | Every key request — automatic                      | REQUESTER   |
-| Signature verification | `POST /api/requests/hod-decision` | Only when `submitted_signature_url` is in the body | DEAN or CSO |
-| Gemini shift report    | `POST /api/reports/generate`      | On-demand by the CSO                               | CSO         |
+| Component              | Route                             | Trigger                                                                    | Who         |
+| ---------------------- | --------------------------------- | -------------------------------------------------------------------------- | ----------- |
+| Risk scoring           | `POST /api/requests/submit`       | Every key request — automatic                                              | REQUESTER   |
+| Signature verification | `POST /api/requests/hod-decision` | When `submitted_signature_url` and/or `submitted_stamp_url` is in the body | DEAN or CSO |
+| Gemini shift report    | `POST /api/reports/generate`      | On-demand by the CSO                                                       | CSO         |
 
 All three components run server-side only. No AI key or model is ever exposed to the browser.

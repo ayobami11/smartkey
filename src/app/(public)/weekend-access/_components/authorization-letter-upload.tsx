@@ -26,14 +26,14 @@ export const AuthorizationLetterUpload = ({
 }: AuthorizationLetterUploadProps) => (
   <>
     {!file ? (
+      // aria-invalid is a valid global ARIA state usable on any element per the
+      // WAI-ARIA spec; jsx-a11y's role-support table for the implicit button
+      // role just doesn't list it. Real screen readers announce it correctly.
+      // eslint-disable-next-line jsx-a11y/role-supports-aria-props
       <button
         id={id}
         type="button"
         onClick={onPickClick}
-        // aria-invalid is a valid global ARIA state usable on any element per the
-        // WAI-ARIA spec; jsx-a11y's role-support table for the implicit button
-        // role just doesn't list it. Real screen readers announce it correctly.
-         
         aria-invalid={invalid}
         className="flex w-full flex-col items-center gap-2 rounded-lg border-2 border-dashed border-border bg-muted/30 p-8 text-center transition-colors hover:border-primary/50 hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       >

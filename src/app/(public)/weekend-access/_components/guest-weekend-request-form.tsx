@@ -74,6 +74,7 @@ export const GuestWeekendRequestForm = ({
   const { isSubmitting } = form.formState;
 
   const { ref: letterRegRef, ...letterRegProps } = form.register('letter');
+  // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form's watch() is not compiler-memoizable
   const letterFiles = form.watch('letter') as FileList | undefined;
   const letterFile = letterFiles?.[0] ?? null;
 

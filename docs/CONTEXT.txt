@@ -36,10 +36,12 @@ Nodemailer via Gmail SMTP. NOT Resend.
   File : src/lib/email/otp.ts
 
 SIGNATURE VERIFICATION
-- Runs server-side only (Sharp + Pixelmatch).
+- Runs server-side only (Sharp + Pixelmatch), scored over the ink region (not whole canvas).
 - Dean uploads reference signature/stamp at /dean/onboarding.
-- Verification runs when a Dean approves a weekend request.
-- Mismatch > 15% → approval held → CSO alert at /cso (signature-alerts feed).
+- Verification runs when a Dean approves a weekend request; signature and stamp checks are
+  independent (either, both, or neither may run, depending on what was uploaded).
+- Mismatch > 55% (SIGNATURE_DIFF_THRESHOLD default) on either check → approval held → CSO
+  alert at /cso (signature-alerts feed).
 - CSO resolves via POST /api/requests/hod-decision with cso_override: true.
 - Administration-key approvals (CSO) skip signature verification (no reference).
 

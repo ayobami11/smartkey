@@ -74,6 +74,7 @@ export const ProvisionUserDialog = ({ onSuccess }: Props) => {
     },
   });
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form's watch() is not compiler-memoizable
   const selectedRole = form.watch('role');
   const needsDept = selectedRole === 'DEAN' || selectedRole === 'REQUESTER';
 

@@ -4,7 +4,7 @@
 
 ## Context
 
-Next.js 15 (App Router) supports React Server Components. Defaulting to RSC reduces client-side JS, improves performance, and keeps secrets (Supabase service key, Gemini API key) server-side by construction.
+Next.js 16 (App Router) supports React Server Components. Defaulting to RSC reduces client-side JS, improves performance, and keeps secrets (Supabase service key, Gemini API key) server-side by construction.
 
 ## Decision
 
