@@ -6,6 +6,43 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-08-30 — One SELECT policy per storage bucket; weekend-letters was readable by every requester
+
+- **Why**: verifying the bucket lockdown surfaced two things. Production carried
+  `hod_signatures_select` / `passport_photos_select` / `weekend_letters_select` policies that
+  exist in no committed migration — already owner-or-privileged-role scoped — so the policies
+  added by `20260830140000` were near-duplicates, re-introducing the duplicate-permissive-SELECT
+  pattern `20260830102744_consolidate_permissive_select_policies` had just cleaned up. Because
+  permissive policies OR together, the duplicate also widened `passport-photos` to DEAN, which
+  production had never granted.
+- **The larger find**: two `weekend-letters` policies from the original
+  `20260612101316_weekend_letters_bucket.sql` did not scope at all.
+  `weekend_letters_select_own` reads as an ownership check but its predicate only asserts the
+  caller is a REQUESTER — every requester could read every object in the bucket.
+  `weekend_letters_select_hod` gave every DEAN blanket read with no unit check. Authorisation
+  letters carry Dean signatures, so this was the same exposure `20260830140000` closed for
+  `hod-signatures`, one login deep. `weekend_letters_insert_requester` had the matching write-side
+  gap: any REQUESTER could upload to any path, including another requester's folder or `guest/`.
+- `supabase/migrations/20260830213933_consolidate_storage_select_policies.sql`: collapses each
+  bucket to a single SELECT policy — `hod-signatures` to the owning Dean plus CSO,
+  `passport-photos` to the subject plus CSO/VERIFIER, `weekend-letters` to the uploading requester
+  plus CSO — and rewrites `weekend_letters_insert_requester` to scope to the caller's own folder.
+  Applied to production via `apply_migration`, so it is recorded in `supabase_migrations`;
+  verified afterwards that exactly one SELECT policy per bucket remains.
+- DEAN deliberately gets no blanket read at the Storage level. Nothing in the app reads these
+  buckets with a user token — `GET /api/storage/object` and `GET /api/requests/[id]/letter` both
+  use the service-role admin client and apply their own role and unit checks — so these policies
+  are a backstop, and are kept no wider than needed. The Dean's letter preview continues to go
+  through the unit-scoped letter route.
+- `src/lib/storage/object-url.ts`: the object-path pattern required a UUID folder segment, which
+  would have rejected guest weekend letters — those upload to a literal `guest/{uuid}.{ext}`
+  prefix, so the proxy would have 422'd them. Widened to any safe single folder segment; nested
+  paths and traversal are still rejected, and a folder that is not a real profile id simply never
+  matches an owner. Two tests added (24 in the file, 381 passing overall).
+- `20260830140000_private_storage_buckets` was applied through the SQL editor and so had no
+  `supabase_migrations` row. Recorded one by hand: without it a later `supabase db push` would
+  have re-run that file and re-created the duplicate policies this migration just removed.
+
 ### 2026-08-30 — Private storage buckets; all object reads go through an authenticated proxy
 
 - **Why**: `passport-photos` and `hod-signatures` were world-readable — a security review confirmed

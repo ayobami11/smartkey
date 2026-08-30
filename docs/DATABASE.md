@@ -360,8 +360,22 @@ Two things mattered here beyond the flag itself:
   each granted _every_ authenticated user _every_ object in the bucket. While the buckets were
   public those policies were dormant; flipping `public = false` would have promoted them to the
   live authorisation rule, leaving any signed-in requester able to download any Dean's reference
-  signature straight from the Storage API. Both are replaced with owner-or-privileged-role
-  policies in the same migration.
+  signature straight from the Storage API.
+- **The bucket flag does not purge the CDN.** Public objects are served
+  `cache-control: public, max-age=3600` and cached at the Supabase edge, so an object fetched
+  while its bucket was public keeps answering anonymous GETs (`cf-cache-status: HIT`) until that
+  copy expires — up to an hour after the flip. Uncached objects are denied immediately. A `HEAD`
+  bypasses the cache and returns 400, so `curl -I` will report the bucket private while a real
+  GET still serves the image. Re-uploading an object purges its cached copy. Nothing purges a
+  copy someone already downloaded: an exfiltrated reference signature has to be re-onboarded.
+- **Policies are now one per bucket** (`20260830213933_consolidate_storage_select_policies.sql`).
+  Production also carried uncommitted `*_select` policies, so `20260830140000`'s additions were
+  near-duplicates; and two `weekend-letters` policies from `20260612101316` did not scope at all
+  — `weekend_letters_select_own` checked only that the caller was a REQUESTER, letting any
+  requester read every letter in the bucket, and `weekend_letters_select_hod` gave every Dean
+  cross-faculty read. The current set is: `hod-signatures` → owning Dean + CSO;
+  `passport-photos` → subject + CSO/VERIFIER; `weekend-letters` → uploading requester + CSO,
+  with `weekend_letters_insert_requester` scoped to the caller's own folder.
 - **The application does not rely on those policies.** Reads go through the service-role admin
   client inside the proxy route, which bypasses RLS and applies its own per-role check. The
   tightened policies are defence in depth for direct Storage API access with a user token.
