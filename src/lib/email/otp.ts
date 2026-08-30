@@ -2,6 +2,8 @@ import { setDefaultResultOrder } from 'node:dns';
 
 import nodemailer from 'nodemailer';
 
+import { getLogoAttachment, LOGO_CID } from '@/lib/email/logo';
+
 setDefaultResultOrder('ipv4first');
 
 const transporter = nodemailer.createTransport({
@@ -21,13 +23,22 @@ const transporter = nodemailer.createTransport({
   dnsTimeout: 5_000,
 });
 
+// Every template renders the embedded logo in its header, so every send goes
+// through here rather than repeating the attachment at each of the 14 call
+// sites below.
+const send = async (opts: Parameters<typeof transporter.sendMail>[0]) =>
+  transporter.sendMail({ ...opts, attachments: [await getLogoAttachment()] });
+
 // ---------------------------------------------------------------------------
 // Design tokens and layout helpers. Mirrors design-system/DESIGN.md (maroon
 // primary, gold accent, status colours) with email-safe font stacks standing
 // in for Fraunces/DM Sans/JetBrains Mono — no external webfonts, since most
-// inboxes (Outlook desktop and Gmail included) never load them. There is no
-// logo asset for the product, and inline logo art is unreliable in Outlook
-// and Gmail, so the header is a text wordmark.
+// inboxes (Outlook desktop and Gmail included) never load them. The header
+// carries the real SmartKeyMark logo (src/lib/email/logo.ts) alongside the
+// text wordmark, not instead of it — inline <svg> is unreliable in email
+// clients, but a raster image sent as a cid attachment (getLogoAttachment)
+// is standard practice and renders in Gmail, Outlook, and Apple Mail alike;
+// the wordmark stays as real text so the header still reads with images off.
 // ---------------------------------------------------------------------------
 
 type Tone = 'success' | 'warning' | 'error' | 'info' | 'guest';
@@ -65,10 +76,13 @@ const F_MONO = `ui-monospace, SFMono-Regular, Menlo, Consolas, 'Courier New', mo
 // stops the inbox preview from bleeding into the email's first visible line.
 const PREHEADER_PAD = '&nbsp;&zwnj;'.repeat(40);
 
+const nLogoMark = (size: number) =>
+  `<img src="cid:${LOGO_CID}" width="${size}" height="${size}" alt="SmartKey" style="display:inline-block;vertical-align:middle;border:0;margin-right:9px;">`;
+
 const nHeader = () => `
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;">
     <tr><td style="background:${N.maroon};border-radius:12px 12px 0 0;padding:26px 30px 22px;">
-      <div style="font-family:${F_SERIF};font-weight:700;font-size:21px;color:#ffffff;letter-spacing:0.01em;">SmartKey</div>
+      <div>${nLogoMark(26)}<span style="font-family:${F_SERIF};font-weight:700;font-size:21px;color:#ffffff;letter-spacing:0.01em;vertical-align:middle;">SmartKey</span></div>
       <div style="font-family:${F_SANS};font-size:9.5px;letter-spacing:0.15em;text-transform:uppercase;color:${N.gold};margin-top:6px;">Senate Building &middot; University of Lagos</div>
     </td></tr>
     <tr><td style="height:3px;line-height:3px;font-size:0;background:${N.gold};">&nbsp;</td></tr>
@@ -80,7 +94,7 @@ const nDigestHeader = () => `
     <tr><td style="background:${N.maroon};border-radius:12px 12px 0 0;padding:20px 30px;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
         <td style="vertical-align:middle;">
-          <div style="font-family:${F_SERIF};font-weight:700;font-size:18px;color:#ffffff;">SmartKey</div>
+          <div>${nLogoMark(20)}<span style="font-family:${F_SERIF};font-weight:700;font-size:18px;color:#ffffff;vertical-align:middle;">SmartKey</span></div>
         </td>
         <td style="text-align:right;vertical-align:middle;">
           <span style="font-family:${F_SANS};font-size:9.5px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:${N.gold};">Daily digest</span>
@@ -274,7 +288,7 @@ export const sendOtpEmail = async ({
   to: string;
   code: string;
 }) =>
-  transporter.sendMail({
+  send({
     from: `"SmartKey" <${process.env.GMAIL_USER}>`,
     to,
     subject: 'Your SmartKey verification code',
@@ -300,7 +314,7 @@ export const sendActivationEmail = async ({
   link: string;
   isReinvite?: boolean;
 }) =>
-  transporter.sendMail({
+  send({
     from: `"SmartKey" <${process.env.GMAIL_USER}>`,
     to,
     subject: isReinvite
@@ -339,7 +353,7 @@ export const sendWeekendReminderEmail = async ({
   link: string;
   fullName: string;
 }) =>
-  transporter.sendMail({
+  send({
     from: `"SmartKey" <${process.env.GMAIL_USER}>`,
     to,
     subject: 'Get your SmartKey collection code today',
@@ -373,7 +387,7 @@ export const sendWeekendApprovedEmail = async ({
   keyCode: string;
   roomName: string;
 }) =>
-  transporter.sendMail({
+  send({
     from: `"SmartKey" <${process.env.GMAIL_USER}>`,
     to,
     subject: 'Your weekend key request has been approved',
@@ -403,7 +417,7 @@ export const sendWeekendDeclinedEmail = async ({
   fullName: string;
   note?: string;
 }) =>
-  transporter.sendMail({
+  send({
     from: `"SmartKey" <${process.env.GMAIL_USER}>`,
     to,
     subject: 'Your weekend key request was not approved',
@@ -435,7 +449,7 @@ export const sendGuestWeekendApprovedEmail = async ({
   keyCode: string;
   roomName: string;
 }) =>
-  transporter.sendMail({
+  send({
     from: `"SmartKey" <${process.env.GMAIL_USER}>`,
     to,
     subject: 'Your weekend access request has been approved',
@@ -462,7 +476,7 @@ export const sendPasswordResetEmail = async ({
   to: string;
   link: string;
 }) =>
-  transporter.sendMail({
+  send({
     from: `"SmartKey" <${process.env.GMAIL_USER}>`,
     to,
     subject: 'Reset your SmartKey password',
@@ -501,7 +515,7 @@ export const sendCollectionCodeEmail = async ({
     minute: '2-digit',
   });
 
-  return transporter.sendMail({
+  return send({
     from: `"SmartKey" <${process.env.GMAIL_USER}>`,
     to,
     subject: 'Your SmartKey collection code',
@@ -540,7 +554,7 @@ export const sendOverdueReminderEmail = async ({
     minute: '2-digit',
   });
 
-  return transporter.sendMail({
+  return send({
     from: `"SmartKey" <${process.env.GMAIL_USER}>`,
     to,
     subject: 'Your key is overdue for return',
@@ -592,7 +606,7 @@ export const sendWeekendSubmittedEmail = async ({
   // dashboard and the confirmation page.
   isGuest?: boolean;
 }) =>
-  transporter.sendMail({
+  send({
     from: `"SmartKey" <${process.env.GMAIL_USER}>`,
     to,
     subject: 'New weekend access request awaiting your review',
@@ -649,7 +663,7 @@ export const sendCsoSignatureMismatchEmail = async ({
     .filter((row): row is string => row !== null)
     .join('');
 
-  return transporter.sendMail({
+  return send({
     from: `"SmartKey" <${process.env.GMAIL_USER}>`,
     to,
     subject: 'Signature/stamp mismatch held for review',
@@ -689,7 +703,7 @@ export const sendDeanDigestEmail = async ({
     weekend_pending_count: number;
   };
 }) =>
-  transporter.sendMail({
+  send({
     from: `"SmartKey" <${process.env.GMAIL_USER}>`,
     to,
     subject: "Your faculty's daily activity digest",
@@ -728,7 +742,7 @@ export const sendCsoDigestEmail = async ({
     incidents_count: number;
   };
 }) =>
-  transporter.sendMail({
+  send({
     from: `"SmartKey" <${process.env.GMAIL_USER}>`,
     to,
     subject: "SmartKey's daily activity digest",
@@ -762,7 +776,7 @@ export const sendGuestWeekendEmail = async ({
   link: string;
   fullName: string;
 }) =>
-  transporter.sendMail({
+  send({
     from: `"SmartKey" <${process.env.GMAIL_USER}>`,
     to,
     subject: 'Your SmartKey weekend access request',
