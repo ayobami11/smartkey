@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "5f2a7c10-9d34-4b8e-a1c6-7e0b2d4f6a81",
     "name": "SmartKey API",
-    "description": "<div style=\"color:#111827;\">Every server-side route in SmartKey (78 requests covering 71 unique method + path combinations across 63 route files), grouped by the role that calls it.\n\n## Read this before your first request\n\n**1. Auth is cookie-based, not Bearer.** `POST /api/auth/login` writes a Supabase session into a role-namespaced cookie (`sb-<project-ref>-cso`, `-dean`, `-verifier`, `-requester`). Postman's cookie jar stores it automatically. Do not set an `Authorization` header on user routes; it is ignored.\n\n**2. Every authenticated request MUST send a `Referer` header.** This is the non-obvious part. For `/api/*` paths the middleware cannot derive the role namespace from the URL, so it falls back to the `Referer` (see `src/lib/supabase/middleware.ts` and `namespaceFromReferer` in `src/lib/supabase/cookies.ts`). With no `Referer`, the request resolves to the transient `activate` namespace, finds no session, and returns 401 — even though you are logged in.\n\nEvery request in this collection already carries the correct `Referer`. If you copy a request elsewhere, carry the header with it:\n\n| Calling role | Referer value |\n| --- | --- |\n| CSO | `{{baseUrl}}/cso` |\n| Dean | `{{baseUrl}}/dean` |\n| Verifier | `{{baseUrl}}/verifier` |\n| Requester | `{{baseUrl}}/requester` |\n\nThe `x-smartkey-namespace` header is set by the middleware and overwritten on every request, so sending it yourself does nothing.\n\n**3. CSO, Dean and Verifier require email OTP.** Login returns `mfa_required: true` and mails a 6-digit code; the session is not usable until `POST /api/auth/verify-otp` succeeds. Requester skips MFA and is signed in straight from login.\n\n**4. Response envelope.** Every route returns `{ data, error, status }`. On success `error` is null; on failure `data` is null and `error` is a user-facing string. 204 responses have no body.\n\nSee `docs/postman/README.md` for the full walkthrough and `docs/API.md` for the per-route reference.</div>",
+    "description": "<div style=\"color:#111827;\">Every server-side route in SmartKey (79 requests covering 72 unique method + path combinations across 63 route files), grouped by the role that calls it.\n\n## Read this before your first request\n\n**1. Auth is cookie-based, not Bearer.** `POST /api/auth/login` writes a Supabase session into a role-namespaced cookie (`sb-<project-ref>-cso`, `-dean`, `-verifier`, `-requester`). Postman's cookie jar stores it automatically. Do not set an `Authorization` header on user routes; it is ignored.\n\n**2. Every authenticated request MUST send a `Referer` header.** This is the non-obvious part. For `/api/*` paths the middleware cannot derive the role namespace from the URL, so it falls back to the `Referer` (see `src/lib/supabase/middleware.ts` and `namespaceFromReferer` in `src/lib/supabase/cookies.ts`). With no `Referer`, the request resolves to the transient `activate` namespace, finds no session, and returns 401 — even though you are logged in.\n\nEvery request in this collection already carries the correct `Referer`. If you copy a request elsewhere, carry the header with it:\n\n| Calling role | Referer value |\n| --- | --- |\n| CSO | `{{baseUrl}}/cso` |\n| Dean | `{{baseUrl}}/dean` |\n| Verifier | `{{baseUrl}}/verifier` |\n| Requester | `{{baseUrl}}/requester` |\n\nThe `x-smartkey-namespace` header is set by the middleware and overwritten on every request, so sending it yourself does nothing.\n\n**3. CSO, Dean and Verifier require email OTP.** Login returns `mfa_required: true` and mails a 6-digit code; the session is not usable until `POST /api/auth/verify-otp` succeeds. Requester skips MFA and is signed in straight from login.\n\n**4. Response envelope.** Every route returns `{ data, error, status }`. On success `error` is null; on failure `data` is null and `error` is a user-facing string. 204 responses have no body.\n\nSee `docs/postman/README.md` for the full walkthrough and `docs/API.md` for the per-route reference.</div>",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -1215,7 +1215,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "requests", "hod-decision"]
             },
-            "description": "<div style=\"color:#111827;\">Moves the request to `APPROVED` via the `approve_weekend` RPC. **No code is minted here** — the requester mints one on the day. So the success status is `\"APPROVED\"`, never `\"CODE_ISSUED\"`.\n\nIf you include `submitted_signature_url`, the letter's signature is pixel-matched (Sharp + Pixelmatch) against the Dean's onboarded reference first. Over the threshold (default 15%) the approval is **held**: the RPC is never called, a `SIGNATURE_MISMATCH` audit entry is written, and you get HTTP **200** with `{ status: 'HELD_SIGNATURE_MISMATCH', mismatch_pct }` — a held approval is not a route error, so check the status field, not just the HTTP code.\n\nThe RPC re-validates the actor against the unit's `authoriser`, so a Dean acting on an Administration key (or the CSO on a faculty key) is rejected with 403 regardless of what the route allowed.</div>"
+            "description": "<div style=\"color:#111827;\">Moves the request to `APPROVED` via the `approve_weekend` RPC. **No code is minted here** — the requester mints one on the day. So the success status is `\"APPROVED\"`, never `\"CODE_ISSUED\"`.\n\n`submitted_signature_url` and `submitted_stamp_url` each independently trigger a pixel-match (Sharp + Pixelmatch) against the Dean's onboarded reference — either, both, or neither may be present. Over the threshold (default 55%, scored over the ink region) on **either** check, the approval is **held**: the RPC is never called, a `SIGNATURE_MISMATCH` audit entry is written, and you get HTTP **200** with `{ status: 'HELD_SIGNATURE_MISMATCH', mismatches: { signature?: pct, stamp?: pct } }` — a held approval is not a route error, so check the status field, not just the HTTP code.\n\nThe RPC re-validates the actor against the unit's `authoriser`, so a Dean acting on an Administration key (or the CSO on a faculty key) is rejected with 403 regardless of what the route allowed.</div>"
           },
           "response": [
             {
@@ -2130,7 +2130,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "ai", "signature-alerts"]
             },
-            "description": "<div style=\"color:#111827;\">Weekend requests stuck on `PENDING_HOD` with an unresolved `SIGNATURE_MISMATCH` audit entry. Each alert carries both image URLs and the mismatch percentage so the CSO can compare side by side.\n\nA request drops off this list once resolved via `cso_override` on hod-decision (next request).</div>"
+            "description": "<div style=\"color:#111827;\">Two independent lists of held mismatches, both resolved by the CSO.\n\n`alerts` — weekend requests stuck on `PENDING_HOD` with an unresolved `SIGNATURE_MISMATCH` audit entry from `hod-decision`. Each entry carries `signature` and/or `stamp` (whichever check failed — never both null), each with `ref_url` / `submitted_url` / `mismatch_pct`. Drops off this list once resolved via `cso_override` on hod-decision (see '04 -> Override a held mismatch').\n\n`reference_replacements` — a Dean's onboarded-signature/stamp replacement upload held by 'Replace signature or stamp (Dean)' (06 -> Profile). Drops off once resolved via 'Resolve pending signature reference' (next request).</div>"
           },
           "response": [
             {
@@ -2145,7 +2145,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"data\": {\n    \"alerts\": [\n      {\n        \"id\": \"<uuid>\",\n        \"requested_for\": \"2026-07-04\",\n        \"occurred_at\": \"<iso>\",\n        \"ref_url\": \"<url>\",\n        \"submitted_url\": \"<url>\",\n        \"mismatch_pct\": 22.5,\n        \"threshold_pct\": 15,\n        \"requester\": {\n          \"id\": \"<uuid>\",\n          \"full_name\": \"Dr. Bakare\",\n          \"institutional_email\": \"bakare@unilag.edu.ng\"\n        },\n        \"key\": {\n          \"id\": \"<uuid>\",\n          \"code\": \"NS-304\",\n          \"room_name\": \"Senate Hall A\",\n          \"zone\": \"NEW_SENATE\"\n        }\n      }\n    ]\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+              "body": "{\n  \"data\": {\n    \"alerts\": [\n      {\n        \"id\": \"<uuid>\",\n        \"requested_for\": \"2026-07-04\",\n        \"occurred_at\": \"<iso>\",\n        \"signature\": {\n          \"ref_url\": \"<url>\",\n          \"submitted_url\": \"<url>\",\n          \"mismatch_pct\": 22.5\n        },\n        \"stamp\": {\n          \"ref_url\": \"<url>\",\n          \"submitted_url\": \"<url>\",\n          \"mismatch_pct\": 61\n        },\n        \"threshold_pct\": 55,\n        \"requester\": {\n          \"id\": \"<uuid>\",\n          \"full_name\": \"Dr. Bakare\",\n          \"institutional_email\": \"bakare@unilag.edu.ng\"\n        },\n        \"key\": {\n          \"id\": \"<uuid>\",\n          \"code\": \"NS-304\",\n          \"room_name\": \"Senate Hall A\",\n          \"zone\": \"NEW_SENATE\"\n        }\n      }\n    ],\n    \"reference_replacements\": [\n      {\n        \"profile_id\": \"<uuid>\",\n        \"type\": \"signature\",\n        \"dean_name\": \"Dr. Bakare\",\n        \"submitted_at\": \"<iso>\",\n        \"mismatch_pct\": 62,\n        \"threshold_pct\": 55,\n        \"current_ref_url\": \"<url>\",\n        \"pending_url\": \"<url>\"\n      }\n    ]\n  },\n  \"error\": null,\n  \"status\": 200\n}"
             }
           ]
         },
@@ -2202,6 +2202,62 @@
               ],
               "cookie": [],
               "body": "{\n  \"data\": null,\n  \"error\": \"cso_override requires an existing signature mismatch on this request\",\n  \"status\": 403\n}"
+            }
+          ]
+        },
+        {
+          "name": "Resolve pending signature reference",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Referer",
+                "value": "{{baseUrl}}/cso"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"profile_id\": \"{{userId}}\",\n  \"type\": \"signature\",\n  \"decision\": \"APPROVED\",\n  \"note\": \"Compared against filed specimen; genuine — new pen.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/signature-references/resolve",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "signature-references", "resolve"]
+            },
+            "description": "<div style=\"color:#111827;\">Resolves a held Dean reference-replacement mismatch surfaced by `reference_replacements` on 'Signature mismatch alerts' (previous request) — a Dean tried to replace their onboarded signature/stamp via 'Replace signature or stamp (Dean)' (06 -> Profile) and the new upload didn't match the existing reference closely enough to swap automatically.\n\n`decision: \"APPROVED\"` replaces `profiles.signature_ref_url`/`stamp_ref_url` with the pending upload and returns its URL as `new_url`. `decision: \"DECLINED\"` discards the pending upload; `new_url` is `null`. Either way the pending row is deleted — this is a one-shot resolution, not reversible from here.\n\nCalls the `resolve_pending_signature_reference` RPC. Errors: 403 not CSO · 404 no pending reference exists for this `profile_id`/`type` (already resolved, or never held) · 422 bad `type`/`decision`.</div>"
+          },
+          "response": [
+            {
+              "name": "Success (approved)",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"status\": \"APPROVED\",\n    \"new_url\": \"<url>\"\n  },\n  \"error\": null,\n  \"status\": 200\n}"
+            },
+            {
+              "name": "Error — nothing pending",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"data\": null,\n  \"error\": \"No pending signature reference for this profile\",\n  \"status\": 404\n}"
             }
           ]
         },

@@ -1,6 +1,6 @@
 # SmartKey — Postman collection
 
-An importable Postman collection covering **every** server-side route in SmartKey: 71 unique method + path combinations across 78 requests, grouped by the role that calls them.
+An importable Postman collection covering **every** server-side route in SmartKey: 72 unique method + path combinations across 79 requests, grouped by the role that calls them.
 
 This is the "how do I actually hit it" companion to [`docs/API.md`](../API.md), which stays the spec-level reference.
 
@@ -115,6 +115,7 @@ The weekend variant differs in an important way: approval does **not** mint a co
 - **`POST /api/requests/collect` ignores any client-supplied `verifier_id`.** The verifier comes from the session, so a collection can't be attributed to another officer.
 - **`register` and `activate-hod` have no `token` field.** The invite link resolves through `GET /auth/confirm` into an `activate`-namespace session first; those routes only read it. They aren't directly runnable from Postman without doing the browser step. (`GET /api/auth/callback` handles the PKCE `?code=...` shape instead — it's a dead-but-harmless fallback no in-app flow currently triggers.)
 - **`DELETE /api/admin/authorisations/...` returns 204 with no body.** `apiFetch` normalises that to `{ data: null, error: null, status: 204 }`.
+- **A Dean replacing their onboarded signature/stamp can get held too, separately from weekend-approval mismatches.** `POST /api/profile/signature` pixel-matches the new upload against the current reference; over threshold it's stored as a pending row rather than swapped in, surfaced in `signature-alerts`' `reference_replacements` array, and resolved (approve or decline) via `POST /api/admin/signature-references/resolve` — a one-shot call that deletes the pending row either way.
 
 ---
 
@@ -158,9 +159,11 @@ Drop the `-H 'Referer: ...'` from step 2 and you get a 401.
 The collection is published to Postman as **SmartKey API** in _Firdous's Workspace_:
 
 ```
-collection id  c7912f2c-fc39-46ce-aebb-6a396b2cd0ff
-uid            44971333-c7912f2c-fc39-46ce-aebb-6a396b2cd0ff
+collection id  ac287f0b-2edd-4170-8d95-72fa8413b6de
+uid            44971333-ac287f0b-2edd-4170-8d95-72fa8413b6de
 ```
+
+Corrected 2026-08-30: this doc previously pointed at `c7912f2c-fc39-46ce-aebb-6a396b2cd0ff`, which no longer resolves (404) — the collection was evidently deleted and re-created at some point without this file being updated, silently breaking the "the link never changes" guarantee below for anyone still holding the old link. If you're holding a bookmark to the old id, re-fetch the collection URL from Postman directly rather than trusting a doc that's already been wrong once.
 
 **Editing it in place keeps the same id, so the shared link stays valid.** You never need to re-import and hand out a new URL. Only _creating_ a collection mints a new id — importing this JSON as a fresh collection is what would break the link, so don't do that to apply an update.
 
@@ -192,4 +195,4 @@ for f in $(find src/app/api -name route.ts); do
 done | sort -u
 ```
 
-`diff` the two. As of the last sync both sides were 71 and matched exactly (63 distinct route files, one path — `/auth/confirm` — implemented outside `src/app/api`).
+`diff` the two. As of the last sync both sides were 72 and matched exactly (63 distinct route files, one path — `/auth/confirm` — implemented outside `src/app/api`).

@@ -114,7 +114,7 @@ One-time Dean onboarding. There is no `token` field — as with `/api/auth/regis
 | `signature` | `File` (image)                                | yes      |
 | `stamp`     | `File` (image)                                | yes      |
 
-**Response `data`**: `{ "profile_id": "<uuid>", "redirect": "/hod" }`
+**Response `data`**: `{ "profile_id": "<uuid>", "redirect": "/dean" }`
 
 **Errors**: `401` no valid activation session · `422` validation · `413` image too large
 
@@ -837,7 +837,7 @@ Edits an existing user's `full_name` and — for departmental roles (Dean, REQUE
 **File**: `src/app/api/admin/units/route.ts`
 **Roles**: CSO
 
-No query params. Returns every unit (faculty or Administration) with its Dean, an `hasActiveHod` flag (an `ACTIVE` Dean is already assigned — used to grey out that unit in the Dean-role picker on `POST /api/admin/users`), and a `hasAvailableKey` flag.
+No query params. Returns every unit (faculty or Administration) with its Dean, a `has_hod` flag (`true` when an `ACTIVE` Dean is already assigned — used to grey out that unit in the Dean-role picker on `POST /api/admin/users`), and a `has_slot_today` flag (`true` when at least one non-retired key in the unit is currently `AVAILABLE`).
 
 **Response `data`**: `{ "units": [...] }`
 
@@ -1372,7 +1372,7 @@ Returns two independent lists of held signature/stamp mismatches. Read-only.
         "submitted_url": "<url>",
         "mismatch_pct": 61.0
       },
-      "threshold_pct": 15,
+      "threshold_pct": 55,
       "requester": {
         "id": "<uuid>",
         "full_name": "Dr. Bakare",

@@ -6,6 +6,29 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-08-30 — Close the audit-export deploy gap; drop stale post-migration debris
+
+- **Why**: a Supabase audit (via the Supabase MCP server, live against the production project)
+  turned up three confirmed stale items: `docs/DATABASE.md` had flagged since 2026-08-29 that
+  the `audit_export_state` table and `audit-log-export` pg_cron job were never actually applied
+  to production despite their migrations existing in `supabase/migrations/`; a `_backup_20260625`
+  schema (6 tables, ~112kB, no primary keys) — a manual pre-migration snapshot taken just before
+  `20260625221600_faculties_and_admin_authoriser.sql` wiped and reseeded the department model —
+  had sat unused in production for over two months; and 30 Storage objects (~19.9MB across
+  `hod-signatures`, `passport-photos`, `weekend-letters`) were orphaned by that same migration
+  (owning `profiles`/`requests` rows deleted, files never cleaned up).
+- Applied `20260820120000_audit_export_state.sql` and `20260820120100_audit_log_export_cron.sql`
+  directly to production. Confirmed live: `audit_export_state` exists, `audit-log-export` is
+  registered and active in `cron.job`. Not verified: whether `BLOB_READ_WRITE_TOKEN` is set in
+  the Vercel environment — the cron's first real run fails `500` without it.
+- Dropped `_backup_20260625 cascade` from production.
+- Deleted the 30 orphaned `storage.objects` rows via SQL. Note this only removes the Postgres
+  metadata, not the underlying object-store bytes — actual deletion needs the Storage API
+  (service-role key) or CLI/dashboard, neither of which this session had access to.
+- No `src/` or migration-file changes — this was direct production DDL/cleanup via the Supabase
+  MCP server, not a code change. Recorded here per the workflow rule (every production DB change
+  gets a changelog entry) even though nothing was pushed to a branch.
+
 ### 2026-08-30 — Embed the real SmartKey logo in the redesigned email templates
 
 - **Why**: the email redesign below (same day) shipped with a text-only wordmark in the header,
