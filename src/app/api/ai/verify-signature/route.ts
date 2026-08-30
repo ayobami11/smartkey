@@ -1,7 +1,7 @@
 'use server';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { verifySignature } from '@/lib/ai/signature/verifier';
 import { logger } from '@/lib/logger';

@@ -3,7 +3,7 @@
 import { type ChangeEvent, useEffect, useRef, useState } from 'react';
 import { Trash2Icon, UploadIcon, XIcon } from 'lucide-react';
 import { toast } from 'sonner';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { ProfilePhotoPreview } from '@/components/smartkey/profile-photo-preview';
 

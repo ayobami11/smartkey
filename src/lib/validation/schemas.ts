@@ -6,7 +6,7 @@
  *   const form = useForm({ resolver: zodResolver(loginSchema) });
  */
 
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { todayDateISO } from '@/lib/dates';
 import { password } from '@/lib/validation/primitives';

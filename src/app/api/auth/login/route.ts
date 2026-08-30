@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { createClient, isAuthRetryableFetchError } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { writeAuditEntry } from '@/lib/audit';
 import { sendOtpEmail } from '@/lib/email/otp';

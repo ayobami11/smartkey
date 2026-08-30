@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { decideWeekendRequest } from '@/lib/requests/decide-weekend';
 import { createServerClient } from '@/lib/supabase/server';

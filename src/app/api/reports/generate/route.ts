@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { generateShiftReport } from '@/lib/ai/reports/client';
 import type { ReportEvent } from '@/lib/ai/reports/types';

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { sendPasswordResetEmail } from '@/lib/email/otp';
 import { logger } from '@/lib/logger';

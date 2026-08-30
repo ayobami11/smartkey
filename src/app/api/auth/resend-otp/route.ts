@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { sendOtpEmail } from '@/lib/email/otp';
 import { logger } from '@/lib/logger';
