@@ -6,6 +6,28 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-09-03 — README and two stale doc claims corrected against the live system
+
+- **Why**: the README described a system that had moved on. Reviewing it against
+  the repo and the production database turned up four wrong statements and one
+  whole subsystem missing.
+- **Corrected**: pgTAP was described as "never been run" — `ci.yml` has run
+  `supabase start` + `bun run test:db` on every push and PR since
+  `182d8c5`. The 10-minute code expiry was stated as fixed; it is the default,
+  CSO-configurable 5–60. Weekend access was described as gating _code
+  generation_ at approval, but the code is minted by the requester on the day,
+  and a Dean can decide from the email without signing in. Storage was listed as
+  plain "file storage"; buckets are private and proxied.
+- **Added**: a Scheduled jobs table (7 `pg_cron` jobs), verified against
+  `cron.job` in production rather than against the migrations. Plus TanStack
+  Query, date-fns, Vercel Blob, the missing commands, `src/hooks/`,
+  `src/tests/`, `src/proxy.ts`, `tests/`, and five unlisted docs.
+- **Same fact, two other files**: `CLAUDE.md` and `docs/TESTING.md` both
+  asserted no `design:*` script exists. `design:lint` does exist and passes
+  (0 errors, 30 warnings, run to confirm rather than assumed); only
+  `design:export` is still absent. Both now say so, and both note it is a
+  manual check no workflow gates.
+
 ### 2026-09-03 — Emails render times in West Africa Time, not UTC
 
 - **Why**: a demo collection code minted at 16:03 Lagos time arrived in the email as

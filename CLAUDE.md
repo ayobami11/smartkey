@@ -53,7 +53,7 @@ bun run test         # Run unit tests
 bun run test:e2e     # Run Playwright E2E with axe-core checks
 ```
 
-`bun run design:lint` / `bun run design:export` are not real scripts — no `design:*` entry exists in `package.json`. To validate `design-system/DESIGN.md`, run `bunx @google/design.md lint DESIGN.md` directly (see `design-system/prompts/README.md`); there is no equivalent export command wired up yet.
+`bun run design:lint` validates `design-system/DESIGN.md` against the Google DESIGN.md spec (it shells out to `bunx @google/design.md lint`). Verified 2026-09-03: 0 errors, 30 warnings, mostly `orphaned-tokens` for status colours the linter cannot see referenced. No CI workflow runs it — it is a manual check. `bun run design:export` is still not a real script: nothing wires DESIGN.md exports into Tailwind, despite ADR-0005 describing that flow.
 
 ## Coding conventions
 

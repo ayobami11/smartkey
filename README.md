@@ -35,15 +35,19 @@ against their physical ID at the desk.
 ## How a key request works (weekday)
 
 1. A requester selects an authorised key and confirms a return time.
-2. The system runs the risk engine, generates a 6-digit code (valid 10 minutes),
-   and emails it.
+2. The system runs the risk engine, generates a 6-digit code (valid 10 minutes
+   by default; the CSO can set anything from 5 to 60 in `/cso/settings`), and
+   emails it.
 3. The requester presents the code at the desk. The verifier sees the
    requester's name, photo, the key, and a risk tier before issuing.
 4. On return, the verifier records the handover. Every step writes an audit
    entry.
 
-Weekend access is a separate flow that requires Dean approval (or CSO approval,
-for Administration keys) before a code can be generated.
+Weekend access is a separate flow. It needs Dean approval first (or CSO
+approval, for Administration keys) — the Dean can decide straight from the
+notification email through a one-click link, without signing in. The code is
+not issued at approval time: the requester mints it themselves on the requested
+day, so it is never long-lived.
 
 ## AI components
 
@@ -69,14 +73,39 @@ as a black-box decision.
 
 - **Framework**: Next.js (App Router), React, TypeScript (strict)
 - **Database / Auth / Realtime / Storage**: Supabase (Postgres with Row Level
-  Security, email-OTP MFA, websocket subscriptions, file storage)
+  Security, email-OTP MFA, websocket subscriptions, file storage). Storage
+  buckets are private; images are served through an authenticated proxy route
+  that re-checks the session on every request, not via public or signed URLs.
+- **Scheduled jobs**: `pg_cron` inside Postgres (there is no separate scheduler,
+  and the Edge Functions that once held these jobs have been removed)
 - **UI**: Tailwind CSS with shadcn/ui and lucide-react icons
 - **Forms**: react-hook-form with zod
+- **Client data**: TanStack Query; date handling via date-fns
 - **Email**: Nodemailer over Gmail SMTP
-- **Testing**: Vitest (unit and component), Playwright with axe-core (E2E).
-  pgTAP suites exist for RPCs and RLS but have never been run — they need a
-  local Supabase stack, so Docker is required (see `docs/TESTING.md`).
-- **Hosting**: Vercel (frontend and API routes), Supabase Cloud (backend)
+- **Testing**: Vitest (unit and component), Playwright with axe-core (E2E),
+  pgTAP for RPCs and RLS. The pgTAP suites run in CI on every push and pull
+  request; running them locally needs a local Supabase stack, so Docker is
+  required. They cover a subset of the RPCs — see `docs/TESTING.md` for what is
+  and is not covered.
+- **Hosting**: Vercel (frontend and API routes), Supabase Cloud (backend),
+  Vercel Blob (daily audit-log export)
+
+## Scheduled jobs
+
+Seven `pg_cron` jobs run inside Postgres. Three of them (the reminder, digest,
+and export jobs) call an API route over HTTP with a shared bearer secret,
+because sending email and writing to Blob storage cannot be done from plpgsql.
+All times are UTC.
+
+| Job                             | Schedule       | What it does                                          |
+| ------------------------------- | -------------- | ----------------------------------------------------- |
+| `expire-lapsed-codes`           | every 10 min   | Expires unclaimed collection codes, freeing the key   |
+| `overdue-key-check`             | hourly         | Marks overdue keys, then emails overdue reminders     |
+| `daily-shift-summary`           | 18:00          | Queues a shift report for the day's last shift        |
+| `expire-stale-weekend-requests` | 00:15          | Expires weekend requests whose date has passed        |
+| `weekend-code-reminders`        | 06:00 Sat, Sun | Reminds approved requesters to mint their code        |
+| `daily-digest`                  | 07:00          | Sends the opt-in activity digest to Deans and the CSO |
+| `audit-log-export`              | 02:00          | Exports the previous day's audit log to Vercel Blob   |
 
 ## Getting started
 
@@ -112,9 +141,12 @@ bun run dev          # Start the development server
 bun run build        # Production build
 bun run lint         # Run ESLint
 bun run typecheck    # Type-check with tsc
+bun run format       # Format src/** with Prettier
 bun run test         # Unit and component tests
 bun run test:e2e     # Playwright E2E tests
+bun run test:db      # pgTAP suites (needs a local Supabase stack, so Docker)
 bun run db:migrate   # Apply Supabase migrations
+bun run db:types     # Regenerate src/types/database.ts from the local schema
 ```
 
 ## Project layout
@@ -122,9 +154,13 @@ bun run db:migrate   # Apply Supabase migrations
 ```
 src/app/          App Router routes, one group per role plus public and api
 src/components/   ui/ (shadcn primitives) and smartkey/ (app components)
+src/hooks/        Realtime subscriptions, connection status, small utilities
 src/lib/          Supabase clients, audit writer, AI integrations, utilities
 src/types/        Shared TypeScript types and zod schemas
-supabase/         Migrations, RLS policies, seed data
+src/tests/        Unit and component tests (not co-located with components)
+src/proxy.ts      Auth and role gating (Next.js 16's rename of middleware.ts)
+supabase/         Migrations, RLS policies, seed data, pgTAP tests
+tests/            Playwright E2E specs and the post-deploy smoke test
 design-system/    DESIGN.md (design tokens), screens, prompt files
 docs/             Long-form documentation
 ```
@@ -139,4 +175,9 @@ docs/             Long-form documentation
 - `docs/DATABASE.md` — database schema
 - `docs/AI.md` — AI integration details
 - `docs/TESTING.md` — testing strategy
+- `docs/SCREEN_CHECKLIST.md` — required states and checks for any new screen
+- `docs/GLOSSARY.md` — project and UNILAG-specific terms
+- `docs/GITHUB.md` — labels, milestones, branch and PR conventions
+- `docs/CHANGELOG.md` — what changed and why, newest first
+- `docs/adr/` — architectural decision records
 - `design-system/DESIGN.md` — design system and tokens
