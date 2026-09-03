@@ -2,6 +2,7 @@ import { setDefaultResultOrder } from 'node:dns';
 
 import nodemailer from 'nodemailer';
 
+import { formatDateTimeTz, formatDateTz, formatTimeTz } from '@/lib/dates';
 import { getLogoAttachment, LOGO_CID } from '@/lib/email/logo';
 
 setDefaultResultOrder('ipv4first');
@@ -260,25 +261,6 @@ const nDigestRow = (label: string, value: number, attention = false) => `
 const nGuestBadge = () =>
   `<span style="display:inline-block;background:${N.guestSoft};color:${N.guest};font-size:10.5px;font-weight:700;letter-spacing:0.02em;text-transform:uppercase;padding:2px 9px;border-radius:9999px;vertical-align:middle;">External</span>`;
 
-const formatDigestDate = (d: Date) => {
-  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const months = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
-  return `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
-};
-
 // ---------------------------------------------------------------------------
 // Email senders
 // ---------------------------------------------------------------------------
@@ -512,10 +494,7 @@ export const sendCollectionCodeEmail = async ({
   keyCode: string;
   roomName: string;
 }) => {
-  const expiresAtLabel = new Date(codeExpiresAt).toLocaleTimeString('en-GB', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const expiresAtLabel = formatTimeTz(codeExpiresAt);
 
   return send({
     from: `"SmartKey" <${process.env.GMAIL_USER}>`,
@@ -548,13 +527,7 @@ export const sendOverdueReminderEmail = async ({
   roomName: string;
   returnDeadline: string;
 }) => {
-  const deadlineLabel = new Date(returnDeadline).toLocaleString('en-GB', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const deadlineLabel = formatDateTimeTz(returnDeadline);
 
   return send({
     from: `"SmartKey" <${process.env.GMAIL_USER}>`,
@@ -712,7 +685,7 @@ export const sendDeanDigestEmail = async ({
     html: nWrapDigest(
       `
         ${nGreeting(`Good morning, ${fullName}`)}
-        ${nP(`Faculty activity for the last 24 hours &middot; ${formatDigestDate(new Date())}`, 18)}
+        ${nP(`Faculty activity for the last 24 hours &middot; ${formatDateTz(new Date())}`, 18)}
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;">
           ${nDigestRow('Keys issued', stats.issued_count)}
           ${nDigestRow('Keys returned', stats.returned_count)}
@@ -751,7 +724,7 @@ export const sendCsoDigestEmail = async ({
     html: nWrapDigest(
       `
         ${nGreeting(`Good morning, ${fullName}`)}
-        ${nP(`Building-wide activity for the last 24 hours &middot; ${formatDigestDate(new Date())}`, 18)}
+        ${nP(`Building-wide activity for the last 24 hours &middot; ${formatDateTz(new Date())}`, 18)}
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;">
           ${nDigestRow('Keys issued', stats.issued_count)}
           ${nDigestRow('Keys returned', stats.returned_count)}

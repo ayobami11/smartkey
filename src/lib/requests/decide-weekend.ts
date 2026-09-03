@@ -5,6 +5,7 @@ import {
   verifySignature,
 } from '@/lib/ai/signature/verifier';
 import { writeAuditEntry } from '@/lib/audit';
+import { formatDateLongTz } from '@/lib/dates';
 import {
   sendCsoSignatureMismatchEmail,
   sendGuestWeekendApprovedEmail,
@@ -59,12 +60,7 @@ export const notifyRequester = async (
     if (!req) return;
 
     const requestedFor = req.requested_for
-      ? new Date(req.requested_for).toLocaleDateString('en-GB', {
-          weekday: 'long',
-          day: 'numeric',
-          month: 'long',
-          year: 'numeric',
-        })
+      ? formatDateLongTz(req.requested_for)
       : '';
 
     const key = Array.isArray(req.key) ? req.key[0] : req.key;

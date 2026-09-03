@@ -112,3 +112,80 @@ export const subDaysISO = (n: number): string =>
 
 // Current date as YYYY-MM-DD (for date input min attributes)
 export const todayDateISO = (): string => format(new Date(), 'yyyy-MM-dd');
+// Server-side formatting (emails, cron jobs)
+//
+// SmartKey serves one building in Lagos, so every user-facing time is West
+// Africa Time (UTC+1). Browser surfaces get that from the host locale; server
+// surfaces run in UTC on Vercel and must pin the zone explicitly — otherwise a
+// code minted at 16:03 WAT reads as "Expires at 15:13" in the email.
+//
+// date-fns formats in the host zone, so these compose Intl parts instead. The
+// output matches the date-fns formatters above (no comma after the weekday,
+// "Sep" not ICU's "Sept").
+
+export const APP_TIME_ZONE = 'Africa/Lagos';
+
+type LagosParts = {
+  weekdayLong: string;
+  weekdayShort: string;
+  day: string;
+  monthLong: string;
+  monthShort: string;
+  year: string;
+  hour: string;
+  minute: string;
+};
+
+const lagosParts = (value: string | Date): LagosParts => {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: APP_TIME_ZONE,
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(typeof value === 'string' ? new Date(value) : value);
+
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value ?? '';
+
+  const weekdayLong = part('weekday');
+  const monthLong = part('month');
+
+  return {
+    weekdayLong,
+    weekdayShort: weekdayLong.slice(0, 3),
+    day: part('day'),
+    monthLong,
+    monthShort: monthLong.slice(0, 3),
+    year: part('year'),
+    hour: part('hour'),
+    minute: part('minute'),
+  };
+};
+
+// "16:13" (24-hour, West Africa Time)
+export const formatTimeTz = (iso: string | Date): string => {
+  const { hour, minute } = lagosParts(iso);
+  return `${hour}:${minute}`;
+};
+
+// "Friday 4 September 17:00" (West Africa Time)
+export const formatDateTimeTz = (iso: string | Date): string => {
+  const { weekdayLong, day, monthLong, hour, minute } = lagosParts(iso);
+  return `${weekdayLong} ${day} ${monthLong} ${hour}:${minute}`;
+};
+
+// "Friday 4 September 2026" (West Africa Time)
+export const formatDateLongTz = (iso: string | Date): string => {
+  const { weekdayLong, day, monthLong, year } = lagosParts(iso);
+  return `${weekdayLong} ${day} ${monthLong} ${year}`;
+};
+
+// "Fri 4 Sep 2026" (West Africa Time)
+export const formatDateTz = (iso: string | Date): string => {
+  const { weekdayShort, day, monthShort, year } = lagosParts(iso);
+  return `${weekdayShort} ${day} ${monthShort} ${year}`;
+};

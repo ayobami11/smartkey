@@ -1,10 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  formatDateLongTz,
+  formatDateTimeTz,
+  formatDateTz,
   formatDeadline,
   formatLastSignIn,
   isPastDate,
   isTodayDate,
+  formatTimeTz,
   relativeTime,
   relativeTimeCompact,
 } from '@/lib/dates';
@@ -117,5 +121,32 @@ describe('isPastDate', () => {
 
   it('returns false for a date after today', () => {
     expect(isPastDate('2026-06-09')).toBe(false);
+  });
+});
+
+describe('West Africa Time formatters', () => {
+  // 15:13 UTC is 16:13 in Lagos. Emails render on a UTC server, so these must
+  // not fall back to the host zone.
+  it('formatTimeTz renders the Lagos wall-clock time', () => {
+    expect(formatTimeTz('2026-09-03T15:13:00.000Z')).toBe('16:13');
+  });
+
+  it('formatTimeTz rolls into the next day past 23:00 UTC', () => {
+    expect(formatTimeTz('2026-09-03T23:30:00.000Z')).toBe('00:30');
+  });
+
+  it('formatDateTimeTz includes the Lagos weekday, date and time', () => {
+    const label = formatDateTimeTz('2026-09-03T16:00:00.000Z');
+    expect(label).toContain('Thursday');
+    expect(label).toContain('3 September');
+    expect(label).toContain('17:00');
+  });
+
+  it('formatDateLongTz keeps a plain YYYY-MM-DD on its own day', () => {
+    expect(formatDateLongTz('2026-09-05')).toBe('Saturday 5 September 2026');
+  });
+
+  it('formatDateTz renders the short form without commas', () => {
+    expect(formatDateTz('2026-09-05T12:00:00.000Z')).toBe('Sat 5 Sep 2026');
   });
 });

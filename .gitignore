@@ -76,3 +76,6 @@ tests/signature-calibration-samples/**/*.webp
 
 Project Guide Second Semester new.docx
 SmartKey Project Report.md
+
+# generated backend implementation report and assets
+backend/implementation/

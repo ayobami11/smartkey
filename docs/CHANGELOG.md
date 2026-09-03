@@ -6,6 +6,32 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-09-03 — Emails render times in West Africa Time, not UTC
+
+- **Why**: a demo collection code minted at 16:03 Lagos time arrived in the email as
+  "Expires at 15:13". The expiry itself was correct (10 minutes later); the label was not.
+  Email HTML is built on the server, which runs UTC on Vercel, and every date formatter in
+  `src/lib/email/otp.ts` used `toLocaleTimeString`/`toLocaleString` with no `timeZone` —
+  so they rendered the host zone. SmartKey serves one building in Lagos, so every user-facing
+  time is WAT (UTC+1); the browser gives client surfaces that for free, server surfaces have to
+  pin it.
+- **What changed**: `src/lib/dates.ts` gains `APP_TIME_ZONE` (`Africa/Lagos`) and four
+  Lagos-pinned formatters — `formatTimeTz`, `formatDateTimeTz`, `formatDateLongTz`,
+  `formatDateTz`. They compose `Intl.DateTimeFormat` parts rather than wrapping date-fns
+  (which formats in the host zone) and match the existing date-fns output style, so the digest
+  emails still read "Fri 4 Sep 2026" and not ICU's "Sept".
+- **Call sites fixed**: the collection-code email's expiry label, the overdue-reminder email's
+  due label, the Dean/CSO digest date (previously `getDay()`/`getDate()` on a UTC clock — off
+  by a day either side of midnight), and the weekend approved/declined email's requested-for
+  date in `src/lib/requests/decide-weekend.ts`.
+- **Not changed**: client components keep formatting in the browser's zone — correct for users
+  at the Senate Building, and the countdown was never affected because it derives from
+  `code_expires_at` rather than a rendered label. Postgres still evaluates `current_date` in
+  UTC, so a weekend code cannot be minted between 00:00 and 01:00 WAT on the requested day;
+  logged here, not fixed.
+- **Also**: `tsconfig.json` excludes `backend/` (gitignored report scratch scripts) so
+  `bun run typecheck` is clean again.
+
 ### 2026-08-30 — One SELECT policy per storage bucket; weekend-letters was readable by every requester
 
 - **Why**: verifying the bucket lockdown surfaced two things. Production carried
