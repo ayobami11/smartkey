@@ -64,11 +64,18 @@ export type KeyAvailability = {
 /**
  * Picks the request that best represents the key's current state.
  *
- * More than one active request per key is possible today: `create_request`
- * only blocks a requester's own duplicate (its conflict check is scoped to
- * `r.requester_id = v_requester_id`), and `issue_key` validates the request
- * row without consulting `keys.status`. So two people can hold live
- * KEY_ISSUED requests for one physical key.
+ * More than one *active* request per key is normal — several people can hold
+ * unexpired codes for the same key at once, since `create_request` only blocks
+ * a requester's own duplicate (its conflict check is scoped to
+ * `r.requester_id = v_requester_id`).
+ *
+ * At most one of them can be KEY_ISSUED, though: the partial unique index
+ * `requests_one_live_issue_per_key` and the guard in `issue_key` enforce one
+ * live holder per key (`20260904150000_issue_key_single_holder_guard.sql`).
+ * Until that shipped two people genuinely could both be KEY_ISSUED on one key,
+ * so the KEY_ISSUED branch below still resolves a set rather than assuming a
+ * single row — it costs nothing, covers any pre-fix row, and this function
+ * should not assume its input is well-formed.
  *
  * A KEY_ISSUED row wins because someone is physically holding the key;
  * otherwise the earliest-created row wins, as the one first in line.

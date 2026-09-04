@@ -388,6 +388,8 @@ The response carries an `is_guest` flag. For an external (guest) request it is `
 
 **Errors**: `404` code not found or expired · `409` key already issued · `422` validation
 
+The `409` is raised by the `issue_key` guard (`requests_one_live_issue_per_key`, see `docs/DATABASE.md`) when another request for the same key is already `KEY_ISSUED` — one physical bunch cannot be with two people. Unlike every other branch of the route's `mapRpcError`, the `CONFLICT` branch passes the RPC's own text through to the client (`msg.split(': ')[1]`), so the verifier sees **"this key is already issued and has not been returned"** verbatim. That message is therefore UI copy: any `CONFLICT` message reaching this route must contain no second `': '`, or the split truncates it mid-clause.
+
 ---
 
 ### POST /api/requests/cancel

@@ -6,6 +6,59 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-09-04 — One key, one holder: the double-issue gap in `issue_key` is closed
+
+- **Why**: two requesters could both hold a live `KEY_ISSUED` request for the
+  same physical key. Two guards each looked sufficient alone and together left a
+  hole. `create_request`'s duplicate check is scoped to
+  `r.requester_id = v_requester_id`, so it only stops _you_ re-requesting a key
+  you already hold — a second person was waved through and got a valid code. And
+  `issue_key` loaded and locked the **request** row, checked its status and code
+  expiry, then flipped it and set `keys.status = 'ISSUED'` without ever
+  consulting the key. So A collects NS-304, B requests the same key, walks to
+  the desk, and the desk hands over a key that isn't on the hook. The only
+  backstop was the verifier noticing. Found while building the key-availability
+  feature below, flagged then, fixed now.
+- **Checked against production first**: it has never actually happened — no key
+  currently holds more than one live `KEY_ISSUED` request, and no two requests
+  on one key have ever had overlapping issued→returned windows. A latent bug,
+  not an incident, so no data repair was needed and the new index built cleanly.
+- **`20260904150000_issue_key_single_holder_guard.sql`** adds the partial unique
+  index `requests_one_live_issue_per_key` on `(key_id) where status =
+'KEY_ISSUED'`, and a matching check in `issue_key` that raises `CONFLICT`
+  (`P0006` → 409). The index is the part that matters: the RPC check alone
+  cannot stop two concurrent `issue_key` calls on one key, because each call's
+  `for update` locks only its own request row. The RPC check exists to produce a
+  clean verifier-facing message rather than a raw 23505 mapping to an opaque 500. Lock order is requests → keys, matching `return_key`, so they can't
+  deadlock.
+- **`keys.key_count` is bunch size, not capacity** — the whole fix hinges on
+  this. `docs/BACKEND.md` calls it "Number of keys in the bunch issued" and the
+  faculty-remodel entry describes the VC's key as a "2-key bunch": one row is one
+  bunch handed over as a unit. So the guard is a strict "at most one live
+  holder", not a capacity check. Worth recording because production does use the
+  column — `FENG-005` has `key_count = 12` and `ADM-VC` has 2 — and under a
+  capacity reading a strict guard would have wrongly blocked 11 legitimate
+  collections.
+- **The message is UI copy.** `POST /api/requests/collect`'s `mapRpcError` sends
+  `CONFLICT` to 409 and, uniquely among its branches, passes the RPC text
+  through as `msg.split(': ')[1]`. Any `CONFLICT` message reaching that route
+  must therefore contain no second `': '` — the existing
+  `…(current: %)` message is already truncated mid-clause by that split. The new
+  one is deliberately colon-free.
+- **Deliberately not done**: `create_request` is unchanged. A WEEKEND request is
+  submitted days ahead for a future date, so an "is this key out right now?"
+  test there would refuse legitimate weekend bookings; the physical key is the
+  real constraint, so collection time is where it binds. And a refused
+  collection writes no audit entry — the RPC raises and the transaction rolls
+  back, matching every other refusal path in SmartKey.
+- **Test fixtures had to move.** `05_weekday_lifecycle_test.sql` parked its
+  happy-path request, its expired-code request and an already-`KEY_ISSUED`
+  request all on key `…0022`; the happy path passed _only because nothing
+  guarded the key_. The already-issued one now sits on its own key `…002b`, plus
+  two new assertions — that the guard fires, and that it does not over-block a
+  key whose only other request is terminal (without which a key would be
+  stranded permanently after its first ever collection). `plan(35)` → `plan(37)`.
+
 ### 2026-09-04 — Requesters can see whether a key is out, and who has it
 
 - **Why**: a requester had no way to tell whether a key they are authorised on

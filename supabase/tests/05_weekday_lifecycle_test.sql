@@ -4,7 +4,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to public, extensions;
 
-select plan(35);
+select plan(37);
 
 insert into auth.users (id, email) values
   ('55555555-5555-4555-8555-000000000001', 'pgtap.week.dean@example.test'),
@@ -36,7 +36,12 @@ insert into public.keys (id, code, zone, room_name, unit_id, status) values
   ('55555555-5555-4555-8555-00000000002a', 'PGT-511', 'NEW_SENATE', 'pgTAP Lifecycle Room H', '55555555-5555-4555-8555-000000000010', 'ISSUED'),
   ('55555555-5555-4555-8555-000000000027', 'PGT-508', 'NEW_SENATE', 'pgTAP Lifecycle Room I', '55555555-5555-4555-8555-000000000010', 'ISSUED'),
   ('55555555-5555-4555-8555-000000000028', 'PGT-509', 'NEW_SENATE', 'pgTAP Lifecycle Room J', '55555555-5555-4555-8555-000000000010', 'AVAILABLE'),
-  ('55555555-5555-4555-8555-000000000029', 'PGT-510', 'NEW_SENATE', 'pgTAP Lifecycle Room K', '55555555-5555-4555-8555-000000000010', 'ISSUED');
+  ('55555555-5555-4555-8555-000000000029', 'PGT-510', 'NEW_SENATE', 'pgTAP Lifecycle Room K', '55555555-5555-4555-8555-000000000010', 'ISSUED'),
+  -- Holds the already-KEY_ISSUED request ...0042 used by the "not CODE_ISSUED"
+  -- assertion. It needs its own key: since requests_one_live_issue_per_key,
+  -- parking it on ...0022 alongside the happy-path request would mean the
+  -- happy path is refused for collecting a key that is already out.
+  ('55555555-5555-4555-8555-00000000002b', 'PGT-512', 'NEW_SENATE', 'pgTAP Lifecycle Room L', '55555555-5555-4555-8555-000000000010', 'ISSUED');
 
 insert into public.authorisations (key_id, profile_id, authorised_by) values
   ('55555555-5555-4555-8555-000000000020', '55555555-5555-4555-8555-000000000003', '55555555-5555-4555-8555-000000000001'),
@@ -149,7 +154,7 @@ insert into public.requests
 values
   ('55555555-5555-4555-8555-000000000040', '55555555-5555-4555-8555-000000000003', '55555555-5555-4555-8555-000000000022', 'WEEKDAY', current_date, 'CODE_ISSUED', '111111', now() + interval '5 minutes', now() + interval '1 day'),
   ('55555555-5555-4555-8555-000000000041', '55555555-5555-4555-8555-000000000003', '55555555-5555-4555-8555-000000000022', 'WEEKDAY', current_date, 'CODE_ISSUED', '222222', now() - interval '1 minute',  now() + interval '1 day'),
-  ('55555555-5555-4555-8555-000000000042', '55555555-5555-4555-8555-000000000003', '55555555-5555-4555-8555-000000000022', 'WEEKDAY', current_date, 'KEY_ISSUED',  null,     null,                              now() + interval '1 day');
+  ('55555555-5555-4555-8555-000000000042', '55555555-5555-4555-8555-000000000003', '55555555-5555-4555-8555-00000000002b', 'WEEKDAY', current_date, 'KEY_ISSUED',  null,     null,                              now() + interval '1 day');
 
 select public.issue_key(
   '55555555-5555-4555-8555-000000000040', '55555555-5555-4555-8555-000000000002');
@@ -202,6 +207,37 @@ select throws_ok(
   'P0008',
   'EXPIRED_CODE: the 6-digit code has expired',
   'issue_key refuses an expired code'
+);
+
+-- One key, one holder. Key ...0022 is now out with request ...0040 (issued
+-- above), so a second requester presenting a perfectly valid code for the same
+-- key must be refused at the desk rather than handed a key that is not there.
+insert into public.requests
+  (id, requester_id, key_id, type, requested_for, status, code, code_expires_at, return_deadline)
+values
+  ('55555555-5555-4555-8555-000000000043', '55555555-5555-4555-8555-000000000004', '55555555-5555-4555-8555-000000000022', 'WEEKDAY', current_date, 'CODE_ISSUED', '555555', now() + interval '5 minutes', now() + interval '1 day');
+
+select throws_ok(
+  $$ select * from public.issue_key(
+       '55555555-5555-4555-8555-000000000043', '55555555-5555-4555-8555-000000000002') $$,
+  'P0006',
+  'CONFLICT: this key is already issued and has not been returned',
+  'issue_key refuses a key that is already out with someone else'
+);
+
+-- ...and does not over-block: the guard is scoped to KEY_ISSUED, so a key whose
+-- only other request is terminal still issues normally. Without this, a key
+-- would be stranded permanently after its first ever collection.
+insert into public.requests
+  (id, requester_id, key_id, type, requested_for, status, code, code_expires_at, return_deadline)
+values
+  ('55555555-5555-4555-8555-000000000044', '55555555-5555-4555-8555-000000000003', '55555555-5555-4555-8555-000000000028', 'WEEKDAY', current_date, 'KEY_RETURNED', null,     null,                              now() - interval '1 day'),
+  ('55555555-5555-4555-8555-000000000045', '55555555-5555-4555-8555-000000000003', '55555555-5555-4555-8555-000000000028', 'WEEKDAY', current_date, 'CODE_ISSUED',  '666666', now() + interval '5 minutes', now() + interval '1 day');
+
+select lives_ok(
+  $$ select * from public.issue_key(
+       '55555555-5555-4555-8555-000000000045', '55555555-5555-4555-8555-000000000002') $$,
+  'issue_key still issues a key whose only other request is already returned'
 );
 
 insert into public.requests
