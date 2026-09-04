@@ -11,6 +11,24 @@ import { createServerClient } from '@/lib/supabase/server';
 import { err, ok } from '@/types/api';
 
 
+/**
+ * GET /api/keys/availability
+ *
+ * Tells a requester whether each key they are authorised on is free, and who
+ * is holding it if not — so they can stop walking to the Senate Building desk
+ * to find out.
+ *
+ * RLS deliberately stays untouched. `requests_select` scopes a REQUESTER to
+ * their own rows, and that table holds `code` and `return_code`; a policy
+ * loose enough to expose a holder's name would expose live collection codes
+ * to every co-authorised requester. So this route reads past RLS with the
+ * admin client and applies its own scope check, exactly as
+ * `src/app/api/keys/out/route.ts` does for the verifier and CSO.
+ *
+ * No `rewriteStorageUrls` here, by design: the select list carries no storage
+ * URL. Holders are named, never pictured — the passport photo exists for desk
+ * identity verification, not for peer browsing.
+ */
 export const GET = async () => {
   const supabase = await createServerClient();
 

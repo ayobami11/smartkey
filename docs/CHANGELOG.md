@@ -6,6 +6,66 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-09-04 — Requesters can see whether a key is out, and who has it
+
+- **Why**: a requester had no way to tell whether a key they are authorised on
+  was already taken, or by whom. The only way to find out was to walk to the
+  Senate Building desk and ask — the exact round trip SmartKey exists to remove
+  (`docs/PRODUCT.md` lists physical, unsearchable records as a headline failure
+  of the paper logbook). The verifier and CSO have had this view all along via
+  `GET /api/keys/out`, which 403s every other role.
+- **Two walls caused it**. RLS: `requests_select` scopes a REQUESTER to
+  `requester_id = auth.uid()`, so another person's request row — and via
+  `profiles_select_own`, their name — was unreachable. And the UI was throwing
+  away status it already had: `authorized-keys.tsx` has always selected
+  `keys.status` for every authorised key, then used it for one thing,
+  `key.status === 'RETIRED'`. `ISSUED` and `OVERDUE` were dropped on the floor.
+- **New `GET /api/keys/availability`** (REQUESTER-only) returns, per authorised
+  key, a `state` of `AVAILABLE` / `SPOKEN_FOR` / `OUT` / `OVERDUE` / `RETIRED`
+  plus `return_deadline`, `issued_at`, and a `holder` of `{full_name, is_guest}`.
+  Derivation is a pure module, `src/lib/keys/availability.ts`, with 17 unit
+  tests.
+- **RLS was deliberately not widened.** `requests` holds `code` and
+  `return_code`; a policy loose enough to expose a holder's name would expose
+  live collection codes to every co-authorised requester. The route instead
+  reads past RLS with the admin client and applies its own scope check — the
+  pattern `GET /api/keys/out` already uses. Worth knowing for the next reader:
+  `authorisations_select_all` is `USING (true)`, so RLS does **not** scope the
+  authorisation lookup either; the handler's explicit
+  `.eq('profile_id', user.id)` is the security boundary, and it must never take
+  a client-supplied parameter.
+- **Disclosure was scoped on purpose**, not by accident. You see holders only
+  for keys you personally hold a slot on (max 3 people per key, all vouched for
+  by the same Dean). Name, collection time and deadline only — no email, no
+  passport photo (that exists for desk identity verification, not peer
+  browsing), no risk tier, never a code. `SPOKEN_FOR` names nobody: a code that
+  may simply expire in ten minutes is not worth naming a colleague over. This is
+  not new disclosure in substance — the paper logbook on the desk is already
+  readable by anyone standing at it — it is the same disclosure without the walk.
+- **Not built on `keys.status` alone**, though that column is maintained
+  correctly. It cannot see the `CODE_ISSUED` / `PENDING_HOD` window, where a key
+  is spoken for but not yet collected. One route is the single source of truth so
+  the UI never carries a second, divergent notion of "available". `OVERDUE` is
+  likewise derived from `return_deadline < now` rather than the hourly
+  `mark_key_overdue()` flip, which saves the screen a second realtime channel.
+- **On the dashboard**: each tile gains a status pill (colour + icon + label,
+  with an `aria-label`, per the house badge convention), the left stripe now
+  reads state instead of zone, `OUT`/`OVERDUE` tiles gain a "Held by … ·
+  collected …" line with a `GuestBadge` for external holders, and Request
+  disables with a tooltip saying why. Availability is treated as **enrichment**:
+  if that query fails the tiles render exactly as before, with no pill and no
+  second error box. The pill's row reserves its height so its arrival shifts
+  nothing.
+- **Found but not fixed**: two requesters can both hold a live `KEY_ISSUED`
+  request for one physical key. `create_request`'s conflict check is scoped to
+  `r.requester_id = v_requester_id`, so it only blocks your own duplicate, and
+  `issue_key` validates the request row without consulting `keys.status`. Today
+  the only backstop is the verifier noticing the key isn't on the hook. Fixing it
+  means a migration to `issue_key` with its own audit and pgTAP implications, so
+  it is deliberately left alone here; `pickRepresentative` in
+  `src/lib/keys/availability.ts` handles the multi-row case in the meantime by
+  preferring the `KEY_ISSUED` row.
+
 ### 2026-09-04 — Scheduled shift reports actually generate
 
 - **Why**: opening a shift report showed "This report is still generating. Refresh

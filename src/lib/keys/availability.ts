@@ -1,3 +1,19 @@
+/**
+ * Derives, for a key a requester is authorised on, whether that key is free
+ * to request and who currently holds it.
+ *
+ * Pure — no I/O, no JSX. The route at `src/app/api/keys/availability/route.ts`
+ * does the fetching; everything below is testable in isolation.
+ *
+ * Deliberately NOT driven by `keys.status` alone. That column is maintained
+ * correctly (issue_key -> ISSUED, return_key -> AVAILABLE, mark_key_overdue()
+ * -> OVERDUE) but it cannot see the CODE_ISSUED / PENDING_HOD window, where a
+ * key is spoken for but not yet physically collected.
+ */
+
+/** Request statuses that mean a key is not free. Mirrors the set
+ *  `create_request` treats as an active request (everything except the four
+ *  terminal states KEY_RETURNED / EXPIRED / CANCELLED / DECLINED). */
 export const ACTIVE_REQUEST_STATUSES = [
   'PENDING_HOD',
   'APPROVED',
@@ -45,6 +61,18 @@ export type KeyAvailability = {
 };
 
 
+/**
+ * Picks the request that best represents the key's current state.
+ *
+ * More than one active request per key is possible today: `create_request`
+ * only blocks a requester's own duplicate (its conflict check is scoped to
+ * `r.requester_id = v_requester_id`), and `issue_key` validates the request
+ * row without consulting `keys.status`. So two people can hold live
+ * KEY_ISSUED requests for one physical key.
+ *
+ * A KEY_ISSUED row wins because someone is physically holding the key;
+ * otherwise the earliest-created row wins, as the one first in line.
+ */
 const pickRepresentative = (
   rows: ActiveRequestRow[]
 ): ActiveRequestRow | null => {
@@ -105,6 +133,10 @@ export const deriveKeyAvailability = (
     };
   }
 
+  // Overdue is derived from the deadline rather than read off `keys.status`,
+  // which only flips on the hourly mark_key_overdue() cron. Same fallback
+  // `src/app/api/keys/out/route.ts` applies, and it saves this screen a
+  // second realtime subscription on `keys`.
   const overdue =
     row.return_deadline !== null && new Date(row.return_deadline) < now;
 
@@ -117,6 +149,10 @@ export const deriveKeyAvailability = (
   };
 };
 
+/**
+ * Convenience wrapper: groups `requests` by `key_id` and derives every key in
+ * one pass. Keys with no active request come back AVAILABLE.
+ */
 export const deriveKeyAvailabilityList = (
   keys: KeyRow[],
   requests: ActiveRequestRow[],

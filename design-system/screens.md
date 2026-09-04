@@ -184,6 +184,7 @@ The five screens below are anchor screens. Other screens follow the same pattern
 - **Greeting**: "Good afternoon, Dr. Bakare." Time-of-day greeting; subtitle shows next steps if any.
 - **Active request banner**: present only if user has an issued, unexpired code or an outstanding key. Shows code (if pre-collection) or "Return by 17:00" with countdown.
 - **Authorised keys grid**: KeyTile per key (zone, room name, last used). Tap → request sheet.
+- **Key availability**: every tile carries a status pill — Available / Being collected / In use / Overdue / Retired — with the tile's left stripe reading the same state. Colour is paired with an icon and a text label, never alone. A key that is out also shows who holds it ("Held by Dr. Bakare · collected 2 hrs ago", with an External badge for guest holders) and when it is due back; Request disables with a tooltip giving the reason. Fed by `GET /api/keys/availability`, scoped to keys the requester holds a slot on. Names appear only once a key is physically out — a key merely reserved shows "Being collected" with no name. Availability is enrichment: if it fails to load, tiles render without the pill rather than erroring.
 - **Weekend request CTA**: secondary button below the grid: "Request weekend access".
 - **Empty state**: when no keys authorised: friendly illustration + "Your Dean has not authorised any keys for you yet. Reach out to your faculty's Dean."
 

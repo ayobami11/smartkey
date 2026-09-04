@@ -723,6 +723,48 @@ Returns all requests with `status = 'KEY_ISSUED'` or `status = 'KEY_OVERDUE'`, j
 
 ---
 
+### GET /api/keys/availability
+
+**File**: `src/app/api/keys/availability/route.ts`
+**Roles**: REQUESTER
+
+The requester-facing counterpart to `GET /api/keys/out` above. For every key the caller holds an authorisation slot on, reports whether that key is free and — when it is physically out — who is holding it, so a requester can stop walking to the Senate Building desk to find out.
+
+No query params. No request body.
+
+**Response `data`**:
+
+```json
+{
+  "keys": [
+    {
+      "key_id": "<uuid>",
+      "state": "OUT",
+      "return_deadline": "<iso>",
+      "issued_at": "<iso>",
+      "holder": { "full_name": "Dr. Bakare", "is_guest": false }
+    }
+  ]
+}
+```
+
+`state` is one of `AVAILABLE` · `SPOKEN_FOR` · `OUT` · `OVERDUE` · `RETIRED`, derived in `src/lib/keys/availability.ts`:
+
+- `RETIRED` — the key row's own status, and it wins over any request.
+- `OUT` / `OVERDUE` — an active `KEY_ISSUED` request exists. `OVERDUE` is derived from `return_deadline < now`, not read from `keys.status` (which only flips on the hourly `mark_key_overdue()` cron), matching the fallback `GET /api/keys/out` already applies.
+- `SPOKEN_FOR` — an active `PENDING_HOD` / `APPROVED` / `CODE_ISSUED` request exists. **`holder` is `null` here by design**: a code that may simply expire in ten minutes is not worth naming a colleague over.
+- `AVAILABLE` — no active request.
+
+`holder` is non-null only for `OUT` / `OVERDUE`, and carries `full_name` and `is_guest` (guests hold keys at weekends) — nothing else. The response deliberately contains **no `code`, no `return_code`, no `photo_url`, no `risk_tier`**; there is no `rewriteStorageUrls` call because no storage URL is selected. A requester is told who has the key, never shown their passport photo — that exists for desk identity verification.
+
+**Scope and enforcement**. This is the only route that shows one requester another requester's activity, so note where the boundary lives. RLS is deliberately **not** widened: `requests_select` scopes a REQUESTER to `requester_id = auth.uid()`, and `requests` holds `code` and `return_code`, so a policy loose enough to expose a holder's name would expose live collection codes to every co-authorised requester. Instead the route reads past RLS with the admin client and applies its own check — the same pattern `GET /api/keys/out` uses. The scope is the caller's own `authorisations` rows, filtered in the handler on the session user's id. `authorisations_select_all` is `USING (true)`, so **RLS does not scope that read; the explicit `.eq('profile_id', user.id)` does**, and it must never be driven by a client-supplied parameter.
+
+Read-only, so no audit entry — `audit_log` records consequential actions, not queries.
+
+**Errors**: `401` unauthenticated or profile missing · `403` not a REQUESTER · `500` query failure (correlation ref in the error string)
+
+---
+
 ### GET /api/keys/history
 
 **File**: `src/app/api/keys/history/route.ts`

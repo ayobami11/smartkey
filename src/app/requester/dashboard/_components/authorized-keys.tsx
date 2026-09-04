@@ -32,7 +32,14 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { GuestBadge } from '@/components/smartkey/guest-badge';
+import {
+  KEY_AVAILABILITY_CONFIG,
+  UNREQUESTABLE_STATES,
+} from '@/components/smartkey/key-availability-status';
 import { apiFetch } from '@/lib/api';
+import { formatDeadline, relativeTime } from '@/lib/dates';
+import type { KeyAvailability } from '@/lib/keys/availability';
 import { createBrowserClient } from '@/lib/supabase/client';
 import {
   weekdayRequestFormSchema,
@@ -80,11 +87,28 @@ const defaultReturnDeadline = (deadlineTime: string) => {
 const zoneLabel = (zone: string) =>
   zone === 'NEW_SENATE' ? 'New Senate' : 'Old Senate';
 
-const zoneStripe = (zone: string) =>
-  zone === 'NEW_SENATE' ? 'bg-primary' : 'bg-blue-500';
+// Why a key can't be requested right now, for the disabled button's tooltip.
+// Retired is excluded: the tile already carries a "Retired" pill and the key
+// is gone for good, so a deadline-shaped explanation would be misleading.
+const unavailableReason = (availability: KeyAvailability): string | null => {
+  switch (availability.state) {
+    case 'SPOKEN_FOR':
+      return 'Someone is collecting this key right now.';
+    case 'OUT':
+    case 'OVERDUE':
+      return availability.return_deadline
+        ? `This key is currently out. Due back ${formatDeadline(availability.return_deadline)}.`
+        : 'This key is currently out.';
+    case 'RETIRED':
+      return 'This key has been retired.';
+    default:
+      return null;
+  }
+};
 
 export const AuthorizedKeys = () => {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const connectionStatus = useConnectionStatus();
   const isOffline = connectionStatus === 'offline';
 
@@ -142,6 +166,44 @@ export const AuthorizedKeys = () => {
 
   const keys = data?.keys ?? [];
   const userId = data?.userId ?? null;
+
+  // Availability is enrichment, never a gate. If this query fails the tiles
+  // still render exactly as they did before this feature existed — no second
+  // error box, no empty list. The keys list must not depend on it.
+  const { data: availabilityData } = useQuery({
+    queryKey: ['requester', 'key-availability'],
+    queryFn: async () => {
+      const result = await apiFetch<{ keys: KeyAvailability[] }>(
+        '/api/keys/availability'
+      );
+      if (result.error) throw new Error(result.error);
+      return result.data?.keys ?? [];
+    },
+    staleTime: 30_000,
+    refetchInterval: connectionStatus !== 'connected' ? 10_000 : false,
+  });
+
+  const availabilityByKey = new Map(
+    (availabilityData ?? []).map((entry) => [entry.key_id, entry])
+  );
+
+  // One subscription, no filter — `use-realtime.ts` ref-counts a module-level
+  // registry keyed `realtime:requests`, and three sibling components on this
+  // screen already subscribe to it, so this attaches to the existing channel
+  // rather than opening another. Any issue/return/code transition anywhere can
+  // change what a co-authorised colleague sees, so this deliberately does not
+  // filter on requester_id the way the sibling components do.
+  const invalidateAvailability = () => {
+    queryClient.invalidateQueries({
+      queryKey: ['requester', 'key-availability'],
+    });
+  };
+
+  useRealtime({
+    table: 'requests',
+    onInsert: invalidateAvailability,
+    onUpdate: invalidateAvailability,
+  });
 
   const openWeekdaySheet = (keyId: string) => {
     setSelectedKeyId(keyId);
@@ -276,31 +338,86 @@ export const AuthorizedKeys = () => {
         <div className="flex flex-col gap-3">
           {keys.map((authorised) => {
             const { key } = authorised;
-            const retired = key.status === 'RETIRED';
+            const availability = availabilityByKey.get(key.id) ?? null;
+
+            // Until the availability query lands, fall back to the key row's
+            // own status so a retired key never renders as requestable.
+            const state =
+              availability?.state ??
+              (key.status === 'RETIRED' ? 'RETIRED' : null);
+            const config = state ? KEY_AVAILABILITY_CONFIG[state] : null;
+            const unavailable = state
+              ? UNREQUESTABLE_STATES.includes(state)
+              : false;
+            const reason = availability
+              ? unavailableReason(availability)
+              : state === 'RETIRED'
+                ? 'This key has been retired.'
+                : null;
+            const holder = availability?.holder ?? null;
+            const blocked = unavailable || isOffline;
+
             return (
               <div
                 key={key.id}
                 className="flex overflow-hidden rounded-lg border border-border bg-card shadow-[0_2px_4px_rgba(15,23,42,0.06)]"
               >
                 <div
-                  className={`w-1 shrink-0 ${zoneStripe(key.zone)}`}
+                  className={`w-1 shrink-0 ${config?.stripe ?? 'bg-border'}`}
                   aria-hidden="true"
                 />
                 <div className="flex flex-1 items-center gap-3 p-4">
                   <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                    <div className="flex items-center gap-2">
+                    {/* min-h reserves the pill's row so its arrival after the
+                        availability query resolves causes no layout shift. */}
+                    <div className="flex min-h-5 items-center gap-2">
                       <span className="font-mono text-sm font-medium text-foreground">
                         {key.code}
                       </span>
-                      {retired && (
-                        <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                          Retired
+                      {config && (
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${config.badge}`}
+                          aria-label={config.srLabel}
+                        >
+                          <config.Icon className="size-3" aria-hidden="true" />
+                          {config.label}
                         </span>
                       )}
                     </div>
                     <p className="truncate text-xs text-muted-foreground">
                       {key.room_name}
                     </p>
+                    {holder && (
+                      <p className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+                        <span className="truncate">
+                          Held by{' '}
+                          <span className="font-medium text-foreground">
+                            {holder.full_name}
+                          </span>
+                        </span>
+                        {holder.is_guest && <GuestBadge label="External" />}
+                        {availability?.issued_at && (
+                          <span>
+                            · collected {relativeTime(availability.issued_at)}
+                          </span>
+                        )}
+                      </p>
+                    )}
+                    {availability?.return_deadline &&
+                      (state === 'OUT' || state === 'OVERDUE') && (
+                        <p className="text-xs text-muted-foreground">
+                          Due back{' '}
+                          <span
+                            className={
+                              state === 'OVERDUE'
+                                ? 'font-medium text-destructive'
+                                : 'font-medium'
+                            }
+                          >
+                            {formatDeadline(availability.return_deadline)}
+                          </span>
+                        </p>
+                      )}
                     <p className="text-xs text-muted-foreground">
                       {zoneLabel(key.zone)}
                     </p>
@@ -312,18 +429,22 @@ export const AuthorizedKeys = () => {
                           variant="outline"
                           size="sm"
                           onClick={() => openWeekdaySheet(key.id)}
-                          disabled={retired || isOffline}
+                          disabled={blocked}
                           aria-label={`Request key ${key.code} — ${key.room_name}`}
-                          className={`shrink-0${isOffline && !retired ? ' pointer-events-none' : ''}`}
+                          className={`shrink-0${blocked ? ' pointer-events-none' : ''}`}
                         >
                           Request
                         </Button>
                       </span>
                     </TooltipTrigger>
-                    {isOffline && !retired && (
+                    {/* Offline wins: it's the condition the requester can act
+                        on, and it applies to every tile at once. */}
+                    {isOffline ? (
                       <TooltipContent>
                         Available again when you reconnect.
                       </TooltipContent>
+                    ) : (
+                      reason && <TooltipContent>{reason}</TooltipContent>
                     )}
                   </Tooltip>
                 </div>

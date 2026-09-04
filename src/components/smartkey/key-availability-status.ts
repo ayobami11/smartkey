@@ -8,6 +8,16 @@ import {
 
 import type { KeyAvailabilityState } from '@/lib/keys/availability';
 
+/**
+ * Display config for a key's availability on the requester dashboard.
+ *
+ * Data only, no JSX — mirrors `transaction-status.ts`. Stripe colour and badge
+ * colour are paired in one entry so a tile's edge and its pill can never drift
+ * apart, and every colour carries its explicit dark variant.
+ *
+ * `srLabel` is the phrase screen readers get: the visible label alone ("In
+ * use") loses the subject once it's read out of the tile's context.
+ */
 export const KEY_AVAILABILITY_CONFIG: Record<
   KeyAvailabilityState,
   {
