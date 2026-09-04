@@ -13,6 +13,7 @@ import type { TimelineEntry } from '@/lib/ai/reports/types';
 import { createServerClient } from '@/lib/supabase/server';
 
 import { CommentForm } from '@/app/cso/reports/[id]/_components/comment-form';
+import { GenerateNowButton } from '@/app/cso/reports/[id]/_components/generate-now-button';
 import { DownloadReport } from '@/app/cso/reports/[id]/_components/download-report';
 import {
   formatDate,
@@ -23,6 +24,7 @@ import {
 // infer to-one embeds loosely).
 type ReportRow = {
   id: string;
+  shift_id: string;
   markdown: string;
   timeline: unknown;
   metadata: Record<string, unknown> | null;
@@ -109,7 +111,7 @@ export default async function ReportDetailPage({
   const { data: reportData } = await supabase
     .from('shift_reports')
     .select(
-      `id, markdown, timeline, metadata, generated_at,
+      `id, shift_id, markdown, timeline, metadata, generated_at,
        shift:shifts!shift_id(
          shift_number, started_at, ended_at,
          primary_officer:profiles!shifts_primary_officer_id_fkey(full_name),
@@ -194,11 +196,13 @@ export default async function ReportDetailPage({
           role="status"
         >
           <p className="text-sm font-medium text-foreground">
-            This report is still generating.
+            This report has not been generated yet.
           </p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Refresh in a moment to see the AI-generated summary.
+          <p className="mt-1 mb-4 text-sm text-muted-foreground">
+            The shift was scheduled for a report but the summary was never
+            written. Generate it now from the shift&apos;s event data.
           </p>
+          <GenerateNowButton shiftId={report.shift_id} />
         </div>
       ) : (
         <>

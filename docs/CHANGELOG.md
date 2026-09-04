@@ -6,6 +6,50 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-09-04 — Scheduled shift reports actually generate
+
+- **Why**: opening a shift report showed "This report is still generating. Refresh
+  in a moment to see the AI-generated summary." — and refreshing never helped.
+  The two halves of the daily-report flow were never joined up.
+  `schedule_pending_shift_report()` (the `daily-shift-summary` pg_cron job,
+  18:00 daily) inserted a `shift_reports` row with
+  `markdown = 'PENDING_GENERATION'` and stopped there. Its migration comment
+  claimed the Gemini call "still happens when the CSO opens the report" —
+  nothing did that; `/cso/reports/[id]` is a plain read. And the only route that
+  does call Gemini, `POST /api/reports/generate`, starts with the
+  `generate_shift_report` RPC, which raises `CONFLICT` when a row already exists
+  for the shift — so the CSO's own "Generate report now" returned 409 for exactly
+  the shifts that needed generating. Every scheduled report was a dead end with no
+  exit. Confirmed live: 5 of 9 production rows were stuck this way, from
+  2026-07-04 to 2026-08-31.
+- **The daily job now generates**: new `POST /api/cron/shift-report` drains
+  pending placeholders (Gemini per row, template fallback unchanged), and
+  `20260904103000_shift_report_cron_generation.sql` re-points
+  `daily-shift-summary` to call it after `schedule_pending_shift_report()` —
+  same `net.http_post` + `weekend_cron_secret` Vault pattern as the other cron
+  routes, since Gemini can only be called from the Node runtime. Placeholder
+  creation stays, so the `SHIFT_REPORT_SCHEDULED` audit entry survives. It drains
+  by row rather than by "today's shift", so stranded placeholders get picked up
+  too — run once against production on 2026-09-04, it backfilled all five, every
+  one from Gemini rather than the template fallback. Zero rows remain pending.
+  The migration was applied directly to production via the Supabase MCP server
+  (`cron.job` confirms the new command); it only does useful work once the app
+  carrying `/api/cron/shift-report` is deployed — until then the job behaves
+  exactly as it did before, scheduling a placeholder and no more.
+- **Stuck reports are now recoverable by hand too**: `POST /api/reports/generate`
+  adopts an existing `PENDING_GENERATION` row instead of 409-ing on it (a real
+  report still 409s), writing `SHIFT_REPORT_INITIATED` directly since the RPC
+  that normally writes it can't run. The pending report page gained a "Generate
+  now" button and honest copy — "Refresh in a moment" was a promise nothing kept.
+  The reports list shows "Not generated yet" on a pending card instead of
+  "0 issued / 0 returned" and an "AI-generated" line, all three of which were false.
+- **Also fixed while extracting the shared `fillShiftReport` helper**
+  (`src/lib/ai/reports/generate.ts`, used by both routes): the audit-event query
+  had a lower bound only, so a report about an old shift swept in every event
+  recorded since — now bounded by the shift's `ended_at` and capped at 2000 rows.
+  The persisting `UPDATE`'s error was also discarded, so a failed write returned
+  201; it now throws and the route returns a 500 with a correlation ref.
+
 ### 2026-09-03 — README and two stale doc claims corrected against the live system
 
 - **Why**: the README described a system that had moved on. Reviewing it against

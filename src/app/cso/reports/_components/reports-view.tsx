@@ -50,6 +50,7 @@ function mapReport(r: Record<string, unknown>): Report {
     issued: typeof meta.issued_count === 'number' ? meta.issued_count : 0,
     returned: typeof meta.returned_count === 'number' ? meta.returned_count : 0,
     flagged: typeof meta.flagged_count === 'number' ? meta.flagged_count : 0,
+    pending: r.markdown === 'PENDING_GENERATION',
   };
 }
 
