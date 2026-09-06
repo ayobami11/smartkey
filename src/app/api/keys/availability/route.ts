@@ -76,7 +76,7 @@ export const GET = async () => {
 
   const { data: keys, error: keysError } = await admin
     .from('keys')
-    .select('id, status')
+    .select('id, status, key_count')
     .in('id', keyIds);
 
   if (keysError) {
@@ -95,7 +95,7 @@ export const GET = async () => {
   const { data: requests, error: requestsError } = await admin
     .from('requests')
     .select(
-      `key_id, status, created_at, issued_at, return_deadline,
+      `key_id, status, created_at, issued_at, return_deadline, code_expires_at,
        requester:profiles!requester_id(full_name),
        guest:guest_requesters!guest_id(full_name)`
     )

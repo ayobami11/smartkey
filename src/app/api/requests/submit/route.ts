@@ -39,6 +39,16 @@ const mapRpcError = (msg: string): { status: number; message: string } => {
     return { status: 401, message: 'Not authenticated' };
   if (msg.includes('FORBIDDEN')) return { status: 403, message: 'Forbidden' };
   if (msg.includes('NOT_FOUND')) return { status: 404, message: 'Not found' };
+  // Distinct from CONFLICT below, and checked first. CONFLICT means "*you*
+  // already have a request for this key"; NO_KEYS_AVAILABLE means the bunch is
+  // exhausted by other people, so telling this requester to cancel something
+  // would point them at a request they never made.
+  if (msg.includes('NO_KEYS_AVAILABLE'))
+    return {
+      status: 409,
+      message:
+        'No key is available for this room right now. Every key is out or reserved — try again once one is returned.',
+    };
   if (msg.includes('CONFLICT'))
     return {
       status: 409,

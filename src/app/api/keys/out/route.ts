@@ -55,18 +55,12 @@ export const GET = async (request: NextRequest) => {
     return NextResponse.json(err('Failed to fetch outstanding keys', 500), { status: 500 });
   }
 
-  // The request row stays KEY_ISSUED while the key is out; the overdue state is
-  // derived. The hourly mark_key_overdue job flips the key's own status to
-  // OVERDUE, but we also fall back to comparing the return deadline so the badge
-  // is correct even before the next cron run. Surface it as KEY_OVERDUE so the
-  // verifier/CSO UI can render the overdue treatment.
+
   const now = Date.now();
   const outstanding = (data ?? []).map((row) => {
-    const key = row.key as { status?: string } | null;
     const overdue =
-      key?.status === 'OVERDUE' ||
-      (row.return_deadline !== null &&
-        new Date(row.return_deadline).getTime() < now);
+      row.return_deadline !== null &&
+      new Date(row.return_deadline).getTime() < now;
 
     // Normalise: registered requester takes precedence; fall back to guest name.
     const guest = row.guest as { id: string; full_name: string } | null;

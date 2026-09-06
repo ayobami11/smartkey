@@ -4,10 +4,7 @@
  *
  * Pure — no I/O, no JSX. The route at `src/app/api/keys/availability/route.ts`
  * does the fetching; everything below is testable in isolation.
- *
- * The logic here mirrors the database's `derive_key_availability` function,
- * ensuring the UI and the database agree on key availability.
- *
+
  * Deliberately NOT driven by `keys.status` alone. That column is maintained
  * correctly, but it is a single scalar that can only say "exhausted or not" —
  * it cannot see the CODE_ISSUED window, nor express "3 of 12 out".

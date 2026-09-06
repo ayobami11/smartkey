@@ -59,10 +59,17 @@ insert into public.profiles (id, role, full_name, institutional_email, unit_id, 
 update public.units set hod_id = '66666666-6666-4666-8666-000000000001' where id = '66666666-6666-4666-8666-000000000010';
 update public.units set hod_id = '66666666-6666-4666-8666-000000000002' where id = '66666666-6666-4666-8666-000000000011';
 
-insert into public.keys (id, code, zone, room_name, unit_id, status) values
-  ('66666666-6666-4666-8666-000000000020', 'PGT-601', 'NEW_SENATE', 'pgTAP Guest Alpha Office', '66666666-6666-4666-8666-000000000010', 'AVAILABLE'),
-  ('66666666-6666-4666-8666-000000000021', 'PGT-602', 'NEW_SENATE', 'pgTAP Guest Beta Office',  '66666666-6666-4666-8666-000000000011', 'AVAILABLE'),
-  ('66666666-6666-4666-8666-000000000022', 'PGT-603', 'OLD_SENATE', 'pgTAP Guest Registry',     '66666666-6666-4666-8666-000000000012', 'AVAILABLE');
+-- ...0020 is deliberately a large bunch. This file parks many concurrent
+-- guest requests on that one key to exercise the lifecycle RPCs in isolation,
+-- and since 20260906120000_key_count_as_capacity.sql a live code RESERVES one
+-- key from the bunch — so on a key_count = 1 key those fixtures would now be
+-- refused by check_key_capacity() before any assertion could run. The capacity
+-- rule itself is covered in 05_weekday_lifecycle_test.sql; here it is only
+-- fixture headroom, and nothing in this file asserts on keys.status.
+insert into public.keys (id, code, zone, room_name, unit_id, status, key_count) values
+  ('66666666-6666-4666-8666-000000000020', 'PGT-601', 'NEW_SENATE', 'pgTAP Guest Alpha Office', '66666666-6666-4666-8666-000000000010', 'AVAILABLE', 10),
+  ('66666666-6666-4666-8666-000000000021', 'PGT-602', 'NEW_SENATE', 'pgTAP Guest Beta Office',  '66666666-6666-4666-8666-000000000011', 'AVAILABLE', 1),
+  ('66666666-6666-4666-8666-000000000022', 'PGT-603', 'OLD_SENATE', 'pgTAP Guest Registry',     '66666666-6666-4666-8666-000000000012', 'AVAILABLE', 1);
 
 insert into public.guest_requesters (id, full_name, email, id_document_type, id_document_number) values
   ('66666666-6666-4666-8666-000000000030', 'pgTAP Guest One',   'pgtap.guest.g1@example.test', 'National ID', 'PGT-ID-601'),

@@ -4,7 +4,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to public, extensions;
 
-select plan(37);
+select plan(42);
 
 insert into auth.users (id, email) values
   ('55555555-5555-4555-8555-000000000001', 'pgtap.week.dean@example.test'),
@@ -41,7 +41,16 @@ insert into public.keys (id, code, zone, room_name, unit_id, status) values
   -- assertion. It needs its own key: since requests_one_live_issue_per_key,
   -- parking it on ...0022 alongside the happy-path request would mean the
   -- happy path is refused for collecting a key that is already out.
-  ('55555555-5555-4555-8555-00000000002b', 'PGT-512', 'NEW_SENATE', 'pgTAP Lifecycle Room L', '55555555-5555-4555-8555-000000000010', 'ISSUED');
+  ('55555555-5555-4555-8555-00000000002b', 'PGT-512', 'NEW_SENATE', 'pgTAP Lifecycle Room L', '55555555-5555-4555-8555-000000000010', 'ISSUED'),
+  -- Holds the CODE_ISSUED request ...0071 used by the request_return block. It
+  -- needs its own key for the same reason ...002b does: key ...0028 is already
+  -- held by ...0045 (the "does not over-block" assertion issues it), and since
+  -- the capacity rule a second live reservation on a one-key bunch is refused
+  -- at insert time.
+  ('55555555-5555-4555-8555-00000000002d', 'PGT-514', 'NEW_SENATE', 'pgTAP Lifecycle Room N', '55555555-5555-4555-8555-000000000010', 'AVAILABLE');
+
+insert into public.keys (id, code, zone, room_name, unit_id, status, key_count) values
+  ('55555555-5555-4555-8555-00000000002c', 'PGT-513', 'NEW_SENATE', 'pgTAP Lifecycle Room M', '55555555-5555-4555-8555-000000000010', 'AVAILABLE', 3);
 
 insert into public.authorisations (key_id, profile_id, authorised_by) values
   ('55555555-5555-4555-8555-000000000020', '55555555-5555-4555-8555-000000000003', '55555555-5555-4555-8555-000000000001'),
@@ -209,20 +218,94 @@ select throws_ok(
   'issue_key refuses an expired code'
 );
 
--- One key, one holder. Key ...0022 is now out with request ...0040 (issued
--- above), so a second requester presenting a perfectly valid code for the same
--- key must be refused at the desk rather than handed a key that is not there.
+-- Capacity. A key record is a bunch of key_count interchangeable keys, and a
+-- live code RESERVES one of them.
+--
+-- Key ...0022 has key_count 1 and is now out with request ...0040 (issued
+-- above), so a second requester cannot even obtain a code for it. Note the
+-- refusal has moved EARLIER than it used to be: before the capacity rule this
+-- row inserted fine and was only caught at the desk by issue_key, which meant
+-- someone walked to the Senate Building to be turned away.
+select throws_ok(
+  $$ insert into public.requests
+       (id, requester_id, key_id, type, requested_for, status, code, code_expires_at, return_deadline)
+     values
+       ('55555555-5555-4555-8555-000000000043', '55555555-5555-4555-8555-000000000004',
+        '55555555-5555-4555-8555-000000000022', 'WEEKDAY', current_date, 'CODE_ISSUED',
+        '555555', now() + interval '5 minutes', now() + interval '1 day') $$,
+  'P0016',
+  'NO_KEYS_AVAILABLE: every key on this bunch is currently out or reserved (1 of 1)',
+  'a second reservation on a full single-key bunch is refused at request time'
+);
+
+-- A weekend request approved for a FUTURE date holds nothing: the reservation
+-- is taken when the code is minted on the day, not at approval. Without this,
+-- booking a key for next Saturday would block it all week.
+select lives_ok(
+  $$ insert into public.requests
+       (id, requester_id, key_id, type, requested_for, status, return_deadline)
+     values
+       ('55555555-5555-4555-8555-000000000046', '55555555-5555-4555-8555-000000000004',
+        '55555555-5555-4555-8555-000000000022', 'WEEKEND', current_date + 7, 'APPROVED',
+        now() + interval '8 days') $$,
+  'a future weekend approval consumes no capacity, even on a full key'
+);
+
+alter table public.requests disable trigger requests_key_capacity;
 insert into public.requests
   (id, requester_id, key_id, type, requested_for, status, code, code_expires_at, return_deadline)
 values
   ('55555555-5555-4555-8555-000000000043', '55555555-5555-4555-8555-000000000004', '55555555-5555-4555-8555-000000000022', 'WEEKDAY', current_date, 'CODE_ISSUED', '555555', now() + interval '5 minutes', now() + interval '1 day');
+alter table public.requests enable trigger requests_key_capacity;
 
 select throws_ok(
   $$ select * from public.issue_key(
        '55555555-5555-4555-8555-000000000043', '55555555-5555-4555-8555-000000000002') $$,
   'P0006',
   'CONFLICT: this key is already issued and has not been returned',
-  'issue_key refuses a key that is already out with someone else'
+  'issue_key still refuses a key that is already out with someone else'
+);
+
+insert into public.requests
+  (id, requester_id, key_id, type, requested_for, status, code, code_expires_at, return_deadline)
+values
+  ('55555555-5555-4555-8555-000000000047', '55555555-5555-4555-8555-000000000003', '55555555-5555-4555-8555-00000000002c', 'WEEKDAY', current_date, 'CODE_ISSUED', '777777', now() + interval '5 minutes', now() + interval '1 day'),
+  ('55555555-5555-4555-8555-000000000048', '55555555-5555-4555-8555-000000000004', '55555555-5555-4555-8555-00000000002c', 'WEEKDAY', current_date, 'CODE_ISSUED', '888888', now() + interval '5 minutes', now() + interval '1 day');
+
+select lives_ok(
+  $$ insert into public.requests
+       (id, requester_id, key_id, type, requested_for, status, code, code_expires_at, return_deadline)
+     values
+       ('55555555-5555-4555-8555-000000000049', '55555555-5555-4555-8555-000000000003',
+        '55555555-5555-4555-8555-00000000002c', 'WEEKDAY', current_date, 'CODE_ISSUED',
+        '999999', now() + interval '5 minutes', now() + interval '1 day') $$,
+  'a three-key bunch admits a third concurrent reservation'
+);
+
+select throws_ok(
+  $$ insert into public.requests
+       (id, requester_id, key_id, type, requested_for, status, code, code_expires_at, return_deadline)
+     values
+       ('55555555-5555-4555-8555-00000000004a', '55555555-5555-4555-8555-000000000004',
+        '55555555-5555-4555-8555-00000000002c', 'WEEKDAY', current_date, 'CODE_ISSUED',
+        '101010', now() + interval '5 minutes', now() + interval '1 day') $$,
+  'P0016',
+  'NO_KEYS_AVAILABLE: every key on this bunch is currently out or reserved (3 of 3)',
+  'a three-key bunch refuses the fourth concurrent reservation'
+);
+
+update public.requests
+set    code_expires_at = now() - interval '1 minute'
+where  id = '55555555-5555-4555-8555-000000000047';
+
+select lives_ok(
+  $$ insert into public.requests
+       (id, requester_id, key_id, type, requested_for, status, code, code_expires_at, return_deadline)
+     values
+       ('55555555-5555-4555-8555-00000000004a', '55555555-5555-4555-8555-000000000004',
+        '55555555-5555-4555-8555-00000000002c', 'WEEKDAY', current_date, 'CODE_ISSUED',
+        '101010', now() + interval '5 minutes', now() + interval '1 day') $$,
+  'a lapsed code releases its key immediately, without waiting for the sweep'
 );
 
 -- ...and does not over-block: the guard is scoped to KEY_ISSUED, so a key whose
@@ -343,7 +426,7 @@ insert into public.requests
   (id, requester_id, key_id, type, requested_for, status, return_deadline)
 values
   ('55555555-5555-4555-8555-000000000070', '55555555-5555-4555-8555-000000000003', '55555555-5555-4555-8555-000000000027', 'WEEKDAY', current_date, 'KEY_ISSUED',  now() + interval '1 day'),
-  ('55555555-5555-4555-8555-000000000071', '55555555-5555-4555-8555-000000000003', '55555555-5555-4555-8555-000000000028', 'WEEKDAY', current_date, 'CODE_ISSUED', now() + interval '1 day'),
+  ('55555555-5555-4555-8555-000000000071', '55555555-5555-4555-8555-000000000003', '55555555-5555-4555-8555-00000000002d', 'WEEKDAY', current_date, 'CODE_ISSUED', now() + interval '1 day'),
   ('55555555-5555-4555-8555-000000000072', '55555555-5555-4555-8555-000000000004', '55555555-5555-4555-8555-000000000029', 'WEEKDAY', current_date, 'KEY_ISSUED',  now() + interval '1 day');
 
 create temp table t_d1 as
