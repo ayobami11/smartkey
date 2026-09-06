@@ -34,14 +34,21 @@ against their physical ID at the desk.
 
 ## How a key request works (weekday)
 
-1. A requester selects an authorised key and confirms a return time.
+1. A requester selects an authorised key and confirms a return time. If every
+   copy of that key is already out or reserved, the request is refused here
+   rather than at the desk.
 2. The system runs the risk engine, generates a 6-digit code (valid 10 minutes
    by default; the CSO can set anything from 5 to 60 in `/cso/settings`), and
-   emails it.
+   emails it. The code **reserves** one copy until it is used or lapses.
 3. The requester presents the code at the desk. The verifier sees the
    requester's name, photo, the key, and a risk tier before issuing.
 4. On return, the verifier records the handover. Every step writes an audit
    entry.
+
+A key record is a room's set of interchangeable copies (`keys.key_count`), not a
+bunch handed over as a unit. A room with three keys can be with three people at
+once and the fourth request is refused; most rooms have one, where this behaves
+exactly as a single key always did.
 
 Weekend access is a separate flow. It needs Dean approval first (or CSO
 approval, for Administration keys) — the Dean can decide straight from the
@@ -99,13 +106,17 @@ All times are UTC.
 
 | Job                             | Schedule       | What it does                                          |
 | ------------------------------- | -------------- | ----------------------------------------------------- |
-| `expire-lapsed-codes`           | every 10 min   | Expires unclaimed collection codes, freeing the key   |
+| `expire-lapsed-codes`           | every 10 min   | Tidies up unclaimed collection codes¹                 |
 | `overdue-key-check`             | hourly         | Marks overdue keys, then emails overdue reminders     |
 | `daily-shift-summary`           | 18:00          | Queues a shift report for the day's last shift        |
 | `expire-stale-weekend-requests` | 00:15          | Expires weekend requests whose date has passed        |
 | `weekend-code-reminders`        | 06:00 Sat, Sun | Reminds approved requesters to mint their code        |
 | `daily-digest`                  | 07:00          | Sends the opt-in activity digest to Deans and the CSO |
 | `audit-log-export`              | 02:00          | Exports the previous day's audit log to Vercel Blob   |
+
+¹ It marks the request `EXPIRED`; it is **not** what frees the key. A code stops
+reserving its copy the moment it lapses, so the key is requestable again
+immediately rather than up to ten minutes later.
 
 ## Getting started
 

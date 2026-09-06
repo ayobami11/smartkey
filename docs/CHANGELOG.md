@@ -119,9 +119,9 @@ Each entry: date, brief title, what changed, why.
   `public.key_status`. Worth recording as an argument for exercising a migration
   against a real stack rather than reviewing 574 lines of SQL by eye.
 - **Tests**: `05_weekday_lifecycle_test.sql` `plan(37)` → `plan(42)`. The old
-  "issue_key refuses a key already out" assertion inverted in an interesting way:
+  "issue*key refuses a key already out" assertion inverted in an interesting way:
   that state is no longer reachable, because the second requester is refused a
-  _code_. The file now asserts the refusal at request time, keeps the `issue_key`
+  \_code*. The file now asserts the refusal at request time, keeps the `issue_key`
   guard as defence in depth (disabling the trigger to construct a state that is
   otherwise unreachable, which is the point), and adds a `key_count = 3` fixture
   covering three concurrent holders, refusal of the fourth, a lapsed code
@@ -130,6 +130,11 @@ Each entry: date, brief title, what changed, why.
   to exercise the guest RPCs in isolation, so its fixture key became a 10-copy
   room; nothing there asserts on `keys.status`. Full suite: 157 pgTAP assertions,
   410 unit tests.
+- **`README.md`** picked up the capacity rule in "How a key request works", and
+  a correction to the `expire-lapsed-codes` row in the scheduled-jobs table: it
+  said the job frees the key, which is no longer true and was the exact
+  subtlety worth getting right — the key frees the moment the code lapses, and
+  the cron only marks the row `EXPIRED`.
 - **No data repair needed**: every one of the 87 request rows in production is
   terminal and all 27 keys are `AVAILABLE`, so the index drop and trigger
   creation were clean.
