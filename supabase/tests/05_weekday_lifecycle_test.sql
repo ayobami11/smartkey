@@ -42,11 +42,6 @@ insert into public.keys (id, code, zone, room_name, unit_id, status) values
   -- parking it on ...0022 alongside the happy-path request would mean the
   -- happy path is refused for collecting a key that is already out.
   ('55555555-5555-4555-8555-00000000002b', 'PGT-512', 'NEW_SENATE', 'pgTAP Lifecycle Room L', '55555555-5555-4555-8555-000000000010', 'ISSUED'),
-  -- Holds the CODE_ISSUED request ...0071 used by the request_return block. It
-  -- needs its own key for the same reason ...002b does: key ...0028 is already
-  -- held by ...0045 (the "does not over-block" assertion issues it), and since
-  -- the capacity rule a second live reservation on a one-key bunch is refused
-  -- at insert time.
   ('55555555-5555-4555-8555-00000000002d', 'PGT-514', 'NEW_SENATE', 'pgTAP Lifecycle Room N', '55555555-5555-4555-8555-000000000010', 'AVAILABLE');
 
 insert into public.keys (id, code, zone, room_name, unit_id, status, key_count) values

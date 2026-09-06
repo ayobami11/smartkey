@@ -6,6 +6,134 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-09-06 — `/api/keys/availability` select list caught up with the capacity model
+
+- **Why**: `bun run build` failed on the pre-push hook —
+  `Property 'key_count' is missing in type ... but required in type 'KeyRow'`.
+  Commit 6a31dda reworked `src/lib/keys/availability.ts` from "one key, one
+  holder" to `keys.key_count` as **capacity** (a bunch of N keys, N-1 still
+  requestable while one is out), but neither the route feeding it nor its unit
+  tests were updated with it.
+- **The type error was the smaller half.** The route also stopped selecting
+  `code_expires_at`, and the `as unknown as ActiveRequestRow[]` cast on the
+  requests query hid that completely: `occupiesKey` would have read `undefined`
+  for every `CODE_ISSUED` row, so `code_expires_at === null` was false and
+  `new Date(undefined) > now` was false — every live code would have read as
+  lapsed, and a key reserved by a valid unexpired code would have shown as
+  AVAILABLE to a co-authorised colleague. Silent, and exactly the class of bug
+  the cast defeats the compiler's ability to catch.
+- Both fields are now in the select lists (`keys`: `id, status, key_count`;
+  `requests`: adds `code_expires_at`).
+- `src/tests/keys/availability.test.ts` updated to the capacity semantics and
+  extended from 15 to 20 tests: partially-issued bunch (`3 keys, 2 out` →
+  AVAILABLE with `available_count: 1` and both holders named), fully-exhausted
+  bunch → OUT, null `key_count` → treated as 1, and a lapsed `CODE_ISSUED` code
+  freeing its key again. The old `it.each` asserting SPOKEN_FOR for
+  `PENDING_HOD`/`APPROVED` was wrong under the new model and is now the
+  opposite assertion — those statuses hold no physical key and must not consume
+  capacity, matching `check_key_capacity()` in
+  `20260906120000_key_count_as_capacity.sql`. A pending weekend approval
+  blocking the whole bunch would be the regression.
+- No UI change needed: `authorized-keys.tsx` was already rendering
+  `{available_count} of {key_count}`; the route was the only lagging caller.
+
+### 2026-09-06 — `keys.key_count` is capacity, and a live code reserves a key
+
+- **Why**: the previous day's one-key-one-holder guard fixed a real bug with the
+  wrong rule. It enforced strictly **one** live holder per key and its header
+  asserted that `keys.key_count` is "bunch size, not capacity … NOT a count of
+  interchangeable copies". That is wrong about the domain: a key record is a
+  room's set of `key_count` **interchangeable copies**, someone takes one and
+  the rest stay collectable. Production says so plainly — `FENG-005` is
+  "Electrical Engineering HOD's Office" with `key_count = 12`, and one room does
+  not have twelve locks on its door. Under the shipped guard, 11 legitimate
+  collections of that key were refused.
+- **Where the bad evidence came from**: `docs/BACKEND.md` §4.6's
+  `key_count` row — "Number of keys in the bunch issued". That row documents
+  `key_transactions.key_count` in the **original** design (a table that was never
+  built; the request row carries the lifecycle instead), where it meant "how many
+  keys were handed over in this transaction". It was quoted as though it
+  documented the live `keys.key_count`. §4.6 now carries a callout saying so, to
+  stop the same misreading recurring.
+- **The rule now**: a request **occupies** one copy while it is `KEY_ISSUED`, or
+  `CODE_ISSUED` with an unexpired code; a key may never be occupied more than
+  `key_count` times.
+- **A live code reserves a copy.** This is the hold-and-release a booking system
+  uses, and SmartKey already had the release half (`code_expires_at` +
+  `expire_lapsed_codes()`) — only the hold was missing. The requester is now
+  refused at request time with "no key is available for this room" instead of
+  walking to the Senate Building to be turned away at the desk.
+- **A weekend booking made days ahead holds nothing.** `PENDING_HOD` and
+  `APPROVED` are not occupying; the hold is taken when the code is minted, which
+  `generate_weekend_code` already restricts to the requested date. So the
+  previous migration's "deliberately NOT enforced in `create_request`" reasoning
+  survives intact — booking for next Saturday does not block the key all week.
+- **Occupancy tests `code_expires_at > now()`, not the raw status.**
+  `expire_lapsed_codes()` sweeps only every 10 minutes, so counting raw
+  `CODE_ISSUED` rows would leave a room looking full for up to 10 minutes after a
+  code actually lapsed. The cron still tidies the row to `EXPIRED`; it is no
+  longer what frees the key.
+- **`20260906120000_key_count_as_capacity.sql`** drops the partial unique index
+  `requests_one_live_issue_per_key` and replaces it with a
+  `requests_key_capacity` trigger. A unique index can express "at most one" but
+  not "at most N", and the `code_expires_at > now()` half is not immutable so
+  cannot sit in an index predicate at all — hence a trigger, following the
+  `authorisations_max_three` precedent for the max-3-collectors rule. Race safety
+  comes from locking the `keys` row before counting (lock order requests → keys,
+  matching `issue_key`/`return_key`). `SECURITY DEFINER` is load-bearing:
+  `requests_select` scopes a REQUESTER to their own rows, so a trigger running as
+  the requester would count only their own requests and never fire.
+- **Three RPCs needed no change at all.** The trigger fires on every write to
+  `requests`, so `create_request`, `generate_weekend_code` and
+  `generate_guest_weekend_code` are all covered on the way in, and the
+  non-occupying transitions (`WEEKEND` insert, `PENDING_HOD → APPROVED`,
+  `CODE_ISSUED → KEY_ISSUED`, every terminal state) are skipped by construction.
+- **`keys.status` now means "exhausted or not"** — a single scalar cannot say
+  "3 of 12 out". `issue_key` writes `ISSUED` only when a collection exhausts the
+  room; `return_key` recomputes (`OVERDUE` if any remaining holder is late, else
+  `ISSUED` if still exhausted, else `AVAILABLE`) instead of writing `AVAILABLE`
+  unconditionally — which also fixed a smaller pre-existing bug where it cleared
+  an `OVERDUE` key to `AVAILABLE` regardless. Keeping that meaning is what lets
+  `/api/admin/units`' `has_slot_today` and the CSO keys chart work unchanged.
+- **`mark_key_overdue()`'s idempotence guard was per-key and is now
+  per-request.** With several holders of one key the first overdue holder flipped
+  the shared `keys.status` and the `k.status <> 'OVERDUE'` filter then silently
+  swallowed every other overdue holder's `KEY_OVERDUE` audit entry. Missing audit
+  entries are the one thing this system cannot trade away.
+- **Overdue derivation stopped reading `keys.status`.** `GET /api/keys/out` and
+  its twin in `src/lib/queries/verifier-dashboard.ts` had
+  `key.status === 'OVERDUE' || return_deadline < now`. That first disjunct reads
+  a scalar shared by every holder of the room, so one late holder would badge
+  every punctual co-holder overdue. The deadline comparison was already there as
+  the pre-cron fallback and is the only per-holder half, so it is now the whole
+  rule.
+- **Two distinct 409s on submit.** `CONFLICT` means "_you_ already have a request
+  for this key"; the new `NO_KEYS_AVAILABLE` (`P0016`) means other people hold
+  every copy. Without separating them the requester was told to cancel a request
+  they never made. Added to `/api/requests/submit`,
+  `/api/requests/weekend-code` and the guest code route, the last two of which
+  would otherwise have returned a 500.
+- **Found by running it, not reading it.** The first local `db reset` applied
+  cleanly and the capacity behaviour was correct, but `return_key`'s recomputed
+  status failed at runtime — a bare `CASE` yields `text` and `keys.status` is
+  `public.key_status`. Worth recording as an argument for exercising a migration
+  against a real stack rather than reviewing 574 lines of SQL by eye.
+- **Tests**: `05_weekday_lifecycle_test.sql` `plan(37)` → `plan(42)`. The old
+  "issue_key refuses a key already out" assertion inverted in an interesting way:
+  that state is no longer reachable, because the second requester is refused a
+  _code_. The file now asserts the refusal at request time, keeps the `issue_key`
+  guard as defence in depth (disabling the trigger to construct a state that is
+  otherwise unreachable, which is the point), and adds a `key_count = 3` fixture
+  covering three concurrent holders, refusal of the fourth, a lapsed code
+  releasing its copy, and a future weekend approval consuming nothing.
+  `06_guest_weekend_lifecycle_test.sql` parks many concurrent requests on one key
+  to exercise the guest RPCs in isolation, so its fixture key became a 10-copy
+  room; nothing there asserts on `keys.status`. Full suite: 157 pgTAP assertions,
+  410 unit tests.
+- **No data repair needed**: every one of the 87 request rows in production is
+  terminal and all 27 keys are `AVAILABLE`, so the index drop and trigger
+  creation were clean.
+
 ### 2026-09-04 — One key, one holder: the double-issue gap in `issue_key` is closed
 
 - **Why**: two requesters could both hold a live `KEY_ISSUED` request for the

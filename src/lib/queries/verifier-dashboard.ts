@@ -99,10 +99,10 @@ const deriveOutstandingStatus = <
   now: number
 ) =>
   rows.map((row) => {
+
     const overdue =
-      row.key?.status === 'OVERDUE' ||
-      (row.return_deadline !== null &&
-        new Date(row.return_deadline).getTime() < now);
+      row.return_deadline !== null &&
+      new Date(row.return_deadline).getTime() < now;
     return { ...row, overdue };
   });
 

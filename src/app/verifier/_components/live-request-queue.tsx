@@ -522,9 +522,12 @@ export const LiveRequestQueue = ({
                         {issueResult.key.code} · {issueResult.key.room_name}
                       </p>
                     )}
+                    {/* One key off a bunch of several, not the whole bunch —
+                        the other copies stay on the hook for colleagues. */}
                     {(issueResult.key.key_count ?? 1) > 1 && (
                       <p className="mt-1 text-sm font-medium text-foreground">
-                        Keys on bunch: {issueResult.key.key_count}
+                        Hand over 1 key — this room has{' '}
+                        {issueResult.key.key_count} on the bunch
                       </p>
                     )}
                     <p className="mt-1 text-sm text-muted-foreground">

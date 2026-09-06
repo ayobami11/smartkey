@@ -24,6 +24,15 @@ const mapRpcError = (msg: string): { status: number; message: string } => {
       status: 422,
       message: 'A collection code can only be generated on the requested date.',
     };
+  // Minting the code is what reserves a key from the bunch, so this is the
+  // point an approved weekend request can find the room already fully spoken
+  // for. Distinct from CONFLICT, which is about the request's own state.
+  if (msg.includes('NO_KEYS_AVAILABLE'))
+    return {
+      status: 409,
+      message:
+        'No key is available for this room right now. Every key is out or reserved — try again once one is returned.',
+    };
   if (msg.includes('CONFLICT'))
     return { status: 409, message: 'This request is not awaiting collection.' };
   return { status: 500, message: 'Internal error' };

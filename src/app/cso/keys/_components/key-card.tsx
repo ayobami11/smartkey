@@ -87,10 +87,10 @@ export const KeyCard = ({ keyItem, onMarkLost }: Props) => {
         </span>
         {(keyItem.key_count ?? 1) > 1 && (
           <span className="text-xs text-muted-foreground">
-            Keys on bunch:{' '}
             <span className="font-medium text-foreground">
-              {keyItem.key_count}
-            </span>
+              {keyItem.key_count} keys
+            </span>{' '}
+            for this room
           </span>
         )}
       </div>

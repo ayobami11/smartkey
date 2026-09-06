@@ -91,14 +91,19 @@ const zoneLabel = (zone: string) =>
 // Retired is excluded: the tile already carries a "Retired" pill and the key
 // is gone for good, so a deadline-shaped explanation would be misleading.
 const unavailableReason = (availability: KeyAvailability): string | null => {
+  const subject =
+    availability.key_count > 1 ? 'Every key for this room' : 'This key';
+
   switch (availability.state) {
     case 'SPOKEN_FOR':
-      return 'Someone is collecting this key right now.';
+      return availability.key_count > 1
+        ? 'Every key for this room is being collected right now.'
+        : 'Someone is collecting this key right now.';
     case 'OUT':
     case 'OVERDUE':
       return availability.return_deadline
-        ? `This key is currently out. Due back ${formatDeadline(availability.return_deadline)}.`
-        : 'This key is currently out.';
+        ? `${subject} is currently out. Due back ${formatDeadline(availability.return_deadline)}.`
+        : `${subject} is currently out.`;
     case 'RETIRED':
       return 'This key has been retired.';
     default:
@@ -355,6 +360,14 @@ export const AuthorizedKeys = () => {
                 ? 'This key has been retired.'
                 : null;
             const holder = availability?.holder ?? null;
+            const otherHolders = Math.max(
+              0,
+              (availability?.holders.length ?? 0) - 1
+            );
+            // Only worth showing for a real bunch; for a single key the pill
+            // already says everything.
+            const bunch =
+              availability && availability.key_count > 1 ? availability : null;
             const blocked = unavailable || isOffline;
 
             return (
@@ -387,6 +400,14 @@ export const AuthorizedKeys = () => {
                     <p className="truncate text-xs text-muted-foreground">
                       {key.room_name}
                     </p>
+                    {bunch && (
+                      <p className="text-xs text-muted-foreground">
+                        <span className="font-medium text-foreground">
+                          {bunch.available_count} of {bunch.key_count}
+                        </span>{' '}
+                        keys available
+                      </p>
+                    )}
                     {holder && (
                       <p className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
                         <span className="truncate">
@@ -396,6 +417,12 @@ export const AuthorizedKeys = () => {
                           </span>
                         </span>
                         {holder.is_guest && <GuestBadge label="External" />}
+                        {otherHolders > 0 && (
+                          <span>
+                            · +{otherHolders}{' '}
+                            {otherHolders === 1 ? 'other' : 'others'}
+                          </span>
+                        )}
                         {availability?.issued_at && (
                           <span>
                             · collected {relativeTime(availability.issued_at)}

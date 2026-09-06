@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/dialog';
 import {
   Field,
+  FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
@@ -253,7 +254,7 @@ export const CreateKeyDialog = ({ onCreated }: Props) => {
                     render={({ field, fieldState }) => (
                       <Field data-invalid={fieldState.invalid}>
                         <FieldLabel htmlFor="key-count">
-                          Keys on bunch{' '}
+                          Keys for this room{' '}
                           <span className="text-muted-foreground">
                             (optional)
                           </span>
@@ -274,6 +275,10 @@ export const CreateKeyDialog = ({ onCreated }: Props) => {
                             )
                           }
                         />
+                        <FieldDescription>
+                          How many copies of this key exist. This many people
+                          can hold one at the same time.
+                        </FieldDescription>
                         {fieldState.invalid && (
                           <FieldError errors={[fieldState.error]} />
                         )}

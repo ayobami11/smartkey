@@ -7,7 +7,7 @@ import {
   type KeyRow,
 } from '@/lib/keys/availability';
 
-const KEY: KeyRow = { id: 'key-1', status: 'AVAILABLE' };
+const KEY: KeyRow = { id: 'key-1', status: 'AVAILABLE', key_count: 1 };
 const NOW = new Date('2026-09-04T12:00:00.000Z');
 
 const row = (overrides: Partial<ActiveRequestRow> = {}): ActiveRequestRow => ({
@@ -16,6 +16,7 @@ const row = (overrides: Partial<ActiveRequestRow> = {}): ActiveRequestRow => ({
   created_at: '2026-09-04T09:00:00.000Z',
   issued_at: '2026-09-04T09:05:00.000Z',
   return_deadline: '2026-09-04T17:00:00.000Z',
+  code_expires_at: null,
   requester: { full_name: 'Dr. Bakare' },
   guest: null,
   ...overrides,
@@ -28,20 +29,24 @@ describe('deriveKeyAvailability', () => {
     expect(result).toEqual({
       key_id: 'key-1',
       state: 'AVAILABLE',
+      key_count: 1,
+      available_count: 1,
       return_deadline: null,
       issued_at: null,
       holder: null,
+      holders: [],
     });
   });
 
   it('reports RETIRED regardless of any active request', () => {
     const result = deriveKeyAvailability(
-      { id: 'key-1', status: 'RETIRED' },
+      { id: 'key-1', status: 'RETIRED', key_count: 1 },
       [row()],
       NOW
     );
 
     expect(result.state).toBe('RETIRED');
+    expect(result.available_count).toBe(0);
     expect(result.holder).toBeNull();
   });
 
@@ -49,10 +54,12 @@ describe('deriveKeyAvailability', () => {
     const result = deriveKeyAvailability(KEY, [row()], NOW);
 
     expect(result.state).toBe('OUT');
+    expect(result.available_count).toBe(0);
     expect(result.holder).toEqual({
       full_name: 'Dr. Bakare',
       is_guest: false,
     });
+    expect(result.holders).toEqual([{ full_name: 'Dr. Bakare', is_guest: false }]);
     expect(result.issued_at).toBe('2026-09-04T09:05:00.000Z');
     expect(result.return_deadline).toBe('2026-09-04T17:00:00.000Z');
   });
@@ -80,16 +87,55 @@ describe('deriveKeyAvailability', () => {
 
   // A code minted but not yet collected. Naming a person whose code may simply
   // expire in ten minutes is disclosure without purpose.
-  it.each(['PENDING_HOD', 'APPROVED', 'CODE_ISSUED'] as const)(
-    'reports SPOKEN_FOR with no holder for status %s',
+  it('reports SPOKEN_FOR with no holder for a live CODE_ISSUED row', () => {
+    const result = deriveKeyAvailability(
+      KEY,
+      [
+        row({
+          status: 'CODE_ISSUED',
+          issued_at: null,
+          code_expires_at: '2026-09-04T12:10:00.000Z',
+        }),
+      ],
+      NOW
+    );
+
+    expect(result.state).toBe('SPOKEN_FOR');
+    expect(result.available_count).toBe(0);
+    expect(result.holder).toBeNull();
+    expect(result.issued_at).toBeNull();
+  });
+
+  // Matches check_key_capacity() in 20260906120000_key_count_as_capacity.sql:
+  // a weekend request awaiting a decision holds no physical key, so it must not
+  // consume capacity — otherwise a pending approval blocks the whole bunch.
+  it.each(['PENDING_HOD', 'APPROVED'] as const)(
+    'does not consume capacity for status %s',
     (status) => {
       const result = deriveKeyAvailability(KEY, [row({ status })], NOW);
 
-      expect(result.state).toBe('SPOKEN_FOR');
+      expect(result.state).toBe('AVAILABLE');
+      expect(result.available_count).toBe(1);
       expect(result.holder).toBeNull();
-      expect(result.issued_at).toBeNull();
     }
   );
+
+  it('frees the key again once a CODE_ISSUED code has lapsed', () => {
+    const result = deriveKeyAvailability(
+      KEY,
+      [
+        row({
+          status: 'CODE_ISSUED',
+          issued_at: null,
+          code_expires_at: '2026-09-04T11:50:00.000Z',
+        }),
+      ],
+      NOW
+    );
+
+    expect(result.state).toBe('AVAILABLE');
+    expect(result.available_count).toBe(1);
+  });
 
   it('names a guest holder and flags them as external', () => {
     const result = deriveKeyAvailability(
@@ -110,19 +156,68 @@ describe('deriveKeyAvailability', () => {
 
     expect(result.state).toBe('OUT');
     expect(result.holder).toBeNull();
+    expect(result.holders).toEqual([]);
   });
 
-  // Two people can hold live KEY_ISSUED requests for one physical key —
-  // create_request only blocks a requester's own duplicate, and issue_key
-  // never consults keys.status. The physically-held row must win over a
-  // merely-reserved one, whatever order the rows arrive in.
-  it('prefers the KEY_ISSUED row over a later-created SPOKEN_FOR one', () => {
+  // A bunch of three keys stays requestable while two of them are out, and
+  // still names who is holding the ones that are.
+  it('reports remaining capacity on a partially-issued bunch', () => {
     const result = deriveKeyAvailability(
-      KEY,
+      { id: 'key-1', status: 'ISSUED', key_count: 3 },
+      [
+        row({ created_at: '2026-09-04T10:00:00.000Z',
+              requester: { full_name: 'Dr. Adeyemi' } }),
+        row(),
+      ],
+      NOW
+    );
+
+    expect(result.state).toBe('AVAILABLE');
+    expect(result.key_count).toBe(3);
+    expect(result.available_count).toBe(1);
+    expect(result.holders.map((h) => h.full_name)).toEqual([
+      'Dr. Bakare',
+      'Dr. Adeyemi',
+    ]);
+  });
+
+  it('reports OUT once every key in the bunch is issued', () => {
+    const result = deriveKeyAvailability(
+      { id: 'key-1', status: 'ISSUED', key_count: 2 },
+      [
+        row({ created_at: '2026-09-04T10:00:00.000Z',
+              requester: { full_name: 'Dr. Adeyemi' } }),
+        row(),
+      ],
+      NOW
+    );
+
+    expect(result.state).toBe('OUT');
+    expect(result.available_count).toBe(0);
+  });
+
+  it('treats a null key_count as a single key', () => {
+    const result = deriveKeyAvailability(
+      { id: 'key-1', status: 'AVAILABLE', key_count: null },
+      [row()],
+      NOW
+    );
+
+    expect(result.key_count).toBe(1);
+    expect(result.state).toBe('OUT');
+  });
+
+  // The physically-held row must win over a merely-reserved one, whatever
+  // order the rows arrive in.
+  it('prefers the KEY_ISSUED row over an earlier-created reservation', () => {
+    const result = deriveKeyAvailability(
+      { id: 'key-1', status: 'ISSUED', key_count: 2 },
       [
         row({
           status: 'CODE_ISSUED',
           created_at: '2026-09-04T08:00:00.000Z',
+          issued_at: null,
+          code_expires_at: '2026-09-04T12:10:00.000Z',
           requester: { full_name: 'Dr. Adeyemi' },
         }),
         row(),
@@ -150,27 +245,17 @@ describe('deriveKeyAvailability', () => {
     expect(result.holder?.full_name).toBe('Dr. Bakare');
   });
 
-  it('falls back to the earliest row when none is KEY_ISSUED', () => {
-    const result = deriveKeyAvailability(
-      KEY,
-      [
-        row({ status: 'CODE_ISSUED', created_at: '2026-09-04T10:00:00.000Z' }),
-        row({ status: 'PENDING_HOD', created_at: '2026-09-04T08:00:00.000Z' }),
-      ],
-      NOW
-    );
-
-    expect(result.state).toBe('SPOKEN_FOR');
-  });
-
   // Regression guard: the output must never carry a collection or return code.
   // Widening the select list in the route is the mistake this catches.
-  it('exposes only the five documented fields', () => {
+  it('exposes only the documented fields', () => {
     const result = deriveKeyAvailability(KEY, [row()], NOW);
 
     expect(Object.keys(result).sort()).toEqual([
+      'available_count',
       'holder',
+      'holders',
       'issued_at',
+      'key_count',
       'key_id',
       'return_deadline',
       'state',
@@ -185,9 +270,9 @@ describe('deriveKeyAvailability', () => {
 describe('deriveKeyAvailabilityList', () => {
   it('groups requests by key and defaults unmatched keys to AVAILABLE', () => {
     const keys: KeyRow[] = [
-      { id: 'key-1', status: 'ISSUED' },
-      { id: 'key-2', status: 'AVAILABLE' },
-      { id: 'key-3', status: 'RETIRED' },
+      { id: 'key-1', status: 'ISSUED', key_count: 1 },
+      { id: 'key-2', status: 'AVAILABLE', key_count: 1 },
+      { id: 'key-3', status: 'RETIRED', key_count: 1 },
     ];
 
     const result = deriveKeyAvailabilityList(keys, [row()], NOW);

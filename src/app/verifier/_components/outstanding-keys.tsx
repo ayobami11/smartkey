@@ -328,9 +328,12 @@ export const OutstandingKeys = () => {
                     </span>{' '}
                     at {formatTime(selectedKey.issued_at)}
                   </p>
+                  {/* This row is one holder's key, not the whole bunch. Others
+                      may hold their own copy and appear as separate rows. */}
                   {(selectedKey.key?.key_count ?? 1) > 1 && (
                     <p className="mt-1 text-xs font-medium text-foreground">
-                      Keys on bunch: {selectedKey.key?.key_count}
+                      1 key of {selectedKey.key?.key_count} on this room&apos;s
+                      bunch
                     </p>
                   )}
                   {selectedKey.status === 'KEY_OVERDUE' && (

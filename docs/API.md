@@ -242,7 +242,9 @@ The RPC runs the risk engine, generates the code, and writes the audit entry ato
 }
 ```
 
-**Errors**: `403` requester not authorised for this key · `409` active request already exists for this key · `422` outside operational hours (weekend requests) · `500` RPC failure
+**Errors**: `403` requester not authorised for this key · `409` active request already exists for this key · `409` no key available for this room (`NO_KEYS_AVAILABLE`) · `422` outside operational hours (weekend requests) · `500` RPC failure
+
+The two `409`s are distinct and the route maps them to different messages. `CONFLICT` means **you** already have an active request for this key; `NO_KEYS_AVAILABLE` means every copy of the room's key is out or reserved by other people, so telling this requester to cancel something would point them at a request they never made. The latter is raised by the `requests_key_capacity` trigger (`docs/DATABASE.md`) and only on the `WEEKDAY` branch, which mints a code immediately — a `WEEKEND` request starts `PENDING_HOD` and reserves nothing.
 
 For a `WEEKDAY` request, fires a fire-and-forget `sendCollectionCodeEmail` to the requester. For a `WEEKEND` request, fires a fire-and-forget `sendWeekendSubmittedEmail` to the key's unit's Dean (resolved via `getDeanRecipientForKey`) — no-op for Administration (`authoriser='CSO'`) keys, which have no Dean. When a Dean recipient does resolve, a `decision_token` is minted and persisted on the request first, and the email's `decisionLink` points at `/dean-decision/[token]` — the one-click Approve/Decline flow (see "Public one-click Dean decision" below). Neither send can fail the response.
 
@@ -388,7 +390,7 @@ The response carries an `is_guest` flag. For an external (guest) request it is `
 
 **Errors**: `404` code not found or expired · `409` key already issued · `422` validation
 
-The `409` is raised by the `issue_key` guard (`requests_one_live_issue_per_key`, see `docs/DATABASE.md`) when another request for the same key is already `KEY_ISSUED` — one physical bunch cannot be with two people. Unlike every other branch of the route's `mapRpcError`, the `CONFLICT` branch passes the RPC's own text through to the client (`msg.split(': ')[1]`), so the verifier sees **"this key is already issued and has not been returned"** verbatim. That message is therefore UI copy: any `CONFLICT` message reaching this route must contain no second `': '`, or the split truncates it mid-clause.
+The `409` is raised by the `issue_key` capacity guard (see `docs/DATABASE.md`) when the room's copies are all already out — `count(KEY_ISSUED for this key) >= keys.key_count`. In practice it is unreachable through normal paths, because a request only reaches `CODE_ISSUED` by passing the `requests_key_capacity` trigger, which already reserved a copy; it is defence in depth at the physical handover. Unlike every other branch of the route's `mapRpcError`, the `CONFLICT` branch passes the RPC's own text through to the client (`msg.split(': ')[1]`), so the verifier sees **"this key is already issued and has not been returned"** (single-copy rooms) or **"all N keys on this bunch are out and none has been returned"** verbatim. Those messages are therefore UI copy: any `CONFLICT` message reaching this route must contain no second `': '`, or the split truncates it mid-clause.
 
 ---
 
@@ -441,7 +443,7 @@ Requester-initiated. For an `APPROVED` weekend request, on the requested date on
 
 **Response `data`**: `{ "request_id": "<uuid>", "code": "123456", "code_expires_at": "<iso>" }`
 
-**Errors**: `403` not the requester's own request · `409` request not in APPROVED state · `422` before the requested date (TOO_EARLY) · `404` request not found
+**Errors**: `403` not the requester's own request · `409` request not in APPROVED state · `409` no key available for this room (`NO_KEYS_AVAILABLE` — minting the code is what reserves a copy, so an approved weekend request can find the room fully spoken for on the day) · `422` before the requested date (TOO_EARLY) · `404` request not found
 
 ---
 
@@ -555,7 +557,7 @@ Mints a short-lived 6-digit collection code (10-min expiry) for an `APPROVED` gu
 
 **Response `data`**: `{ "request_id": "<uuid>", "code": "123456", "code_expires_at": "<iso>" }`
 
-**Errors**: `409` request not in APPROVED state · `422` before the requested date (TOO_EARLY) · `404` token not found
+**Errors**: `409` request not in APPROVED state · `409` no key available for this room (`NO_KEYS_AVAILABLE`, same reason as the registered flow above) · `422` before the requested date (TOO_EARLY) · `404` token not found
 
 ---
 
@@ -742,22 +744,33 @@ No query params. No request body.
     {
       "key_id": "<uuid>",
       "state": "OUT",
+      "key_count": 3,
+      "available_count": 0,
       "return_deadline": "<iso>",
       "issued_at": "<iso>",
-      "holder": { "full_name": "Dr. Bakare", "is_guest": false }
+      "holder": { "full_name": "Dr. Bakare", "is_guest": false },
+      "holders": [
+        { "full_name": "Dr. Bakare", "is_guest": false },
+        { "full_name": "Jane Doe", "is_guest": true }
+      ]
     }
   ]
 }
 ```
 
-`state` is one of `AVAILABLE` · `SPOKEN_FOR` · `OUT` · `OVERDUE` · `RETIRED`, derived in `src/lib/keys/availability.ts`:
+A key record is a room's set of `key_count` **interchangeable copies**, so availability is a count, not a boolean. A request _occupies_ one copy while it is `KEY_ISSUED`, or `CODE_ISSUED` with an unexpired code — the same rule the `requests_key_capacity` trigger enforces, mirrored in `src/lib/keys/availability.ts` so the UI and database agree. `available_count` is `key_count` minus the occupants.
+
+`state` is one of `AVAILABLE` · `SPOKEN_FOR` · `OUT` · `OVERDUE` · `RETIRED`:
 
 - `RETIRED` — the key row's own status, and it wins over any request.
-- `OUT` / `OVERDUE` — an active `KEY_ISSUED` request exists. `OVERDUE` is derived from `return_deadline < now`, not read from `keys.status` (which only flips on the hourly `mark_key_overdue()` cron), matching the fallback `GET /api/keys/out` already applies.
-- `SPOKEN_FOR` — an active `PENDING_HOD` / `APPROVED` / `CODE_ISSUED` request exists. **`holder` is `null` here by design**: a code that may simply expire in ten minutes is not worth naming a colleague over.
-- `AVAILABLE` — no active request.
+- `AVAILABLE` — `available_count > 0`. A partially-out room is still requestable, and still lists its current `holders`.
+- `OVERDUE` — no copies left and at least one holder is past their deadline. Derived from `return_deadline < now`, not read from `keys.status` (which only flips on the hourly `mark_key_overdue()` cron, and for a multi-copy room cannot tell one late holder from all of them).
+- `OUT` — no copies left and at least one is physically held.
+- `SPOKEN_FOR` — no copies left and every hold is an unexpired code. **`holders` is empty here by design**: a code that may simply expire in ten minutes is not worth naming a colleague over.
 
-`holder` is non-null only for `OUT` / `OVERDUE`, and carries `full_name` and `is_guest` (guests hold keys at weekends) — nothing else. The response deliberately contains **no `code`, no `return_code`, no `photo_url`, no `risk_tier`**; there is no `rewriteStorageUrls` call because no storage URL is selected. A requester is told who has the key, never shown their passport photo — that exists for desk identity verification.
+Because `state` is already capacity-aware, requestability stays a pure function of it — `UNREQUESTABLE_STATES` in `src/components/smartkey/key-availability-status.ts` needs no count logic.
+
+`holders` lists everyone _physically_ holding a copy, earliest first; `holder` is the first of them, retained for callers that predate multi-copy rooms. Both carry `full_name` and `is_guest` (guests hold keys at weekends) — nothing else. The response deliberately contains **no `code`, no `return_code`, no `photo_url`, no `risk_tier`**; there is no `rewriteStorageUrls` call because no storage URL is selected. A requester is told who has the key, never shown their passport photo — that exists for desk identity verification.
 
 **Scope and enforcement**. This is the only route that shows one requester another requester's activity, so note where the boundary lives. RLS is deliberately **not** widened: `requests_select` scopes a REQUESTER to `requester_id = auth.uid()`, and `requests` holds `code` and `return_code`, so a policy loose enough to expose a holder's name would expose live collection codes to every co-authorised requester. Instead the route reads past RLS with the admin client and applies its own check — the same pattern `GET /api/keys/out` uses. The scope is the caller's own `authorisations` rows, filtered in the handler on the session user's id. `authorisations_select_all` is `USING (true)`, so **RLS does not scope that read; the explicit `.eq('profile_id', user.id)` does**, and it must never be driven by a client-supplied parameter.
 
@@ -892,13 +905,13 @@ No query params. Returns every unit (faculty or Administration) with its Dean, a
 **File**: `src/app/api/admin/keys/route.ts`
 **Roles**: CSO
 
-| Field       | Type                                 | Required |
-| ----------- | ------------------------------------ | -------- |
-| `code`      | `string` (matches `^[A-Z0-9]+-\d+$`) | yes      |
-| `zone`      | `'NEW_SENATE' \| 'OLD_SENATE'`       | yes      |
-| `room_name` | `string`                             | yes      |
-| `unit_id`   | `string` (uuid)                      | yes      |
-| `key_count` | `integer` (1–20, default 1)          | no       |
+| Field       | Type                                 | Required                                                                                                 |
+| ----------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| `code`      | `string` (matches `^[A-Z0-9]+-\d+$`) | yes                                                                                                      |
+| `zone`      | `'NEW_SENATE' \| 'OLD_SENATE'`       | yes                                                                                                      |
+| `room_name` | `string`                             | yes                                                                                                      |
+| `unit_id`   | `string` (uuid)                      | yes                                                                                                      |
+| `key_count` | `integer` (1–20, default 1)          | no — how many interchangeable copies of this room’s key exist, i.e. how many people may hold one at once |
 
 Creates a new key record (status `AVAILABLE`). Returns `201`.
 

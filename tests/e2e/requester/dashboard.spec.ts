@@ -39,17 +39,21 @@ test.describe('Requester dashboard', () => {
 
     for (const entry of body.data.keys) {
       expect(Object.keys(entry).sort()).toEqual([
+        'available_count',
         'holder',
+        'holders',
         'issued_at',
+        'key_count',
         'key_id',
         'return_deadline',
         'state',
       ]);
-      if (entry.holder) {
-        expect(Object.keys(entry.holder).sort()).toEqual([
-          'full_name',
-          'is_guest',
-        ]);
+      // `holders` names everyone physically holding a key from the bunch, so
+      // it is held to the same contract as the singular `holder`: a name and
+      // an external flag, nothing more. No photo, no email, no request id.
+      for (const holder of [entry.holder, ...entry.holders]) {
+        if (!holder) continue;
+        expect(Object.keys(holder).sort()).toEqual(['full_name', 'is_guest']);
       }
     }
   });

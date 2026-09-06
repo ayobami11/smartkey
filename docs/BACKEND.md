@@ -142,6 +142,8 @@ This is the most critical enforcement table in the schema. It implements the rul
 
 The primary audit trail. Every physical key handover and return is logged here with exact timestamps and the identities of both the requester and the verifying security officer. This table is the foundation for overdue alerts and AI incident analysis.
 
+> **Do not read the `key_count` row below as documenting `keys.key_count`.** This section describes the original `key_transactions` design; the shipped schema has no such table (the request row itself carries the lifecycle — see `docs/DATABASE.md`). Its `key_count` meant "how many keys were handed over in this transaction", which is not what the live `keys.key_count` means. `20260904150000_issue_key_single_holder_guard.sql` quoted this row as evidence that `keys.key_count` was a bunch handed over as a unit and built a strictly-one-holder rule on it; that was wrong, and `20260906120000_key_count_as_capacity.sql` replaced it. `keys.key_count` is how many interchangeable copies of a room's key exist, i.e. how many people may hold one at once.
+
 | **Column**             | **Type & Constraint**                          | **Purpose**                                                       |
 | ---------------------- | ---------------------------------------------- | ----------------------------------------------------------------- |
 | **id**                 | UUID - Primary Key                             | Auto-generated transaction identifier                             |
