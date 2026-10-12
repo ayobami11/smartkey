@@ -20,7 +20,7 @@ import type { Database } from '@/types/database';
 // weekend request. Callers say who is deciding and what; everything else —
 // guest or registered, which authoriser owns the unit, which images to
 // verify, whether this is a CSO override of a held approval — is derived here
-// from the request row and the actor's profile. See CONTEXT.md.
+// from the request row and the actor's profile. Terms: docs/GLOSSARY.md.
 
 type UserRole = Database['public']['Enums']['user_role'];
 type Authoriser = Database['public']['Enums']['department_authoriser'];

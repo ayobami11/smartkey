@@ -1215,7 +1215,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "requests", "hod-decision"]
             },
-            "description": "<div style=\"color:#111827;\">Moves the request to `APPROVED` via the `approve_weekend` RPC. **No code is minted here** — the requester mints one on the day. So the success status is `\"APPROVED\"`, never `\"CODE_ISSUED\"`.\n\n`submitted_signature_url` and `submitted_stamp_url` each independently trigger a pixel-match (Sharp + Pixelmatch) against the Dean's onboarded reference — either, both, or neither may be present. Over the threshold (default 55%, scored over the ink region) on **either** check, the approval is **held**: the RPC is never called, a `SIGNATURE_MISMATCH` audit entry is written, and you get HTTP **200** with `{ status: 'HELD_SIGNATURE_MISMATCH', mismatches: { signature?: pct, stamp?: pct } }` — a held approval is not a route error, so check the status field, not just the HTTP code.\n\nThe RPC re-validates the actor against the unit's `authoriser`, so a Dean acting on an Administration key (or the CSO on a faculty key) is rejected with 403 regardless of what the route allowed.</div>"
+            "description": "<div style=\"color:#111827;\">Moves the request to `APPROVED` via the `approve_weekend` RPC. **No code is minted here** — the requester mints one on the day. So the success status is `\"APPROVED\"`, never `\"CODE_ISSUED\"`.\n\nThe images to verify are read server-side from the request row (`letter_url` / `stamp_url`) — the client does not send them. Each present image is pixel-matched (Sharp + Pixelmatch) against the Dean's onboarded reference independently; with neither present the approval proceeds and is recorded as `signature_verified = false`. Over the threshold (default 55%, scored over the ink region) on **either** check, the approval is **held**: the RPC is never called, a `SIGNATURE_MISMATCH` audit entry is written, and you get HTTP **200** with `{ status: 'HELD_SIGNATURE_MISMATCH', mismatches: { signature?: pct, stamp?: pct } }` — a held approval is not a route error, so check the status field, not just the HTTP code.\n\nThe RPC re-validates the actor against the unit's `authoriser`, so a Dean acting on an Administration key (or the CSO on a faculty key) is rejected with 403 regardless of what the route allowed.</div>"
           },
           "response": [
             {
@@ -2130,7 +2130,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "ai", "signature-alerts"]
             },
-            "description": "<div style=\"color:#111827;\">Two independent lists of held mismatches, both resolved by the CSO.\n\n`alerts` — weekend requests stuck on `PENDING_HOD` with an unresolved `SIGNATURE_MISMATCH` audit entry from `hod-decision`. Each entry carries `signature` and/or `stamp` (whichever check failed — never both null), each with `ref_url` / `submitted_url` / `mismatch_pct`. Drops off this list once resolved via `cso_override` on hod-decision (see '04 -> Override a held mismatch').\n\n`reference_replacements` — a Dean's onboarded-signature/stamp replacement upload held by 'Replace signature or stamp (Dean)' (06 -> Profile). Drops off once resolved via 'Resolve pending signature reference' (next request).</div>"
+            "description": "<div style=\"color:#111827;\">Two independent lists of held mismatches, both resolved by the CSO.\n\n`alerts` — weekend requests stuck on `PENDING_HOD` with an unresolved `SIGNATURE_MISMATCH` audit entry from `hod-decision`. Each entry carries `signature` and/or `stamp` (whichever check failed — never both null), each with `ref_url` / `submitted_url` / `mismatch_pct`. Drops off this list once the CSO decides it on hod-decision (see '04 -> Override a held mismatch').\n\n`reference_replacements` — a Dean's onboarded-signature/stamp replacement upload held by 'Replace signature or stamp (Dean)' (06 -> Profile). Drops off once resolved via 'Resolve pending signature reference' (next request).</div>"
           },
           "response": [
             {
@@ -2165,14 +2165,14 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"request_id\": \"{{requestId}}\",\n  \"decision\": \"APPROVED\",\n  \"cso_override\": true,\n  \"note\": \"Compared against filed specimen; genuine.\"\n}"
+              "raw": "{\n  \"request_id\": \"{{requestId}}\",\n  \"decision\": \"APPROVED\",\n  \"note\": \"Compared against filed specimen; genuine.\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/requests/hod-decision",
               "host": ["{{baseUrl}}"],
               "path": ["api", "requests", "hod-decision"]
             },
-            "description": "<div style=\"color:#111827;\">Lets the CSO settle a faculty-key request that a Dean's approval attempt held on a signature mismatch.\n\nThis is **not** a general bypass of the Dean-authoriser gate: the RPC itself checks that a `SIGNATURE_MISMATCH` audit entry already exists for the request and returns 403 otherwise. Enforced in the function body, not just the route, so it holds even if something calls the RPC directly.</div>"
+            "description": "<div style=\"color:#111827;\">Lets the CSO settle a faculty-key request that a Dean's approval attempt held on a signature mismatch. There is no override flag: the server treats the CSO deciding a Dean-authorised request as an override.\n\nThis is **not** a general bypass of the Dean-authoriser gate: the RPC itself checks that a `SIGNATURE_MISMATCH` audit entry already exists for the request and returns 403 otherwise. Enforced in the function body, not just the route, so it holds even if something calls the RPC directly.</div>"
           },
           "response": [
             {
@@ -2201,7 +2201,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"data\": null,\n  \"error\": \"cso_override requires an existing signature mismatch on this request\",\n  \"status\": 403\n}"
+              "body": "{\n  \"data\": null,\n  \"error\": \"This request belongs to a Dean-authorised unit and has no held approval to resolve.\",\n  \"status\": 403\n}"
             }
           ]
         },
@@ -4051,7 +4051,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "public", "dean-decision", "{{decisionToken}}"]
             },
-            "description": "<div style=\"color:#111827;\">Re-resolves the unit's **current** Dean at decision time (handles a Dean handover between the email being sent and acted on), then runs the same `decideWeekendRequest` core as `POST /api/requests/hod-decision` &mdash; verification, mismatch-holding, guest key-assignment, and the requester notification all behave identically to the dashboard flow.\n\nFor a guest request, `key_id` is required when `decision` is `APPROVED` (pick one from the prior GET's `available_keys`). Registered-requester approvals read `letter_url`/`stamp_url` off the request row itself as the submitted signature/stamp.\n\n**Roles**: ALL (unauthenticated).\n\n**Errors**: `403` unit no longer Dean-authorised, or has no Dean &middot; `404` token not found, or resolves to no unit &middot; `409` request no longer `PENDING_HOD` &middot; `422` validation, or (guest `APPROVED`) missing `key_id`.</div>"
+            "description": "<div style=\"color:#111827;\">Re-resolves the unit's **current** Dean at decision time (handles a Dean handover between the email being sent and acted on), then runs the same `decideWeekend` module as `POST /api/requests/hod-decision` &mdash; verification, mismatch-holding, guest key-assignment, and the requester notification all behave identically to the dashboard flow.\n\nFor a guest request, `key_id` is required when `decision` is `APPROVED` (pick one from the prior GET's `available_keys`). Registered-requester approvals read `letter_url`/`stamp_url` off the request row itself as the submitted signature/stamp.\n\n**Roles**: ALL (unauthenticated).\n\n**Errors**: `403` unit no longer Dean-authorised, or has no Dean &middot; `404` token not found, or resolves to no unit &middot; `409` request no longer `PENDING_HOD` &middot; `422` validation, or (guest `APPROVED`) missing `key_id`.</div>"
           },
           "response": [
             {

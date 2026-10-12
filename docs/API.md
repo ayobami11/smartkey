@@ -278,27 +278,26 @@ Returns requests for the Dean's faculty with `status = 'PENDING_HOD'`, including
 **Roles**: Dean (role: DEAN), CSO
 **RPC**: `approve_weekend(request_id, hod_id, note?, signature_verified?, signature_mismatch_pct?, cso_override?)`, `approve_guest_weekend(request_id, hod_id, key_id, note?)`, or `decline_weekend(request_id, hod_id, note?, cso_override?)`
 
-| Field                     | Type                       | Required                             |
-| ------------------------- | -------------------------- | ------------------------------------ |
-| `request_id`              | `string` (uuid)            | yes                                  |
-| `decision`                | `'APPROVED' \| 'DECLINED'` | yes                                  |
-| `key_id`                  | `string` (uuid)            | guest approvals only                 |
-| `note`                    | `string`                   | no                                   |
-| `submitted_signature_url` | `string` (url)             | no — triggers signature verification |
-| `submitted_stamp_url`     | `string` (url)             | no — triggers stamp verification     |
-| `cso_override`            | `boolean`                  | CSO resolving a held mismatch only   |
+| Field        | Type                       | Required             |
+| ------------ | -------------------------- | -------------------- |
+| `request_id` | `string` (uuid)            | yes                  |
+| `decision`   | `'APPROVED' \| 'DECLINED'` | yes                  |
+| `key_id`     | `string` (uuid)            | guest approvals only |
+| `note`       | `string`                   | no                   |
 
-For approvals, the route runs pixel-level verification for whichever of `submitted_signature_url` / `submitted_stamp_url` is present — independent checks; either, both, or neither may run (see `docs/AI.md` §3). If **either** check fails its threshold, the approval is **held** — the RPC is never called — and a `SIGNATURE_MISMATCH` audit entry is written instead, with a nested payload `{ signature: {ref_url, submitted_url, mismatch_pct} | null, stamp: {...} | null, threshold_pct }`. The response in this case is `{ "request_id": "<uuid>", "status": "HELD_SIGNATURE_MISMATCH", "mismatches": { "signature"?: <number>, "stamp"?: <number> } }` (still HTTP 200 — this is not a route-level error; only the failing check(s) appear in `mismatches`). Alongside the audit entry, every `ACTIVE` CSO opted in to `notification_preferences.signature_mismatch_email` (default true) is emailed via `sendCsoSignatureMismatchEmail` (fire-and-forget; a send failure is logged, never surfaces to the Dean's response).
+The route identifies the actor from the session and hands off to the Weekend decision module (`decideWeekend` in `src/lib/requests/decide-weekend.ts`), which derives everything else from the request row and the actor's profile. The client does **not** say which images to verify or whether the CSO is overriding — those fields (`submitted_signature_url`, `submitted_stamp_url`, `cso_override`) were removed 2026-10-12 because they let the browser choose the image under test or skip the check entirely. Zod strips them if a stale client still sends them.
 
-For an external (guest) request (`guest_id` set), the route requires a `key_id` in the body and calls `approve_guest_weekend` instead — the Dean assigns the key at approval, and both checks are skipped (guests have no Dean reference signature or stamp; the Dean reviews the uploaded letter manually). The decline path reuses `decline_weekend` unchanged.
+For a Dean approving a registered request, the module pixel-verifies the request's own stored `letter_url` (against `signature_ref_url`) and `stamp_url` (against `stamp_ref_url`) — independent checks; either, both, or neither may run (see `docs/AI.md` §3). A stored URL that is not an object in `weekend-letters` is refused (`422`) rather than compared. If **either** check fails its threshold, the approval is **held** — the RPC is never called — and a `SIGNATURE_MISMATCH` audit entry is written instead, carrying canonical storage URLs and the actor's role, with a nested payload `{ signature: {ref_url, submitted_url, mismatch_pct} | null, stamp: {...} | null, threshold_pct }`. The response in this case is `{ "request_id": "<uuid>", "status": "HELD_SIGNATURE_MISMATCH", "mismatches": { "signature"?: <number>, "stamp"?: <number> } }` (still HTTP 200 — this is not a route-level error; only the failing check(s) appear in `mismatches`). If that audit entry cannot be written the route returns `500` instead — the entry is the hold. Alongside it, every `ACTIVE` CSO opted in to `notification_preferences.signature_mismatch_email` (default true) is emailed (after the response; a send failure is logged, never surfaces to the Dean's response). With no letter or stamp attached, the approval proceeds and `hod_decisions.signature_verified` is recorded as `false`.
 
-The **CSO** may call this route for **Administration** requests (keys whose department `authoriser = 'CSO'`). The CSO path skips signature verification (no reference signature exists for the CSO). The RPC re-validates that the actor's role matches the target department's `authoriser`, so a Dean acting on an Administration key — or the CSO acting on a faculty key — is rejected with `403`.
+For an external (guest) request, the route requires a `key_id` in the body and the module calls `approve_guest_weekend` instead — the Dean assigns the key at approval, and both checks are skipped (guests have no Dean reference signature or stamp; the Dean reviews the uploaded letter manually). The decline path reuses `decline_weekend` unchanged.
 
-The CSO may also resolve a **held faculty-key mismatch** by passing `cso_override: true` with `decision: 'APPROVED'` or `'DECLINED'`. The RPC only honours this when a `SIGNATURE_MISMATCH` audit entry already exists for the request — it is not a general bypass of the Dean-authoriser gate. See `GET /api/ai/signature-alerts` for how the CSO discovers these.
+The **CSO** may call this route for **Administration** requests (keys whose unit `authoriser = 'CSO'`). The CSO path skips signature verification (no reference signature exists for the CSO) and records `signature_verified = false`. The RPC re-validates that the actor's role matches the target unit's `authoriser`, so a Dean acting on an Administration key is rejected with `403`.
+
+The CSO acting on a **Dean-authorised** request is always treated as resolving a **held mismatch** — the module passes `p_cso_override` itself. The RPC only honours it when a `SIGNATURE_MISMATCH` audit entry already exists for the request, so it is not a general bypass of the Dean-authoriser gate; without one the CSO gets `403`. See `GET /api/ai/signature-alerts` for how the CSO discovers these.
 
 **Response `data`**: `{ "request_id": "<uuid>", "status": "APPROVED" | "DECLINED" | "HELD_SIGNATURE_MISMATCH" }` — note this is `"APPROVED"`/`"DECLINED"` (the `hod_decisions.decision` / request status the RPC actually sets), not `"CODE_ISSUED"` — no code is minted at Dean-decision time; the requester mints one later via `POST /api/requests/weekend-code`.
 
-**Errors**: `403` request not in Dean's faculty, or `cso_override` used without a matching mismatch on record · `409` already decided · `422` validation
+**Errors**: `403` not the request's authoriser, the CSO acting on a Dean-authorised request with no held mismatch, or the Dean has no reference signature on file · `404` request not found · `409` already decided, or the requested date has passed · `422` validation, missing guest `key_id`, or a stored letter/stamp that is not a `weekend-letters` object · `500` with a correlation reference
 
 ---
 
@@ -608,7 +607,7 @@ Returns a short-lived (5-minute) signed URL for a request's uploaded authorisati
 
 ### Public one-click Dean decision (email Approve/Decline)
 
-Lets a Dean act on a Dean-authorised weekend request straight from the "New weekend request" email — no login. Covers both **registered-requester** and **guest (external)** requests. Reuses the same `decideWeekendRequest` core as `POST /api/requests/hod-decision` (`src/lib/requests/decide-weekend.ts`), so verification, mismatch-holding, guest key-assignment, the CSO mismatch email, and the requester notification all behave identically to the dashboard flow. Scoped to Dean-authorised units only — Administration/CSO-routed requests (no submission email exists for those today) never receive a `decision_token` and so 404 here.
+Lets a Dean act on a Dean-authorised weekend request straight from the "New weekend request" email — no login. Covers both **registered-requester** and **guest (external)** requests. Reuses the same Weekend decision module (`decideWeekend`) as `POST /api/requests/hod-decision` (`src/lib/requests/decide-weekend.ts`), so verification, mismatch-holding, guest key-assignment, the CSO mismatch email, and the requester notification all behave identically to the dashboard flow. Scoped to Dean-authorised units only — Administration/CSO-routed requests (no submission email exists for those today) never receive a `decision_token` and so 404 here.
 
 The email itself distinguishes the two: a guest submission renders a small cyan "External" badge next to the requester's name (`sendWeekendSubmittedEmail`'s `isGuest` param), matching the `GuestBadge` treatment already used on the CSO/Dean dashboards and on the confirmation page below.
 
@@ -680,7 +679,7 @@ Read-only. Looks up the request by `decision_token` (admin client) and returns t
 | `note`     | `string`                   | no                              |
 | `key_id`   | `string` (uuid)            | guest requests, `APPROVED` only |
 
-Re-resolves the **current** Dean of the request's unit at decision time (not an identity captured when the email was sent, so a Dean handover in between is handled correctly) — for a guest request the unit comes from `requested_unit_id` (no `key_id` exists yet); for a registered request, from the request's own `key_id`. Reads `letter_url`/`stamp_url` off the request row itself as the submitted signature/stamp for **registered** requests only (server-side source of truth — unlike the dashboard route, there is no client to supply these); guest requests never send these — same as the dashboard's guest-approval path, which reviews the letter manually with no reference signature to compare against. Then calls the same `decideWeekendRequest` core as `POST /api/requests/hod-decision`, which for a guest `APPROVED` decision calls `approve_guest_weekend` with the chosen `key_id`.
+Re-resolves the **current** Dean of the request's unit at decision time (not an identity captured when the email was sent, so a Dean handover in between is handled correctly) — for a guest request the unit comes from `requested_unit_id` (no `key_id` exists yet); for a registered request, from the request's own `key_id`. Then calls `decideWeekend` with that Dean as the actor — the same module as `POST /api/requests/hod-decision`, which reads the letter/stamp to verify from the request row itself (registered requests only; guest approvals review the letter manually) and, for a guest `APPROVED` decision, calls `approve_guest_weekend` with the chosen `key_id`.
 
 **Response `data`**: identical shape to `POST /api/requests/hod-decision` — `{ "request_id": "<uuid>", "status": "APPROVED" | "DECLINED" }`, or the held-mismatch shape `{ "request_id": "<uuid>", "status": "HELD_SIGNATURE_MISMATCH", "mismatches": {...}, "message": "..." }` (still HTTP 200; never reachable for a guest request, which has no reference signature to mismatch against).
 
@@ -1190,7 +1189,7 @@ If the mismatch exceeds `SIGNATURE_DIFF_THRESHOLD`, the reference is **held, not
 **Roles**: CSO
 **RPC**: `resolve_pending_signature_reference(profile_id, type, decision, note?)`
 
-Resolves a held reference-replacement mismatch from `POST /api/profile/signature` above. Mirrors `POST /api/requests/hod-decision`'s `cso_override` path for weekend-request mismatches, but for a Dean's own onboarded reference rather than a request. `decision: 'APPROVED'` replaces `profiles.signature_ref_url`/`stamp_ref_url` with the pending upload; `decision: 'DECLINED'` discards it. Either way the pending row is deleted. The RPC raises `NOT_FOUND` if there's no pending row for that `profile_id`/`type`.
+Resolves a held reference-replacement mismatch from `POST /api/profile/signature` above. Mirrors the CSO's held-mismatch resolution on `POST /api/requests/hod-decision` for weekend requests, but for a Dean's own onboarded reference rather than a request. `decision: 'APPROVED'` replaces `profiles.signature_ref_url`/`stamp_ref_url` with the pending upload; `decision: 'DECLINED'` discards it. Either way the pending row is deleted. The RPC raises `NOT_FOUND` if there's no pending row for that `profile_id`/`type`.
 
 | Field        | Type                       | Required |
 | ------------ | -------------------------- | -------- |
@@ -1428,7 +1427,7 @@ Returns active high-risk access patterns: requests with `risk_tier = 'HIGH'` in 
 
 Returns two independent lists of held signature/stamp mismatches. Read-only.
 
-- `alerts` — weekend requests currently held on `PENDING_HOD` with an unresolved `SIGNATURE_MISMATCH` audit entry (written by `POST /api/requests/hod-decision` when a Dean's submitted signature and/or stamp fails verification). A request drops off this list once the CSO resolves it via `cso_override` on `POST /api/requests/hod-decision`.
+- `alerts` — weekend requests currently held on `PENDING_HOD` with an unresolved `SIGNATURE_MISMATCH` audit entry (written by `POST /api/requests/hod-decision` when the request's stored letter and/or stamp fails verification against the Dean's reference). A request drops off this list once the CSO approves or declines it on `POST /api/requests/hod-decision`.
 - `reference_replacements` — Dean signature/stamp reference-replacement uploads currently held (written by `POST /api/profile/signature`). Sourced from `pending_signature_references` row existence rather than audit-log scraping (there is no request status to key off here). An entry drops off this list once the CSO resolves it via `POST /api/admin/signature-references/resolve`.
 
 **Response `data`**: `signature` and/or `stamp` is present on an `alerts` entry depending on which check(s) failed — never both null.
