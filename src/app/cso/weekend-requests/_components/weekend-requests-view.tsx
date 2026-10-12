@@ -253,11 +253,11 @@ export const WeekendRequestsView = () => {
     filter: { column: 'type', value: 'WEEKEND' },
     onInsert: () =>
       queryClient.invalidateQueries({
-        queryKey: ['requests', 'pending-weekend'],
+        queryKey: ['cso', 'requests', 'pending-weekend'],
       }),
     onUpdate: () =>
       queryClient.invalidateQueries({
-        queryKey: ['requests', 'pending-weekend'],
+        queryKey: ['cso', 'requests', 'pending-weekend'],
       }),
   });
 
