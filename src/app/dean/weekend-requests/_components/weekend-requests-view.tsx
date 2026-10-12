@@ -247,50 +247,6 @@ export const WeekendRequestsView = () => {
     setSubmitting(true);
     setSubmitError(null);
 
-    // requests.letter_url/stamp_url point into the private weekend-letters
-    // bucket. decide-weekend.ts resolves whatever URL we send through the
-    // Storage API, which accepts the signed form as readily as the canonical
-    // one, so send the same signed URL handleViewLetter uses for the Dean's
-    // own preview. Sign fresh here rather than reusing letterUrl/stampUrl
-    // state: the Dean may approve without ever clicking "view", and a
-    // previously-fetched signed URL is only valid 5 minutes.
-    let signedSignatureUrl: string | undefined;
-    let signedStampUrl: string | undefined;
-    if (choice === 'APPROVED' && !isGuest) {
-      const [letterResult, stampResult] = await Promise.all([
-        selected.letter_url
-          ? apiFetch<{ url: string }>(
-              `/api/requests/${selected.id}/letter?type=letter`
-            )
-          : Promise.resolve(null),
-        selected.stamp_url
-          ? apiFetch<{ url: string }>(
-              `/api/requests/${selected.id}/letter?type=stamp`
-            )
-          : Promise.resolve(null),
-      ]);
-      if (letterResult) {
-        if (letterResult.error || !letterResult.data) {
-          setSubmitting(false);
-          setSubmitError(
-            letterResult.error ?? 'Could not prepare the letter for review.'
-          );
-          return;
-        }
-        signedSignatureUrl = letterResult.data.url;
-      }
-      if (stampResult) {
-        if (stampResult.error || !stampResult.data) {
-          setSubmitting(false);
-          setSubmitError(
-            stampResult.error ?? 'Could not prepare the stamp for review.'
-          );
-          return;
-        }
-        signedStampUrl = stampResult.data.url;
-      }
-    }
-
     const result = await apiFetch<{
       request_id: string;
       status: string;
@@ -301,13 +257,8 @@ export const WeekendRequestsView = () => {
         request_id: selected.id,
         decision: choice,
         note: values.note?.trim() || undefined,
+        // The letter/stamp to verify are read from the request row server-side.
         ...(choice === 'APPROVED' && isGuest ? { key_id: values.key_id } : {}),
-        // For registered requests with an uploaded signature/stamp, trigger
-        // pixel-level verification against the Dean's onboarded references.
-        ...(signedSignatureUrl
-          ? { submitted_signature_url: signedSignatureUrl }
-          : {}),
-        ...(signedStampUrl ? { submitted_stamp_url: signedStampUrl } : {}),
       },
     });
     setSubmitting(false);

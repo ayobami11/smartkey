@@ -6,6 +6,34 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-10-12 — Weekend decisions verify the stored letter, not one the client picks
+
+- **Why**: the Dean's signature check on weekend approvals could be bypassed in two ways.
+  - `POST /api/requests/hod-decision` took `submitted_signature_url` / `submitted_stamp_url` from the request body and verified whatever image they pointed at. If both were left out, `decide-weekend.ts` approved with `p_signature_verified: true` even though nothing had been compared.
+  - `POST /api/requests/submit` stored the requester's `letter_url` / `stamp_url` as any `z.url()`. A letter URL pointing at the Dean's own reference in `hod-signatures` would have compared the reference against itself and passed.
+  - Both were found during an architecture review of `decide-weekend.ts`, whose 10-field parameter bag pushed this logic onto callers. Callers decided `isGuest`, `isCso`, `csoOverride` and which URLs to verify.
+- **Weekend decision module** (`src/lib/requests/decide-weekend.ts`, now `decideWeekend`):
+  - It takes `{ requestId, actorId, decision, note?, keyId? }`. It derives guest vs registered, the unit's authoriser, the actor's role and references, and the CSO override from the request row and the actor's profile.
+  - It returns `APPROVED | DECLINED | HELD | REJECTED{reason}` with no HTTP in it. `rejectionToHttp` maps a rejection to a status and message.
+- **Verification source**: the images under test are read from `requests.letter_url` / `stamp_url` and must be `weekend-letters` objects.
+- **`signature_verified` is recorded honestly**: it is `false` whenever no comparison ran, i.e. no letter or stamp attached, and on the CSO path. It used to be `true` in both cases.
+- **The CSO override is implicit**: the CSO deciding a Dean-authorised request is treated as an override. The RPC's existing check that a `SIGNATURE_MISMATCH` exists remains the guard. `cso_override` was removed from the request body.
+- **The hold mismatch audit entry**:
+  - It now stores canonical storage URLs instead of 5-minute signed URLs carrying bearer tokens.
+  - It records the actor's real role instead of a hard-coded `DEAN`.
+  - A failure to write it now fails the decision with a 500. It used to be swallowed while the Dean was told the approval was held, but with no audit row there is no hold for the CSO to resolve.
+- **`hod-decision` request body** is now `{ request_id, decision, note?, key_id? }`. Zod strips the removed fields, so a stale dashboard bundle keeps working. The Dean dashboard no longer signs URLs before approving, and the CSO mismatch dialog no longer sends `cso_override`.
+- **`submit`** now returns 422 unless `letter_url` / `stamp_url` are in the requester's own `weekend-letters/{user.id}/` folder. This matches the upload path and the `weekend_letters_insert_requester` RLS policy.
+- **New `src/lib/rpc/call-rpc.ts`**:
+  - It is a `callRpc` that matches the exact `KIND:` message prefix rather than `.includes()` or SQLSTATE; SQLSTATE codes are shared across kinds, e.g. P0004 ×5 and P0009 ×2.
+  - It unwraps set-returning results, guards against an empty result, and logs INTERNAL errors with a ref.
+  - Only the decision module uses it so far. It fixes the `msg.split(': ')[1]` truncation, where users saw "request is not in PENDING_HOD state (current". Migrating the other ~20 private `mapRpcError` copies is follow-up work.
+- `notifyRequester` moved unchanged to `src/lib/email/notify-weekend-decision.ts` as `notifyWeekendDecided`, next to `notifyCsoSignatureMismatch`.
+- **Tests**:
+  - 17 for the decision module in `src/tests/requests/decide-weekend.test.ts`, using in-memory ports, one per branch and per rule above.
+  - 7 for `callRpc` in `src/tests/rpc/call-rpc.test.ts`.
+- Docs updated: `docs/API.md` (hod-decision, dean-decision, signature-alerts), `docs/AI.md` §3, the Postman collection, and new **Authoriser** / **Weekend decision** / **Held approval** entries in `docs/GLOSSARY.md`.
+
 ### 2026-09-06 — `/api/keys/availability` select list caught up with the capacity model
 
 - **Why**: `bun run build` failed on the pre-push hook —

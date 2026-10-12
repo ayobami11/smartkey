@@ -100,8 +100,9 @@ export const SignatureMismatchDetailDialog = ({
               method: 'POST',
               body: {
                 request_id: alert.id,
+                // The server treats the CSO acting on a Dean-authorised
+                // request as releasing the held approval.
                 decision,
-                cso_override: true,
               },
             }
           );

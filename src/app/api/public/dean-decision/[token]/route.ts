@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as z from 'zod';
 
 import { logger } from '@/lib/logger';
-import { decideWeekendRequest } from '@/lib/requests/decide-weekend';
+import { decideWeekend, rejectionToHttp } from '@/lib/requests/decide-weekend';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { err, ok } from '@/types/api';
 
@@ -175,7 +175,6 @@ export const POST = async (
     );
   }
 
-  const isGuest = !!reqRow.guest_id;
   const unitId = await resolveUnitId(admin, reqRow);
   if (!unitId) {
     return NextResponse.json(err('Request not found', 404), { status: 404 });
@@ -196,43 +195,26 @@ export const POST = async (
     );
   }
 
-  // reqRow.letter_url/stamp_url are raw paths in the private weekend-letters
-  // bucket — decideWeekendRequest's verifier does a plain fetch() against
-  // whatever URL it's given, so it needs a signed URL, not the raw path.
-  // Sign the same way GET above does for the preview.
-  const [signedLetterUrl, signedStampUrl] = isGuest
-    ? [null, null]
-    : await Promise.all([
-        signLetterUrl(admin, reqRow.letter_url),
-        signLetterUrl(admin, reqRow.stamp_url),
-      ]);
-
-  const result = await decideWeekendRequest({
+  // The letter/stamp to verify are read from the request row by
+  // decideWeekend itself, so nothing is signed or passed here.
+  const result = await decideWeekend({
     requestId: reqRow.id,
-    hodId: unit.hod_id,
-    isCso: false,
-    isGuest,
+    actorId: unit.hod_id,
     decision: parsed.data.decision,
     note: parsed.data.note,
     keyId: parsed.data.key_id,
-    // Guests have no HOD reference signature to compare against — the
-    // authoriser reviews the uploaded letter manually, same as the
-    // dashboard's guest-approval path.
-    submittedSignatureUrl: signedLetterUrl ?? undefined,
-    submittedStampUrl: signedStampUrl ?? undefined,
   });
 
-  if (!result.ok) {
-    return NextResponse.json(err(result.message, result.httpStatus), {
-      status: result.httpStatus,
-    });
+  if (result.outcome === 'REJECTED') {
+    const { status, message } = rejectionToHttp(result.reason, result.ref);
+    return NextResponse.json(err(message, status), { status });
   }
 
-  if (result.status === 'HELD_SIGNATURE_MISMATCH') {
+  if (result.outcome === 'HELD') {
     return NextResponse.json(
       ok({
         request_id: result.requestId,
-        status: result.status,
+        status: 'HELD_SIGNATURE_MISMATCH',
         mismatches: result.mismatches,
         message:
           'This approval has been held for review — the submitted signature or stamp did not match. The CSO has been notified.',
@@ -241,6 +223,6 @@ export const POST = async (
   }
 
   return NextResponse.json(
-    ok({ request_id: result.requestId, status: result.status })
+    ok({ request_id: result.requestId, status: result.outcome })
   );
 };
