@@ -1,3 +1,5 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+
 import { logger } from '@/lib/logger';
 import type { Database } from '@/types/database';
 
@@ -45,16 +47,10 @@ export type RpcErrorKind = (typeof RPC_ERROR_KINDS)[number] | 'INTERNAL';
 export type RpcError = { kind: RpcErrorKind; detail: string; ref?: string };
 
 export type RpcResult<T> =
-  { ok: true; data: T } | { ok: false; error: RpcError };
+  | { ok: true; data: T }
+  | { ok: false; error: RpcError };
 
-// The slice of a Supabase client callRpc needs. Accepting this rather than a
-// full SupabaseClient keeps tests to a one-line stub.
-export type RpcClient = {
-  rpc: (
-    name: string,
-    args: Record<string, unknown>
-  ) => PromiseLike<{ data: unknown; error: { message: string } | null }>;
-};
+export type RpcClient = SupabaseClient<Database>;
 
 const PREFIX_PATTERN = /^([A-Z_]+):\s*([\s\S]*)$/;
 
@@ -84,10 +80,14 @@ export const callRpc = async <N extends RpcName>(
   name: N,
   args: RpcArgs<N>
 ): Promise<RpcResult<RpcRow<N>>> => {
-  const { data, error } = await client.rpc(
-    name,
-    args as Record<string, unknown>
-  );
+  // The generated client types `args` per function name; that relationship
+  // is already enforced by this function's own signature.
+  const { data, error } = await (
+    client.rpc as (
+      fn: string,
+      args: unknown
+    ) => PromiseLike<{ data: unknown; error: { message: string } | null }>
+  ).call(client, name, args);
 
   if (error) {
     const parsed = parseRpcErrorMessage(error.message);
