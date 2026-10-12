@@ -1,30 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as z from 'zod';
 
-import { decideWeekendRequest } from '@/lib/requests/decide-weekend';
+import { decideWeekend, rejectionToHttp } from '@/lib/requests/decide-weekend';
 import { createServerClient } from '@/lib/supabase/server';
 import { err, ok } from '@/types/api';
 
+// The letter/stamp to verify and whether the CSO is overriding a held
+// approval are derived server-side from the request row — the client does
+// not send them. Unknown keys (from a stale bundle) are stripped by zod.
 const bodySchema = z.object({
   request_id: z.uuid(),
   decision: z.enum(['APPROVED', 'DECLINED']),
   note: z.string().optional(),
-  // URL of the HOD-signed letter uploaded by the requester to weekend-letters
-  // storage. When present, the embedded signature is compared pixel-level
-  // against the HOD's onboarded reference. Omit if no letter was uploaded.
-  submitted_signature_url: z.url().optional(),
-  // Same idea, for the departmental stamp. Independent of the signature
-  // check — either, both, or neither may be present.
-  submitted_stamp_url: z.url().optional(),
-  // For external (guest) requests, the HOD assigns the actual key on approval —
-  // the request has no key_id until then. Required when approving a guest
-  // request; ignored for registered requests.
+  // For external (guest) requests the authoriser assigns the key on approval.
   key_id: z.uuid().optional(),
-  // CSO-only. Resolves a faculty-key request that a Dean's approval attempt
-  // held due to a signature mismatch. The RPC re-validates that a
-  // SIGNATURE_MISMATCH audit entry actually exists for this request before
-  // honouring the override.
-  cso_override: z.boolean().optional(),
 });
 
 export const POST = async (request: NextRequest) => {
@@ -38,14 +27,13 @@ export const POST = async (request: NextRequest) => {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, unit_id, signature_ref_url, stamp_ref_url')
+    .select('role')
     .eq('id', user.id)
     .single();
   if (!profile)
     return NextResponse.json(err('Unauthorized', 401), { status: 401 });
   if (profile.role !== 'DEAN' && profile.role !== 'CSO')
     return NextResponse.json(err('Forbidden', 403), { status: 403 });
-  const isCso = profile.role === 'CSO';
 
   const body = await request.json().catch(() => null);
   const parsed = bodySchema.safeParse(body);
@@ -53,51 +41,26 @@ export const POST = async (request: NextRequest) => {
     return NextResponse.json(err('Invalid request body', 422), { status: 422 });
   }
 
-  const {
-    request_id,
-    decision,
-    note,
-    submitted_signature_url,
-    submitted_stamp_url,
-    key_id,
-    cso_override,
-  } = parsed.data;
+  const { request_id, decision, note, key_id } = parsed.data;
 
-  // Detect whether this is an external (guest) request. Guests have no HOD
-  // reference signature to compare, so decideWeekendRequest takes a
-  // distinct approval path for them that assigns a key and skips
-  // signature verification (the HOD reviews the uploaded letter manually).
-  const { data: targetRequest } = await supabase
-    .from('requests')
-    .select('guest_id')
-    .eq('id', request_id)
-    .maybeSingle();
-  const isGuestRequest = Boolean(targetRequest?.guest_id);
-
-  const result = await decideWeekendRequest({
+  const result = await decideWeekend({
     requestId: request_id,
-    hodId: user.id,
-    isCso,
-    isGuest: isGuestRequest,
+    actorId: user.id,
     decision,
     note,
-    submittedSignatureUrl: submitted_signature_url,
-    submittedStampUrl: submitted_stamp_url,
-    csoOverride: cso_override,
     keyId: key_id,
   });
 
-  if (!result.ok) {
-    return NextResponse.json(err(result.message, result.httpStatus), {
-      status: result.httpStatus,
-    });
+  if (result.outcome === 'REJECTED') {
+    const { status, message } = rejectionToHttp(result.reason, result.ref);
+    return NextResponse.json(err(message, status), { status });
   }
 
-  if (result.status === 'HELD_SIGNATURE_MISMATCH') {
+  if (result.outcome === 'HELD') {
     return NextResponse.json(
       ok({
         request_id: result.requestId,
-        status: result.status,
+        status: 'HELD_SIGNATURE_MISMATCH',
         mismatches: result.mismatches,
         message: 'Approval held: mismatch detected. The CSO has been notified.',
       })
@@ -105,6 +68,6 @@ export const POST = async (request: NextRequest) => {
   }
 
   return NextResponse.json(
-    ok({ request_id: result.requestId, status: result.status })
+    ok({ request_id: result.requestId, status: result.outcome })
   );
 };

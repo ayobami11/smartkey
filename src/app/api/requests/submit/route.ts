@@ -18,6 +18,7 @@ import {
   getRequestRecipient,
 } from '@/lib/email/request-recipient';
 import { logger } from '@/lib/logger';
+import { parseStorageUrl } from '@/lib/storage/object-url';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
 import { err, ok } from '@/types/api';
@@ -86,6 +87,24 @@ export const POST = async (request: NextRequest) => {
 
   const { key_id, type, return_deadline, weekend_date, letter_url, stamp_url } =
     parsed.data;
+
+  // The letter/stamp are what the Dean's approval is verified against, so
+  // they must be objects this requester uploaded: weekend-letters, in their
+  // own folder (the upload path the RLS insert policy enforces). Any other
+  // URL — e.g. the Dean's own reference in hod-signatures — would let the
+  // signature check compare a reference against itself.
+  const isOwnWeekendLetter = (url: string | undefined) => {
+    if (!url) return true;
+    const ref = parseStorageUrl(url);
+    return (
+      ref?.bucket === 'weekend-letters' && ref.path.startsWith(`${user.id}/`)
+    );
+  };
+  if (!isOwnWeekendLetter(letter_url) || !isOwnWeekendLetter(stamp_url)) {
+    return NextResponse.json(err('Invalid letter or stamp upload', 422), {
+      status: 422,
+    });
+  }
 
   // Fetch risk context data in parallel before calling the RPC.
   const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();

@@ -1,10 +1,9 @@
 import type { createAdminClient } from '@/lib/supabase/admin';
 
 // Shared recipient lookup for a single `requests` row — registered requester
-// or guest, plus the key's display code and room name. Mirrors the join
-// already inlined in src/app/api/requests/hod-decision/route.ts's
-// notifyRequester; that file is left as-is (it already works), this is for
-// the newer collection-code call sites.
+// or guest, plus the key's display code and room name.
+// notifyWeekendDecided in ./notify-weekend-decision.ts still runs its own
+// copy of this join (it also needs access_token and requested_for).
 export const getRequestRecipient = async (
   admin: ReturnType<typeof createAdminClient>,
   requestId: string

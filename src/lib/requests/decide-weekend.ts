@@ -1,532 +1,476 @@
 import { after } from 'next/server';
 
-import {
-  DEFAULT_THRESHOLD,
-  verifySignature,
-} from '@/lib/ai/signature/verifier';
 import { writeAuditEntry } from '@/lib/audit';
-import { formatDateLongTz } from '@/lib/dates';
-import {
-  sendCsoSignatureMismatchEmail,
-  sendGuestWeekendApprovedEmail,
-  sendWeekendApprovedEmail,
-  sendWeekendDeclinedEmail,
-} from '@/lib/email/otp';
-import {
-  getCsoRecipients,
-  getRequestRecipient,
-} from '@/lib/email/request-recipient';
 import { logger } from '@/lib/logger';
-import { downloadStorageObject } from '@/lib/storage/object-url';
+import {
+  callRpc,
+  type RpcArgs,
+  type RpcName,
+  type RpcResult,
+  type RpcRow,
+} from '@/lib/rpc/call-rpc';
+import {
+  downloadStorageObject,
+  parseStorageUrl,
+} from '@/lib/storage/object-url';
 import { createAdminClient } from '@/lib/supabase/admin';
+import type { Database } from '@/types/database';
 
-const siteUrl =
-  process.env.NEXT_PUBLIC_SITE_URL ?? 'https://smartkey-ochre.vercel.app';
+// The Weekend decision module: a Dean or the CSO approves or declines a
+// weekend request. Callers say who is deciding and what; everything else —
+// guest or registered, which authoriser owns the unit, which images to
+// verify, whether this is a CSO override of a held approval — is derived here
+// from the request row and the actor's profile. See CONTEXT.md.
 
-export const mapRpcError = (
-  msg: string
-): { status: number; message: string } => {
-  if (msg.includes('NOT_AUTHENTICATED'))
-    return { status: 401, message: 'Not authenticated' };
-  if (msg.includes('FORBIDDEN')) return { status: 403, message: 'Forbidden' };
-  if (msg.includes('NOT_FOUND')) return { status: 404, message: 'Not found' };
-  if (msg.includes('CONFLICT'))
-    return { status: 409, message: msg.split(': ')[1] ?? 'Conflict' };
-  if (msg.includes('NOT_AUTHORISED'))
-    return { status: 403, message: 'Not authorised for this key' };
-  if (msg.includes('EXPIRED_CODE'))
-    return { status: 404, message: 'Code has expired' };
-  return { status: 500, message: 'Internal error' };
-};
+type UserRole = Database['public']['Enums']['user_role'];
+type Authoriser = Database['public']['Enums']['department_authoriser'];
 
-// Fetch request + requester details and send the approval/decline email.
-// Runs after the RPC succeeds. Email failures are logged but never bubble up.
-export const notifyRequester = async (
-  requestId: string,
-  decision: 'APPROVED' | 'DECLINED',
-  note?: string
-) => {
-  try {
-    const admin = createAdminClient();
-
-    const { data: req } = await admin
-      .from('requests')
-      .select(
-        'requester_id, guest_id, access_token, requested_for, key:keys(code, room_name), guest:guest_requesters(full_name, email), profile:profiles!requests_requester_id_fkey(full_name, institutional_email)'
-      )
-      .eq('id', requestId)
-      .single();
-
-    if (!req) return;
-
-    const requestedFor = req.requested_for
-      ? formatDateLongTz(req.requested_for)
-      : '';
-
-    const key = Array.isArray(req.key) ? req.key[0] : req.key;
-    const keyCode = key?.code ?? '';
-    const roomName = key?.room_name ?? '';
-
-    if (req.guest_id && req.guest) {
-      const guest = Array.isArray(req.guest) ? req.guest[0] : req.guest;
-      if (!guest?.email) return;
-
-      if (decision === 'APPROVED') {
-        const link = `${siteUrl}/weekend-access/${req.access_token}`;
-        await sendGuestWeekendApprovedEmail({
-          to: guest.email,
-          fullName: guest.full_name,
-          link,
-          requestedFor,
-          keyCode,
-          roomName,
-        });
-      }
-      // Decline notification is not sent to guests — they can check the status page.
-      return;
-    }
-
-    const profile = Array.isArray(req.profile) ? req.profile[0] : req.profile;
-    if (!profile?.institutional_email) return;
-
-    // Absence of a preference row means the default (true) applies — it is
-    // not an opt-out. Guests (handled above) have no preference row and
-    // always get this email regardless.
-    if (req.requester_id) {
-      const { data: pref } = await admin
-        .from('notification_preferences')
-        .select('weekend_decided_email')
-        .eq('profile_id', req.requester_id)
-        .maybeSingle();
-      if (pref && !pref.weekend_decided_email) return;
-    }
-
-    if (decision === 'APPROVED') {
-      const link = `${siteUrl}/requester/request/${requestId}/code`;
-      await sendWeekendApprovedEmail({
-        to: profile.institutional_email,
-        fullName: profile.full_name,
-        link,
-        requestedFor,
-        keyCode,
-        roomName,
-      });
-    } else {
-      await sendWeekendDeclinedEmail({
-        to: profile.institutional_email,
-        fullName: profile.full_name,
-        note,
-      });
-    }
-  } catch (e) {
-    logger.error('decide-weekend: notification email failed', {
-      requestId,
-      decision,
-      err: e instanceof Error ? e.message : String(e),
-    });
-  }
-};
-
-export type DecideWeekendParams = {
+export type WeekendDecisionInput = {
   requestId: string;
-  hodId: string; // resolved Dean or CSO profile id
-  isCso: boolean;
-  // External (guest) request — approval assigns a key rather than
-  // comparing a signature (guests have no HOD reference to compare
-  // against). Ignored for DECLINE, which is identical for guest and
-  // registered requests.
-  isGuest: boolean;
+  // The profile making the decision: the session user on the dashboard, or
+  // the unit's current Dean on the emailed one-click page.
+  actorId: string;
   decision: 'APPROVED' | 'DECLINED';
   note?: string;
-  submittedSignatureUrl?: string;
-  submittedStampUrl?: string;
-  csoOverride?: boolean;
-  // Required when isGuest && decision === 'APPROVED'; ignored otherwise.
+  // Guest approvals only: the key the authoriser assigns. Ignored otherwise.
   keyId?: string;
 };
 
-export type DecideWeekendResult =
-  | { ok: true; requestId: string; status: 'APPROVED' | 'DECLINED' }
-  | {
-      ok: true;
-      requestId: string;
-      status: 'HELD_SIGNATURE_MISMATCH';
-      mismatches: { signature?: number; stamp?: number };
-    }
-  | { ok: false; httpStatus: number; message: string };
+export type WeekendDecisionRejection =
+  | 'NOT_FOUND'
+  | 'ALREADY_DECIDED'
+  | 'DATE_PASSED'
+  | 'NOT_AUTHORISER'
+  | 'NO_MISMATCH_TO_OVERRIDE'
+  | 'KEY_REQUIRED'
+  | 'ONBOARDING_INCOMPLETE'
+  | 'INVALID_SUBMISSION'
+  | 'INTERNAL';
 
-export const decideWeekendRequest = async (
-  params: DecideWeekendParams
-): Promise<DecideWeekendResult> => {
-  const {
-    requestId,
-    hodId,
-    isCso,
-    isGuest,
-    decision,
-    note,
-    submittedSignatureUrl,
-    submittedStampUrl,
-    csoOverride,
-    keyId,
-  } = params;
+export type Mismatches = { signature?: number; stamp?: number };
 
+export type WeekendDecisionResult =
+  | { outcome: 'APPROVED' | 'DECLINED'; requestId: string }
+  | { outcome: 'HELD'; requestId: string; mismatches: Mismatches }
+  | { outcome: 'REJECTED'; reason: WeekendDecisionRejection; ref?: string };
+
+export type DecisionContext = {
+  request: {
+    id: string;
+    status: string;
+    isGuest: boolean;
+    letterUrl: string | null;
+    stampUrl: string | null;
+  } | null;
+  // The unit whose authoriser governs this request: the key's unit for a
+  // registered request, `requested_unit_id` for a guest one.
+  authoriser: Authoriser | null;
+  actor: {
+    id: string;
+    role: UserRole;
+    signatureRefUrl: string | null;
+    stampRefUrl: string | null;
+  } | null;
+};
+
+export type VerifyOutcome = {
+  mismatchPct: number;
+  passed: boolean;
+  thresholdPct: number;
+};
+
+// Internal seam. Production adapters come from defaultPorts(); tests pass
+// in-memory ones. Callers of decideWeekend never see this.
+export type WeekendDecisionPorts = {
+  loadContext: (requestId: string, actorId: string) => Promise<DecisionContext>;
+  rpc: <N extends RpcName>(
+    name: N,
+    args: RpcArgs<N>
+  ) => Promise<RpcResult<RpcRow<N>>>;
+  loadImage: (url: string) => Promise<Buffer>;
+  verify: (reference: Buffer, submitted: Buffer) => Promise<VerifyOutcome>;
+  audit: typeof writeAuditEntry;
+  notify: {
+    decided: (
+      requestId: string,
+      decision: 'APPROVED' | 'DECLINED',
+      note?: string
+    ) => void;
+    signatureMismatch: (
+      requestId: string,
+      mismatches: Mismatches,
+      thresholdPct: number
+    ) => void;
+  };
+};
+
+const toPct = (ratio: number) => parseFloat((ratio * 100).toFixed(2));
+
+export const defaultPorts = (): WeekendDecisionPorts => {
   const admin = createAdminClient();
 
-  // External (guest) request approval — assigns a key rather than
-  // comparing a signature (guests have no HOD reference on file; the
-  // authoriser reviews the uploaded letter manually). Checked before the
-  // CSO/Dean signature-verification branches below: a guest request may be
-  // approved by either a Dean or the CSO, whichever authorises the chosen
-  // key — approve_guest_weekend validates that itself.
-  if (decision === 'APPROVED' && isGuest) {
-    if (!keyId) {
-      return {
-        ok: false,
-        httpStatus: 422,
-        message: 'A key must be assigned to approve an external request.',
-      };
-    }
-
-    const { data, error } = await admin.rpc('approve_guest_weekend', {
-      p_request_id: requestId,
-      p_hod_id: hodId,
-      p_key_id: keyId,
-      p_note: note ?? undefined,
-    });
-
-    if (error) {
-      const mapped = mapRpcError(error.message);
-      if (mapped.status === 500) {
-        const ref = crypto.randomUUID();
-        logger.error('approve_guest_weekend RPC failed', {
-          err: error.message,
-          ref,
-        });
-        return {
-          ok: false,
-          httpStatus: 500,
-          message: `Internal error. Ref: ${ref}`,
-        };
-      }
-      return { ok: false, httpStatus: mapped.status, message: mapped.message };
-    }
-
-    const result = Array.isArray(data) ? data[0] : data;
-    after(() => notifyRequester(result.request_id, 'APPROVED'));
-    return { ok: true, requestId: result.request_id, status: 'APPROVED' };
-  }
-
-  if (decision === 'DECLINED') {
-    const { data, error } = await admin.rpc('decline_weekend', {
-      p_request_id: requestId,
-      p_hod_id: hodId,
-      p_note: note ?? undefined,
-      p_cso_override: isCso ? (csoOverride ?? false) : false,
-    });
-
-    if (error) {
-      const mapped = mapRpcError(error.message);
-      if (mapped.status === 500) {
-        const ref = crypto.randomUUID();
-        logger.error('decline_weekend RPC failed', {
-          err: error.message,
-          ref,
-        });
-        return {
-          ok: false,
-          httpStatus: 500,
-          message: `Internal error. Ref: ${ref}`,
-        };
-      }
-      return { ok: false, httpStatus: mapped.status, message: mapped.message };
-    }
-
-    const result = Array.isArray(data) ? data[0] : data;
-    after(() => notifyRequester(result.request_id, 'DECLINED', note));
-    return { ok: true, requestId: result.request_id, status: 'DECLINED' };
-  }
-
-  // decision === 'APPROVED'
-
-  // CSO approves Administration keys directly. There is no reference
-  // signature for the CSO, so signature verification is skipped (the RPC
-  // gates the actor against the key's authoriser).
-  if (isCso) {
-    const { data, error } = await admin.rpc('approve_weekend', {
-      p_request_id: requestId,
-      p_hod_id: hodId,
-      p_note: note ?? undefined,
-      p_signature_verified: true,
-      p_signature_mismatch_pct: undefined,
-      p_cso_override: csoOverride ?? false,
-    });
-
-    if (error) {
-      const mapped = mapRpcError(error.message);
-      if (mapped.status === 500) {
-        const ref = crypto.randomUUID();
-        logger.error('approve_weekend RPC failed', {
-          err: error.message,
-          ref,
-        });
-        return {
-          ok: false,
-          httpStatus: 500,
-          message: `Internal error. Ref: ${ref}`,
-        };
-      }
-      return { ok: false, httpStatus: mapped.status, message: mapped.message };
-    }
-
-    const result = Array.isArray(data) ? data[0] : data;
-    after(() => notifyRequester(result.request_id, 'APPROVED'));
-    return { ok: true, requestId: result.request_id, status: 'APPROVED' };
-  }
-
-  const { data: profileData } = await admin
-    .from('profiles')
-    .select('signature_ref_url, stamp_ref_url')
-    .eq('id', hodId)
-    .single();
-
-  if (!profileData?.signature_ref_url) {
-    return {
-      ok: false,
-      httpStatus: 403,
-      message:
-        'HOD onboarding is incomplete. Please upload your signature before approving requests.',
-    };
-  }
-
-  // Run pixel-level verification for whichever of signature/stamp was
-  // submitted — independent checks, either/both/neither may be present.
-  if (submittedSignatureUrl || submittedStampUrl) {
-    type CheckResult = {
-      ref_url: string;
-      submitted_url: string;
-      mismatch_pct: number;
-      passed: boolean;
-    };
-
-    const runCheck = async (
-      refUrl: string,
-      submittedUrl: string
-    ): Promise<CheckResult> => {
-      // Downloaded through the Storage API, not fetched over HTTP. The
-      // reference lives in `hod-signatures` and the submitted image in
-      // `weekend-letters` — both private buckets, so a plain fetch of the
-      // stored URL returns an error body rather than image bytes.
-      const [refBuffer, subBuffer] = await Promise.all([
-        downloadStorageObject(admin, refUrl),
-        downloadStorageObject(admin, submittedUrl),
+  return {
+    loadContext: async (requestId, actorId) => {
+      const [{ data: req }, { data: actor }] = await Promise.all([
+        admin
+          .from('requests')
+          .select(
+            `id, status, guest_id, letter_url, stamp_url,
+             key:keys!requests_key_id_fkey(unit:units!keys_unit_id_fkey(authoriser)),
+             requested_unit:units!requests_requested_unit_id_fkey(authoriser)`
+          )
+          .eq('id', requestId)
+          .maybeSingle(),
+        admin
+          .from('profiles')
+          .select('id, role, signature_ref_url, stamp_ref_url')
+          .eq('id', actorId)
+          .maybeSingle(),
       ]);
 
-      const verifyResult = await verifySignature(refBuffer, subBuffer);
+      const key = Array.isArray(req?.key) ? req.key[0] : req?.key;
+      const keyUnit = Array.isArray(key?.unit) ? key.unit[0] : key?.unit;
+      const requestedUnit = Array.isArray(req?.requested_unit)
+        ? req.requested_unit[0]
+        : req?.requested_unit;
+      const isGuest = Boolean(req?.guest_id);
+
       return {
-        ref_url: refUrl,
-        submitted_url: submittedUrl,
-        mismatch_pct: parseFloat(
-          (verifyResult.mismatch_ratio * 100).toFixed(2)
-        ),
-        passed: verifyResult.passed,
+        request: req
+          ? {
+              id: req.id,
+              status: req.status,
+              isGuest,
+              letterUrl: req.letter_url,
+              stampUrl: req.stamp_url,
+            }
+          : null,
+        authoriser:
+          (isGuest ? requestedUnit?.authoriser : keyUnit?.authoriser) ?? null,
+        actor: actor
+          ? {
+              id: actor.id,
+              role: actor.role,
+              signatureRefUrl: actor.signature_ref_url,
+              stampRefUrl: actor.stamp_ref_url,
+            }
+          : null,
       };
-    };
-
-    let signatureCheck: CheckResult | null = null;
-    let stampCheck: CheckResult | null = null;
-
-    try {
-      if (submittedSignatureUrl) {
-        signatureCheck = await runCheck(
-          profileData.signature_ref_url,
-          submittedSignatureUrl
-        );
-      }
-      if (submittedStampUrl) {
-        if (profileData.stamp_ref_url) {
-          stampCheck = await runCheck(
-            profileData.stamp_ref_url,
-            submittedStampUrl
-          );
-        } else {
-          logger.error(
-            'decide-weekend: stamp submitted but no stamp_ref_url on file',
-            { requestId }
-          );
-        }
-      }
-    } catch (e) {
-      const ref = crypto.randomUUID();
-      logger.error('decide-weekend: signature/stamp fetch/verify failed', {
-        ref,
-        err: e instanceof Error ? e.message : String(e),
-      });
+    },
+    rpc: (name, args) => callRpc(admin, name, args),
+    loadImage: (url) => downloadStorageObject(admin, url),
+    // Loaded lazily: the verifier pulls in sharp, and the email adapters pull
+    // in nodemailer — neither belongs in the import graph of a test that
+    // replaces them.
+    verify: async (reference, submitted) => {
+      const { verifySignature, DEFAULT_THRESHOLD } =
+        await import('@/lib/ai/signature/verifier');
+      const result = await verifySignature(reference, submitted);
       return {
-        ok: false,
-        httpStatus: 500,
-        message: `Signature verification error. Ref: ${ref}`,
+        mismatchPct: toPct(result.mismatch_ratio),
+        passed: result.passed,
+        thresholdPct: toPct(DEFAULT_THRESHOLD),
       };
-    }
+    },
+    audit: writeAuditEntry,
+    // after(): Vercel may freeze the function once the response is sent, so
+    // an unawaited promise could be cut off mid-send.
+    notify: {
+      decided: (requestId, decision, note) =>
+        after(async () => {
+          const { notifyWeekendDecided } =
+            await import('@/lib/email/notify-weekend-decision');
+          await notifyWeekendDecided(requestId, decision, note);
+        }),
+      signatureMismatch: (requestId, mismatches, thresholdPct) =>
+        after(async () => {
+          const { notifyCsoSignatureMismatch } =
+            await import('@/lib/email/notify-weekend-decision');
+          await notifyCsoSignatureMismatch(requestId, mismatches, thresholdPct);
+        }),
+    },
+  };
+};
 
-    const failed = [signatureCheck, stampCheck].filter(
-      (c): c is CheckResult => c !== null && !c.passed
+const rejected = (
+  reason: WeekendDecisionRejection,
+  ref?: string
+): WeekendDecisionResult => ({
+  outcome: 'REJECTED',
+  reason,
+  ...(ref ? { ref } : {}),
+});
+
+// Translates an RPC failure into a domain rejection. The RPC's own text is
+// never returned — it names internal states ("current: PENDING_HOD").
+const fromRpcError = (
+  error: { kind: string; detail: string; ref?: string },
+  csoOverride: boolean
+): WeekendDecisionResult => {
+  switch (error.kind) {
+    case 'CONFLICT':
+      return rejected(
+        error.detail.includes('already passed')
+          ? 'DATE_PASSED'
+          : 'ALREADY_DECIDED'
+      );
+    case 'FORBIDDEN':
+      return rejected(
+        csoOverride ? 'NO_MISMATCH_TO_OVERRIDE' : 'NOT_AUTHORISER'
+      );
+    case 'NOT_FOUND':
+      return rejected('NOT_FOUND');
+    default:
+      return rejected('INTERNAL', error.ref);
+  }
+};
+
+type Check = {
+  ref_url: string;
+  submitted_url: string;
+  mismatch_pct: number;
+  passed: boolean;
+};
+
+export const decideWeekend = async (
+  input: WeekendDecisionInput,
+  ports: WeekendDecisionPorts = defaultPorts()
+): Promise<WeekendDecisionResult> => {
+  const { requestId, actorId, decision, note, keyId } = input;
+  const { request, authoriser, actor } = await ports.loadContext(
+    requestId,
+    actorId
+  );
+
+  if (!request || !actor) return rejected('NOT_FOUND');
+  // Fast path only — the RPC re-checks under a row lock and stays the authority.
+  if (request.status !== 'PENDING_HOD') return rejected('ALREADY_DECIDED');
+
+  // The CSO acting on a Dean-authorised unit can only be releasing a held
+  // approval; the RPC honours that only when a SIGNATURE_MISMATCH audit
+  // entry exists for the request.
+  const csoOverride = actor.role === 'CSO' && authoriser === 'DEAN';
+
+  const finish = async <
+    N extends 'approve_weekend' | 'approve_guest_weekend' | 'decline_weekend',
+  >(
+    name: N,
+    args: RpcArgs<N>
+  ): Promise<WeekendDecisionResult> => {
+    const result = await ports.rpc(name, args);
+    if (!result.ok) return fromRpcError(result.error, csoOverride);
+    const row = result.data as { request_id: string };
+    ports.notify.decided(
+      row.request_id,
+      decision,
+      decision === 'DECLINED' ? note : undefined
     );
+    return { outcome: decision, requestId: row.request_id };
+  };
 
-    if (failed.length > 0) {
-      try {
-        await writeAuditEntry({
-          event: 'SIGNATURE_MISMATCH',
-          actorId: hodId,
-          actorRole: 'DEAN',
-          targetType: 'request',
-          targetId: requestId,
-          payload: {
-            signature: signatureCheck
-              ? {
-                  ref_url: signatureCheck.ref_url,
-                  submitted_url: signatureCheck.submitted_url,
-                  mismatch_pct: signatureCheck.mismatch_pct,
-                }
-              : null,
-            stamp: stampCheck
-              ? {
-                  ref_url: stampCheck.ref_url,
-                  submitted_url: stampCheck.submitted_url,
-                  mismatch_pct: stampCheck.mismatch_pct,
-                }
-              : null,
-            threshold_pct: parseFloat((DEFAULT_THRESHOLD * 100).toFixed(2)),
-          },
-        });
-      } catch (auditErr) {
+  if (decision === 'DECLINED') {
+    return finish('decline_weekend', {
+      p_request_id: requestId,
+      p_hod_id: actorId,
+      p_note: note,
+      p_cso_override: csoOverride,
+    });
+  }
+
+  // Guest approval assigns a key instead of comparing a signature — guests
+  // have no reference on file; the authoriser reviews the letter manually.
+  if (request.isGuest) {
+    if (!keyId) return rejected('KEY_REQUIRED');
+    return finish('approve_guest_weekend', {
+      p_request_id: requestId,
+      p_hod_id: actorId,
+      p_key_id: keyId,
+      p_note: note,
+    });
+  }
+
+  // The CSO has no reference signature, so nothing is compared.
+  if (actor.role === 'CSO') {
+    return finish('approve_weekend', {
+      p_request_id: requestId,
+      p_hod_id: actorId,
+      p_note: note,
+      p_signature_verified: false,
+      p_cso_override: csoOverride,
+    });
+  }
+
+  if (!actor.signatureRefUrl) return rejected('ONBOARDING_INCOMPLETE');
+
+  // The images come from the request row, never from the caller. Each must
+  // be an object in weekend-letters: anything else (e.g. a URL pointing at
+  // the Dean's own reference in hod-signatures) would compare against itself.
+  for (const url of [request.letterUrl, request.stampUrl]) {
+    if (url && parseStorageUrl(url)?.bucket !== 'weekend-letters') {
+      logger.error(
+        'decide-weekend: stored submission is not a weekend-letters object',
+        {
+          requestId,
+        }
+      );
+      return rejected('INVALID_SUBMISSION');
+    }
+  }
+
+  let signatureCheck: Check | null = null;
+  let stampCheck: Check | null = null;
+  let thresholdPct = 0;
+
+  const runCheck = async (
+    refUrl: string,
+    submittedUrl: string
+  ): Promise<Check> => {
+    const [refImage, submittedImage] = await Promise.all([
+      ports.loadImage(refUrl),
+      ports.loadImage(submittedUrl),
+    ]);
+    const outcome = await ports.verify(refImage, submittedImage);
+    thresholdPct = outcome.thresholdPct;
+    return {
+      ref_url: refUrl,
+      submitted_url: submittedUrl,
+      mismatch_pct: outcome.mismatchPct,
+      passed: outcome.passed,
+    };
+  };
+
+  try {
+    if (request.letterUrl) {
+      signatureCheck = await runCheck(actor.signatureRefUrl, request.letterUrl);
+    }
+    if (request.stampUrl) {
+      if (actor.stampRefUrl) {
+        stampCheck = await runCheck(actor.stampRefUrl, request.stampUrl);
+      } else {
         logger.error(
-          'decide-weekend: failed to write signature_mismatch audit entry',
+          'decide-weekend: stamp submitted but no stamp_ref_url on file',
           {
-            err:
-              auditErr instanceof Error ? auditErr.message : String(auditErr),
+            requestId,
           }
         );
       }
-
-      // Makes the "The CSO has been notified" claim above actually true.
-      // Failures are logged, never surfaced; the hold itself already
-      // succeeded via the audit entry above. Runs via after() rather than a
-      // bare fire-and-forget promise — Vercel may freeze the function once
-      // the response is sent, so an unawaited promise here can be silently
-      // cut off mid-send.
-      const mismatchThresholdPct = parseFloat(
-        (DEFAULT_THRESHOLD * 100).toFixed(2)
-      );
-      after(() =>
-        Promise.all([
-          getCsoRecipients(admin, 'signature_mismatch_email'),
-          getRequestRecipient(admin, requestId),
-        ])
-          .then(([recipients, reqInfo]) => {
-            if (recipients.length === 0 || !reqInfo) return;
-            return Promise.all(
-              recipients.map((recipient) =>
-                sendCsoSignatureMismatchEmail({
-                  to: recipient.to,
-                  fullName: recipient.fullName,
-                  requesterName: reqInfo.fullName,
-                  keyCode: reqInfo.keyCode,
-                  roomName: reqInfo.roomName,
-                  mismatches: {
-                    ...(signatureCheck && !signatureCheck.passed
-                      ? { signature: signatureCheck.mismatch_pct }
-                      : {}),
-                    ...(stampCheck && !stampCheck.passed
-                      ? { stamp: stampCheck.mismatch_pct }
-                      : {}),
-                  },
-                  thresholdPct: mismatchThresholdPct,
-                  link: `${siteUrl}/cso/dashboard`,
-                })
-              )
-            );
-          })
-          .catch((e: unknown) => {
-            logger.error(
-              'decide-weekend: cso signature-mismatch email failed',
-              {
-                requestId,
-                err: e instanceof Error ? e.message : String(e),
-              }
-            );
-          })
-      );
-
-      return {
-        ok: true,
-        requestId,
-        status: 'HELD_SIGNATURE_MISMATCH',
-        mismatches: {
-          ...(signatureCheck && !signatureCheck.passed
-            ? { signature: signatureCheck.mismatch_pct }
-            : {}),
-          ...(stampCheck && !stampCheck.passed
-            ? { stamp: stampCheck.mismatch_pct }
-            : {}),
-        },
-      };
     }
-
-    const { data, error } = await admin.rpc('approve_weekend', {
-      p_request_id: requestId,
-      p_hod_id: hodId,
-      p_note: note ?? undefined,
-      p_signature_verified: true,
-      p_signature_mismatch_pct: signatureCheck?.mismatch_pct,
+  } catch (e) {
+    const ref = crypto.randomUUID();
+    logger.error('decide-weekend: signature/stamp fetch/verify failed', {
+      ref,
+      err: e instanceof Error ? e.message : String(e),
     });
-
-    if (error) {
-      const mapped = mapRpcError(error.message);
-      if (mapped.status === 500) {
-        const ref = crypto.randomUUID();
-        logger.error('approve_weekend RPC failed', {
-          err: error.message,
-          ref,
-        });
-        return {
-          ok: false,
-          httpStatus: 500,
-          message: `Internal error. Ref: ${ref}`,
-        };
-      }
-      return { ok: false, httpStatus: mapped.status, message: mapped.message };
-    }
-
-    const result = Array.isArray(data) ? data[0] : data;
-    after(() => notifyRequester(result.request_id, 'APPROVED'));
-    return { ok: true, requestId: result.request_id, status: 'APPROVED' };
+    return rejected('INTERNAL', ref);
   }
 
-  // No submitted letter or stamp — proceed without comparison.
-  const { data, error } = await admin.rpc('approve_weekend', {
-    p_request_id: requestId,
-    p_hod_id: hodId,
-    p_note: note ?? undefined,
-    p_signature_verified: true,
-    p_signature_mismatch_pct: undefined,
-  });
+  const mismatches: Mismatches = {
+    ...(signatureCheck && !signatureCheck.passed
+      ? { signature: signatureCheck.mismatch_pct }
+      : {}),
+    ...(stampCheck && !stampCheck.passed
+      ? { stamp: stampCheck.mismatch_pct }
+      : {}),
+  };
 
-  if (error) {
-    const mapped = mapRpcError(error.message);
-    if (mapped.status === 500) {
+  if (Object.keys(mismatches).length > 0) {
+    const describe = (c: Check | null) =>
+      c
+        ? {
+            ref_url: c.ref_url,
+            submitted_url: c.submitted_url,
+            mismatch_pct: c.mismatch_pct,
+          }
+        : null;
+
+    // The audit entry IS the hold: it is what the CSO dashboard lists and
+    // what approve_weekend's override checks for. Without it there is no
+    // hold, so a write failure must not be reported as HELD.
+    try {
+      await ports.audit({
+        event: 'SIGNATURE_MISMATCH',
+        actorId,
+        actorRole: actor.role,
+        targetType: 'request',
+        targetId: requestId,
+        payload: {
+          signature: describe(signatureCheck),
+          stamp: describe(stampCheck),
+          threshold_pct: thresholdPct,
+        },
+      });
+    } catch (e) {
       const ref = crypto.randomUUID();
-      logger.error('approve_weekend RPC failed', { err: error.message, ref });
-      return {
-        ok: false,
-        httpStatus: 500,
-        message: `Internal error. Ref: ${ref}`,
-      };
+      logger.error(
+        'decide-weekend: failed to write SIGNATURE_MISMATCH audit entry',
+        {
+          ref,
+          err: e instanceof Error ? e.message : String(e),
+        }
+      );
+      return rejected('INTERNAL', ref);
     }
-    return { ok: false, httpStatus: mapped.status, message: mapped.message };
+
+    ports.notify.signatureMismatch(requestId, mismatches, thresholdPct);
+    return { outcome: 'HELD', requestId, mismatches };
   }
 
-  const result = Array.isArray(data) ? data[0] : data;
-  after(() => notifyRequester(result.request_id, 'APPROVED'));
-  return { ok: true, requestId: result.request_id, status: 'APPROVED' };
+  return finish('approve_weekend', {
+    p_request_id: requestId,
+    p_hod_id: actorId,
+    p_note: note,
+    // True only when a comparison actually ran — "no letter attached" is
+    // recorded as not verified, not as verified.
+    p_signature_verified: signatureCheck !== null || stampCheck !== null,
+    p_signature_mismatch_pct: signatureCheck?.mismatch_pct,
+  });
+};
+
+const REJECTION_HTTP: Record<
+  WeekendDecisionRejection,
+  { status: number; message: string }
+> = {
+  NOT_FOUND: { status: 404, message: 'Request not found.' },
+  ALREADY_DECIDED: {
+    status: 409,
+    message: 'This request has already been decided.',
+  },
+  DATE_PASSED: {
+    status: 409,
+    message: 'The requested weekend date has already passed.',
+  },
+  NOT_AUTHORISER: {
+    status: 403,
+    message: 'You are not the authoriser for this request.',
+  },
+  NO_MISMATCH_TO_OVERRIDE: {
+    status: 403,
+    message:
+      'This request belongs to a Dean-authorised unit and has no held approval to resolve.',
+  },
+  KEY_REQUIRED: {
+    status: 422,
+    message: 'A key must be assigned to approve an external request.',
+  },
+  ONBOARDING_INCOMPLETE: {
+    status: 403,
+    message:
+      'Your onboarding is incomplete. Upload your signature before approving requests.',
+  },
+  INVALID_SUBMISSION: {
+    status: 422,
+    message:
+      'The letter attached to this request cannot be verified. Decline it and ask the requester to resubmit.',
+  },
+  INTERNAL: { status: 500, message: 'Internal error.' },
+};
+
+export const rejectionToHttp = (
+  reason: WeekendDecisionRejection,
+  ref?: string
+): { status: number; message: string } => {
+  const mapped = REJECTION_HTTP[reason];
+  return ref
+    ? { status: mapped.status, message: `${mapped.message} Ref: ${ref}` }
+    : mapped;
 };
