@@ -6,6 +6,21 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-10-13 — Marking a key lost and logging an incident are audited and atomic
+
+- **Why**: CLAUDE.md requires every consequential action to write its audit entry in the same transaction as the state change. `POST /api/keys/mark-lost` retired the key and inserted its `MISSING_KEY`/`HIGH` incident as two separate writes — an incident-insert failure left a retired key with no incident — and wrote no audit entry at all. `POST /api/incidents` inserted the incident with the service-role client and no audit entry. `docs/API.md` also claimed a `HIGH` incident triggered immediate AI report generation and a dedicated Realtime alert; the route did neither.
+- **Deploy order**: apply `supabase/migrations/20261013130000_audited_incident_rpcs.sql` **before** the code deploys. The new routes call `mark_key_lost` / `log_incident`; against a database without them, both routes answer `500`.
+- **Migration**: two `SECURITY DEFINER` RPCs (`set search_path = public`, actor from `auth.uid()`, `revoke ... from public, anon`, `grant ... to authenticated`):
+  - `mark_key_lost(key_id, note)` — CSO only. Locks the key; `NOT_FOUND`, `CONFLICT` (already retired), `VALIDATION` (blank note). Retires the key, inserts the incident and writes `KEY_MARKED_LOST {key_id, key_code, previous_status, incident_id, incident_reference, note, open_requests}`. It still does not refuse a key someone holds; `open_requests` records how many requests occupy a copy so the CSO can see it.
+  - `log_incident(type, severity, description, occurred_at, related_key_id?, related_person_id?)` — CSO or VERIFIER. Same insert the route did (open-shift resolution, DB-generated `reference`) plus `INCIDENT_LOGGED {incident_id, reference, type, severity, related_key_id, related_person_id}`.
+- **Routes**: both now call their RPC through `callRpc` + `rpcFail` with the user's session. Every status and message is unchanged (`404 Key not found`, `409 Key is already retired`, `200 {key_id, incident_id}`; `201 {incident_id, reference}`). The "known follow-up" comment in `mark-lost` is gone.
+- **Behaviour changes**:
+  - A `mark-lost` incident is now filed against the open shift, like every other incident; the route used to leave `shift_id` null.
+  - A whitespace-only `note` / `description` used to pass the schema and be stored; it is now `422 Invalid request body`.
+  - `KEY_MARKED_LOST` and `INCIDENT_LOGGED` map to the `ANOMALY` category (`src/lib/audit/event-types.ts`) and the CSO audit log's Anomaly filter, so they also appear live in the CSO dashboard's events chart through its `audit_log` subscription. Severity changes nothing; there is no per-incident report — reports are per shift.
+- **Tests**: `supabase/tests/15_audited_incidents_test.sql` (29 assertions: happy paths with state, incident row and exactly one audit row; role gates; `NOT_FOUND`; already-retired `CONFLICT`; blank note/description; grants). The `keys` and `reports` contract tests now pin the RPC calls; changed assertions are marked `CHANGED`.
+- **Docs**: `docs/API.md` (both routes, RPC cross-reference), `docs/DATABASE.md` (RPC list, `incidents`), `docs/AUDIT_EVENTS.md`, `supabase/tests/README.md`, `docs/TESTING.md`.
+
 ### 2026-10-13 — `keys`, `shifts`, `reports` and `incidents` routes move onto `route()`
 
 - **Why**: the thirteen handlers under `src/app/api/keys/`, `shifts/`, `reports/` and `incidents` each hand-rolled auth, the role check, body parsing and the ref'd 500, and four carried a private `mapRpcError` matching RPC errors by substring. Four `201` responses carried an envelope `status` of `200`, a throw escaped as Next's bare 500, and a non-UUID report id reached the RPC and came back as a `500`. This is batch 3 of the `src/lib/http/` migration (batches 1 and 2, `requests/*` and `public/*`, are in open PRs #65 and #66).

@@ -35,7 +35,6 @@ import {
   resetFake,
   rpcError,
   success,
-  type Op,
 } from '../http/contract-harness';
 
 vi.mock('@/lib/supabase/server', async () => {
@@ -48,8 +47,6 @@ vi.mock('@/lib/supabase/admin', async () => {
 });
 
 const REQUEST_ID = '22222222-2222-4222-8222-222222222222';
-
-const hasOp = (ops: Op[], method: string) => ops.some(([m]) => m === method);
 
 beforeEach(() => {
   resetFake();
@@ -187,69 +184,60 @@ describe('POST /api/keys/mark-lost', () => {
     expect(await call(markLost, post(path, bad))).toEqual(
       failure(422, 'Invalid request body')
     );
+    expect(fake.rpcCalls).toHaveLength(0);
   });
 
-  it('404 when the key does not exist', async () => {
-    fake.tables.keys = { data: null, error: { message: 'no rows' } };
+  // CHANGED: the key lookup, retirement and incident insert moved into the
+  // mark_key_lost RPC, so these outcomes are now RPC error kinds. Statuses
+  // and messages are unchanged.
+  it.each([
+    [`NOT_FOUND: key ${KEY_ID} does not exist`, 404, 'Key not found'],
+    ['CONFLICT: key is already retired', 409, 'Key is already retired'],
+    // CHANGED: new — a whitespace-only note used to pass and be stored.
+    ['VALIDATION: a note is required', 422, 'Invalid request body'],
+  ])('maps %s → %i', async (raised, status, message) => {
+    fake.rpc.mark_key_lost = rpcError(raised);
     expect(await call(markLost, post(path, body))).toEqual(
-      failure(404, 'Key not found')
+      failure(status, message)
     );
   });
 
-  it('409 when the key is already retired', async () => {
-    fake.tables.keys = {
-      data: { id: KEY_ID, code: 'NS-1', status: 'RETIRED' },
-      error: null,
-    };
-    expect(await call(markLost, post(path, body))).toEqual(
-      failure(409, 'Key is already retired')
-    );
-  });
-
-  const keyRead = { id: KEY_ID, code: 'NS-1', status: 'ISSUED' };
-
-  it('500 with a ref when the key update fails', async () => {
-    fake.tables.keys = (ops) =>
-      hasOp(ops, 'update')
-        ? { data: null, error: { message: 'update failed' } }
-        : { data: keyRead, error: null };
-    expectRef(await call(markLost, post(path, body)));
-    expect(fake.queries.some((q) => q.table === 'incidents')).toBe(false);
-  });
-
-  // Known follow-up, not fixed here: the key is retired before the incident
-  // is inserted, outside one transaction, so this failure leaves a retired
+  // CHANGED: replaces the separate "key update fails" and "incident insert
+  // fails" 500s. Retirement, incident and audit entry are one transaction
+  // now, so any failure rolls all three back instead of leaving a retired
   // key with no incident.
-  it('500 with a ref when the incident insert fails', async () => {
-    fake.tables.keys = (ops) =>
-      hasOp(ops, 'update')
-        ? { data: null, error: null }
-        : { data: keyRead, error: null };
-    fake.tables.incidents = { data: null, error: { message: 'insert failed' } };
+  it('500 with a ref for an unrecognised RPC failure', async () => {
+    fake.rpc.mark_key_lost = rpcError('statement timeout');
+    expectRef(await call(markLost, post(path, body)));
+  });
+
+  it('500 with a ref when the RPC returns no row', async () => {
+    fake.rpc.mark_key_lost = { data: [], error: null };
     expectRef(await call(markLost, post(path, body)));
   });
 
   it('retires the key and logs a HIGH MISSING_KEY incident', async () => {
-    fake.tables.keys = (ops) =>
-      hasOp(ops, 'update')
-        ? { data: null, error: null }
-        : { data: keyRead, error: null };
-    fake.tables.incidents = { data: { id: 'inc-1' }, error: null };
+    fake.rpc.mark_key_lost = {
+      data: [
+        { key_id: KEY_ID, incident_id: 'inc-1', reference: 'INC-2026-0042' },
+      ],
+      error: null,
+    };
 
     expect(await call(markLost, post(path, body))).toEqual(
       success({ key_id: KEY_ID, incident_id: 'inc-1' })
     );
 
-    const insert = fake.queries.find((q) => q.table === 'incidents');
-    const [, [row]] = insert!.ops.find(([m]) => m === 'insert')!;
-    expect(row).toMatchObject({
-      logged_by: USER_ID,
-      type: 'MISSING_KEY',
-      severity: 'HIGH',
-      description: body.note,
-      related_key_id: KEY_ID,
-      status: 'OPEN',
-    });
+    // CHANGED: the incident row is built inside the RPC (pgTAP file 15 pins
+    // its columns); the route's contract is the RPC call and no direct write.
+    expect(fake.rpcCalls).toEqual([
+      {
+        name: 'mark_key_lost',
+        args: { p_key_id: KEY_ID, p_note: body.note },
+      },
+    ]);
+    expect(fake.queries.some((q) => q.table === 'keys')).toBe(false);
+    expect(fake.queries.some((q) => q.table === 'incidents')).toBe(false);
   });
 });
 
