@@ -1,66 +1,49 @@
-import { NextRequest, NextResponse } from 'next/server';
 import * as z from 'zod';
 
-import { logger } from '@/lib/logger';
+import { respond } from '@/lib/http/respond';
+import { route } from '@/lib/http/route';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { err, ok } from '@/types/api';
 
 // Unauthenticated. Returns the safe, public-facing status of a guest weekend
 // request, keyed on the unguessable access_token. Only the fields the status
-// page needs are returned — no internal ids beyond the request id.
-
-export const GET = async (
-  _request: NextRequest,
-  { params }: { params: Promise<{ token: string }> }
-) => {
-  const { token } = await params;
-
-  if (!z.uuid().safeParse(token).success) {
-    return NextResponse.json(err('Request not found', 404), { status: 404 });
-  }
-
-  const adminClient = createAdminClient();
-
-  const { data, error } = await adminClient
-    .from('requests')
-    .select(
+// page needs are returned — no internal ids beyond the request id. Read-only.
+export const GET = route({
+  name: 'public/weekend-request/status',
+  auth: 'public',
+  params: z.object({ token: z.uuid() }),
+  paramsError: { status: 404, message: 'Request not found' },
+  handler: async ({ params }) => {
+    const { data, error } = await createAdminClient()
+      .from('requests')
+      .select(
+        `
+        id,
+        status,
+        requested_for,
+        return_deadline,
+        code,
+        code_expires_at,
+        return_code,
+        return_code_expires_at,
+        requested_room,
+        keys ( code, room_name ),
+        guest_requesters ( full_name )
       `
-      id,
-      status,
-      requested_for,
-      return_deadline,
-      code,
-      code_expires_at,
-      return_code,
-      return_code_expires_at,
-      requested_room,
-      keys ( code, room_name ),
-      guest_requesters ( full_name )
-    `
-    )
-    .eq('access_token', token)
-    .maybeSingle();
+      )
+      .eq('access_token', params.token)
+      .maybeSingle();
 
-  if (error) {
-    const ref = crypto.randomUUID();
-    logger.error('guest weekend-request status lookup failed', {
-      ref,
-      err: error.message,
-    });
-    return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
-      status: 500,
-    });
-  }
+    if (error) {
+      return respond.internal('guest weekend-request status lookup failed', {
+        err: error.message,
+      });
+    }
+    if (!data) return respond.fail(404, 'Request not found');
 
-  if (!data) {
-    return NextResponse.json(err('Request not found', 404), { status: 404 });
-  }
+    const isCodeIssued = data.status === 'CODE_ISSUED';
+    const isKeyIssued = data.status === 'KEY_ISSUED';
 
-  const isCodeIssued = data.status === 'CODE_ISSUED';
-  const isKeyIssued = data.status === 'KEY_ISSUED';
-
-  return NextResponse.json(
-    ok({
+    return respond.ok({
       request_id: data.id,
       status: data.status,
       requested_for: data.requested_for,
@@ -74,7 +57,6 @@ export const GET = async (
       code_expires_at: isCodeIssued ? data.code_expires_at : null,
       return_code: isKeyIssued ? data.return_code : null,
       return_code_expires_at: isKeyIssued ? data.return_code_expires_at : null,
-    }),
-    { status: 200 }
-  );
-};
+    });
+  },
+});

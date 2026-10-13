@@ -1,11 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server';
 import * as z from 'zod';
 
-import { uploadExtension } from '@/lib/storage/extension';
-import { logger } from '@/lib/logger';
+import { respond } from '@/lib/http/respond';
+import { route } from '@/lib/http/route';
+import { rpcFail } from '@/lib/http/rpc-errors';
 import { notifyAfterResponse } from '@/lib/notifications/notify';
+import { callRpc } from '@/lib/rpc/call-rpc';
+import { uploadExtension } from '@/lib/storage/extension';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { err, ok } from '@/types/api';
 
 // Unauthenticated. An external person (no SmartKey account) submits a weekend
 // key request: declares an ID document, picks a department, and uploads the
@@ -38,12 +39,6 @@ const fieldsSchema = z.object({
   return_deadline: z.iso.datetime({ offset: true }),
 });
 
-const mapRpcError = (msg: string): { status: number; message: string } => {
-  if (msg.includes('NOT_FOUND'))
-    return { status: 404, message: 'Department not found' };
-  return { status: 500, message: 'Internal error' };
-};
-
 // True for a future (or today) Saturday or Sunday in UTC terms.
 const isWeekendDate = (isoDate: string): boolean => {
   const date = new Date(`${isoDate}T00:00:00Z`);
@@ -52,153 +47,113 @@ const isWeekendDate = (isoDate: string): boolean => {
   return day === 0 || day === 6;
 };
 
-export const POST = async (request: NextRequest) => {
-  let formData: FormData;
-  try {
-    formData = await request.formData();
-  } catch {
-    return NextResponse.json(err('Expected multipart/form-data', 422), {
-      status: 422,
+// Multipart, so no `body` schema: the handler reads the form itself.
+export const POST = route({
+  name: 'public/weekend-request',
+  auth: 'public',
+  handler: async ({ request }) => {
+    let formData: FormData;
+    try {
+      formData = await request.formData();
+    } catch {
+      return respond.fail(422, 'Expected multipart/form-data');
+    }
+
+    const parsed = fieldsSchema.safeParse({
+      full_name: formData.get('full_name'),
+      email: formData.get('email'),
+      phone: formData.get('phone') ?? undefined,
+      id_document_type: formData.get('id_document_type'),
+      id_document_number: formData.get('id_document_number'),
+      requested_room: formData.get('requested_room'),
+      department_id: formData.get('department_id'),
+      weekend_date: formData.get('weekend_date'),
+      return_deadline: formData.get('return_deadline'),
     });
-  }
+    if (!parsed.success) return respond.fail(422, 'Invalid request body');
+    const fields = parsed.data;
 
-  const fields = {
-    full_name: formData.get('full_name'),
-    email: formData.get('email'),
-    phone: formData.get('phone') ?? undefined,
-    id_document_type: formData.get('id_document_type'),
-    id_document_number: formData.get('id_document_number'),
-    requested_room: formData.get('requested_room'),
-    department_id: formData.get('department_id'),
-    weekend_date: formData.get('weekend_date'),
-    return_deadline: formData.get('return_deadline'),
-  };
+    if (!isWeekendDate(fields.weekend_date)) {
+      return respond.fail(
+        422,
+        'The selected date must be a Saturday or Sunday.'
+      );
+    }
 
-  const parsed = fieldsSchema.safeParse(fields);
-  if (!parsed.success) {
-    return NextResponse.json(err('Invalid request body', 422), { status: 422 });
-  }
+    const letter = formData.get('letter');
+    if (!(letter instanceof File) || letter.size === 0) {
+      return respond.fail(422, 'An authorisation letter is required.');
+    }
+    if (letter.size > MAX_LETTER_BYTES) {
+      return respond.fail(
+        413,
+        'The authorisation letter must be 5MB or smaller.'
+      );
+    }
+    if (!ALLOWED_LETTER_TYPES.includes(letter.type)) {
+      return respond.fail(
+        422,
+        'The authorisation letter must be an image or a PDF.'
+      );
+    }
 
-  if (!isWeekendDate(parsed.data.weekend_date)) {
-    return NextResponse.json(
-      err('The selected date must be a Saturday or Sunday.', 422),
-      { status: 422 }
-    );
-  }
+    const admin = createAdminClient();
 
-  const letter = formData.get('letter');
-  if (!(letter instanceof File) || letter.size === 0) {
-    return NextResponse.json(err('An authorisation letter is required.', 422), {
-      status: 422,
-    });
-  }
+    // Upload the letter to the existing weekend-letters bucket. Guest letters
+    // live under a guest/ prefix to keep them separate from registered
+    // uploads.
+    const ext = uploadExtension(letter.name, 'bin');
+    const letterPath = `guest/${crypto.randomUUID()}.${ext}`;
+    const { error: uploadError } = await admin.storage
+      .from('weekend-letters')
+      .upload(letterPath, await letter.arrayBuffer(), {
+        contentType: letter.type,
+        upsert: false,
+      });
+    if (uploadError) {
+      return respond.internal('guest weekend-request: letter upload failed', {
+        err: uploadError.message,
+      });
+    }
 
-  if (letter.size > MAX_LETTER_BYTES) {
-    return NextResponse.json(
-      err('The authorisation letter must be 5MB or smaller.', 413),
-      { status: 413 }
-    );
-  }
+    const { data: letterUrlData } = admin.storage
+      .from('weekend-letters')
+      .getPublicUrl(letterPath);
 
-  if (!ALLOWED_LETTER_TYPES.includes(letter.type)) {
-    return NextResponse.json(
-      err('The authorisation letter must be an image or a PDF.', 422),
-      { status: 422 }
-    );
-  }
-
-  const adminClient = createAdminClient();
-
-  // Upload the letter to the existing weekend-letters bucket. Guest letters
-  // live under a guest/ prefix to keep them separate from registered uploads.
-  const ext = uploadExtension(letter.name, 'bin');
-  const letterPath = `guest/${crypto.randomUUID()}.${ext}`;
-  const letterBytes = await letter.arrayBuffer();
-
-  const { error: uploadError } = await adminClient.storage
-    .from('weekend-letters')
-    .upload(letterPath, letterBytes, {
-      contentType: letter.type,
-      upsert: false,
-    });
-
-  if (uploadError) {
-    const ref = crypto.randomUUID();
-    logger.error('guest weekend-request: letter upload failed', {
-      ref,
-      err: uploadError.message,
-    });
-    return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
-      status: 500,
-    });
-  }
-
-  const { data: letterUrlData } = adminClient.storage
-    .from('weekend-letters')
-    .getPublicUrl(letterPath);
-
-  const { data: rpcData, error: rpcError } = await adminClient.rpc(
-    'create_guest_weekend_request',
-    {
-      p_full_name: parsed.data.full_name,
-      p_email: parsed.data.email,
-      p_phone: parsed.data.phone ?? '',
-      p_id_type: parsed.data.id_document_type,
-      p_id_number: parsed.data.id_document_number,
-      p_department_id: parsed.data.department_id,
-      p_weekend_date: parsed.data.weekend_date,
-      p_return_deadline: parsed.data.return_deadline,
+    const result = await callRpc(admin, 'create_guest_weekend_request', {
+      p_full_name: fields.full_name,
+      p_email: fields.email,
+      p_phone: fields.phone ?? '',
+      p_id_type: fields.id_document_type,
+      p_id_number: fields.id_document_number,
+      p_department_id: fields.department_id,
+      p_weekend_date: fields.weekend_date,
+      p_return_deadline: fields.return_deadline,
       p_letter_url: letterUrlData.publicUrl,
-      p_requested_room: parsed.data.requested_room,
-    }
-  );
-
-  if (rpcError) {
-    const mapped = mapRpcError(rpcError.message);
-    if (mapped.status === 500) {
-      const ref = crypto.randomUUID();
-      logger.error('create_guest_weekend_request RPC failed', {
-        ref,
-        err: rpcError.message,
-      });
-      return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
-        status: 500,
-      });
-    }
-    return NextResponse.json(err(mapped.message, mapped.status), {
-      status: mapped.status,
+      p_requested_room: fields.requested_room,
     });
-  }
+    if (!result.ok) {
+      return rpcFail(result.error, { NOT_FOUND: 'Department not found' });
+    }
 
-  const result = Array.isArray(rpcData) ? rpcData[0] : rpcData;
-  if (!result) {
-    const ref = crypto.randomUUID();
-    logger.error('create_guest_weekend_request returned empty result', { ref });
-    return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
-      status: 500,
+    // The guest's status link, and the authoriser's review email. Both run
+    // after the response; a failed send never fails the request. The
+    // one-click decision token was created with the request by the RPC.
+    notifyAfterResponse({
+      type: 'GUEST_SUBMISSION_RECEIVED',
+      requestId: result.data.request_id,
     });
-  }
+    notifyAfterResponse({
+      type: 'WEEKEND_SUBMITTED',
+      requestId: result.data.request_id,
+    });
 
-  // The guest's status link, and the authoriser's review email. Both run
-  // after the response; a failed send never fails the request. The one-click
-  // decision token was created with the request by the RPC.
-  notifyAfterResponse({
-    type: 'GUEST_SUBMISSION_RECEIVED',
-    requestId: result.request_id,
-  });
-  notifyAfterResponse({
-    type: 'WEEKEND_SUBMITTED',
-    requestId: result.request_id,
-  });
-
-  return NextResponse.json(
-    ok(
+    return respond.ok(
       {
-        access_token: result.access_token,
-        request_id: result.request_id,
+        access_token: result.data.access_token,
+        request_id: result.data.request_id,
       },
       201
-    ),
-    { status: 201 }
-  );
-};
+    );
+  },
+});
