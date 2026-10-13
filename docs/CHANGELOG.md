@@ -6,6 +6,11 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-10-13 — Fix pgTAP audit count in the weekday lifecycle test
+
+- **Why**: CI's `bun run test:db` failed test 14 of `supabase/tests/05_weekday_lifecycle_test.sql`. The decision-token coverage added in the previous entry creates a fourth request (`t_a6_admin`, the Administration-unit weekend request) before the `REQUEST_CREATED` audit-count assertion, which still expected three. The count was stale, not the code: `create_request` correctly writes one audit entry per successful call.
+- The assertion now expects 4 and its description names four calls. Plan count is unchanged (45).
+
 ### 2026-10-13 — Request emails go through one notifications module, with HTML escaping
 
 - **Why**: emails about a request were assembled in eight routes, two crons and `src/lib/email/otp.ts` (772 lines, the most-changed file in the repo), and that spread had produced real bugs:

@@ -180,8 +180,8 @@ select is(
    where event = 'REQUEST_CREATED'
      and target_type = 'request'
      and actor_id = '55555555-5555-4555-8555-000000000003'),
-  3,
-  'three successful create_request calls wrote three REQUEST_CREATED entries'
+  4,
+  'four successful create_request calls wrote four REQUEST_CREATED entries'
 );
 
 insert into public.requests
