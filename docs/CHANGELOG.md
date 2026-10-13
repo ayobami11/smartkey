@@ -6,6 +6,34 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-10-13 — Remaining state changes move into atomic RPCs
+
+- **Why**: CLAUDE.md requires every consequential action to write its audit entry in the same transaction as the state change. Six routes still changed state and then audited in a second call whose failure was logged and swallowed, so a cancellation, CSO decision, user edit, deactivation or signature-reference change could commit with no audit entry. One of them also had a live bug: `POST /api/requests/cso-decision` with `DECLINED` on a `KEY_ISSUED` request (the CSO queue shows those, with buttons) changed nothing, still wrote `REQUEST_DECLINED_CSO`, and answered `CANCELLED`. Its `note` was accepted and dropped.
+- **Migrations — apply all four, in this order, BEFORE deploying the code**:
+  1. `20261013120000_cancel_and_cso_decision_rpcs.sql` — `cancel_request(request_id)` and `cso_decide_request(request_id, decision, note?)`, actor from `auth.uid()`, granted to `authenticated`.
+  2. `20261013120100_create_request_risk_and_letters.sql` — drops the 4-argument `create_request` and recreates it with defaulted `p_risk_tier`, `p_risk_factors`, `p_letter_url`, `p_stamp_url`. Same body as `20261013090000` otherwise; same revoke/grant. The letter/stamp ownership check is repeated in SQL, and `REQUEST_CREATED` now carries `risk_tier`/`risk_factors` (as `docs/AUDIT_EVENTS.md` already claimed).
+  3. `20261013120200_user_admin_rpcs.sql` — `update_user_profile(profile_id, full_name, unit_id?)` and `deactivate_user(profile_id)`, CSO-only, granted to `authenticated`. The one-Dean-per-unit check now runs under a lock on the destination unit, and the `units.hod_id` sync is in the same transaction instead of being "non-fatal".
+  4. `20261013120300_signature_reference_rpcs.sql` — `set_signature_reference` and `hold_signature_reference`, **service-only** (revoked from `public`, `anon`, `authenticated`; granted to `service_role`). The verification runs in TypeScript, so a session must not be able to call these. Both refuse (`CONFLICT`) when the live reference is no longer the one the upload was compared against, and a passing upload clears a stale held one.
+
+  The migrations are compatible with the code currently deployed (the new `create_request` parameters are defaulted, and nothing else is removed), so applying them first is safe.
+
+- **Routes**, all now on `route()` + `callRpc` + `rpcFail`:
+  - `requests/cancel` → `cancel_request`. Another requester's request is `404`, as before (RLS hid it).
+  - `requests/cso-decision` → `cso_decide_request`. **Behaviour change**: `DECLINED` on anything but `CODE_ISSUED` is a `409`; `APPROVED` returns the request's real status (`CODE_ISSUED` or `KEY_ISSUED`). The note is in the audit payload.
+  - `requests/submit` passes the risk result and letter/stamp to `create_request`; its two post-RPC admin back-fills are gone.
+  - `admin/users/[id]` → `update_user_profile`. The `409` copy says "unit"/"Dean" instead of "department"/"HOD".
+  - `admin/users/[id]/revoke`: ban first, then `deactivate_user`, then lift the ban if the RPC failed (kept on `CONFLICT`, where a concurrent revoke won). The ban is the only real lockout and is reversible; an audit entry is not. **Behaviour change**: a failed ban is now a `500`; it used to be logged and answered `200`, leaving a "deactivated" user who could sign in. The flow is `src/lib/admin/revoke-user.ts` with injected ports.
+  - `profile/signature` → `hold_signature_reference` / `set_signature_reference` via the admin client. Every upload goes to a unique path (`{uid}/{type}-{uuid}.{ext}`), so the live reference file is never overwritten in place. This also fixes a CSO-approved held upload being overwritten by the next held one (both used `{type}-pending.{ext}`). An upload the RPC refuses is removed again.
+- **Tests**:
+  - pgTAP `12_cancel_and_cso_decision_test.sql` (26), `13_user_admin_test.sql` (24), `14_signature_reference_test.sql` (19); `05_weekday_lifecycle_test.sql` extended from 45 to 53 for the new `create_request` parameters.
+  - Vitest `src/tests/admin/revoke-user.test.ts` (7).
+- **Docs**: `docs/DATABASE.md`, `docs/API.md`, `docs/AUDIT_EVENTS.md`, `docs/AI.md`, `docs/TESTING.md`, `supabase/tests/README.md`.
+- **Follow-ups, not in scope**:
+  - Changes with no audit entry at all: re-invite, `admin/keys`, `keys/mark-lost` (also non-atomic), `shifts/start`, incidents, activation.
+  - `create_request` should become service-only: a requester calling it directly can choose its own risk tier (a direct call previously stored `LOW`, so this is no worse).
+  - `reports/generate` writes its audit entry before the state change.
+  - Superseded signature-reference files are left in storage; nothing deletes them.
+
 ### 2026-10-13 — One key-occupancy rule: CSO chart counts copies, overdue from the clock
 
 - **Why**: "is this key free?" had five answers. The capacity trigger (`request_occupies_key`) was right; `src/lib/keys/availability.ts` mirrored it by hand with nothing holding the two together; and the CSO dashboard's zone chart, `GET /api/admin/units`' `has_slot_today` and the daily digest all read the coarse `keys.status`. That column counts key **records**, not copies, so the twelve-copy `FENG-005` and two-copy `ADM-VC` counted as one key each. It treated copies reserved by a live collection code as available, and only showed overdue after the hourly `mark_key_overdue()` cron. On top of that, the overdue rule existed in five TypeScript copies, and `/api/keys/out` invented a `KEY_OVERDUE` request status that does not exist (one verifier realtime branch listened for it and never fired).
