@@ -6,6 +6,43 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-10-13 — One module for API route plumbing (`src/lib/http/`), batch 0
+
+- **Why**: about 47 routes repeated the same session check, role check, body parse and ref'd 500 by hand, and that copying had drifted:
+  - ~20 private `mapRpcError` copies matched RPC errors with `msg.includes(...)`, so a detail that named another kind could be misclassified.
+  - Several copies passed raw RPC text to the client (`return { status: 500, message: msg }`, and `collect`'s `msg.split(': ')[1]`).
+  - The envelope `status` disagreed with the HTTP status in 11 routes.
+  - `callRpc` turned the bare `NOT_AUTHENTICATED` that several RPCs raise (no `: detail`) into a 500, and could not call `returns void` RPCs at all because its empty-result guard rejected their `null`.
+
+  This entry adds the module and migrates one exemplar route. The remaining routes move in later batches, one PR each.
+
+- **`src/lib/http/respond.ts`**: `respond.ok / fail / error / internal / noContent`, the only envelope builder. Envelope status and HTTP status come from the same value. `internal()` logs under a fresh ref and returns `500 "Internal error. Ref: <ref>"`.
+- **`src/lib/http/rpc-errors.ts`**:
+  - `RPC_ERROR_HTTP`, the default status and copy for every RPC error kind, typed `Record<KnownRpcErrorKind, …>` so a new kind without a row fails to compile.
+  - Per-route overrides: a string, `{ status, message }`, or a function of the detail.
+  - `byDetail()` for RPCs that raise one kind for different situations.
+  - `rpcErrorToHttp` / `rpcFail`. `INTERNAL` is not overridable, and the RPC's `detail` never reaches a message unless an override explicitly returns copy for it.
+- **`src/lib/http/route.ts`**: `route({ name, auth: 'user' | 'public' | 'cron', roles?, params?, paramsError?, body?, handler })`.
+  - Checks run in a fixed order: session or cron secret → profile and role → params → JSON body → handler.
+  - Overloads type `ctx` per auth mode. `profile` exists only when `roles` is set, and omitting `roles` skips the profile query.
+  - Cron auth compares `Bearer ${CRON_SECRET}` with `timingSafeEqual` over SHA-256 digests. An unset secret → ref'd 500.
+  - Any throw becomes a ref'd 500.
+  - `public` and `cron` handlers get no Supabase client, so each use of the service role stays explicit.
+  - The exported handler type takes `{ params: Promise<unknown> }`, which satisfies Next.js 16's generated route validators for both static and dynamic routes. This was checked with `bun run build` against a throwaway dynamic route.
+- **`src/lib/rpc/call-rpc.ts`**: `NOT_AUTHENTICATED` added to `RPC_ERROR_KINDS`. The prefix parser accepts a bare kind (detail `''`). New `callRpcVoid` for `remove_collector`, `update_risk_config` and `update_operational_config`.
+- **`POST /api/requests/hod-decision`** is migrated as the exemplar. Its responses are unchanged.
+- **Tests** in `src/tests/http/`:
+  - `respond.test.ts`
+  - `rpc-errors.test.ts`: every kind has a catalogue row, every override form is covered, and a `'<KIND>: secret (current: PENDING_HOD)'` detail never leaks for any kind.
+  - `route.test.ts`: 401 with no user or no profile, 403 on the wrong role, no profile query without `roles`, 422 on bad JSON, `paramsError`, auth before body parsing, a throwing handler → ref'd 500, and the cron cases.
+
+  `src/tests/rpc/call-rpc.test.ts` gains the bare-kind and `callRpcVoid` cases.
+
+- **Docs**:
+  - `docs/API.md`: "Auth conventions" rewritten around `route()`. This corrects the false claim that the service role is used only in Edge Functions: the public token routes, crons and several read routes use `createAdminClient()`. Adds a new "RPC error mapping" subsection.
+  - `docs/ARCHITECTURE.md`: tree gains `lib/http/` and `lib/rpc/`.
+  - `.claude/skills/api-routes/SKILL.md`: rewritten around `route()` + `callRpc` + `rpcFail`.
+
 ### 2026-10-13 — Users can no longer change their own role or status through the API
 
 - **Why**: privilege escalation. The `profiles_update` RLS policy lets a session update its own row (and the CSO any row), and Supabase grants `authenticated` UPDATE on every public table. Nothing limited **which** columns could change, so any signed-in user could `PATCH /rest/v1/profiles?id=eq.<self>` with `role=CSO` and become an administrator. The same path let a requester reactivate themselves, move units, or point their passport photo at someone else's image, and let a Dean replace their reference signature without the verification step. Found by the planning pass for the atomic-transitions refactor.

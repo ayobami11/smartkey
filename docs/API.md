@@ -32,14 +32,76 @@ type ApiResponse<T> =
 
 Error strings are user-facing. Stack traces and Supabase error messages never appear in the response body — they are logged server-side with a correlation reference that is included in the error string.
 
+Routes build the envelope only through `respond.ok` / `fail` / `error` / `internal` / `noContent` in `src/lib/http/respond.ts`, which sets the envelope `status` and the HTTP status from the same value. `respond.internal(logMessage, context)` logs under a fresh ref and returns `500 "Internal error. Ref: <ref>"`.
+
 ---
 
 ## Auth conventions
 
-- All routes except `/api/auth/login` and `/api/auth/reset-password` require a valid Supabase session JWT (verified via `getUser()`, never `getSession()`).
-- Role is read from `profiles.role` after the session is confirmed, not from the JWT claim alone.
-- RLS is the authoritative enforcement layer; route-level role checks are defence-in-depth.
-- The service-role key is used only in Edge Functions, never in browser-reachable routes.
+Route handlers are wrapped in `route()` from `src/lib/http/route.ts`. Routes are being moved onto it in batches; `POST /api/requests/hod-decision` is the first. `route()` runs these checks in a fixed order before the handler:
+
+1. **Auth**, chosen per route with `auth`:
+   - `'user'` validates the Supabase session with `getUser()`, never `getSession()`. No session → `401 Unauthorized`.
+   - `'cron'` requires `Authorization: Bearer ${CRON_SECRET}`, compared in constant time (`timingSafeEqual` over SHA-256 digests). An unset `CRON_SECRET` → `500` with a ref; a wrong or missing header → `401 Unauthorized`.
+   - `'public'` performs no check. Used by the session-less guest and one-click Dean decision routes, which authorise by an unguessable token instead.
+2. **Role**, only when `roles` is given. The role comes from `profiles.role`, never from the JWT claim alone. No profile row → `401 Unauthorized`; a role not in the list → `403 Forbidden`. With `roles` omitted there is no profile query at all.
+3. **Path params**, when a `params` schema is given. Failure → the route's `paramsError`, by default `404 Not found`.
+4. **JSON body**, when a `body` schema is given. Unparseable JSON or a schema failure → `422 Invalid request body`. Multipart routes omit `body` and read `ctx.request` themselves.
+5. **Handler.** Any throw, from the handler or from the checks above, becomes an enveloped `500 Internal error. Ref: <ref>`, logged as `<name>: unhandled error`.
+
+Not wrapped, by design: the `auth/*` routes (they establish sessions and set cookies or redirect), `GET /api/health`, `GET /api/storage/object` (returns bytes) and `POST /api/ai/verify-signature`. They still build their envelopes through `respond.*`.
+
+- **RLS is the authoritative enforcement layer**; route-level role checks are defence in depth.
+- **The service-role key is server-only, and it is used by routes, not only Edge Functions.** `createAdminClient()` (`src/lib/supabase/admin.ts`) bypasses RLS. It is used by:
+  - the public token routes (`/api/public/*`), whose RPCs are revoked from `anon`;
+  - the cron routes (`/api/cron/*`);
+  - routes that read past RLS and apply their own check, such as `GET /api/keys/availability`, `GET /api/keys/out` and `GET /api/storage/object`;
+  - specific admin writes.
+
+  It is never imported by browser code. `route()` never creates it implicitly: `'public'` and `'cron'` handlers get no Supabase client, so each use of the service role is visible in the handler.
+
+### RPC error mapping
+
+RPCs raise `'<KIND>: <detail>'` (a few raise the bare `'<KIND>'`). `callRpc` / `callRpcVoid` (`src/lib/rpc/call-rpc.ts`) parse the exact prefix into `{ kind, detail }`; an unrecognised message becomes `INTERNAL`, is logged there with a ref, and is never shown to the client. Routes turn the result into a response with `rpcFail(error, overrides?)` from `src/lib/http/rpc-errors.ts`, which reads this default catalogue (`RPC_ERROR_HTTP`):
+
+| Kind                  | Status | Default message                                                                                             |
+| --------------------- | ------ | ----------------------------------------------------------------------------------------------------------- |
+| `NOT_AUTHENTICATED`   | 401    | Unauthorized                                                                                                |
+| `FORBIDDEN`           | 403    | Forbidden                                                                                                   |
+| `NOT_AUTHORISED`      | 403    | Not authorised for this key                                                                                 |
+| `NOT_FOUND`           | 404    | Not found                                                                                                   |
+| `EXPIRED_CODE`        | 404    | Code has expired                                                                                            |
+| `BAD_RETURN_CODE`     | 404    | Return code not recognised. Ask the requester to check it.                                                  |
+| `EXPIRED_RETURN_CODE` | 404    | Return code has expired. Ask the requester to generate a new one.                                           |
+| `CONFLICT`            | 409    | This action conflicts with the request's current state.                                                     |
+| `NO_KEYS_AVAILABLE`   | 409    | No key is available for this room right now. Every key is out or reserved — try again once one is returned. |
+| `NOT_ISSUED`          | 409    | This key is not currently issued.                                                                           |
+| `NOT_EXPIRED`         | 409    | This code has not expired yet.                                                                              |
+| `DUPLICATE_PROFILE`   | 409    | Email already registered                                                                                    |
+| `AUTH_USER_NOT_FOUND` | 409    | No auth account found for this email. Send an invite via Supabase Auth first, then provision.               |
+| `TOO_EARLY`           | 422    | A collection code can only be generated on the requested date.                                              |
+| `REQUESTER_INACTIVE`  | 422    | This user account is deactivated and cannot be authorised                                                   |
+| `NO_VERIFICATION`     | 422    | Enter the return code, or give a reason to return without one.                                              |
+| `VALIDATION`          | 422    | Invalid request                                                                                             |
+| `INVALID_DECISION`    | 422    | Invalid decision                                                                                            |
+| `INVALID_RULES`       | 422    | Invalid rule configuration                                                                                  |
+| `INVALID_TIER_BOUNDS` | 422    | high_min must exceed medium_min                                                                             |
+| `INVALID_ZONE_HOURS`  | 422    | Invalid zone hours                                                                                          |
+| `INVALID_CONFIG`      | 422    | Invalid operational configuration                                                                           |
+| `INTERNAL`            | 500    | Internal error. Ref: `<ref>` (not overridable)                                                              |
+
+Rules:
+
+- **Overrides are per kind.** A route passes `{ KIND: override }` for the kinds whose copy should differ. An override is one of:
+  - a string, which replaces the message and keeps the default status;
+  - an `{ status, message }`, which replaces both;
+  - a function of the RPC's `detail`, returning either of those or `undefined` to fall back to the default.
+
+  Routes never write their own `mapRpcError`. A kind added to `RPC_ERROR_KINDS` without a catalogue row is a type error.
+
+- **`byDetail(cases, fallback?)`** branches one kind on its detail text, for RPCs that raise one kind for different situations (e.g. `nominate_collector`'s two `CONFLICT`s). Cases are `[RegExp, copy]` pairs. Anchor a pattern (`^…$`) when the detail is a fixed message. The first match wins.
+- **`detail` never reaches a client by default.** It can name internal states (`current: PENDING_HOD`) and is for logs and branching only. A message can carry RPC text only through an explicit override, and `byDetail` maps a matched detail to fixed copy rather than echoing it.
+- **`INTERNAL` is always `500 "Internal error. Ref: <ref>"`.** The ref is the one `callRpc` logged with the original error.
 
 ---
 

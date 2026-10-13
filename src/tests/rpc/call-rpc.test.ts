@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   callRpc,
+  callRpcVoid,
   parseRpcErrorMessage,
   type RpcClient,
 } from '@/lib/rpc/call-rpc';
@@ -31,6 +32,53 @@ describe('parseRpcErrorMessage', () => {
 
   it('treats an unknown prefix as INTERNAL', () => {
     expect(parseRpcErrorMessage('WAT: unexpected').kind).toBe('INTERNAL');
+  });
+
+  it('parses a bare kind with no detail', () => {
+    expect(parseRpcErrorMessage('NOT_AUTHENTICATED')).toEqual({
+      kind: 'NOT_AUTHENTICATED',
+      detail: '',
+    });
+  });
+
+  it('still treats an unknown bare word as INTERNAL', () => {
+    expect(parseRpcErrorMessage('BOOM').kind).toBe('INTERNAL');
+  });
+});
+
+describe('callRpcVoid', () => {
+  it('treats a null result as success', async () => {
+    const result = await callRpcVoid(
+      stubClient({ data: null, error: null }),
+      'remove_collector',
+      { p_key_id: 'k1', p_requester_id: 'r1' }
+    );
+    expect(result).toEqual({ ok: true, data: null });
+  });
+
+  it('parses a bare kind the same way as callRpc', async () => {
+    const result = await callRpcVoid(
+      stubClient({ data: null, error: { message: 'NOT_AUTHENTICATED' } }),
+      'remove_collector',
+      { p_key_id: 'k1', p_requester_id: 'r1' }
+    );
+    expect(result).toEqual({
+      ok: false,
+      error: { kind: 'NOT_AUTHENTICATED', detail: '' },
+    });
+  });
+
+  it('gives an unrecognised failure a ref', async () => {
+    const result = await callRpcVoid(
+      stubClient({ data: null, error: { message: 'connection reset' } }),
+      'update_risk_config',
+      { p_rules: [], p_medium_min: 4, p_high_min: 7 }
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.kind).toBe('INTERNAL');
+      expect(result.error.ref).toEqual(expect.any(String));
+    }
   });
 });
 
