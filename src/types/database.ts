@@ -1088,6 +1088,21 @@ export type Database = {
           weekend_submitted_count: number;
         }[];
       };
+      get_key_occupancy: {
+        Args: { p_zone?: Database['public']['Enums']['zone'] };
+        Returns: {
+          available: number;
+          issued: number;
+          key_count: number;
+          key_id: string;
+          occupied: number;
+          overdue: number;
+          reserved: number;
+          retired: boolean;
+          unit_id: string;
+          zone: Database['public']['Enums']['zone'];
+        }[];
+      };
       issue_key: {
         Args: { p_request_id: string; p_verifier_id: string };
         Returns: {
@@ -1122,6 +1137,20 @@ export type Database = {
       remove_collector: {
         Args: { p_key_id: string; p_requester_id: string };
         Returns: undefined;
+      };
+      request_is_overdue: {
+        Args: {
+          p_return_deadline: string;
+          p_status: Database['public']['Enums']['request_status'];
+        };
+        Returns: boolean;
+      };
+      request_occupies_key: {
+        Args: {
+          p_code_expires_at: string;
+          p_status: Database['public']['Enums']['request_status'];
+        };
+        Returns: boolean;
       };
       request_return: {
         Args: { p_request_id: string; p_requester_id: string };
