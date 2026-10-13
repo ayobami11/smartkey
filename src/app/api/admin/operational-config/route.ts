@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
 import * as z from 'zod';
 
 import { ZONES, type Zone } from '@/lib/constants';
-import { logger } from '@/lib/logger';
-import { createServerClient } from '@/lib/supabase/server';
-import { err, ok } from '@/types/api';
+import { respond } from '@/lib/http/respond';
+import { route } from '@/lib/http/route';
+import { rpcFail } from '@/lib/http/rpc-errors';
+import { callRpcVoid } from '@/lib/rpc/call-rpc';
 
 const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -43,65 +43,32 @@ const bodySchema = z
 // and the RPC's HH:MM regex both want "HH:MM".
 const toHHMM = (t: string | null): string | null => (t ? t.slice(0, 5) : null);
 
-const mapRpcError = (msg: string): { status: number; message: string } => {
-  if (msg.includes('NOT_AUTHENTICATED'))
-    return { status: 401, message: 'Unauthorized' };
-  if (msg.includes('FORBIDDEN'))
-    return {
-      status: 403,
-      message: 'Only the CSO can update operational configuration',
-    };
-  if (msg.includes('INVALID_ZONE_HOURS'))
-    return { status: 422, message: 'Invalid zone hours' };
-  if (msg.includes('INVALID_CONFIG'))
-    return { status: 422, message: 'Invalid operational configuration' };
-  return { status: 500, message: msg };
-};
+export const GET = route({
+  name: 'admin/operational-config',
+  auth: 'user',
+  roles: ['CSO'],
+  handler: async ({ supabase }) => {
+    const [zoneHoursRes, configRes] = await Promise.all([
+      supabase
+        .from('zone_hours')
+        .select(
+          'zone, weekday_open, weekday_close, weekend_closed, weekend_open, weekend_close'
+        )
+        .order('zone'),
+      supabase
+        .from('operational_config')
+        .select('return_deadline_time, code_expiry_minutes')
+        .single(),
+    ]);
 
-export const GET = async () => {
-  const supabase = await createServerClient();
+    if (zoneHoursRes.error || configRes.error || !configRes.data) {
+      return respond.internal('operational-config GET failed', {
+        zoneErr: zoneHoursRes.error?.message,
+        configErr: configRes.error?.message,
+      });
+    }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user)
-    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single();
-  if (!profile || profile.role !== 'CSO')
-    return NextResponse.json(err('Forbidden', 403), { status: 403 });
-
-  const [zoneHoursRes, configRes] = await Promise.all([
-    supabase
-      .from('zone_hours')
-      .select(
-        'zone, weekday_open, weekday_close, weekend_closed, weekend_open, weekend_close'
-      )
-      .order('zone'),
-    supabase
-      .from('operational_config')
-      .select('return_deadline_time, code_expiry_minutes')
-      .single(),
-  ]);
-
-  if (zoneHoursRes.error || configRes.error || !configRes.data) {
-    const ref = crypto.randomUUID();
-    logger.error('operational-config GET failed', {
-      ref,
-      zoneErr: zoneHoursRes.error?.message,
-      configErr: configRes.error?.message,
-    });
-    return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
-      status: 500,
-    });
-  }
-
-  return NextResponse.json(
-    ok({
+    return respond.ok({
       zones: (zoneHoursRes.data ?? []).map((z) => ({
         zone: z.zone as Zone,
         weekday_open: toHHMM(z.weekday_open)!,
@@ -112,59 +79,30 @@ export const GET = async () => {
       })),
       return_deadline_time: toHHMM(configRes.data.return_deadline_time)!,
       code_expiry_minutes: configRes.data.code_expiry_minutes,
-    })
-  );
-};
+    });
+  },
+});
 
-export const PATCH = async (request: NextRequest) => {
-  const supabase = await createServerClient();
+export const PATCH = route({
+  name: 'admin/operational-config',
+  auth: 'user',
+  roles: ['CSO'],
+  body: bodySchema,
+  handler: async ({ supabase, body }) => {
+    const { zones, return_deadline_time, code_expiry_minutes } = body;
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user)
-    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
+    const result = await callRpcVoid(supabase, 'update_operational_config', {
+      p_zone_hours: zones,
+      p_return_deadline_time: return_deadline_time,
+      p_code_expiry_minutes: code_expiry_minutes,
+    });
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single();
-  if (!profile || profile.role !== 'CSO')
-    return NextResponse.json(err('Forbidden', 403), { status: 403 });
-
-  const body = await request.json().catch(() => null);
-  const parsed = bodySchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json(err('Invalid request body', 422), { status: 422 });
-  }
-
-  const { zones, return_deadline_time, code_expiry_minutes } = parsed.data;
-
-  const { error } = await supabase.rpc('update_operational_config', {
-    p_zone_hours: zones,
-    p_return_deadline_time: return_deadline_time,
-    p_code_expiry_minutes: code_expiry_minutes,
-  });
-
-  if (error) {
-    const mapped = mapRpcError(error.message);
-    if (mapped.status === 500) {
-      const ref = crypto.randomUUID();
-      logger.error('update_operational_config RPC failed', {
-        err: error.message,
-        ref,
-      });
-      return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
-        status: 500,
+    if (!result.ok) {
+      return rpcFail(result.error, {
+        FORBIDDEN: 'Only the CSO can update operational configuration',
       });
     }
-    return NextResponse.json(err(mapped.message, mapped.status), {
-      status: mapped.status,
-    });
-  }
 
-  return NextResponse.json(
-    ok({ zones, return_deadline_time, code_expiry_minutes })
-  );
-};
+    return respond.ok({ zones, return_deadline_time, code_expiry_minutes });
+  },
+});

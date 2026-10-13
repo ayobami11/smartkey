@@ -39,9 +39,6 @@ vi.mock('@/lib/supabase/admin', async () => {
 const REQUESTER_ID = '88888888-8888-4888-8888-888888888888';
 const DEAN_ID = '99999999-9999-4999-8999-999999999999';
 
-// The old nominate route minted 8-character refs.
-const SHORT_REF = /^Internal error\. Ref: [0-9a-f]{8}$/;
-
 beforeEach(() => {
   resetFake();
   vi.spyOn(logger, 'error').mockImplementation(() => undefined);
@@ -61,31 +58,20 @@ describe('POST /api/admin/authorisations', () => {
     fake.rpc.nominate_collector = { data: [{ slot_number: 2 }], error: null };
   });
 
-  describe('auth', () => {
-    it('401 Unauthorized with no session', async () => {
-      fake.user = null;
-      expect(await call(nominate, post(path, body))).toEqual(
-        failure(401, 'Unauthorized')
-      );
-    });
+  // CHANGED by the route() migration: there was no route-level role check,
+  // so any signed-in user (even one with no profile row) reached the RPC,
+  // which answered 403 "Key not in your department". Now a session with no
+  // profile is 401 and a VERIFIER or REQUESTER is 403 Forbidden before the
+  // RPC runs. The RPC still decides which keys a CSO or Dean may touch.
+  describeAuth('admin/authorisations', nominate, () => post(path, body), [
+    'CSO',
+    'DEAN',
+  ]);
 
-    // BUG: no route-level role check — any signed-in user, even one with no
-    // profile row, reaches the RPC, which is the only gate.
-    it.each([
-      ['no profile', null],
-      ['a VERIFIER', 'VERIFIER'],
-      ['a REQUESTER', 'REQUESTER'],
-    ] as const)('lets %s reach the RPC', async (_label, role) => {
-      if (role) asRole(role);
-      else fake.profile = null;
-      expect((await call(nominate, post(path, body))).status).toBe(201);
-      expect(fake.rpcCalls).toHaveLength(1);
-    });
-
-    it.each(['CSO', 'DEAN'] as const)('allows %s', async (role) => {
-      asRole(role);
-      expect((await call(nominate, post(path, body))).status).toBe(201);
-    });
+  it.each(['CSO', 'DEAN'] as const)('lets %s reach the RPC', async (role) => {
+    asRole(role);
+    expect((await call(nominate, post(path, body))).status).toBe(201);
+    expect(fake.rpcCalls).toHaveLength(1);
   });
 
   it.each([
@@ -107,13 +93,16 @@ describe('POST /api/admin/authorisations', () => {
       403,
       'Key not in your department',
     ],
-    // BUG: misleading — this is a Dean (or anyone but the CSO) acting on an
-    // Administration key, not a key from another department.
+    // CHANGED by the route() migration: this used to say "Key not in your
+    // department", which is the wrong reason for a Dean acting on an
+    // Administration key.
     [
       'FORBIDDEN: only the CSO can authorise collectors for administrative keys',
       403,
-      'Key not in your department',
+      'Only the CSO can manage collectors for Administration keys',
     ],
+    // An unknown FORBIDDEN detail keeps the department copy.
+    ['FORBIDDEN: something new', 403, 'Key not in your department'],
     [
       'REQUESTER_INACTIVE: user is not an active requester',
       422,
@@ -136,44 +125,39 @@ describe('POST /api/admin/authorisations', () => {
     );
   });
 
+  // CHANGED by the route() migration: the ref was 8 characters; it is now
+  // the full ref callRpc logs.
   it('500 with a ref for an unrecognised RPC failure', async () => {
     fake.rpc.nominate_collector = rpcError('connection reset');
-    const res = await call(nominate, post(path, body));
-    expect(res.status).toBe(500);
-    expect(res.body.error).toMatch(SHORT_REF);
+    expectRef(await call(nominate, post(path, body)));
   });
 
-  it('500 with a ref for a CONFLICT it does not recognise', async () => {
+  // CHANGED by the route() migration: an unrecognised CONFLICT detail was a
+  // ref'd 500; it now gets the catalogue's 409. nominate_collector raises no
+  // such detail today.
+  it('409 with the catalogue copy for a CONFLICT it does not recognise', async () => {
     fake.rpc.nominate_collector = rpcError('CONFLICT: something else');
-    const res = await call(nominate, post(path, body));
-    expect(res.status).toBe(500);
-    expect(res.body.error).toMatch(SHORT_REF);
+    expect(await call(nominate, post(path, body))).toEqual(
+      failure(409, "This action conflicts with the request's current state.")
+    );
   });
 
-  // BUG: a null RPC result is reported as a created slot with no number.
-  it('201 with a null slot when the RPC returns no row', async () => {
+  // CHANGED by the route() migration: a null RPC result was reported as a
+  // created slot with a null number; it is now a ref'd 500.
+  it('500 with a ref when the RPC returns no row', async () => {
     fake.rpc.nominate_collector = { data: null, error: null };
-    const res = await call(nominate, post(path, body));
-    expect(res.status).toBe(201);
-    expect(res.body.data).toEqual({
-      authorisation_id: `${KEY_ID}:${REQUESTER_ID}`,
-      slot_number: null,
-    });
+    expectRef(await call(nominate, post(path, body)));
   });
 
   it('201 with the composite id and slot number', async () => {
-    // BUG: the envelope status says 200 while the HTTP status is 201.
-    expect(await call(nominate, post(path, body))).toEqual({
-      status: 201,
-      body: {
-        data: {
-          authorisation_id: `${KEY_ID}:${REQUESTER_ID}`,
-          slot_number: 2,
-        },
-        error: null,
-        status: 200,
-      },
-    });
+    // CHANGED by the route() migration: the envelope status said 200 while
+    // the HTTP status was 201.
+    expect(await call(nominate, post(path, body))).toEqual(
+      success(
+        { authorisation_id: `${KEY_ID}:${REQUESTER_ID}`, slot_number: 2 },
+        201
+      )
+    );
     expect(fake.rpcCalls).toEqual([
       {
         name: 'nominate_collector',
@@ -194,28 +178,26 @@ describe('DELETE /api/admin/authorisations/[key_id]/[requester_id]', () => {
 
   beforeEach(() => asRole('DEAN'));
 
-  it('401 Unauthorized with no session', async () => {
-    fake.user = null;
-    expect(await call(removeCollector, del(), params)).toEqual(
-      failure(401, 'Unauthorized')
-    );
-  });
+  // CHANGED by the route() migration: no route-level role check before, as
+  // for nominate; no profile is now 401 and other roles 403.
+  describeAuth(
+    'admin/authorisations/[key_id]/[requester_id]',
+    removeCollector,
+    del,
+    ['CSO', 'DEAN'],
+    params
+  );
 
-  // BUG: no route-level role check, as for nominate.
-  it('lets a signed-in user with no profile reach the RPC', async () => {
-    fake.profile = null;
-    expect((await call(removeCollector, del(), params)).status).toBe(204);
-  });
-
-  // BUG: a malformed id reaches the RPC, whose uuid cast fails as a 500.
-  it('500 with a ref for a non-uuid key id (from the RPC)', async () => {
-    fake.rpc.remove_collector = rpcError(
-      'invalid input syntax for type uuid: "nope"'
+  // CHANGED by the route() migration: a malformed id reached the RPC, whose
+  // uuid cast failed as a ref'd 500; it is now a 404 without calling it.
+  it.each([
+    ['key id', { ...params, key_id: 'nope' }],
+    ['requester id', { ...params, requester_id: 'nope' }],
+  ])('404 Authorisation not found for a non-uuid %s', async (_label, bad) => {
+    expect(await call(removeCollector, del(), bad)).toEqual(
+      failure(404, 'Authorisation not found')
     );
-    expectRef(
-      await call(removeCollector, del(), { ...params, key_id: 'nope' })
-    );
-    expect(fake.rpcCalls).toHaveLength(1);
+    expect(fake.rpcCalls).toHaveLength(0);
   });
 
   it.each([
@@ -225,11 +207,11 @@ describe('DELETE /api/admin/authorisations/[key_id]/[requester_id]', () => {
       403,
       'Key not in your department',
     ],
-    // BUG: misleading copy, as for nominate.
+    // CHANGED by the route() migration: misleading copy, as for nominate.
     [
       'FORBIDDEN: only the CSO can remove collectors for administrative keys',
       403,
-      'Key not in your department',
+      'Only the CSO can manage collectors for Administration keys',
     ],
     ['NOT_FOUND: key does not exist', 404, 'Authorisation not found'],
     ['NOT_FOUND: authorisation does not exist', 404, 'Authorisation not found'],
@@ -322,10 +304,11 @@ describe('POST /api/admin/signature-references/resolve', () => {
     expectRef(await call(resolveReference, post(path, body)));
   });
 
-  // BUG: an empty RPC result throws past the handler (Next's bare 500).
-  it('throws when the RPC returns no row', async () => {
+  // CHANGED by the route() migration: an empty RPC result threw past the
+  // handler (Next's bare 500); it is now an enveloped 500 with a ref.
+  it('500 with a ref when the RPC returns no row', async () => {
     fake.rpc.resolve_pending_signature_reference = { data: [], error: null };
-    await expect(call(resolveReference, post(path, body))).rejects.toThrow();
+    expectRef(await call(resolveReference, post(path, body)));
   });
 
   it('returns the decision and new URL, note passed through', async () => {

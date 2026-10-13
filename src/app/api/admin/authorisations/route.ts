@@ -1,95 +1,55 @@
-import { NextRequest, NextResponse } from 'next/server';
 import * as z from 'zod';
 
-import { logger } from '@/lib/logger';
-import { createServerClient } from '@/lib/supabase/server';
-import { err, ok } from '@/types/api';
+import { collectorForbidden } from '@/lib/admin/collector-errors';
+import { respond } from '@/lib/http/respond';
+import { route } from '@/lib/http/route';
+import { byDetail, rpcFail } from '@/lib/http/rpc-errors';
+import { callRpc } from '@/lib/rpc/call-rpc';
 
 const bodySchema = z.object({
-  key_id: z.string().uuid(),
-  requester_id: z.string().uuid(),
+  key_id: z.uuid(),
+  requester_id: z.uuid(),
 });
 
-const mapRpcError = (msg: string): { status: number; message: string } => {
-  if (msg.includes('NOT_AUTHENTICATED'))
-    return { status: 401, message: 'Unauthorized' };
-  if (msg.includes('NOT_FOUND'))
-    return { status: 404, message: 'Key not found' };
-  if (msg.includes('FORBIDDEN'))
-    return { status: 403, message: 'Key not in your department' };
-  if (msg.includes('CONFLICT: three'))
-    return {
-      status: 409,
-      message: 'Three authorisation slots are already filled',
-    };
-  if (msg.includes('CONFLICT: requester'))
-    return {
-      status: 409,
-      message: 'Requester is already authorised for this key',
-    };
-  if (msg.includes('REQUESTER_INACTIVE'))
-    return {
-      status: 422,
-      message: 'This user account is deactivated and cannot be authorised',
-    };
-  return { status: 500, message: msg };
-};
+// nominate_collector is authoriser-aware: a Dean for their own faculty's
+// keys, the CSO for Administration keys. The role list here is defence in
+// depth; the RPC decides which keys each may touch.
+export const POST = route({
+  name: 'admin/authorisations',
+  auth: 'user',
+  roles: ['CSO', 'DEAN'],
+  body: bodySchema,
+  handler: async ({ supabase, body }) => {
+    const { key_id, requester_id } = body;
 
-export const POST = async (request: NextRequest) => {
-  try {
-    const supabase = await createServerClient();
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user)
-      return NextResponse.json(err('Unauthorized', 401), { status: 401 });
-
-    const body = await request.json().catch(() => null);
-    const parsed = bodySchema.safeParse(body);
-    if (!parsed.success)
-      return NextResponse.json(err('Invalid request body', 422), {
-        status: 422,
-      });
-
-    const { key_id, requester_id } = parsed.data;
-
-    const { data, error } = await supabase.rpc('nominate_collector', {
+    const result = await callRpc(supabase, 'nominate_collector', {
       p_key_id: key_id,
       p_requester_id: requester_id,
     });
 
-    if (error) {
-      const mapped = mapRpcError(error.message);
-      if (mapped.status === 500) {
-        const ref = crypto.randomUUID().slice(0, 8);
-        logger.error('nominate_collector rpc failed', {
-          err: error.message,
-          ref,
-        });
-        return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
-          status: 500,
-        });
-      }
-      return NextResponse.json(err(mapped.message, mapped.status), {
-        status: mapped.status,
+    if (!result.ok) {
+      return rpcFail(result.error, {
+        NOT_FOUND: 'Key not found',
+        FORBIDDEN: collectorForbidden,
+        CONFLICT: byDetail([
+          [
+            /^three authorisation slots are already filled$/,
+            'Three authorisation slots are already filled',
+          ],
+          [
+            /^requester is already authorised for this key$/,
+            'Requester is already authorised for this key',
+          ],
+        ]),
       });
     }
 
-    const slot_number = Array.isArray(data) ? data[0]?.slot_number : null;
-
-    return NextResponse.json(
-      ok({ authorisation_id: `${key_id}:${requester_id}`, slot_number }),
-      { status: 201 }
+    return respond.ok(
+      {
+        authorisation_id: `${key_id}:${requester_id}`,
+        slot_number: result.data.slot_number,
+      },
+      201
     );
-  } catch (e) {
-    const ref = crypto.randomUUID().slice(0, 8);
-    logger.error('nominate_collector unexpected error', {
-      ref,
-      err: String(e),
-    });
-    return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
-      status: 500,
-    });
-  }
-};
+  },
+});

@@ -1,9 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
 import * as z from 'zod';
 
-import { logger } from '@/lib/logger';
-import { createServerClient } from '@/lib/supabase/server';
-import { err, ok } from '@/types/api';
+import { respond } from '@/lib/http/respond';
+import { route } from '@/lib/http/route';
 
 const bodySchema = z.object({
   code: z
@@ -17,53 +15,41 @@ const bodySchema = z.object({
   key_count: z.coerce.number().int().min(1).max(20).default(1),
 });
 
-export const POST = async (request: NextRequest) => {
-  const supabase = await createServerClient();
+// Postgres unique_violation, raised here by keys.code.
+const UNIQUE_VIOLATION = '23505';
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user)
-    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
+// Known follow-up: creating a key writes no audit entry. It is a single-row
+// insert under the keys RLS policy (CSO write), not an RPC.
+export const POST = route({
+  name: 'admin/keys',
+  auth: 'user',
+  roles: ['CSO'],
+  body: bodySchema,
+  handler: async ({ supabase, body }) => {
+    const { code, zone, room_name, unit_id, key_count } = body;
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single();
-  if (!profile || profile.role !== 'CSO')
-    return NextResponse.json(err('Forbidden', 403), { status: 403 });
+    const { data: key, error: insertError } = await supabase
+      .from('keys')
+      .insert({
+        code,
+        zone,
+        room_name,
+        unit_id,
+        key_count,
+        status: 'AVAILABLE',
+      })
+      .select('id')
+      .single();
 
-  const body = await request.json().catch(() => null);
-  const parsed = bodySchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json(err('Invalid request body', 422), { status: 422 });
-  }
-
-  const { code, zone, room_name, unit_id, key_count } = parsed.data;
-
-  const { data: key, error: insertError } = await supabase
-    .from('keys')
-    .insert({ code, zone, room_name, unit_id, key_count, status: 'AVAILABLE' })
-    .select('id')
-    .single();
-
-  if (insertError) {
-    if (insertError.code === '23505') {
-      return NextResponse.json(
-        err(`Key code "${code}" is already in use.`, 409),
-        { status: 409 }
-      );
+    if (insertError) {
+      if (insertError.code === UNIQUE_VIOLATION) {
+        return respond.fail(409, `Key code "${code}" is already in use.`);
+      }
+      return respond.internal('create-key: insert failed', {
+        err: insertError.message,
+      });
     }
-    const ref = crypto.randomUUID();
-    logger.error('create-key: insert failed', {
-      err: insertError.message,
-      ref,
-    });
-    return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
-      status: 500,
-    });
-  }
 
-  return NextResponse.json(ok({ key_id: key.id }, 201), { status: 201 });
-};
+    return respond.ok({ key_id: key.id }, 201);
+  },
+});

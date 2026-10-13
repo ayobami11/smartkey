@@ -242,15 +242,11 @@ describe('POST /api/admin/users', () => {
   });
 
   it('201 with the new profile id, never the activation token', async () => {
-    // BUG: the envelope status says 200 while the HTTP status is 201.
-    expect(await call(provision, post(path, body))).toEqual({
-      status: 201,
-      body: {
-        data: { profile_id: TARGET_ID, status: 'PENDING_ACTIVATION' },
-        error: null,
-        status: 200,
-      },
-    });
+    // CHANGED by the route() migration: the envelope status said 200 while
+    // the HTTP status was 201.
+    expect(await call(provision, post(path, body))).toEqual(
+      success({ profile_id: TARGET_ID, status: 'PENDING_ACTIVATION' }, 201)
+    );
     expect(fake.authAdminCalls[0].args[0]).toEqual({
       type: 'invite',
       email: 'ada@unilag.edu.ng',

@@ -4,7 +4,6 @@
 // every auth outcome, bad body, query failure and RPC error kind each route
 // maps, plus success shapes. Written against the routes before they moved
 // onto route(); kept as the regression net after.
-import type { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { POST as createKey } from '@/app/api/admin/keys/route';
@@ -46,40 +45,6 @@ vi.mock('@/lib/supabase/admin', async () => {
 const UNIT_ID = '77777777-7777-4777-8777-777777777777';
 const KEY_ID = '33333333-3333-4333-8333-333333333333';
 
-// The routes before route(): a session with no profile row was refused with
-// 403 alongside the wrong roles, rather than 401.
-const describeAuthNoProfile403 = (
-  label: string,
-  handler: unknown,
-  makeRequest: () => NextRequest
-) => {
-  describe(`${label} auth`, () => {
-    it('401 Unauthorized with no session', async () => {
-      fake.user = null;
-      expect(await call(handler, makeRequest())).toEqual(
-        failure(401, 'Unauthorized')
-      );
-    });
-
-    it('403 Forbidden when the user has no profile', async () => {
-      fake.profile = null;
-      expect(await call(handler, makeRequest())).toEqual(
-        failure(403, 'Forbidden')
-      );
-    });
-
-    it.each(['DEAN', 'VERIFIER', 'REQUESTER'] as const)(
-      '403 Forbidden for %s',
-      async (role) => {
-        asRole(role);
-        expect(await call(handler, makeRequest())).toEqual(
-          failure(403, 'Forbidden')
-        );
-      }
-    );
-  });
-};
-
 beforeEach(() => {
   resetFake();
   vi.spyOn(logger, 'error').mockImplementation(() => undefined);
@@ -102,10 +67,9 @@ const TIER = { medium_min: 4, high_min: 7 };
 describe('GET /api/admin/risk-rules', () => {
   const path = '/api/admin/risk-rules';
 
-  // BUG: a signed-in user with no profile row gets 403, not 401.
-  describeAuthNoProfile403('admin/risk-rules GET', getRiskRules, () =>
-    get(path)
-  );
+  // CHANGED by the route() migration: a signed-in user with no profile
+  // row got 403 Forbidden here; it is now 401 like every other route.
+  describeAuth('admin/risk-rules GET', getRiskRules, () => get(path), ['CSO']);
 
   beforeEach(() => {
     asRole('CSO');
@@ -137,9 +101,13 @@ describe('PATCH /api/admin/risk-rules', () => {
   const path = '/api/admin/risk-rules';
   const body = { rules: RULES, tier: TIER };
 
-  // BUG: a signed-in user with no profile row gets 403, not 401.
-  describeAuthNoProfile403('admin/risk-rules PATCH', patchRiskRules, () =>
-    send('PATCH', path, body)
+  // CHANGED by the route() migration: a signed-in user with no profile
+  // row got 403 Forbidden here; it is now 401 like every other route.
+  describeAuth(
+    'admin/risk-rules PATCH',
+    patchRiskRules,
+    () => send('PATCH', path, body),
+    ['CSO']
   );
 
   beforeEach(() => asRole('CSO'));
@@ -227,9 +195,13 @@ const ZONES = [
 describe('GET /api/admin/operational-config', () => {
   const path = '/api/admin/operational-config';
 
-  // BUG: a signed-in user with no profile row gets 403, not 401.
-  describeAuthNoProfile403('admin/operational-config GET', getOperational, () =>
-    get(path)
+  // CHANGED by the route() migration: a signed-in user with no profile
+  // row got 403 Forbidden here; it is now 401 like every other route.
+  describeAuth(
+    'admin/operational-config GET',
+    getOperational,
+    () => get(path),
+    ['CSO']
   );
 
   beforeEach(() => {
@@ -289,11 +261,13 @@ describe('PATCH /api/admin/operational-config', () => {
     code_expiry_minutes: 10,
   };
 
-  // BUG: a signed-in user with no profile row gets 403, not 401.
-  describeAuthNoProfile403(
+  // CHANGED by the route() migration: a signed-in user with no profile
+  // row got 403 Forbidden here; it is now 401 like every other route.
+  describeAuth(
     'admin/operational-config PATCH',
     patchOperational,
-    () => send('PATCH', path, body)
+    () => send('PATCH', path, body),
+    ['CSO']
   );
 
   beforeEach(() => asRole('CSO'));
@@ -476,8 +450,9 @@ describe('POST /api/admin/keys', () => {
     unit_id: UNIT_ID,
   };
 
-  // BUG: a signed-in user with no profile row gets 403, not 401.
-  describeAuthNoProfile403('admin/keys', createKey, () => post(path, body));
+  // CHANGED by the route() migration: a signed-in user with no profile
+  // row got 403 Forbidden here; it is now 401 like every other route.
+  describeAuth('admin/keys', createKey, () => post(path, body), ['CSO']);
 
   beforeEach(() => {
     asRole('CSO');
