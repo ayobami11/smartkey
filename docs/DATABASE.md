@@ -6,6 +6,8 @@ Authoritative schema lives in `supabase/migrations/`. This document is a human-r
 
 ### profiles
 
+**Column guard** (`20261013095000_profiles_column_guard.sql`): the `profiles_update` RLS policy lets a session update its own row and the CSO any row, and `authenticated` holds UPDATE on the table. The `profiles_protect_columns` `BEFORE UPDATE` trigger (`protect_profile_columns()`) therefore rejects any change except `full_name` when the statement runs as `authenticated` or `anon` (`FORBIDDEN`, `P0002`). Every other column — `role`, `status`, `unit_id`, `institutional_email`, `photo_url`, `signature_ref_url`, `stamp_ref_url`, `activation_token`, `last_login_at` — is written server-side only: by the service-role admin client in the API routes, or by `SECURITY DEFINER` RPCs (which run as the function owner, so the guard passes them). It is an allowlist over the whole row, so a column added later is protected by default. Until 2026-10-13 nothing limited the columns, so any signed-in user could promote themselves to CSO through the REST API. `anon` also has its UPDATE grant revoked.
+
 - `id` UUID PK (= auth.users.id)
 - `role` enum `user_role`: 'CSO' | 'DEAN' | 'VERIFIER' | 'REQUESTER' — internal identifiers elsewhere (routes, RPCs, audit events, e.g. `hod_decisions`, `HOD_APPROVED`) retain the old `hod` name for historical continuity, but the enum value itself is `DEAN`
 - `full_name` text

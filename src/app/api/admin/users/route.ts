@@ -111,7 +111,9 @@ export const POST = async (request: NextRequest) => {
     }
 
     // Reset profile status and update name/department in case they changed.
-    const { error: resetError } = await supabase
+    // Server-written: protect_profile_columns rejects status/unit_id changes
+    // from any user session, the CSO's included.
+    const { error: resetError } = await createAdminClient()
       .from('profiles')
       .update({ status: 'PENDING_ACTIVATION', full_name, unit_id })
       .eq('id', existingProfile.id);

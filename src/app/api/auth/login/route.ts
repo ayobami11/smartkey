@@ -134,7 +134,8 @@ export const POST = async (request: NextRequest) => {
       });
     }
 
-    const { error: lastLoginError } = await supabase
+    // last_login_at is server-written only (protect_profile_columns).
+    const { error: lastLoginError } = await createAdminClient()
       .from('profiles')
       .update({ last_login_at: new Date().toISOString() })
       .eq('id', authData.user.id);

@@ -6,6 +6,20 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-10-13 — Users can no longer change their own role or status through the API
+
+- **Why**: privilege escalation. The `profiles_update` RLS policy lets a session update its own row (and the CSO any row), and Supabase grants `authenticated` UPDATE on every public table. Nothing limited **which** columns could change, so any signed-in user could `PATCH /rest/v1/profiles?id=eq.<self>` with `role=CSO` and become an administrator. The same path let a requester reactivate themselves, move units, or point their passport photo at someone else's image, and let a Dean replace their reference signature without the verification step. Found by the planning pass for the atomic-transitions refactor.
+- **Migration `20261013095000_profiles_column_guard.sql`**:
+  - adds the `BEFORE UPDATE` trigger `profiles_protect_columns`. From a user session (`authenticated`/`anon`) only `full_name` may change; anything else raises `FORBIDDEN` (`P0002`);
+  - the check is an allowlist over the whole row, so future columns are protected by default;
+  - the service-role admin client and `SECURITY DEFINER` RPCs are unaffected;
+  - also revokes `anon`'s UPDATE grant.
+- **Routes moved to the admin client** (each already authenticates and authorises the caller before writing): `auth/register`, `auth/activate-hod`, `auth/login` and `auth/verify-otp` (`last_login_at`), `profile/photo`, `profile/signature`, `admin/users` (re-invite), `admin/users/[id]`, `admin/users/[id]/revoke`. `profile/me` (name change) still uses the session.
+- **Deliberately stricter than first planned**: `photo_url` is not user-writable either. The passport photo is what the security desk uses to identify a collector.
+- **Tests**: pgTAP `supabase/tests/07_profiles_column_guard_test.sql` (12 assertions).
+- **Deploy order**: apply the migration and deploy this code together. With the migration alone, the old code's session-client writes (registration, onboarding, photo upload, login stamping, CSO user edits) would be rejected.
+- **Follow-ups**: login, OTP and the proxy never check `profiles.status`, so a revoked user keeps their session until it expires. RPCs that take the actor as a parameter need a grant audit.
+
 ### 2026-10-13 — Fix pgTAP audit count in the weekday lifecycle test
 
 - **Why**: CI's `bun run test:db` failed test 14 of `supabase/tests/05_weekday_lifecycle_test.sql`. The decision-token coverage added in the previous entry creates a fourth request (`t_a6_admin`, the Administration-unit weekend request) before the `REQUEST_CREATED` audit-count assertion, which still expected three. The count was stale, not the code: `create_request` correctly writes one audit entry per successful call.

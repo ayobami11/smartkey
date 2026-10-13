@@ -95,7 +95,8 @@ export const POST = async (request: NextRequest) => {
 
   // Best-effort, mirrors the audit write: this is the moment the role's login
   // is actually complete, not the earlier password/OTP-request step.
-  const lastLoginPromise = supabase
+  // last_login_at is server-written only (protect_profile_columns).
+  const lastLoginPromise = adminClient
     .from('profiles')
     .update({ last_login_at: new Date().toISOString() })
     .eq('id', profile.id)

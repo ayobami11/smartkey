@@ -47,7 +47,9 @@ export const PATCH = async (
     });
   }
 
-  const { error: updateError } = await supabase
+  // Server-written: protect_profile_columns rejects status changes from any
+  // user session, the CSO's included.
+  const { error: updateError } = await createAdminClient()
     .from('profiles')
     .update({ status: 'DEACTIVATED' })
     .eq('id', id);

@@ -117,7 +117,9 @@ export const PATCH = async (
   const updates: { full_name: string; unit_id?: string } = { full_name };
   if (isDepartmental) updates.unit_id = nextUnitId!;
 
-  const { error: updateError } = await supabase
+  // Server-written: protect_profile_columns rejects unit_id changes from any
+  // user session, the CSO's included.
+  const { error: updateError } = await createAdminClient()
     .from('profiles')
     .update(updates)
     .eq('id', id);
