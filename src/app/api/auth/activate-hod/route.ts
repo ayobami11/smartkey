@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { uploadExtension } from '@/lib/storage/extension';
 import { assessPlausibility } from '@/lib/ai/signature/verifier';
 import { logger } from '@/lib/logger';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -123,7 +124,7 @@ export const POST = async (request: NextRequest) => {
   // storage RLS auth-context fragility of the cookie-based server client.
   const adminClient = createAdminClient();
 
-  const sigExt = signature.name.split('.').pop() ?? 'png';
+  const sigExt = uploadExtension(signature.name, 'png');
   const sigPath = `${userId}/signature.${sigExt}`;
 
   const { error: sigUploadError } = await adminClient.storage
@@ -140,7 +141,7 @@ export const POST = async (request: NextRequest) => {
     });
   }
 
-  const stampExt = stamp.name.split('.').pop() ?? 'png';
+  const stampExt = uploadExtension(stamp.name, 'png');
   const stampPath = `${userId}/stamp.${stampExt}`;
 
   const { error: stampUploadError } = await adminClient.storage

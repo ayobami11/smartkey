@@ -1,11 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
 import * as z from 'zod';
 
-import { writeAuditEntry } from '@/lib/audit';
-import { logger } from '@/lib/logger';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { createServerClient } from '@/lib/supabase/server';
-import { err, ok } from '@/types/api';
+import { respond } from '@/lib/http/respond';
+import { route } from '@/lib/http/route';
+import { byDetail, rpcFail } from '@/lib/http/rpc-errors';
+import { callRpc } from '@/lib/rpc/call-rpc';
 
 const bodySchema = z.object({
   request_id: z.uuid(),
@@ -13,75 +11,39 @@ const bodySchema = z.object({
   note: z.string().optional(),
 });
 
-export const POST = async (request: NextRequest) => {
-  const supabase = await createServerClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user)
-    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role, unit_id')
-    .eq('id', user.id)
-    .single();
-  if (!profile)
-    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
-  if (profile.role !== 'CSO')
-    return NextResponse.json(err('Forbidden', 403), { status: 403 });
-
-  const body = await request.json().catch(() => null);
-  const parsed = bodySchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json(err('Invalid request body', 422), { status: 422 });
-  }
-
-  const { request_id, decision } = parsed.data;
-
-  if (decision === 'DECLINED') {
-    // RLS blocks direct UPDATE on requests for authenticated users — use the
-    // service-role admin client to perform this status transition.
-    const adminClient = createAdminClient();
-    const { error } = await adminClient
-      .from('requests')
-      .update({ status: 'CANCELLED' })
-      .eq('id', request_id)
-      .eq('status', 'CODE_ISSUED');
-
-    if (error) {
-      const ref = crypto.randomUUID();
-      logger.error('cso-decision cancel failed', { err: error.message, ref });
-      return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
-        status: 500,
+// CSO intervention on a high-risk request from the cso-queue. DECLINED
+// withdraws an uncollected code (CODE_ISSUED → CANCELLED); APPROVED records
+// that the CSO reviewed it and lets it stand, with no state change. Either
+// way the decision, its note and the audit entry commit together in
+// cso_decide_request, and the response carries the request's real status.
+export const POST = route({
+  name: 'requests/cso-decision',
+  auth: 'user',
+  roles: ['CSO'],
+  body: bodySchema,
+  handler: async ({ supabase, body }) => {
+    const result = await callRpc(supabase, 'cso_decide_request', {
+      p_request_id: body.request_id,
+      p_decision: body.decision,
+      p_note: body.note,
+    });
+    if (!result.ok) {
+      return rpcFail(result.error, {
+        NOT_FOUND: 'Request not found',
+        CONFLICT: byDetail(
+          [
+            [
+              /^only a request with an uncollected code/,
+              'Only a request whose code has not been collected yet can be declined.',
+            ],
+          ],
+          'This request is no longer awaiting review.'
+        ),
       });
     }
-  }
-
-  try {
-    await writeAuditEntry({
-      event:
-        decision === 'DECLINED'
-          ? 'REQUEST_DECLINED_CSO'
-          : 'REQUEST_APPROVED_CSO',
-      actorId: user.id,
-      actorRole: 'CSO',
-      targetType: 'request',
-      targetId: request_id,
-      payload: { decision },
+    return respond.ok({
+      request_id: result.data.request_id,
+      status: result.data.status,
     });
-  } catch (auditErr) {
-    logger.error('cso-decision: audit write failed', {
-      err: String(auditErr),
-      request_id,
-    });
-  }
-
-  return NextResponse.json(
-    ok({
-      request_id,
-      status: decision === 'DECLINED' ? 'CANCELLED' : 'CODE_ISSUED',
-    })
-  );
-};
+  },
+});

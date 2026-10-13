@@ -976,6 +976,13 @@ export type Database = {
           request_id: string;
         }[];
       };
+      cancel_request: {
+        Args: { p_request_id: string };
+        Returns: {
+          request_id: string;
+          status: string;
+        }[];
+      };
       create_guest_weekend_request: {
         Args: {
           p_department_id: string;
@@ -997,7 +1004,11 @@ export type Database = {
       create_request: {
         Args: {
           p_key_id: string;
+          p_letter_url?: string;
           p_return_deadline: string;
+          p_risk_factors?: Json;
+          p_risk_tier?: Database['public']['Enums']['risk_tier'];
+          p_stamp_url?: string;
           p_type: string;
           p_weekend_date?: string;
         };
@@ -1005,6 +1016,20 @@ export type Database = {
           code: string;
           code_expires_at: string;
           request_id: string;
+          status: string;
+        }[];
+      };
+      cso_decide_request: {
+        Args: { p_decision: string; p_note?: string; p_request_id: string };
+        Returns: {
+          request_id: string;
+          status: string;
+        }[];
+      };
+      deactivate_user: {
+        Args: { p_profile_id: string };
+        Returns: {
+          profile_id: string;
           status: string;
         }[];
       };
@@ -1101,6 +1126,19 @@ export type Database = {
           retired: boolean;
           unit_id: string;
           zone: Database['public']['Enums']['zone'];
+        }[];
+      };
+      hold_signature_reference: {
+        Args: {
+          p_compared_ref_url: string;
+          p_mismatch_pct: number;
+          p_pending_url: string;
+          p_profile_id: string;
+          p_threshold_pct: number;
+          p_type: string;
+        };
+        Returns: {
+          held_pending_url: string;
         }[];
       };
       issue_key: {
@@ -1201,6 +1239,18 @@ export type Database = {
           shift_id: string;
         }[];
       };
+      set_signature_reference: {
+        Args: {
+          p_compared_ref_url?: string;
+          p_new_url: string;
+          p_profile_id: string;
+          p_type: string;
+        };
+        Returns: {
+          cleared_pending: boolean;
+          new_url: string;
+        }[];
+      };
       update_operational_config: {
         Args: {
           p_code_expiry_minutes: number;
@@ -1212,6 +1262,14 @@ export type Database = {
       update_risk_config: {
         Args: { p_high_min: number; p_medium_min: number; p_rules: Json };
         Returns: undefined;
+      };
+      update_user_profile: {
+        Args: { p_full_name: string; p_profile_id: string; p_unit_id?: string };
+        Returns: {
+          full_name: string;
+          profile_id: string;
+          unit_id: string;
+        }[];
       };
       user_role: { Args: never; Returns: string };
       user_unit_id: { Args: never; Returns: string };

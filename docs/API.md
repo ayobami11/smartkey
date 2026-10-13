@@ -271,7 +271,7 @@ Verifies `current_password` by re-authenticating (`signInWithPassword`) before a
 
 **File**: `src/app/api/requests/submit/route.ts`
 **Roles**: REQUESTER
-**RPC**: `create_request(key_id, return_time, type, weekend_date?)`
+**RPC**: `create_request(key_id, type, return_deadline, weekend_date?, risk_tier?, risk_factors?, letter_url?, stamp_url?)`
 
 | Field             | Type                       | Required                                                                                                                                                                   |
 | ----------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -280,8 +280,9 @@ Verifies `current_password` by re-authenticating (`signInWithPassword`) before a
 | `return_deadline` | `string` (ISO timestamptz) | yes                                                                                                                                                                        |
 | `weekend_date`    | `string` (ISO date)        | WEEKEND only                                                                                                                                                               |
 | `letter_url`      | `string`                   | no — optional Dean-signature image the requester uploaded client-side to `weekend-letters`; persisted on the request row for later signature verification at Dean approval |
+| `stamp_url`       | `string`                   | no — optional stamp close-up, same rules as `letter_url`                                                                                                                   |
 
-The RPC runs the risk engine, generates the code, and writes the audit entry atomically.
+The route runs the risk engine and passes the result to the RPC, which writes the request (with `risk_tier`, `risk_factors` and, for a weekend request, `letter_url`/`stamp_url`), the code and the `REQUEST_CREATED` entry (carrying the tier) in one transaction. Until 2026-10-13 the tier and the letter/stamp were back-filled after the RPC by two best-effort admin-client UPDATEs, so a failure could leave a HIGH-risk request stored as LOW. A `letter_url`/`stamp_url` outside the requester's own `weekend-letters/{uid}/` folder is refused (`422`) by the route and again by the RPC; on a weekday request the route drops them.
 
 **Response `data`** (WEEKDAY):
 
@@ -379,17 +380,21 @@ Returns requests with `risk_tier = 'HIGH'` and `status` in `('CODE_ISSUED', 'KEY
 **File**: `src/app/api/requests/cso-decision/route.ts`
 **Roles**: CSO
 
-CSO intervention on a high-risk `CODE_ISSUED` request surfaced by `cso-queue` above — not an approval gate every request passes through. `decision: 'DECLINED'` cancels the request (`CODE_ISSUED` → `CANCELLED`, admin client, audit `REQUEST_DECLINED_CSO`); `decision: 'APPROVED'` makes no state change (a no-op acknowledgement that the CSO has reviewed and is letting it proceed), audit `REQUEST_APPROVED_CSO`.
+**RPC**: `cso_decide_request(request_id, decision, note?)`
 
-| Field        | Type                       | Required                                                         |
-| ------------ | -------------------------- | ---------------------------------------------------------------- |
-| `request_id` | `string` (uuid)            | yes                                                              |
-| `decision`   | `'APPROVED' \| 'DECLINED'` | yes                                                              |
-| `note`       | `string`                   | no — accepted by the schema but not currently persisted anywhere |
+CSO intervention on a high-risk request surfaced by `cso-queue` above — not an approval gate every request passes through. `decision: 'DECLINED'` withdraws an uncollected code (`CODE_ISSUED` → `CANCELLED`, audit `REQUEST_DECLINED_CSO`); `decision: 'APPROVED'` makes no state change (an acknowledgement that the CSO has reviewed it and is letting it proceed), audit `REQUEST_APPROVED_CSO`. The state change, the note and the audit entry commit together in the RPC.
 
-**Response `data`**: `{ "request_id": "<uuid>", "status": "CANCELLED" | "CODE_ISSUED" }` (`CANCELLED` on decline, unchanged `CODE_ISSUED` on approve)
+Until 2026-10-13 a decline on a `KEY_ISSUED` request (the queue shows those too) changed nothing but still wrote `REQUEST_DECLINED_CSO` and answered `CANCELLED`; it is now a `409`. The note used to be dropped.
 
-**Errors**: `401` unauthenticated · `403` not CSO · `422` validation
+| Field        | Type                       | Required                                 |
+| ------------ | -------------------------- | ---------------------------------------- |
+| `request_id` | `string` (uuid)            | yes                                      |
+| `decision`   | `'APPROVED' \| 'DECLINED'` | yes                                      |
+| `note`       | `string`                   | no — recorded in the audit entry payload |
+
+**Response `data`**: `{ "request_id": "<uuid>", "status": "CANCELLED" | "CODE_ISSUED" | "KEY_ISSUED" }` (`CANCELLED` on decline; on approve, the request's real, unchanged status)
+
+**Errors**: `401` unauthenticated · `403` not CSO · `404` request not found · `409` declining anything but an uncollected code, or approving a request no longer `CODE_ISSUED`/`KEY_ISSUED` · `422` validation
 
 ---
 
@@ -459,16 +464,17 @@ The `409` is raised by the `issue_key` capacity guard (see `docs/DATABASE.md`) w
 
 **File**: `src/app/api/requests/cancel/route.ts`
 **Roles**: REQUESTER
+**RPC**: `cancel_request(request_id)`
 
 | Field        | Type            | Required |
 | ------------ | --------------- | -------- |
 | `request_id` | `string` (uuid) | yes      |
 
-Cancellable from any pre-collection state the requester owns: `CODE_ISSUED` (weekday code), or `PENDING_HOD` / `APPROVED` (a weekend request before its on-the-day code is minted — the manual escape hatch for an approved weekend request whose date passes). Writes audit entry.
+Cancellable from any pre-collection state the requester owns: `CODE_ISSUED` (weekday code), or `PENDING_HOD` / `APPROVED` (a weekend request before its on-the-day code is minted — the manual escape hatch for an approved weekend request whose date passes). The RPC cancels, clears the code and writes `REQUEST_CANCELLED` in one transaction; the requester is the session user.
 
 **Response `data`**: `{ "request_id": "<uuid>", "status": "CANCELLED" }`
 
-**Errors**: `403` not the requester's own request · `409` request not in cancellable state
+**Errors**: `404` request not found, including another requester's request (its existence is not disclosed) · `409` request not in cancellable state
 
 ---
 
@@ -917,11 +923,20 @@ Each user's `last_sign_in_at` field is sourced from `profiles.last_login_at` (ap
 **File**: `src/app/api/admin/users/[id]/revoke/route.ts`
 **Roles**: CSO
 
-No request body. Sets `profiles.status = 'DEACTIVATED'`. Supabase Auth session is invalidated immediately. Writes audit entry.
+**RPC**: `deactivate_user(profile_id)`
+
+No request body. The flow lives in `src/lib/admin/revoke-user.ts`, because the auth ban (GoTrue) and the profile change (Postgres) cannot share a transaction:
+
+1. Check the target exists and is not already deactivated (`404` / `409`, before anything changes).
+2. Ban the auth user (`ban_duration` ~100 years) — the only thing that actually locks them out, and reversible.
+3. `deactivate_user` sets `status = 'DEACTIVATED'`, clears any `units.hod_id` pointing at them, and writes `USER_DEACTIVATED`, atomically.
+4. If step 3 fails, lift the ban so the user is back where they started — except on `CONFLICT` (a concurrent revoke won), where the ban is correct and stays.
+
+Until 2026-10-13 a failed ban was logged and the route still answered `200`, leaving a "deactivated" user who could sign in; it is now a `500`.
 
 **Response `data`**: `{ "profile_id": "<uuid>", "status": "DEACTIVATED" }`
 
-**Errors**: `404` user not found · `409` already deactivated
+**Errors**: `404` user not found · `409` already deactivated · `500` the ban or the RPC failed (correlation ref)
 
 ---
 
@@ -943,7 +958,9 @@ No request body. Re-sends a fresh activation link for a user still `PENDING_ACTI
 **File**: `src/app/api/admin/users/[id]/route.ts`
 **Roles**: CSO
 
-Edits an existing user's `full_name` and — for departmental roles (Dean, REQUESTER) — `unit_id`. Email and role are intentionally **not** editable here: the email is the auth login identity and chain-of-trust anchor, and role changes are out of scope. Writes a `USER_UPDATED` audit entry recording only the fields that actually changed. When a Dean moves faculty, the `units.hod_id` reverse link is kept in sync.
+**RPC**: `update_user_profile(profile_id, full_name, unit_id?)`
+
+Edits an existing user's `full_name` and — for departmental roles (Dean, REQUESTER) — `unit_id`. Email and role are intentionally **not** editable here: the email is the auth login identity and chain-of-trust anchor, and role changes are out of scope. The RPC writes the profile, keeps the `units.hod_id` reverse link in sync when a Dean moves, and writes a `USER_UPDATED` entry recording only the fields that changed, in one transaction. The one-Dean-per-unit check runs under a lock on the destination unit.
 
 | Field       | Type            | Required                   |
 | ----------- | --------------- | -------------------------- |
@@ -952,7 +969,7 @@ Edits an existing user's `full_name` and — for departmental roles (Dean, REQUE
 
 **Response `data`**: `{ "profile_id": "<uuid>", "full_name": "<name>", "unit_id": "<uuid|null>" }`
 
-**Errors**: `404` user not found · `409` destination faculty already has a Dean · `422` validation / unit required / unit not found
+**Errors**: `404` user not found · `409` destination unit already has an active Dean · `422` validation / unit required / unit not found
 
 ---
 
@@ -1242,12 +1259,12 @@ Replaces a Dean's signature or stamp reference image (post-onboarding). If a ref
 | `type`  | `'signature' \| 'stamp'` | yes      |
 | `image` | `File` (image, max 5MB)  | yes      |
 
-If the mismatch exceeds `SIGNATURE_DIFF_THRESHOLD`, the reference is **held, not replaced**: the new upload is stored at a separate `-pending` Storage path, a row is written to `pending_signature_references` (see `docs/DATABASE.md`), and a `SIGNATURE_MISMATCH` audit entry is written (`context: 'reference_replacement'`, including `pending_url`). The response reports the held state (still HTTP 200) and the current reference stays active in the meantime. The CSO reviews the pending upload against the current reference on `/cso/dashboard` (same "Signature mismatches" card as the weekend-request mismatches) and resolves it via `POST /api/admin/signature-references/resolve` — approve to replace the reference, or decline to discard the pending upload. Otherwise (verification passes) the reference is replaced immediately and a `SIGNATURE_REFERENCE_UPDATED` entry is written.
+If the mismatch exceeds `SIGNATURE_DIFF_THRESHOLD`, the reference is **held, not replaced**: the service-only `hold_signature_reference` RPC writes the `pending_signature_references` row (see `docs/DATABASE.md`) and the `SIGNATURE_MISMATCH` audit entry (`context: 'reference_replacement'`, including `pending_url`) together. Every upload is stored at its own Storage path (`{uid}/{type}-{uuid}.{ext}`), so the live reference file is never overwritten in place. The response reports the held state (still HTTP 200) and the current reference stays active in the meantime. The CSO reviews the pending upload against the current reference on `/cso/dashboard` (same "Signature mismatches" card as the weekend-request mismatches) and resolves it via `POST /api/admin/signature-references/resolve` — approve to replace the reference, or decline to discard the pending upload. Otherwise (verification passes) the service-only `set_signature_reference` RPC replaces the reference, clears any stale held upload for that type, and writes `SIGNATURE_REFERENCE_UPDATED`. Both RPCs refuse (`409`) if the reference changed while the upload was being verified, and the unused upload is then removed.
 
 **Response `data`** (held): `{ "status": "HELD_SIGNATURE_MISMATCH", "mismatch_pct": <number>, "message": "..." }`
 **Response `data`** (updated): `{ "status": "updated", "new_url": "<url>" }`
 
-**Errors**: `401` unauthenticated · `403` not DEAN · `422` missing/invalid type or image · `413` over 5MB
+**Errors**: `401` unauthenticated · `403` not DEAN · `409` the reference changed during verification — retry · `413` over 5MB · `422` missing/invalid type or image · `500` storage, verification or RPC failure (correlation ref)
 
 ---
 
@@ -1615,6 +1632,12 @@ Liveness probe for external uptime monitoring (e.g. UptimeRobot). The landing pa
 | RPC                                   | Called by route                                      | Also writes audit entry |
 | ------------------------------------- | ---------------------------------------------------- | ----------------------- |
 | `create_request`                      | POST /api/requests/submit                            | yes                     |
+| `cancel_request`                      | POST /api/requests/cancel                            | yes                     |
+| `cso_decide_request`                  | POST /api/requests/cso-decision                      | yes                     |
+| `update_user_profile`                 | PATCH /api/admin/users/[id]                          | yes                     |
+| `deactivate_user`                     | PATCH /api/admin/users/[id]/revoke                   | yes                     |
+| `set_signature_reference`             | POST /api/profile/signature (service role)           | yes                     |
+| `hold_signature_reference`            | POST /api/profile/signature (service role)           | yes                     |
 | `issue_key`                           | POST /api/requests/collect                           | yes                     |
 | `generate_weekend_code`               | POST /api/requests/weekend-code                      | yes                     |
 | `expire_request`                      | POST /api/requests/expire                            | yes                     |

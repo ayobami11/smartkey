@@ -4,7 +4,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to public, extensions;
 
-select plan(45);
+select plan(53);
 
 insert into auth.users (id, email) values
   ('55555555-5555-4555-8555-000000000001', 'pgtap.week.dean@example.test'),
@@ -182,6 +182,100 @@ select is(
      and actor_id = '55555555-5555-4555-8555-000000000003'),
   4,
   'four successful create_request calls wrote four REQUEST_CREATED entries'
+);
+
+-- Risk result and weekend letter/stamp are written by create_request's own
+-- INSERT (20261013120100); the submit route used to back-fill them with two
+-- separate best-effort UPDATEs.
+insert into public.keys (id, code, zone, room_name, unit_id, status) values
+  ('55555555-5555-4555-8555-00000000002f', 'PGT-516', 'NEW_SENATE', 'pgTAP Lifecycle Room O', '55555555-5555-4555-8555-000000000010', 'AVAILABLE'),
+  ('55555555-5555-4555-8555-000000000030', 'PGT-517', 'NEW_SENATE', 'pgTAP Lifecycle Room P', '55555555-5555-4555-8555-000000000010', 'AVAILABLE');
+insert into public.authorisations (key_id, profile_id, authorised_by) values
+  ('55555555-5555-4555-8555-00000000002f', '55555555-5555-4555-8555-000000000003', '55555555-5555-4555-8555-000000000001'),
+  ('55555555-5555-4555-8555-000000000030', '55555555-5555-4555-8555-000000000003', '55555555-5555-4555-8555-000000000001');
+
+select is(
+  (select risk_tier::text from public.requests where id = (select request_id from t_a3)),
+  'LOW',
+  'a create_request call without a risk tier still stores LOW'
+);
+
+create temp table t_r1 as
+select * from public.create_request(
+  p_key_id          := '55555555-5555-4555-8555-00000000002f',
+  p_type            := 'WEEKDAY',
+  p_return_deadline := now() + interval '1 day',
+  p_risk_tier       := 'HIGH',
+  p_risk_factors    := '[{"rule": "outside_operational_hours", "weight": 3}]'::jsonb);
+
+select is(
+  (select risk_tier::text from public.requests where id = (select request_id from t_r1)),
+  'HIGH',
+  'the risk tier is stored by the same INSERT as the request'
+);
+
+select is(
+  (select risk_factors->0->>'rule' from public.requests where id = (select request_id from t_r1)),
+  'outside_operational_hours',
+  'the risk factors are stored by the same INSERT as the request'
+);
+
+select is(
+  (select payload->>'risk_tier' from public.audit_log
+   where event = 'REQUEST_CREATED' and target_id = (select request_id from t_r1)),
+  'HIGH',
+  'REQUEST_CREATED records the risk tier'
+);
+
+select throws_ok(
+  $$ select * from public.create_request(
+       p_key_id          := '55555555-5555-4555-8555-000000000030',
+       p_type            := 'WEEKDAY',
+       p_return_deadline := now() + interval '1 day',
+       p_letter_url      := 'https://x.test/storage/v1/object/public/weekend-letters/55555555-5555-4555-8555-000000000003/letter.png') $$,
+  'P0004',
+  'VALIDATION: a letter or stamp is only accepted on a WEEKEND request',
+  'a weekday request carries no letter'
+);
+
+select throws_ok(
+  $$ select * from public.create_request(
+       p_key_id          := '55555555-5555-4555-8555-000000000030',
+       p_type            := 'WEEKEND',
+       p_return_deadline := now() + interval '2 days',
+       p_weekend_date    := current_date + 2,
+       p_letter_url      := 'https://x.test/storage/v1/object/public/weekend-letters/55555555-5555-4555-8555-000000000004/letter.png') $$,
+  'P0004',
+  'VALIDATION: letter or stamp is not an upload of this requester',
+  'a letter from another requester''s folder is refused'
+);
+
+select throws_ok(
+  $$ select * from public.create_request(
+       p_key_id          := '55555555-5555-4555-8555-000000000030',
+       p_type            := 'WEEKEND',
+       p_return_deadline := now() + interval '2 days',
+       p_weekend_date    := current_date + 2,
+       p_stamp_url       := 'https://x.test/storage/v1/object/public/hod-signatures/55555555-5555-4555-8555-000000000003/stamp.png') $$,
+  'P0004',
+  'VALIDATION: letter or stamp is not an upload of this requester',
+  'a stamp outside weekend-letters (e.g. a Dean reference) is refused'
+);
+
+create temp table t_r2 as
+select * from public.create_request(
+  p_key_id          := '55555555-5555-4555-8555-000000000030',
+  p_type            := 'WEEKEND',
+  p_return_deadline := now() + interval '2 days',
+  p_weekend_date    := current_date + 2,
+  p_letter_url      := 'https://x.test/storage/v1/object/public/weekend-letters/55555555-5555-4555-8555-000000000003/letter.png',
+  p_stamp_url       := 'https://x.test/storage/v1/object/public/weekend-letters/55555555-5555-4555-8555-000000000003/stamp.png');
+
+select is(
+  (select letter_url || ' ' || stamp_url from public.requests where id = (select request_id from t_r2)),
+  'https://x.test/storage/v1/object/public/weekend-letters/55555555-5555-4555-8555-000000000003/letter.png '
+    || 'https://x.test/storage/v1/object/public/weekend-letters/55555555-5555-4555-8555-000000000003/stamp.png',
+  'a weekend request stores its own letter and stamp in the same INSERT'
 );
 
 insert into public.requests

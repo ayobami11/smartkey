@@ -1,4 +1,3 @@
-import { NextRequest, NextResponse } from 'next/server';
 import * as z from 'zod';
 
 import { DEFAULT_RISK_CONFIG } from '@/lib/ai/risk/default-config';
@@ -8,12 +7,14 @@ import type {
   RiskEngineConfig,
   RiskRuleKey,
 } from '@/lib/ai/risk/types';
+import { respond } from '@/lib/http/respond';
+import { route } from '@/lib/http/route';
+import { rpcFail } from '@/lib/http/rpc-errors';
 import { logger } from '@/lib/logger';
 import { notifyAfterResponse } from '@/lib/notifications/notify';
+import { callRpc } from '@/lib/rpc/call-rpc';
 import { parseStorageUrl } from '@/lib/storage/object-url';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { createServerClient } from '@/lib/supabase/server';
-import { err, ok } from '@/types/api';
+import type { Json } from '@/types/database';
 
 const bodySchema = z.object({
   key_id: z.uuid(),
@@ -27,252 +28,179 @@ const bodySchema = z.object({
   stamp_url: z.url().optional(),
 });
 
-const mapRpcError = (msg: string): { status: number; message: string } => {
-  if (msg.includes('NOT_AUTHENTICATED'))
-    return { status: 401, message: 'Not authenticated' };
-  if (msg.includes('FORBIDDEN')) return { status: 403, message: 'Forbidden' };
-  if (msg.includes('NOT_FOUND')) return { status: 404, message: 'Not found' };
+const INVALID_UPLOAD = 'Invalid letter or stamp upload';
 
-  if (msg.includes('NO_KEYS_AVAILABLE'))
-    return {
-      status: 409,
-      message:
-        'No key is available for this room right now. Every key is out or reserved — try again once one is returned.',
+export const POST = route({
+  name: 'requests/submit',
+  auth: 'user',
+  roles: ['REQUESTER'],
+  body: bodySchema,
+  handler: async ({ supabase, user, body }) => {
+    const {
+      key_id,
+      type,
+      return_deadline,
+      weekend_date,
+      letter_url,
+      stamp_url,
+    } = body;
+
+    // The letter/stamp are what the Dean's approval is verified against, so
+    // they must be objects this requester uploaded: weekend-letters, in their
+    // own folder (the upload path the RLS insert policy enforces). Any other
+    // URL — e.g. the Dean's own reference in hod-signatures — would let the
+    // signature check compare a reference against itself.
+    const isOwnWeekendLetter = (url: string | undefined) => {
+      if (!url) return true;
+      const ref = parseStorageUrl(url);
+      return (
+        ref?.bucket === 'weekend-letters' && ref.path.startsWith(`${user.id}/`)
+      );
     };
-  if (msg.includes('CONFLICT'))
-    return {
-      status: 409,
-      message:
-        'Active request exists for this key. Cancel it or wait for the key to be returned.',
-    };
-  if (msg.includes('NOT_AUTHORISED'))
-    return { status: 403, message: 'Not authorised for this key' };
-  if (msg.includes('EXPIRED_CODE'))
-    return { status: 404, message: 'Code has expired' };
-  return { status: 500, message: 'Internal error' };
-};
+    if (!isOwnWeekendLetter(letter_url) || !isOwnWeekendLetter(stamp_url)) {
+      return respond.fail(422, INVALID_UPLOAD);
+    }
 
-export const POST = async (request: NextRequest) => {
-  const supabase = await createServerClient();
+    // Fetch risk context data in parallel before calling the RPC.
+    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const [
+      keyRes,
+      outstandingRes,
+      recentRes,
+      authRes,
+      ruleConfigRes,
+      tierConfigRes,
+    ] = await Promise.all([
+      supabase
+        .from('keys')
+        .select('zone, code, room_name')
+        .eq('id', key_id)
+        .single(),
+      supabase
+        .from('requests')
+        .select('key_id')
+        .eq('requester_id', user.id)
+        .in('status', ['CODE_ISSUED', 'KEY_ISSUED']),
+      supabase
+        .from('requests')
+        .select('id', { count: 'exact', head: true })
+        .eq('requester_id', user.id)
+        .gte('created_at', since24h),
+      supabase
+        .from('authorisations')
+        .select('key_id')
+        .eq('profile_id', user.id),
+      supabase.from('risk_rule_config').select('rule_key, weight, enabled'),
+      supabase.from('risk_tier_config').select('medium_min, high_min').single(),
+    ]);
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user)
-    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role, unit_id, full_name')
-    .eq('id', user.id)
-    .single();
-  if (!profile)
-    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
-  if (profile.role !== 'REQUESTER')
-    return NextResponse.json(err('Forbidden', 403), { status: 403 });
-
-  const body = await request.json().catch(() => null);
-  const parsed = bodySchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json(err('Invalid request body', 422), { status: 422 });
-  }
-
-  const { key_id, type, return_deadline, weekend_date, letter_url, stamp_url } =
-    parsed.data;
-
-  // The letter/stamp are what the Dean's approval is verified against, so
-  // they must be objects this requester uploaded: weekend-letters, in their
-  // own folder (the upload path the RLS insert policy enforces). Any other
-  // URL — e.g. the Dean's own reference in hod-signatures — would let the
-  // signature check compare a reference against itself.
-  const isOwnWeekendLetter = (url: string | undefined) => {
-    if (!url) return true;
-    const ref = parseStorageUrl(url);
-    return (
-      ref?.bucket === 'weekend-letters' && ref.path.startsWith(`${user.id}/`)
-    );
-  };
-  if (!isOwnWeekendLetter(letter_url) || !isOwnWeekendLetter(stamp_url)) {
-    return NextResponse.json(err('Invalid letter or stamp upload', 422), {
-      status: 422,
-    });
-  }
-
-  // Fetch risk context data in parallel before calling the RPC.
-  const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const [
-    keyRes,
-    outstandingRes,
-    recentRes,
-    authRes,
-    ruleConfigRes,
-    tierConfigRes,
-  ] = await Promise.all([
-    supabase
-      .from('keys')
-      .select('zone, code, room_name')
-      .eq('id', key_id)
-      .single(),
-    supabase
-      .from('requests')
-      .select('key_id')
-      .eq('requester_id', user.id)
-      .in('status', ['CODE_ISSUED', 'KEY_ISSUED']),
-    supabase
-      .from('requests')
-      .select('id', { count: 'exact', head: true })
-      .eq('requester_id', user.id)
-      .gte('created_at', since24h),
-    supabase.from('authorisations').select('key_id').eq('profile_id', user.id),
-    supabase.from('risk_rule_config').select('rule_key, weight, enabled'),
-    supabase.from('risk_tier_config').select('medium_min, high_min').single(),
-  ]);
-
-  // Risk config is CSO-editable (see /cso/settings → Risk rules); a read
-  // failure here should degrade to the safe hardcoded defaults rather than
-  // block key requests over a transient config-read hiccup.
-  let riskConfig: RiskEngineConfig = DEFAULT_RISK_CONFIG;
-  if (
-    !ruleConfigRes.error &&
-    !tierConfigRes.error &&
-    ruleConfigRes.data?.length === 5 &&
-    tierConfigRes.data
-  ) {
-    const rules = {} as RiskEngineConfig['rules'];
-    for (const row of ruleConfigRes.data) {
-      rules[row.rule_key as RiskRuleKey] = {
-        weight: row.weight,
-        enabled: row.enabled,
+    // Risk config is CSO-editable (see /cso/settings → Risk rules); a read
+    // failure here should degrade to the safe hardcoded defaults rather than
+    // block key requests over a transient config-read hiccup.
+    let riskConfig: RiskEngineConfig = DEFAULT_RISK_CONFIG;
+    if (
+      !ruleConfigRes.error &&
+      !tierConfigRes.error &&
+      ruleConfigRes.data?.length === 5 &&
+      tierConfigRes.data
+    ) {
+      const rules = {} as RiskEngineConfig['rules'];
+      for (const row of ruleConfigRes.data) {
+        rules[row.rule_key as RiskRuleKey] = {
+          weight: row.weight,
+          enabled: row.enabled,
+        };
+      }
+      riskConfig = {
+        rules,
+        tier: {
+          mediumMin: tierConfigRes.data.medium_min,
+          highMin: tierConfigRes.data.high_min,
+        },
       };
+    } else {
+      logger.warn('risk config read failed; falling back to defaults', {
+        ruleConfigError: ruleConfigRes.error?.message,
+        tierConfigError: tierConfigRes.error?.message,
+      });
     }
-    riskConfig = {
-      rules,
-      tier: {
-        mediumMin: tierConfigRes.data.medium_min,
-        highMin: tierConfigRes.data.high_min,
-      },
+
+    // Set of every key this requester is currently authorised for, used both to
+    // decide whitelisting for the requested key and whether the keys they already
+    // hold are all authorised (a whitelisted bulk collector is not a risk).
+    const authorisedKeyIds = new Set((authRes.data ?? []).map((a) => a.key_id));
+    const outstandingKeyIds = (outstandingRes.data ?? [])
+      .map((r) => r.key_id)
+      .filter((id): id is string => id !== null);
+    const hasOutstandingKey = outstandingKeyIds.length > 0;
+
+    const riskCtx: RiskContext = {
+      requestType: type,
+      requestedAt: new Date(),
+      keyZone: (keyRes.data?.zone as RiskContext['keyZone']) ?? 'NEW_SENATE',
+      hasOutstandingKey,
+      outstandingKeysAuthorised:
+        hasOutstandingKey &&
+        outstandingKeyIds.every((id) => authorisedKeyIds.has(id)),
+      recentRequestCount: recentRes.count ?? 0,
+      isWhitelisted: authorisedKeyIds.has(key_id),
     };
-  } else {
-    logger.warn('risk config read failed; falling back to defaults', {
-      ruleConfigError: ruleConfigRes.error?.message,
-      tierConfigError: tierConfigRes.error?.message,
+    const { tier, factors } = evaluateRisk(riskCtx, riskConfig);
+
+    // The risk result and the weekend letter/stamp are written by the same
+    // INSERT as the request, and the tier is recorded in REQUEST_CREATED.
+    const result = await callRpc(supabase, 'create_request', {
+      p_key_id: key_id,
+      p_type: type,
+      p_return_deadline: return_deadline,
+      p_weekend_date: weekend_date ?? undefined,
+      p_risk_tier: tier,
+      p_risk_factors: factors as unknown as Json,
+      // Only a weekend request carries a letter; the RPC refuses one otherwise.
+      p_letter_url: type === 'WEEKEND' ? letter_url : undefined,
+      p_stamp_url: type === 'WEEKEND' ? stamp_url : undefined,
     });
-  }
 
-  // Set of every key this requester is currently authorised for, used both to
-  // decide whitelisting for the requested key and whether the keys they already
-  // hold are all authorised (a whitelisted bulk collector is not a risk).
-  const authorisedKeyIds = new Set((authRes.data ?? []).map((a) => a.key_id));
-  const outstandingKeyIds = (outstandingRes.data ?? [])
-    .map((r) => r.key_id)
-    .filter((id): id is string => id !== null);
-  const hasOutstandingKey = outstandingKeyIds.length > 0;
-
-  const riskCtx: RiskContext = {
-    requestType: type,
-    requestedAt: new Date(),
-    keyZone: (keyRes.data?.zone as RiskContext['keyZone']) ?? 'NEW_SENATE',
-    hasOutstandingKey,
-    outstandingKeysAuthorised:
-      hasOutstandingKey &&
-      outstandingKeyIds.every((id) => authorisedKeyIds.has(id)),
-    recentRequestCount: recentRes.count ?? 0,
-    isWhitelisted: authorisedKeyIds.has(key_id),
-  };
-  const { tier, factors } = evaluateRisk(riskCtx, riskConfig);
-
-  const { data, error } = await supabase.rpc('create_request', {
-    p_key_id: key_id,
-    p_type: type,
-    p_return_deadline: return_deadline,
-    p_weekend_date: weekend_date ?? undefined,
-  });
-
-  if (error) {
-    const mapped = mapRpcError(error.message);
-    if (mapped.status === 500) {
-      const ref = crypto.randomUUID();
-      logger.error('create_request RPC failed', { err: error.message, ref });
-      return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
-        status: 500,
+    if (!result.ok) {
+      return rpcFail(result.error, {
+        NOT_AUTHENTICATED: 'Not authenticated',
+        CONFLICT:
+          'Active request exists for this key. Cancel it or wait for the key to be returned.',
+        VALIDATION: INVALID_UPLOAD,
       });
     }
-    return NextResponse.json(err(mapped.message, mapped.status), {
-      status: mapped.status,
-    });
-  }
 
-  const result = Array.isArray(data) ? data[0] : data;
+    const created = result.data;
 
-  if (!result) {
-    const ref = crypto.randomUUID();
-    logger.error('create_request RPC returned empty result', { ref });
-    return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
-      status: 500,
-    });
-  }
-
-  // Back-fill the real risk tier and factors. RLS blocks REQUESTER updates so
-  // this goes via the admin client. The write is best-effort — a failure here
-  // should not block the response; the default 'LOW' stored by the RPC is safe.
-  const adminClient = createAdminClient();
-  const { error: riskUpdateError } = await adminClient
-    .from('requests')
-    .update({ risk_tier: tier, risk_factors: factors as never })
-    .eq('id', result.request_id);
-
-  if (riskUpdateError) {
-    logger.error('failed to persist risk tier', {
-      requestId: result.request_id,
-      tier,
-      err: riskUpdateError.message,
-    });
-  }
-
-  if (type === 'WEEKEND' && (letter_url || stamp_url)) {
-    const { error: letterUpdateError } = await adminClient
-      .from('requests')
-      .update({
-        ...(letter_url ? { letter_url } : {}),
-        ...(stamp_url ? { stamp_url } : {}),
-      })
-      .eq('id', result.request_id);
-    if (letterUpdateError) {
-      logger.error('failed to persist letter_url/stamp_url', {
-        requestId: result.request_id,
-        err: letterUpdateError.message,
+    if (type === 'WEEKEND') {
+      // Emails the Dean (or the CSOs, for Administration keys). The one-click
+      // decision token was created with the request by create_request.
+      notifyAfterResponse({
+        type: 'WEEKEND_SUBMITTED',
+        requestId: created.request_id,
       });
+
+      return respond.ok(
+        {
+          request_id: created.request_id,
+          status: 'PENDING_HOD',
+          risk_tier: tier,
+        },
+        201
+      );
     }
-  }
 
-  if (type === 'WEEKEND') {
-    // Emails the Dean (or the CSOs, for Administration keys). The one-click
-    // decision token was created with the request by create_request.
-    notifyAfterResponse({
-      type: 'WEEKEND_SUBMITTED',
-      requestId: result.request_id,
-    });
+    // A failed send never fails the request: the code is already shown in-app.
+    notifyAfterResponse({ type: 'CODE_ISSUED', requestId: created.request_id });
 
-    return NextResponse.json(
-      ok({
-        request_id: result.request_id,
-        status: 'PENDING_HOD',
+    return respond.ok(
+      {
+        request_id: created.request_id,
+        code: created.code,
+        code_expires_at: created.code_expires_at,
         risk_tier: tier,
-      }),
-      { status: 201 }
+      },
+      201
     );
-  }
-
-  // A failed send never fails the request: the code is already shown in-app.
-  notifyAfterResponse({ type: 'CODE_ISSUED', requestId: result.request_id });
-
-  return NextResponse.json(
-    ok({
-      request_id: result.request_id,
-      code: result.code,
-      code_expires_at: result.code_expires_at,
-      risk_tier: tier,
-    }),
-    { status: 201 }
-  );
-};
+  },
+});
