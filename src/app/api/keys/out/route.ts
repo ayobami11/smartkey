@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import {
+  shapeOutstanding,
+  type OutstandingSourceRow,
+} from '@/lib/keys/outstanding';
 import { rewriteStorageUrls } from '@/lib/storage/object-url';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
@@ -56,21 +60,11 @@ export const GET = async (request: NextRequest) => {
   }
 
 
-  const now = Date.now();
-  const outstanding = (data ?? []).map((row) => {
-    const overdue =
-      row.return_deadline !== null &&
-      new Date(row.return_deadline).getTime() < now;
-
-    // Normalise: registered requester takes precedence; fall back to guest name.
-    const guest = row.guest as { id: string; full_name: string } | null;
-    const requester =
-      row.requester ??
-      (guest ? { id: guest.id, full_name: guest.full_name, photo_url: null } : null);
-
-    const { guest: _g, ...rest } = row;
-    return { ...rest, requester, status: overdue ? 'KEY_OVERDUE' : row.status };
-  });
+  // `is_overdue` (and the deprecated `status: 'KEY_OVERDUE'`) come from the
+  // shared overdue rule; see src/lib/keys/outstanding.ts.
+  const outstanding = shapeOutstanding(
+    (data ?? []) as unknown as OutstandingSourceRow[]
+  );
 
   return NextResponse.json(ok(rewriteStorageUrls({ outstanding })), {
     status: 200,

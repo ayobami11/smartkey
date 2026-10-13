@@ -5,7 +5,6 @@ import { notify } from '@/lib/notifications/notify';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { err, ok } from '@/types/api';
 
-
 export const POST = async (request: NextRequest) => {
   const secret = process.env.CRON_SECRET;
   if (!secret) {
@@ -22,6 +21,11 @@ export const POST = async (request: NextRequest) => {
   const admin = createAdminClient();
   const now = new Date().toISOString();
 
+  // The filter below is the overdue rule — KEY_ISSUED with a passed
+  // return_deadline — written as a PostgREST query. It must stay in step with
+  // public.request_is_overdue() and isOverdue() in src/lib/keys/occupancy.ts;
+  // the shared helpers are not used here only because this is a server-side
+  // filter, not an in-memory check.
   const { data: due, error } = await admin
     .from('requests')
     .select('id')

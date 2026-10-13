@@ -149,7 +149,8 @@ export const KeysView = () => {
           requesterName: requester?.full_name ?? '—',
           issuedAt: item.issued_at as string,
           returnDeadline: item.return_deadline as string,
-          isOverdue: new Date() > new Date(item.return_deadline as string),
+          // Server-derived from the shared overdue rule (src/lib/keys/outstanding.ts).
+          isOverdue: item.is_overdue === true,
         };
       });
     },
