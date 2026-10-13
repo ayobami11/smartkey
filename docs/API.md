@@ -305,7 +305,7 @@ The route runs the risk engine and passes the result to the RPC, which writes th
 }
 ```
 
-**Errors**: `403` requester not authorised for this key · `409` active request already exists for this key · `409` no key available for this room (`NO_KEYS_AVAILABLE`) · `422` outside operational hours (weekend requests) · `500` RPC failure
+**Errors**: `403` requester not authorised for this key · `409` active request already exists for this key · `409` no key available for this room (`NO_KEYS_AVAILABLE`) · `422` a `WEEKEND` request without a `weekend_date`, or one that is not a Saturday/Sunday from today onwards (Lagos date; checked since 2026-10-13 — previously a missing date booked the request for today, whatever day that was) · `422` outside operational hours (weekend requests) · `500` RPC failure
 
 The two `409`s are distinct and the route maps them to different messages. `CONFLICT` means **you** already have an active request for this key; `NO_KEYS_AVAILABLE` means every copy of the room's key is out or reserved by other people, so telling this requester to cancel something would point them at a request they never made. The latter is raised by the `requests_key_capacity` trigger (`docs/DATABASE.md`) and only on the `WEEKDAY` branch, which mints a code immediately — a `WEEKEND` request starts `PENDING_HOD` and reserves nothing.
 
@@ -583,7 +583,7 @@ Multipart form. Uploads the Dean authorisation letter to the `weekend-letters` b
 
 **Response `data`**: `{ "access_token": "<uuid>", "request_id": "<uuid>" }`
 
-**Errors**: `404` department not found · `422` validation · `413` letter too large
+**Errors**: `404` department not found · `422` validation, or `weekend_date` is not a Saturday/Sunday from today onwards (Lagos date) · `413` letter too large
 
 ---
 
@@ -734,7 +734,14 @@ Read-only. Looks up the request by `decision_token` (admin client) and returns t
 }
 ```
 
-`decidable` is `status === 'PENDING_HOD'` — the page renders Approve/Decline only when `true`; otherwise it renders the terminal state named by `status`. `available_keys` is only populated when `is_guest && decidable`; empty otherwise.
+`decidable` is `status === 'PENDING_HOD'` **and** the requested weekend has not passed (Lagos date) — the page renders Approve/Decline only when `true`; otherwise it renders the state named by `status` (a `PENDING_HOD` request past its date shows "Date has passed"). `available_keys` is only populated when `is_guest && decidable`; empty otherwise.
+
+The link needs no login, so what it returns is limited (since 2026-10-13):
+
+- **While decidable**, `id_document_number` is masked to its last four characters (`•••• 4567`). The Dean sees the full number on the dashboard; the verifier checks the physical document at the desk.
+- **Once not decidable** (decided, cancelled, expired, or past its date), the letter and stamp are not signed (`letter_url`/`stamp_url` are `null`) and `id_document_type`/`id_document_number` are `null`. A forwarded or leaked email still opens the page, but shows only the outcome.
+
+The link therefore works only until the requested weekend passes; `approve_weekend` already refused a past date, but the page used to keep showing the guest's details and letter indefinitely.
 
 **Errors**: `404` token not found or malformed
 
@@ -755,7 +762,7 @@ Re-resolves the **current** Dean of the request's unit at decision time (not an 
 
 **Response `data`**: identical shape to `POST /api/requests/hod-decision` — `{ "request_id": "<uuid>", "status": "APPROVED" | "DECLINED" }`, or the held-mismatch shape `{ "request_id": "<uuid>", "status": "HELD_SIGNATURE_MISMATCH", "mismatches": {...}, "message": "..." }` (still HTTP 200; never reachable for a guest request, which has no reference signature to mismatch against).
 
-**Errors**: `403` the unit is no longer Dean-authorised, or has no Dean · `404` token not found, or the request resolves to no unit · `409` request is no longer `PENDING_HOD` (already decided — the page refetches to show the real terminal state) · `422` validation, or (guest `APPROVED` only) no `key_id` supplied
+**Errors**: `403` the unit is no longer Dean-authorised, or has no Dean · `404` token not found, or the request resolves to no unit · `409` request is no longer `PENDING_HOD` (already decided — the page refetches to show the real terminal state), or its requested date has passed · `422` validation, or (guest `APPROVED` only) no `key_id` supplied
 
 ---
 

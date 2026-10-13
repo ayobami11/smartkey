@@ -189,3 +189,13 @@ export const formatDateTz = (iso: string | Date): string => {
   const { weekdayShort, day, monthShort, year } = lagosParts(iso);
   return `${weekdayShort} ${day} ${monthShort} ${year}`;
 };
+
+// Today's date in Lagos as YYYY-MM-DD. Server code runs in UTC, so between
+// 00:00 and 01:00 WAT `todayDateISO()` there would still say yesterday.
+export const todayDateISOTz = (now: Date = new Date()): string =>
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone: APP_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now);

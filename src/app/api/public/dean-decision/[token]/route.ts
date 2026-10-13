@@ -2,6 +2,7 @@ import * as z from 'zod';
 
 import { respond } from '@/lib/http/respond';
 import { route } from '@/lib/http/route';
+import { todayDateISOTz } from '@/lib/dates';
 import { decideWeekend, rejectionToHttp } from '@/lib/requests/decide-weekend';
 import { createAdminClient } from '@/lib/supabase/admin';
 
@@ -19,6 +20,22 @@ type AdminClient = ReturnType<typeof createAdminClient>;
 const SIGNED_URL_TTL_SECONDS = 300;
 
 const paramsSchema = z.object({ token: z.uuid() });
+
+// The link decides only while the request is pending and its weekend has not
+// passed (approve_weekend refuses a past date anyway). Outside that window a
+// forwarded or leaked email still opens the page, but shows only the outcome:
+// no letter, no stamp, no ID details.
+const isDecidable = (status: string, requestedFor: string): boolean =>
+  status === 'PENDING_HOD' && requestedFor >= todayDateISOTz();
+
+// This page needs no login, so the guest's ID number is shown only in part.
+// The Dean sees it in full on the dashboard; the verifier checks the physical
+// document at the desk.
+const maskIdNumber = (value: string | null | undefined): string | null => {
+  if (!value) return null;
+  const visible = value.slice(-4);
+  return value.length > 4 ? `•••• ${visible}` : '••••';
+};
 const NOT_FOUND = { status: 404, message: 'Request not found' };
 
 const signLetterUrl = async (
@@ -90,12 +107,12 @@ export const GET = route({
     if (!reqRow) return respond.error(NOT_FOUND);
 
     const isGuest = !!reqRow.guest_id;
-    const decidable = reqRow.status === 'PENDING_HOD';
+    const decidable = isDecidable(reqRow.status, reqRow.requested_for);
 
     const [letterSignedUrl, stampSignedUrl, availableKeys] = await Promise.all(
       [
-        signLetterUrl(admin, reqRow.letter_url),
-        signLetterUrl(admin, reqRow.stamp_url),
+        decidable ? signLetterUrl(admin, reqRow.letter_url) : null,
+        decidable ? signLetterUrl(admin, reqRow.stamp_url) : null,
         (async () => {
           if (!isGuest || !decidable) return [];
           // Only reached for guest requests — resolveUnitId gives the
@@ -123,8 +140,12 @@ export const GET = route({
         ? (reqRow.guest?.full_name ?? null)
         : (reqRow.requester?.full_name ?? null),
       requested_room: reqRow.requested_room,
-      id_document_type: reqRow.guest?.id_document_type ?? null,
-      id_document_number: reqRow.guest?.id_document_number ?? null,
+      id_document_type: decidable
+        ? (reqRow.guest?.id_document_type ?? null)
+        : null,
+      id_document_number: decidable
+        ? maskIdNumber(reqRow.guest?.id_document_number)
+        : null,
       key: reqRow.key
         ? { code: reqRow.key.code, room_name: reqRow.key.room_name }
         : null,
@@ -164,6 +185,12 @@ export const POST = route({
     if (!reqRow) return respond.error(NOT_FOUND);
     if (reqRow.status !== 'PENDING_HOD') {
       return respond.fail(409, 'This request has already been decided.');
+    }
+    if (!isDecidable(reqRow.status, reqRow.requested_for)) {
+      return respond.fail(
+        409,
+        'The requested date has passed, so this request can no longer be decided.'
+      );
     }
 
     const unitId = await resolveUnitId(admin, reqRow);
