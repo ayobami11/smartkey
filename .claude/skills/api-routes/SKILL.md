@@ -1,215 +1,198 @@
 ---
 name: api-routes
-description: Use this skill when writing or reviewing any Next.js API route in SmartKey. Covers the response envelope shape, Supabase JWT validation, role gating, Zod validation, RPC-first mutations, error responses, and what must never happen in a route handler.
+description: Use this skill when writing or reviewing any Next.js API route in SmartKey. Covers the route() wrapper, the response envelope, Supabase session and role gating, Zod validation, RPC-first mutations via callRpc, RPC error mapping, and what must never happen in a route handler.
 ---
 
 # API route discipline
 
-Every SmartKey API route is a serverless function in `src/app/api/`. Routes are the boundary between the browser and Supabase — they validate identity, enforce business rules, call RPCs, and return a consistent shape. Inconsistency here is how bugs and security holes appear.
+Every SmartKey API route is a serverless function in `src/app/api/`. Routes are the boundary between the browser and Supabase. They validate identity, enforce business rules, call RPCs, and return one consistent shape. Inconsistency here is how bugs and security holes appear, so the repeated parts live in one module, `src/lib/http/`, and routes use it instead of hand-rolling them.
 
 ## When to apply
 
 - Writing a new `route.ts` under `src/app/api/`
 - Reviewing or modifying an existing route handler
-- Adding a new Server Action in a Server Component
 - Any code that reads from or writes to Supabase on the server
+
+## The three pieces
+
+| File                         | What it gives you                                                                         |
+| ---------------------------- | ----------------------------------------------------------------------------------------- |
+| `src/lib/http/route.ts`      | `route({...})`: auth, role, params, body and the catch-all 500, in a fixed order          |
+| `src/lib/http/respond.ts`    | `respond.ok / fail / error / internal / noContent`, the only envelope builder             |
+| `src/lib/http/rpc-errors.ts` | `rpcFail(error, overrides?)`, `byDetail(...)`, and the default `RPC_ERROR_HTTP` catalogue |
+
+Plus `callRpc` / `callRpcVoid` from `src/lib/rpc/call-rpc.ts` for every RPC call.
+
+## A typical mutation route
+
+```typescript
+import * as z from 'zod';
+
+import { respond } from '@/lib/http/respond';
+import { route } from '@/lib/http/route';
+import { rpcFail } from '@/lib/http/rpc-errors';
+import { callRpc } from '@/lib/rpc/call-rpc';
+
+const bodySchema = z.object({ request_id: z.uuid() });
+
+export const POST = route({
+  name: 'requests/request-return',
+  auth: 'user',
+  roles: ['REQUESTER'],
+  body: bodySchema,
+  handler: async ({ supabase, user, body }) => {
+    const result = await callRpc(supabase, 'request_return', {
+      p_request_id: body.request_id,
+      p_requester_id: user.id, // from the session, never from the body
+    });
+    if (!result.ok) {
+      return rpcFail(result.error, { NOT_FOUND: 'Request not found' });
+    }
+    return respond.ok(result.data);
+  },
+});
+```
+
+The handler only ever sees a validated `body`, an authenticated `user`, and (because `roles` is set) the caller's `profile` (`role`, `unit_id`, `full_name`).
+
+## What `route()` does, in order
+
+1. **Auth**:
+   - `auth: 'user'`: `supabase.auth.getUser()`, never `getSession()`. No user → `401 Unauthorized`.
+   - `auth: 'cron'`: `Authorization: Bearer ${CRON_SECRET}`, compared in constant time. An unset secret → ref'd `500`; a mismatch → `401`.
+   - `auth: 'public'`: nothing. Use it only for token-authorised routes such as `/api/public/*`.
+2. **Role**, if `roles` is given. Reads `profiles.role`, never the JWT claim. No profile → `401`; wrong role → `403 Forbidden`. Omitting `roles` skips the profile query entirely.
+3. **Params**, if a `params` schema is given (dynamic segments). Failure → `paramsError`, default `404 Not found`.
+4. **Body**, if a `body` schema is given. Bad JSON or schema failure → `422 Invalid request body`. Multipart routes omit `body` and read `ctx.request.formData()` themselves.
+5. **Handler.** Anything thrown anywhere becomes `500 "Internal error. Ref: <ref>"`, logged as `<name>: unhandled error`.
+
+A dynamic route:
+
+```typescript
+export const POST = route({
+  name: 'reports/comments',
+  auth: 'user',
+  roles: ['CSO'],
+  params: z.object({ id: z.uuid() }),
+  body: z.object({ text: z.string().min(1) }),
+  handler: async ({ supabase, params, body }) => {
+    const result = await callRpc(supabase, 'add_report_comment', {
+      p_report_id: params.id,
+      p_text: body.text,
+    });
+    if (!result.ok) {
+      return rpcFail(result.error, { NOT_FOUND: 'Report not found' });
+    }
+    return respond.ok(result.data, 201);
+  },
+});
+```
+
+`public` and `cron` handlers get no Supabase client. If one needs the service role, it calls `createAdminClient()` itself, so every use of the service role is visible in the handler.
 
 ## Response envelope
 
-Every route returns the same shape. No exceptions.
-
 ```typescript
-// src/types/api.ts
 type ApiResponse<T> =
   | { data: T; error: null; status: number }
   | { data: null; error: string; status: number };
 ```
 
-```typescript
-// Success
-return NextResponse.json(
-  { data: result, error: null, status: 200 },
-  { status: 200 }
-);
+Build it only with `respond.*`. Never call `NextResponse.json(...)` with a hand-built envelope: that is how the envelope status and the HTTP status drifted apart in 11 routes.
 
-// Error
-return NextResponse.json(
-  { data: null, error: 'Request not found.', status: 404 },
-  { status: 404 }
-);
+```typescript
+respond.ok(data); // 200
+respond.ok(data, 201); // created
+respond.fail(409, 'Handover already completed for this shift');
+respond.error({ status: 403, message: 'Forbidden' });
+respond.internal('keys/out: query failed', { err: error.message }); // ref'd 500
+respond.noContent(); // 204
 ```
 
-Never return a bare object, never nest `{ success: true }`, never mix shapes between routes.
+## RPC-first mutations
 
-## Authentication pattern
-
-Every protected route validates the session via the server Supabase client before any other logic.
+Any operation that changes more than one row, including every operation that writes an audit entry, goes through a Postgres RPC so the state change and its audit entry are atomic. Call it with `callRpc` (or `callRpcVoid` for `returns void` RPCs such as `remove_collector`, `update_risk_config` and `update_operational_config`). Never use a bare `supabase.rpc(...)` and string-match its error message.
 
 ```typescript
-import { createServerClient } from '@/lib/supabase/server';
-
-export async function POST(req: NextRequest) {
-  const supabase = await createServerClient();
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
-    return NextResponse.json(
-      { data: null, error: 'Unauthenticated.', status: 401 },
-      { status: 401 }
-    );
-  }
-
-  // Continue with user.id available
-}
+// WRONG: two separate writes, so the audit entry may be missing if the second fails
+await supabase.from('requests').update({ status: 'KEY_ISSUED' }).eq('id', id);
+await supabase.from('audit_log').insert({ event: 'KEY_ISSUED' /* … */ });
 ```
 
-Never use `getSession()` for authorisation — sessions are client-controlled. `getUser()` re-validates the JWT with the Supabase server on every call.
+## Mapping RPC errors
 
-## Role gating
-
-Fetch the role from `profiles` after confirming the user identity. Never trust a role stored in the JWT claim alone for write operations.
+`callRpc` returns `{ ok: false, error: { kind, detail, ref? } }`. Return `rpcFail(result.error, overrides?)`. The default copy per kind lives in `RPC_ERROR_HTTP` (see `docs/API.md` → "RPC error mapping"). Override only what this route needs to say differently:
 
 ```typescript
-const { data: profile } = await supabase
-  .from('profiles')
-  .select('role')
-  .eq('id', user.id)
-  .single();
-
-if (!profile || profile.role !== 'VERIFIER') {
-  return NextResponse.json(
-    { data: null, error: 'Forbidden.', status: 403 },
-    { status: 403 }
-  );
-}
-```
-
-Route-level role checks are a defence-in-depth layer. RLS is the authoritative enforcement — but do not skip the route check.
-
-## Input validation with Zod
-
-Parse and validate the request body before any database call. Never pass unvalidated input to Supabase.
-
-```typescript
-import { z } from 'zod';
-
-const issueKeySchema = z.object({
-  requestId: z.uuid(),
-  verifierId: z.uuid(),
+return rpcFail(result.error, {
+  NOT_FOUND: 'Request not found', // string: new message, default status
+  CONFLICT: {
+    status: 409,
+    message: 'This request is not awaiting collection.',
+  },
+  FORBIDDEN: (detail) =>
+    detail.startsWith('not your') ? 'This is not your request' : undefined,
 });
-
-export async function POST(req: NextRequest) {
-  // ... auth check above ...
-
-  const body = await req.json();
-  const parsed = issueKeySchema.safeParse(body);
-
-  if (!parsed.success) {
-    return NextResponse.json(
-      {
-        data: null,
-        error: parsed.error.issues.map((i) => i.message).join('; '),
-        status: 422,
-      },
-      { status: 422 }
-    );
-  }
-
-  const { requestId, verifierId } = parsed.data;
-  // safe to use
-}
 ```
 
-## RPC-first for mutations
-
-Any operation that changes more than one row — including all operations that write an audit log entry — must go through a Postgres RPC, not individual Supabase client calls. This makes state changes and audit entries atomic.
+When one kind covers several situations, branch on the detail with `byDetail`, and map each match to fixed copy:
 
 ```typescript
-// CORRECT: single RPC wraps the state change + audit log write
-const { data, error } = await supabase.rpc('issue_key', {
-  p_request_id: requestId,
-  p_verifier_id: verifierId,
+import { byDetail, rpcFail } from '@/lib/http/rpc-errors';
+
+return rpcFail(result.error, {
+  CONFLICT: byDetail([
+    [/^three/, 'Three authorisation slots are already filled'],
+    [/^requester/, 'Requester is already authorised for this key'],
+  ]),
 });
-
-if (error) {
-  return NextResponse.json(
-    { data: null, error: 'Failed to issue key.', status: 500 },
-    { status: 500 }
-  );
-}
-
-return NextResponse.json({ data, error: null, status: 200 }, { status: 200 });
 ```
 
-```typescript
-// WRONG: two separate writes — audit entry may be missing if the second call fails
-await supabase.from('requests').update({ status: 'KEY_ISSUED' }).eq('id', requestId)
-await supabase.from('audit_log').insert({ event: 'key_issued', ... })
-```
+Rules:
 
-See `src/lib/audit/` for the audit writer and `docs/DATABASE.md` for all available RPCs.
+- **Never write a private `mapRpcError`.** Never use `msg.includes('KIND')`: a substring match misclassifies any detail that mentions another kind.
+- **Never send `detail` to the client.** It can name internal states (`current: PENDING_HOD`). An override returns fixed copy and never the detail it was given.
+- **`INTERNAL` is not overridable.** It is always `500 "Internal error. Ref: <ref>"`, where the ref is the one `callRpc` already logged.
 
 ## Status codes
 
-| Situation                    | Code |
-| ---------------------------- | ---- |
-| Success with body            | 200  |
-| Created (POST that inserts)  | 201  |
-| Unauthenticated              | 401  |
-| Authenticated but wrong role | 403  |
-| Resource not found           | 404  |
-| Zod validation failure       | 422  |
-| RPC or Supabase error        | 500  |
-
-Do not use 200 for errors and do not use 500 for validation failures.
-
-## Error responses
-
-Never expose Supabase error messages, stack traces, or database details to the client. Log them server-side via `src/lib/logger.ts` and return a correlation ID.
-
-```typescript
-import { logger } from '@/lib/logger';
-import { randomUUID } from 'crypto';
-
-if (error) {
-  const ref = randomUUID().slice(0, 8);
-  logger.error('issue_key RPC failed', { ref, supabaseError: error.message });
-  return NextResponse.json(
-    {
-      data: null,
-      error: `Something went wrong. Reference: ${ref}`,
-      status: 500,
-    },
-    { status: 500 }
-  );
-}
-```
+| Situation                            | Code |
+| ------------------------------------ | ---- |
+| Success with body                    | 200  |
+| Created (POST that inserts)          | 201  |
+| Success, no body                     | 204  |
+| Unauthenticated, or no profile       | 401  |
+| Authenticated but wrong role         | 403  |
+| Resource not found / bad path params | 404  |
+| State conflict                       | 409  |
+| Zod validation failure               | 422  |
+| RPC or internal failure (with ref)   | 500  |
 
 ## What must never appear in a route
 
-| Forbidden                                       | Reason                                              |
-| ----------------------------------------------- | --------------------------------------------------- |
-| `supabase.auth.getSession()` for auth decisions | Client-controllable; use `getUser()`                |
-| Service-role key in any browser-reachable route | Bypasses RLS; server-only                           |
-| Raw `fetch` to Supabase REST                    | Use the typed client from `src/lib/supabase/server` |
-| `console.log`                                   | Use `src/lib/logger.ts`                             |
-| Direct `INSERT` into `audit_log`                | Go through `src/lib/audit/`                         |
-| Unvalidated `req.body` passed to Supabase       | Validate with Zod first                             |
-| Two separate writes where an RPC exists         | Non-atomic; audit integrity at risk                 |
+| Forbidden                                        | Reason                                                     |
+| ------------------------------------------------ | ---------------------------------------------------------- |
+| `supabase.auth.getSession()` for auth decisions  | Client-controllable; `route()` uses `getUser()`            |
+| A hand-built `{ data, error, status }`           | Use `respond.*`; the statuses drift otherwise              |
+| A private `mapRpcError` / `msg.includes('KIND')` | Use `rpcFail` with overrides                               |
+| RPC `detail`, Supabase error text or a stack     | Log it; the client gets copy or a ref                      |
+| `createAdminClient()` in browser-reachable code  | Service role bypasses RLS; server-only, explicit per route |
+| An actor id taken from the request body          | Use `user.id` from the session                             |
+| Raw `fetch` to Supabase REST                     | Use the typed client from `src/lib/supabase/`              |
+| `console.log`                                    | Use `src/lib/logger.ts`                                    |
+| Direct `INSERT` into `audit_log`                 | Go through an RPC or `src/lib/audit/`                      |
+| Two separate writes where an RPC exists          | Non-atomic; audit integrity at risk                        |
+
+## Not wrapped by `route()`
+
+These routes keep their own flow but still build responses with `respond.*`: the `auth/*` routes (they establish sessions, set cookies and redirect), `health`, `storage/object` (it returns bytes), and `ai/verify-signature`.
 
 ## Route checklist
 
-Before merging a new or modified route:
-
-- [ ] `getUser()` called before any business logic
-- [ ] Role checked if the route is role-specific
-- [ ] Request body parsed through Zod schema
-- [ ] Mutations go through an RPC, not raw `.from().update()`
-- [ ] Response matches `{ data, error, status }` envelope
-- [ ] Errors log via `logger`, not `console.log`
-- [ ] No stack traces or Supabase error messages in the response body
+- [ ] Exported through `route({ name, auth, roles?, params?, body?, handler })`, unless it is in the list above
+- [ ] `roles` set if the route is role-specific
+- [ ] Every input parsed by a `body` / `params` Zod schema
+- [ ] Mutations go through `callRpc` / `callRpcVoid`, not raw `.from().update()`
+- [ ] RPC failures returned via `rpcFail`, overriding only the kinds whose copy differs
+- [ ] Responses built with `respond.*` only
 - [ ] `bun run typecheck && bun run lint` pass

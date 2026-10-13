@@ -61,6 +61,8 @@ src/
 │   │   ├── risk/        # rule engine
 │   │   ├── reports/     # Gemini integration
 │   │   └── signature/   # Sharp + Pixelmatch
+│   ├── http/            # route() wrapper, respond.* envelope builder, RPC error → HTTP catalogue
+│   ├── rpc/             # callRpc / callRpcVoid: typed RPC calls with parsed error kinds
 │   ├── email/           # html.ts (escaping `markup` template), transport.ts (Gmail SMTP), templates/
 │   ├── notifications/   # request-lifecycle emails: notify(event) → who, preferences, send
 │   ├── queries/         # TanStack Query client + role-specific query builders
