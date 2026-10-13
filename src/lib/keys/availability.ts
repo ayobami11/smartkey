@@ -8,7 +8,17 @@
  * Deliberately NOT driven by `keys.status` alone. That column is maintained
  * correctly, but it is a single scalar that can only say "exhausted or not" —
  * it cannot see the CODE_ISSUED window, nor express "3 of 12 out".
+ *
+ * Counts and state come from `src/lib/keys/occupancy.ts`, which mirrors the
+ * SQL occupancy rule; this file only adds who is holding a copy.
  */
+
+import {
+  occupancyOf,
+  occupiesKey,
+  stateOf,
+  type KeyOccupancyState,
+} from '@/lib/keys/occupancy';
 
 /** Request statuses that mean a key is not free. Mirrors the set
  *  `create_request` treats as an active request (everything except the four
@@ -22,12 +32,8 @@ export const ACTIVE_REQUEST_STATUSES = [
 
 export type ActiveRequestStatus = (typeof ACTIVE_REQUEST_STATUSES)[number];
 
-export type KeyAvailabilityState =
-  | 'AVAILABLE'
-  | 'SPOKEN_FOR'
-  | 'OUT'
-  | 'OVERDUE'
-  | 'RETIRED';
+/** Same states the occupancy module derives; see `stateOf`. */
+export type KeyAvailabilityState = KeyOccupancyState;
 
 /** The shape the route selects out of `requests`. Note what is absent:
  *  no `code`, no `return_code`, no `photo_url`, no `risk_tier`.
@@ -74,12 +80,6 @@ export type KeyAvailability = {
   holders: KeyHolder[];
 };
 
-const occupiesKey = (row: ActiveRequestRow, now: Date): boolean => {
-  if (row.status === 'KEY_ISSUED') return true;
-  if (row.status !== 'CODE_ISSUED') return false;
-  return row.code_expires_at === null || new Date(row.code_expires_at) > now;
-};
-
 const byCreatedAt = (a: ActiveRequestRow, b: ActiveRequestRow) =>
   a.created_at.localeCompare(b.created_at);
 
@@ -93,9 +93,6 @@ const resolveHolder = (row: ActiveRequestRow): KeyHolder | null => {
   return null;
 };
 
-const isOverdue = (row: ActiveRequestRow, now: Date): boolean =>
-  row.return_deadline !== null && new Date(row.return_deadline) < now;
-
 /**
  * @param key       the key row (`id`, `status`, `key_count`)
  * @param requests  active requests for this key only — the caller filters
@@ -106,13 +103,21 @@ export const deriveKeyAvailability = (
   requests: ActiveRequestRow[],
   now: Date = new Date()
 ): KeyAvailability => {
-  // `key_count` is NOT NULL with a `>= 1` check in the database; the coalesce
-  // is for rows selected before the column existed in a given code path.
-  const capacity = Math.max(1, key.key_count ?? 1);
+  // Counts and state come from the shared occupancy module, so this route,
+  // the CSO chart (via get_key_occupancy) and the capacity trigger agree on
+  // what "free" means. Everything below only decides which names to show.
+  const occupancy = occupancyOf(
+    { key_count: key.key_count, retired: key.status === 'RETIRED' },
+    requests,
+    now
+  );
+  const state = stateOf(occupancy);
 
   const base = {
     key_id: key.id,
-    key_count: capacity,
+    state,
+    key_count: occupancy.key_count,
+    available_count: occupancy.available,
     return_deadline: null,
     issued_at: null,
     holder: null,
@@ -120,17 +125,23 @@ export const deriveKeyAvailability = (
   };
 
   // The key row's own status wins over any request.
-  if (key.status === 'RETIRED') {
-    return { ...base, state: 'RETIRED', available_count: 0 };
+  if (state === 'RETIRED') return base;
+
+  // Exhausted with nobody physically holding a copy: every hold is a live
+  // code. Name nobody — a code that may lapse in ten minutes is not worth
+  // disclosing a colleague's activity over.
+  if (state === 'SPOKEN_FOR') {
+    const earliestReservation =
+      requests.filter((row) => occupiesKey(row, now)).sort(byCreatedAt)[0] ??
+      null;
+    return {
+      ...base,
+      return_deadline: earliestReservation?.return_deadline ?? null,
+    };
   }
 
-  const occupying = requests.filter((row) => occupiesKey(row, now));
-  const availableCount = Math.max(0, capacity - occupying.length);
-
-  // Only physically-held keys name a person. A key merely reserved by a code
-  // that may lapse in ten minutes is not worth disclosing a colleague's
-  // activity over — so holders are drawn from KEY_ISSUED rows alone.
-  const issued = occupying
+  // Only physically-held keys name a person, earliest first.
+  const issued = requests
     .filter((row) => row.status === 'KEY_ISSUED')
     .sort(byCreatedAt);
 
@@ -143,41 +154,8 @@ export const deriveKeyAvailability = (
   // while remaining requestable.
   const lead = issued[0] ?? null;
 
-  if (availableCount > 0) {
-    return {
-      ...base,
-      state: 'AVAILABLE',
-      available_count: availableCount,
-      return_deadline: lead?.return_deadline ?? null,
-      issued_at: lead?.issued_at ?? null,
-      holder: holders[0] ?? null,
-      holders,
-    };
-  }
-
-  // Exhausted. Which flavour depends on whether anyone is actually holding a
-  // key or the bunch is merely fully reserved.
-  if (issued.length === 0) {
-    const earliestReservation = [...occupying].sort(byCreatedAt)[0] ?? null;
-    return {
-      ...base,
-      state: 'SPOKEN_FOR',
-      available_count: 0,
-      return_deadline: earliestReservation?.return_deadline ?? null,
-    };
-  }
-
-  // Overdue is derived from the deadline rather than read off `keys.status`,
-  // which only flips on the hourly mark_key_overdue() cron — and which, for a
-  // bunch, cannot distinguish one late holder from all of them. Same fallback
-  // `src/app/api/keys/out/route.ts` applies.
-  const overdue = issued.some((row) => isOverdue(row, now));
-
   return {
-    key_id: key.id,
-    state: overdue ? 'OVERDUE' : 'OUT',
-    key_count: capacity,
-    available_count: 0,
+    ...base,
     return_deadline: lead?.return_deadline ?? null,
     issued_at: lead?.issued_at ?? null,
     holder: holders[0] ?? null,

@@ -28,6 +28,8 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -74,6 +76,9 @@
 
   /* Semantic */
   --destructive: #dc2626;
+  /* Status colours from DESIGN.md (same hex in both themes). */
+  --success: #10b981;
+  --warning: #f59e0b;
   --border: #e2e8f0;
   --input: #e2e8f0;
 

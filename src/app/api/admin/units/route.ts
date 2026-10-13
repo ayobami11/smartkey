@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { logger } from '@/lib/logger';
 import { createServerClient } from '@/lib/supabase/server';
 import { err, ok } from '@/types/api';
 
@@ -25,7 +26,7 @@ export const GET = async () => {
   const { data, error } = await supabase
     .from('units')
     .select(
-      'id, name, faculty, hod_id, authoriser, hod:profiles!hod_id(status), keys(status, retired_at)'
+      'id, name, faculty, hod_id, authoriser, hod:profiles!hod_id(status)'
     )
     .order('faculty', { ascending: true })
     .order('name', { ascending: true });
@@ -36,17 +37,39 @@ export const GET = async () => {
     });
   }
 
-  const units = (data ?? []).map(({ hod, hod_id, keys, ...dept }) => ({
+  // Copy-level availability from the shared occupancy rule, so a twelve-copy
+  // room with three out still counts as having a slot, and a key reserved by
+  // a live code does not. keys.status cannot express either.
+  const { data: occupancy, error: occupancyError } =
+    await supabase.rpc('get_key_occupancy');
+
+  if (occupancyError) {
+    const ref = crypto.randomUUID();
+    logger.error('admin/units get_key_occupancy failed', {
+      err: occupancyError.message,
+      ref,
+    });
+    return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
+      status: 500,
+    });
+  }
+
+  const unitsWithSlot = new Set(
+    (occupancy ?? [])
+      .filter((row) => row.available > 0)
+      .map((row) => row.unit_id)
+  );
+
+  const units = (data ?? []).map(({ hod, hod_id, ...dept }) => ({
     ...dept,
     hod_id,
     // true when an ACTIVE HOD is already assigned — frontend should disable this unit in the HOD role picker
     has_hod:
       hod_id !== null &&
       (hod as { status: string } | null)?.status === 'ACTIVE',
-    // true when at least one non-retired key in this unit is currently available to borrow
-    has_slot_today: (
-      keys as { status: string; retired_at: string | null }[]
-    ).some((k) => k.status === 'AVAILABLE' && k.retired_at === null),
+    // true when at least one copy of a non-retired key in this unit is free
+    // right now (get_key_occupancy available > 0)
+    has_slot_today: unitsWithSlot.has(dept.id),
   }));
 
   return NextResponse.json(ok({ units }), { status: 200 });

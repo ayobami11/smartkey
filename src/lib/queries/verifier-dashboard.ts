@@ -1,6 +1,11 @@
 import { cache } from 'react';
 
 import type { RiskFactor, RiskTier } from '@/lib/ai/risk/types';
+import {
+  shapeOutstanding,
+  type OutstandingSourceRow,
+  type OutstandingStatus,
+} from '@/lib/keys/outstanding';
 import { rewriteStorageUrls } from '@/lib/storage/object-url';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
@@ -9,8 +14,9 @@ import { createServerClient } from '@/lib/supabase/server';
 // src/app/api/requests/live-queue/route.ts and src/app/api/keys/out/route.ts
 // on purpose, to seed the Verifier dashboard's first paint without editing
 // src/app/api/**. If either route's query, select columns, role gate, or
-// overdue-derivation logic changes, this file must be updated to match by
-// hand — there is no shared helper enforcing parity.
+// select logic changes, this file must be updated to match by hand. The
+// overdue derivation and row shaping are shared: both use shapeOutstanding()
+// from src/lib/keys/outstanding.ts.
 
 const REQUEST_SELECT = `
   id,
@@ -40,7 +46,10 @@ export type QueueRequest = {
 
 export type OutstandingKey = {
   id: string;
-  status: 'KEY_ISSUED' | 'KEY_OVERDUE';
+  /** True once a KEY_ISSUED request is past its return deadline. */
+  is_overdue: boolean;
+  /** @deprecated read `is_overdue`; `KEY_OVERDUE` is not a request status. */
+  status: OutstandingStatus;
   issued_at: string;
   return_deadline: string;
   created_at: string;
@@ -92,20 +101,6 @@ export const getLiveQueueSeed = async (): Promise<QueueRequest[] | null> => {
   return rewriteStorageUrls(data as unknown as QueueRequest[]);
 };
 
-const deriveOutstandingStatus = <
-  T extends { return_deadline: string | null; key: { status?: string } | null },
->(
-  rows: T[],
-  now: number
-) =>
-  rows.map((row) => {
-
-    const overdue =
-      row.return_deadline !== null &&
-      new Date(row.return_deadline).getTime() < now;
-    return { ...row, overdue };
-  });
-
 export const getOutstandingKeysSeed = async (): Promise<
   OutstandingKey[] | null
 > => {
@@ -126,30 +121,11 @@ export const getOutstandingKeysSeed = async (): Promise<
 
   if (error) return null;
 
-  const now = Date.now();
-  const withOverdue = deriveOutstandingStatus(
-    (data ?? []) as unknown as {
-      return_deadline: string | null;
-      key: { status?: string } | null;
-      [key: string]: unknown;
-    }[],
-    now
-  );
-
+  // Same shaping as GET /api/keys/out, from the same module.
   return rewriteStorageUrls(
-    withOverdue.map(({ overdue, ...row }) => {
-      const guest = row.guest as { id: string; full_name: string } | null;
-      const requester =
-        row.requester ??
-        (guest
-          ? { id: guest.id, full_name: guest.full_name, photo_url: null }
-          : null);
-      const { guest: _g, ...rest } = row;
-      return {
-        ...rest,
-        requester,
-        status: overdue ? 'KEY_OVERDUE' : rest.status,
-      } as OutstandingKey;
-    })
-  );
+    shapeOutstanding(
+      (data ?? []) as unknown as (OutstandingSourceRow &
+        Omit<OutstandingKey, 'requester' | 'status' | 'is_overdue'>)[]
+    )
+  ) as OutstandingKey[];
 };

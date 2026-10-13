@@ -780,11 +780,17 @@ The verifier is the server-verified session user (`user.id`), never a client-sup
 **File**: `src/app/api/keys/out/route.ts`
 **Roles**: CSO, VERIFIER
 
-Returns all requests with `status = 'KEY_ISSUED'` or `status = 'KEY_OVERDUE'`, joined with requester and key details.
+Returns every request with `status = 'KEY_ISSUED'` — every copy physically out — joined with requester and key details. There is no `KEY_OVERDUE` request status in the database; an overdue key is a `KEY_ISSUED` request past its `return_deadline`.
 
-**Query params**: `zone` (`NEW_SENATE | OLD_SENATE`) · `overdue_only` (`boolean`)
+**Query params**: `zone` (`NEW_SENATE | OLD_SENATE`) · `overdue_only` (`boolean` — filters on `return_deadline < now`)
 
-**Response `data`**: `{ "outstanding": [...] }`
+**Response `data`**: `{ "outstanding": [...] }`. Each row is shaped by `shapeOutstanding` (`src/lib/keys/outstanding.ts`):
+
+- `is_overdue` — `true` once the row's `return_deadline` has passed. The same rule as `public.request_is_overdue(status, return_deadline)`, derived from the clock rather than read from `keys.status` (which only flips on the hourly `mark_key_overdue()` cron). **Read this.**
+- `status` — **deprecated**. `'KEY_OVERDUE'` when `is_overdue`, else `'KEY_ISSUED'`. A display-only value kept for one release so older clients keep rendering; it will be removed.
+- `requester` — the registered requester, or a guest holder folded in with `photo_url: null`.
+
+The verifier dashboard's first paint (`getOutstandingKeysSeed` in `src/lib/queries/verifier-dashboard.ts`) shapes its rows through the same function.
 
 ---
 
@@ -819,7 +825,7 @@ No query params. No request body.
 }
 ```
 
-A key record is a room's set of `key_count` **interchangeable copies**, so availability is a count, not a boolean. A request _occupies_ one copy while it is `KEY_ISSUED`, or `CODE_ISSUED` with an unexpired code — the same rule the `requests_key_capacity` trigger enforces, mirrored in `src/lib/keys/availability.ts` so the UI and database agree. `available_count` is `key_count` minus the occupants.
+A key record is a room's set of `key_count` **interchangeable copies**, so availability is a count, not a boolean. A request _occupies_ one copy while it is `KEY_ISSUED`, or `CODE_ISSUED` with an unexpired code — the same rule the `requests_key_capacity` trigger enforces (`public.request_occupies_key`). The counts and `state` come from `src/lib/keys/occupancy.ts`, which mirrors that predicate and `public.request_is_overdue` and is held to them by matching truth tables (`src/tests/keys/occupancy.test.ts` ↔ `supabase/tests/11_key_occupancy_test.sql`); `src/lib/keys/availability.ts` only adds who is holding a copy. The CSO dashboard's per-zone counts use the same rule server-side via `get_key_occupancy()`, so the two agree. `available_count` is `key_count` minus the occupants.
 
 `state` is one of `AVAILABLE` · `SPOKEN_FOR` · `OUT` · `OVERDUE` · `RETIRED`:
 
@@ -955,7 +961,7 @@ Edits an existing user's `full_name` and — for departmental roles (Dean, REQUE
 **File**: `src/app/api/admin/units/route.ts`
 **Roles**: CSO
 
-No query params. Returns every unit (faculty or Administration) with its Dean, a `has_hod` flag (`true` when an `ACTIVE` Dean is already assigned — used to grey out that unit in the Dean-role picker on `POST /api/admin/users`), and a `has_slot_today` flag (`true` when at least one non-retired key in the unit is currently `AVAILABLE`).
+No query params. Returns every unit (faculty or Administration) with its Dean, a `has_hod` flag (`true` when an `ACTIVE` Dean is already assigned — used to grey out that unit in the Dean-role picker on `POST /api/admin/users`), and a `has_slot_today` flag: `true` when at least one copy of a non-retired key in the unit is free right now — `available > 0` in `get_key_occupancy()`. That counts copies (a twelve-copy room with three out still has a slot) and treats a copy reserved by a live collection code as taken; it used to read `keys.status = 'AVAILABLE'`, which could express neither. No UI reads this flag today. A `get_key_occupancy()` failure returns `500` with a correlation reference.
 
 **Response `data`**: `{ "units": [...] }`
 

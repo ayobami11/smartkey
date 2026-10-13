@@ -45,7 +45,8 @@ type OutstandingKey = {
   requester: { id: string; full_name: string; photo_url: string | null } | null;
   issued_at: string;
   return_deadline: string;
-  status: 'KEY_ISSUED' | 'KEY_OVERDUE';
+  /** Past its return deadline. From GET /api/keys/out. */
+  is_overdue: boolean;
 };
 
 type ReturnStep = 'confirm' | 'returning' | 'success';
@@ -84,31 +85,37 @@ export const OutstandingKeys = () => {
     },
   });
 
-  // Live updates — requests drive issued/returned transitions; keys drive overdue
+  // Live updates. Overdue is derived from the clock on the server, so no
+  // event marks it; what changes the list is a request moving into or out of
+  // KEY_ISSUED. There is no KEY_OVERDUE request status to listen for.
+  const invalidateOutstanding = () =>
+    queryClient.invalidateQueries({ queryKey: ['keys', 'outstanding'] });
 
   useRealtime({
     table: 'requests',
     onInsert: (payload) => {
       const row = payload.new as { status?: string };
-      if (row.status === 'KEY_ISSUED')
-        queryClient.invalidateQueries({ queryKey: ['keys', 'outstanding'] });
+      if (row.status === 'KEY_ISSUED') invalidateOutstanding();
     },
     onUpdate: (payload) => {
-      const row = payload.new as { status?: string };
+      const next = payload.new as { status?: string };
+      // payload.old carries only the primary key unless the table has
+      // REPLICA IDENTITY FULL, so KEY_RETURNED is matched on `next` too.
+      const prev = payload.old as { status?: string } | null;
       if (
-        ['KEY_ISSUED', 'KEY_OVERDUE', 'KEY_RETURNED'].includes(row.status ?? '')
+        next.status === 'KEY_ISSUED' ||
+        prev?.status === 'KEY_ISSUED' ||
+        next.status === 'KEY_RETURNED'
       )
-        queryClient.invalidateQueries({ queryKey: ['keys', 'outstanding'] });
+        invalidateOutstanding();
     },
   });
 
+  // keys.status flips on issue/return and on the hourly overdue job; any of
+  // those is a cheap prompt to re-read, and keeps the overdue flag fresh.
   useRealtime({
     table: 'keys',
-    onUpdate: (payload) => {
-      const row = payload.new as { status?: string };
-      if (row.status === 'OVERDUE' || row.status === 'AVAILABLE')
-        queryClient.invalidateQueries({ queryKey: ['keys', 'outstanding'] });
-    },
+    onUpdate: () => invalidateOutstanding(),
   });
 
   // Sheet helpers
@@ -211,7 +218,7 @@ export const OutstandingKeys = () => {
       {!loading && !fetchError && keys.length > 0 && (
         <div className="flex flex-col gap-3">
           {keys.map((item) => {
-            const isOverdue = item.status === 'KEY_OVERDUE';
+            const isOverdue = item.is_overdue;
             const stripe = isOverdue ? 'bg-destructive' : 'bg-emerald-500';
             return (
               <div
@@ -336,7 +343,7 @@ export const OutstandingKeys = () => {
                       bunch
                     </p>
                   )}
-                  {selectedKey.status === 'KEY_OVERDUE' && (
+                  {selectedKey.is_overdue && (
                     <p className="mt-1 text-xs font-medium text-destructive">
                       This key is overdue (deadline:{' '}
                       {formatDeadline(selectedKey.return_deadline)})

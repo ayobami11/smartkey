@@ -16,6 +16,7 @@ review were failures of exactly these rules.
 | `05_weekday_lifecycle_test.sql`       | The weekday collect/return loop: `create_request`, `issue_key` (including the one-live-holder-per-key guard, both that it fires and that it does not over-block a key whose other requests are terminal), `return_key` (both the verified and override-reason paths), `request_return`.                    |
 | `06_guest_weekend_lifecycle_test.sql` | The external (guest) weekend flow: `create_guest_weekend_request`, `approve_guest_weekend` (including the Dean-vs-CSO authoriser gate and the cross-faculty key-assignment check), `generate_guest_weekend_code`, `expire_guest_request` (including the same-day rollback branch), `request_return_guest`. |
 | `07_profiles_column_guard_test.sql`   | `protect_profile_columns`: from a user session only `full_name` changes; `role`, `status`, `unit_id`, `signature_ref_url`, `institutional_email` and `photo_url` are refused (own row, and other rows for a CSO session); non-session writes still work; `anon` has no UPDATE grant.                       |
+| `11_key_occupancy_test.sql`           | Key occupancy (`20261013110000_key_occupancy_rpc.sql`): truth tables for `request_occupies_key` and `request_is_overdue` (mirrored label for label in `src/tests/keys/occupancy.test.ts`), `get_key_occupancy()` per-key copy counts (multi-copy, live vs lapsed codes, retired, stale `keys.status`), its zone filter and CSO/VERIFIER role gate, no `anon` execute, and `get_digest_stats.overdue_count` counting overdue holders rather than key records. |
 
 Still uncovered: registered-user weekend gaps (`generate_weekend_code`,
 `expire_request` — the non-guest analogues of what `06` now covers for guests),
@@ -23,7 +24,7 @@ admin/config RPCs (`update_risk_config`, `update_operational_config`,
 `provision_user`, `resolve_pending_signature_reference`), shift/report RPCs
 (`acknowledge_shift_handover`, `generate_shift_report`, `add_report_comment`),
 and the remaining batch/cron RPCs (`mark_key_overdue`,
-`schedule_pending_shift_report`, `get_digest_stats`, `expire_lapsed_codes`).
+`schedule_pending_shift_report`, `expire_lapsed_codes`; `get_digest_stats` only has its `overdue_count` covered, by `11`).
 This list itself drifted before `06` was written — it omitted
 `generate_weekend_code`, `expire_request`, and `resolve_pending_signature_reference`
 entirely; cross-check against `docs/DATABASE.md`'s RPC list, not just this file,

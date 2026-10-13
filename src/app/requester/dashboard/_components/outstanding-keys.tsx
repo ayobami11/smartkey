@@ -35,12 +35,15 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { apiFetch } from '@/lib/api';
+import { withOverdueFlag } from '@/lib/keys/outstanding';
 import { createBrowserClient } from '@/lib/supabase/client';
 import { formatCountdown, formatDeadline, relativeTime } from '@/lib/dates';
 
 type OutstandingKey = {
   id: string;
-  status: 'KEY_ISSUED' | 'KEY_OVERDUE';
+  status: 'KEY_ISSUED';
+  /** Past its return deadline; see src/lib/keys/outstanding.ts. */
+  is_overdue: boolean;
   return_code: string | null;
   return_code_expires_at: string | null;
   return_deadline: string;
@@ -179,15 +182,7 @@ export const OutstandingKeys = ({ userId }: OutstandingKeysProps) => {
       if (error)
         throw new Error(error.message ?? 'Failed to load your issued keys.');
 
-      const now = Date.now();
-      return (data ?? []).map((row) => ({
-        ...row,
-        status:
-          row.return_deadline !== null &&
-          new Date(row.return_deadline).getTime() < now
-            ? ('KEY_OVERDUE' as const)
-            : ('KEY_ISSUED' as const),
-      })) as OutstandingKey[];
+      return withOverdueFlag(data ?? []) as OutstandingKey[];
     },
   });
 
@@ -269,7 +264,7 @@ export const OutstandingKeys = ({ userId }: OutstandingKeysProps) => {
     queryClient.invalidateQueries({ queryKey: ['outstanding-keys', userId] });
   };
 
-  const isOverdue = (item: OutstandingKey) => item.status === 'KEY_OVERDUE';
+  const isOverdue = (item: OutstandingKey) => item.is_overdue;
   const selectedIsOverdue = selectedKey ? isOverdue(selectedKey) : false;
 
   return (

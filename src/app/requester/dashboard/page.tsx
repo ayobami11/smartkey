@@ -4,6 +4,7 @@ import { ActiveRequestBanner } from '@/app/requester/dashboard/_components/activ
 import { AuthorizedKeys } from '@/app/requester/dashboard/_components/authorized-keys';
 import { OutstandingKeys } from '@/app/requester/dashboard/_components/outstanding-keys';
 import { WeekendRequests } from '@/app/requester/dashboard/_components/weekend-requests';
+import { withOverdueFlag } from '@/lib/keys/outstanding';
 import { getQueryClient } from '@/lib/queries/get-query-client';
 import { createServerClient } from '@/lib/supabase/server';
 
@@ -19,7 +20,9 @@ type ActiveRequest = {
 
 type OutstandingKey = {
   id: string;
-  status: 'KEY_ISSUED' | 'KEY_OVERDUE';
+  status: 'KEY_ISSUED';
+  /** Past its return deadline; see src/lib/keys/outstanding.ts. */
+  is_overdue: boolean;
   return_code: string | null;
   return_code_expires_at: string | null;
   return_deadline: string;
@@ -44,23 +47,6 @@ type WeekendRequest = {
   status: WeekendStatus;
   requested_for: string;
   key: { code: string; room_name: string } | null;
-};
-
-// Extracted so the impure Date.now() call isn't inline inside the page
-// component's body — React Compiler's purity rule flags that even inside a
-// nested async closure like a queryFn.
-const withOverdueStatus = <T extends { return_deadline: string | null }>(
-  rows: T[]
-): (T & { status: 'KEY_ISSUED' | 'KEY_OVERDUE' })[] => {
-  const now = Date.now();
-  return rows.map((row) => ({
-    ...row,
-    status:
-      row.return_deadline !== null &&
-      new Date(row.return_deadline).getTime() < now
-        ? ('KEY_OVERDUE' as const)
-        : ('KEY_ISSUED' as const),
-  }));
 };
 
 export default async function RequesterDashboardPage() {
@@ -107,7 +93,9 @@ export default async function RequesterDashboardPage() {
               error.message ?? 'Failed to load your issued keys.'
             );
 
-          return withOverdueStatus(data ?? []) as OutstandingKey[];
+          // withOverdueFlag reads the clock outside the component body, which
+          // keeps React Compiler's purity rule satisfied.
+          return withOverdueFlag(data ?? []) as OutstandingKey[];
         },
       }),
       queryClient.prefetchQuery({

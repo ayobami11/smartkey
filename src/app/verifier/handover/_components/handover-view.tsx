@@ -35,7 +35,8 @@ type OutstandingKey = {
   requester: { id: string; full_name: string; photo_url: string | null } | null;
   issued_at: string;
   return_deadline: string;
-  status: 'KEY_ISSUED' | 'KEY_OVERDUE';
+  /** Past its return deadline. From GET /api/keys/out. */
+  is_overdue: boolean;
 };
 
 type PageStep = 'loading' | 'no-shift' | 'ready' | 'success' | 'error';
@@ -245,7 +246,7 @@ export const HandoverView = () => {
               </h2>
               <div className="overflow-hidden rounded-lg border border-border bg-card shadow-[0_2px_4px_rgba(15,23,42,0.06)]">
                 {outstandingKeys.map((item, idx) => {
-                  const isOverdue = item.status === 'KEY_OVERDUE';
+                  const isOverdue = item.is_overdue;
                   const zoneLabel =
                     item.key.zone === 'NEW_SENATE'
                       ? 'New Senate'
@@ -435,7 +436,7 @@ export const HandoverView = () => {
                   </div>
 
                   {outstandingKeys.map((item, idx) => {
-                    const isOverdue = item.status === 'KEY_OVERDUE';
+                    const isOverdue = item.is_overdue;
                     const isChecked = acknowledged.has(item.id);
                     const zoneLabel =
                       item.key.zone === 'NEW_SENATE'
