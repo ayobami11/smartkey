@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as z from 'zod';
 
+import { uploadExtension } from '@/lib/storage/extension';
 import { logger } from '@/lib/logger';
 import { notifyAfterResponse } from '@/lib/notifications/notify';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -110,7 +111,7 @@ export const POST = async (request: NextRequest) => {
 
   // Upload the letter to the existing weekend-letters bucket. Guest letters
   // live under a guest/ prefix to keep them separate from registered uploads.
-  const ext = letter.name.split('.').pop() ?? 'bin';
+  const ext = uploadExtension(letter.name, 'bin');
   const letterPath = `guest/${crypto.randomUUID()}.${ext}`;
   const letterBytes = await letter.arrayBuffer();
 

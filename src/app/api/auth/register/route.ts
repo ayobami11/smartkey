@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { uploadExtension } from '@/lib/storage/extension';
 import { logger } from '@/lib/logger';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { DEFAULT_NAMESPACE, namespaceForRole } from '@/lib/supabase/cookies';
@@ -85,7 +86,7 @@ export const POST = async (request: NextRequest) => {
     // the storage RLS auth-context fragility of the cookie-based server client.
     const adminClient = createAdminClient();
     const photoBytes = await photo.arrayBuffer();
-    const ext = photo.name.split('.').pop() ?? 'jpg';
+    const ext = uploadExtension(photo.name, 'jpg');
     const photoPath = `${userId}/passport.${ext}`;
 
     const { error: uploadError } = await adminClient.storage

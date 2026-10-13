@@ -6,6 +6,14 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-10-13 — Upload extensions are sanitised everywhere
+
+- **Why**: six upload sites took the object extension with `file.name.split('.').pop()`. For a filename with no dot that is the whole name (`scan copy` → `{uuid}.scan copy`), and any odd extension produces a path that `isValidObjectPath` rejects — so the storage proxy refused to serve the image ("Image unavailable"), and since `20261013120100` a registered requester's weekend letter with such a name would also be refused by `create_request`'s ownership check.
+- **`src/lib/storage/extension.ts`**: `uploadExtension(fileName, fallback)` keeps a 1–8 character alphanumeric extension (lower-cased) and otherwise returns the fallback. Used by the requester weekend sheet, `auth/activate-hod`, `auth/register`, `public/weekend-request`, `profile/photo` and `profile/signature` (which already had an inline copy).
+- **Tests**: `src/tests/storage/extension.test.ts`, including that every result yields a path the proxy accepts.
+- **No migration.** The SQL check was not the problem: for every name the client can now produce it agrees with the TypeScript one.
+- **Replaced signature files are kept on purpose**, not cleaned up: audit entries and the CSO mismatch view reference them. Recorded in `docs/DATABASE.md` (Storage buckets).
+
 ### 2026-10-13 — Remaining state changes move into atomic RPCs
 
 - **Why**: CLAUDE.md requires every consequential action to write its audit entry in the same transaction as the state change. Six routes still changed state and then audited in a second call whose failure was logged and swallowed, so a cancellation, CSO decision, user edit, deactivation or signature-reference change could commit with no audit entry. One of them also had a live bug: `POST /api/requests/cso-decision` with `DECLINED` on a `KEY_ISSUED` request (the CSO queue shows those, with buttons) changed nothing, still wrote `REQUEST_DECLINED_CSO`, and answered `CANCELLED`. Its `note` was accepted and dropped.

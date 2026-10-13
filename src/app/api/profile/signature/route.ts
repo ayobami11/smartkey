@@ -3,6 +3,7 @@ import {
   DEFAULT_THRESHOLD,
   verifySignature,
 } from '@/lib/ai/signature/verifier';
+import { uploadExtension } from '@/lib/storage/extension';
 import { respond } from '@/lib/http/respond';
 import { route } from '@/lib/http/route';
 import { rpcFail } from '@/lib/http/rpc-errors';
@@ -121,10 +122,7 @@ export const POST = route({
       }
     }
 
-    const rawExt = image.name.split('.').pop() ?? '';
-    const ext = /^[A-Za-z0-9]{1,8}$/.test(rawExt)
-      ? rawExt.toLowerCase()
-      : 'png';
+    const ext = uploadExtension(image.name, 'png');
     const storagePath = `${user.id}/${type}-${crypto.randomUUID()}.${ext}`;
 
     const { error: uploadError } = await admin.storage

@@ -31,6 +31,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { uploadExtension } from '@/lib/storage/extension';
 import { apiFetch } from '@/lib/api';
 import { createBrowserClient } from '@/lib/supabase/client';
 import {
@@ -134,7 +135,7 @@ export const WeekendAccessSheet = ({
     const supabase = createBrowserClient();
 
     const uploadToWeekendLetters = async (file: File) => {
-      const ext = file.name.split('.').pop() ?? 'bin';
+      const ext = uploadExtension(file.name, 'bin');
       const path = `${userId}/${crypto.randomUUID()}.${ext}`;
       const { error: uploadError } = await supabase.storage
         .from('weekend-letters')

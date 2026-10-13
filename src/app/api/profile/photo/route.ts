@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { uploadExtension } from '@/lib/storage/extension';
 import { logger } from '@/lib/logger';
 import { toProxyUrl } from '@/lib/storage/object-url';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -53,7 +54,7 @@ export const POST = async (request: NextRequest) => {
   // the registration flow).
   const adminClient = createAdminClient();
   const photoBytes = await photo.arrayBuffer();
-  const ext = photo.name.split('.').pop() ?? 'jpg';
+  const ext = uploadExtension(photo.name, 'jpg');
   const photoPath = `${userId}/passport.${ext}`;
 
   const { error: uploadError } = await adminClient.storage

@@ -391,6 +391,8 @@ Two things mattered here beyond the flag itself:
   client inside the proxy route, which bypasses RLS and applies its own per-role check. The
   tightened policies are defence in depth for direct Storage API access with a user token.
 
+**Replaced signature and stamp files are kept, deliberately.** Each Dean upload gets its own path, so replacing a reference (or a CSO approving or declining a held one) leaves the previous object in `hod-signatures`. They are not deleted because `SIGNATURE_MISMATCH` audit entries and the CSO mismatch view point at those exact objects (`ref_url`, `submitted_url`, `pending_url`): deleting one would remove the evidence a held approval or replacement was judged on, from an audit trail that is otherwise immutable. The only file removed is an upload that nothing references, when `set_signature_reference`/`hold_signature_reference` refuses it. Volume is a few small images per Dean.
+
 Uploads are unaffected — the `*_insert_own` / `*_update_own` policies were already folder-scoped to
 `auth.uid()`, and the public flag never governed writes.
 
