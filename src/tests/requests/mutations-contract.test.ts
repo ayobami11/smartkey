@@ -3,7 +3,15 @@
 // hod-decision: the status and message for every auth outcome, bad body and
 // RPC error kind each route maps, plus its success shape. Written against the
 // routes before they moved onto route(); kept as the regression net after.
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 
 import { POST as cancel } from '@/app/api/requests/cancel/route';
 import { POST as csoDecision } from '@/app/api/requests/cso-decision/route';
@@ -43,6 +51,16 @@ vi.mock('@/lib/notifications/notify', () => ({
 
 type Role = 'CSO' | 'DEAN' | 'VERIFIER' | 'REQUESTER';
 type Outcome = [status: number, message: string];
+
+// The weekend fixtures request Saturday 2026-10-17. Pin "today" to the Tuesday
+// before, so they stay valid whatever day the suite runs.
+beforeAll(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-10-13T10:00:00Z'));
+});
+afterAll(() => {
+  vi.useRealTimers();
+});
 
 const asRole = (role: Role) => {
   fake.profile = { role, unit_id: 'unit-1', full_name: 'Test User' };
