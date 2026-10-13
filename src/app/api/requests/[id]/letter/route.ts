@@ -1,101 +1,79 @@
-import { NextRequest, NextResponse } from 'next/server';
+import * as z from 'zod';
 
-import { logger } from '@/lib/logger';
+import { respond } from '@/lib/http/respond';
+import { route } from '@/lib/http/route';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createServerClient } from '@/lib/supabase/server';
-import { err, ok } from '@/types/api';
 
-// Returns a short-lived signed URL for a guest request's HOD authorisation
-// letter, so the HOD can preview it before approving. The letter lives in the
-// private `weekend-letters` bucket; signing happens server-side with the admin
-// client. Access is gated to the HOD whose department owns the request.
+// Returns a short-lived signed URL for a request's authorisation letter or
+// stamp, so the authoriser can preview it before deciding. The file lives in
+// the private `weekend-letters` bucket; signing happens server-side with the
+// admin client.
 
 const SIGNED_URL_TTL_SECONDS = 300;
 
-export const GET = async (
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) => {
-  const { id } = await params;
-  const type =
-    request.nextUrl.searchParams.get('type') === 'stamp' ? 'stamp' : 'letter';
-  const column = type === 'stamp' ? 'stamp_url' : 'letter_url';
+// Any string: a malformed id simply finds no request and 404s below with the
+// same "Letter/Stamp not found" copy as an unknown one.
+const paramsSchema = z.object({ id: z.string() });
 
-  const supabase = await createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user)
-    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
+export const GET = route({
+  name: 'requests/letter',
+  auth: 'user',
+  roles: ['DEAN', 'CSO'],
+  params: paramsSchema,
+  handler: async ({ supabase, profile, params, request }) => {
+    const type =
+      request.nextUrl.searchParams.get('type') === 'stamp' ? 'stamp' : 'letter';
+    const column = type === 'stamp' ? 'stamp_url' : 'letter_url';
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role, unit_id')
-    .eq('id', user.id)
-    .single();
-  if (!profile || (profile.role !== 'DEAN' && profile.role !== 'CSO')) {
-    return NextResponse.json(err('Forbidden', 403), { status: 403 });
-  }
+    // RLS exposes the request to a Dean; the CSO reads with the admin client
+    // because its RLS policy doesn't cover every request type.
+    const { data: req } = await (
+      profile.role === 'CSO' ? createAdminClient() : supabase
+    )
+      .from('requests')
+      .select('letter_url, stamp_url, requested_unit_id')
+      .eq('id', params.id)
+      .maybeSingle();
 
-  // RLS exposes the request to the actor; use RLS for the DEAN and the admin
-  // client for the CSO (whose RLS policy doesn't cover all request types).
-  const { data: req } = await (
-    profile.role === 'CSO' ? createAdminClient() : supabase
-  )
-    .from('requests')
-    .select('letter_url, stamp_url, requested_unit_id')
-    .eq('id', id)
-    .maybeSingle();
+    const fileUrl = req?.[column] ?? null;
+    if (!req || !fileUrl) {
+      return respond.fail(
+        404,
+        type === 'stamp' ? 'Stamp not found' : 'Letter not found'
+      );
+    }
 
-  const fileUrl = req?.[column] ?? null;
-  if (!req || !fileUrl) {
-    return NextResponse.json(
-      err(type === 'stamp' ? 'Stamp not found' : 'Letter not found', 404),
-      { status: 404 }
-    );
-  }
+    // A Dean sees only their own faculty's guest requests.
+    if (
+      profile.role === 'DEAN' &&
+      req.requested_unit_id &&
+      req.requested_unit_id !== profile.unit_id
+    ) {
+      return respond.fail(403, 'Forbidden');
+    }
 
-  // DEAN: only their department's requests.
-  if (
-    profile.role === 'DEAN' &&
-    req.requested_unit_id &&
-    req.requested_unit_id !== profile.unit_id
-  ) {
-    return NextResponse.json(err('Forbidden', 403), { status: 403 });
-  }
+    // letter_url/stamp_url are stored as full Supabase Storage URLs; extract
+    // the bucket-relative path that createSignedUrl expects.
+    const bucketMarker = '/weekend-letters/';
+    const markerIdx = fileUrl.indexOf(bucketMarker);
+    if (markerIdx === -1) {
+      return respond.internal('requests/letter: malformed url', {
+        type,
+        url: fileUrl,
+      });
+    }
+    const storagePath = fileUrl.slice(markerIdx + bucketMarker.length);
 
-  // letter_url/stamp_url are stored as full Supabase Storage public URLs;
-  // extract the bucket-relative path that createSignedUrl expects.
-  const bucketMarker = '/weekend-letters/';
-  const markerIdx = fileUrl.indexOf(bucketMarker);
-  if (markerIdx === -1) {
-    const ref = crypto.randomUUID();
-    logger.error('weekend-letter: malformed url', {
-      ref,
-      type,
-      url: fileUrl,
-    });
-    return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
-      status: 500,
-    });
-  }
-  const storagePath = fileUrl.slice(markerIdx + bucketMarker.length);
+    const { data: signed, error: signError } = await createAdminClient()
+      .storage.from('weekend-letters')
+      .createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS);
 
-  const admin = createAdminClient();
-  const { data: signed, error: signError } = await admin.storage
-    .from('weekend-letters')
-    .createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS);
+    if (signError || !signed) {
+      return respond.internal('requests/letter: sign failed', {
+        err: signError?.message,
+      });
+    }
 
-  if (signError || !signed) {
-    const ref = crypto.randomUUID();
-    logger.error('weekend-letter sign failed', {
-      err: signError?.message,
-      ref,
-    });
-    return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
-      status: 500,
-    });
-  }
-
-  return NextResponse.json(ok({ url: signed.signedUrl }));
-};
+    return respond.ok({ url: signed.signedUrl });
+  },
+});
