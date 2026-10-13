@@ -73,7 +73,9 @@ export const POST = async (request: NextRequest) => {
     .getPublicUrl(photoPath);
   const photoUrl = urlData.publicUrl;
 
-  const { error: profileError } = await supabase
+  // profiles columns other than full_name are server-written only: the
+  // protect_profile_columns trigger rejects them from a user session.
+  const { error: profileError } = await adminClient
     .from('profiles')
     .update({ photo_url: photoUrl })
     .eq('id', userId);
@@ -131,7 +133,7 @@ export const DELETE = async () => {
     }
   }
 
-  const { error: profileError } = await supabase
+  const { error: profileError } = await adminClient
     .from('profiles')
     .update({ photo_url: null })
     .eq('id', userId);

@@ -258,7 +258,9 @@ export const POST = async (request: NextRequest) => {
       ? { signature_ref_url: newUrl }
       : { stamp_ref_url: newUrl };
 
-  const { error: updateError } = await supabase
+  // profiles columns other than full_name are server-written only: the
+  // protect_profile_columns trigger rejects them from a user session.
+  const { error: updateError } = await admin
     .from('profiles')
     .update(profileUpdate)
     .eq('id', user.id);

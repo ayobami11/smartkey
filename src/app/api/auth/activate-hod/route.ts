@@ -162,7 +162,9 @@ export const POST = async (request: NextRequest) => {
     .from('hod-signatures')
     .getPublicUrl(stampPath);
 
-  const { error: profileError } = await supabase
+  // profiles columns other than full_name are server-written only: the
+  // protect_profile_columns trigger rejects them from a user session.
+  const { error: profileError } = await adminClient
     .from('profiles')
     .update({
       signature_ref_url: sigUrlData.publicUrl,

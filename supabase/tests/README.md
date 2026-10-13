@@ -15,6 +15,7 @@ review were failures of exactly these rules.
 | `04_authoriser_gate_test.sql`         | The Dean-vs-CSO authoriser gate on `nominate_collector`, `remove_collector`, `approve_weekend`, `decline_weekend`, `dismiss_expired_request`.                                                                                                                                                              |
 | `05_weekday_lifecycle_test.sql`       | The weekday collect/return loop: `create_request`, `issue_key` (including the one-live-holder-per-key guard, both that it fires and that it does not over-block a key whose other requests are terminal), `return_key` (both the verified and override-reason paths), `request_return`.                    |
 | `06_guest_weekend_lifecycle_test.sql` | The external (guest) weekend flow: `create_guest_weekend_request`, `approve_guest_weekend` (including the Dean-vs-CSO authoriser gate and the cross-faculty key-assignment check), `generate_guest_weekend_code`, `expire_guest_request` (including the same-day rollback branch), `request_return_guest`. |
+| `07_profiles_column_guard_test.sql`   | `protect_profile_columns`: from a user session only `full_name` changes; `role`, `status`, `unit_id`, `signature_ref_url`, `institutional_email` and `photo_url` are refused (own row, and other rows for a CSO session); non-session writes still work; `anon` has no UPDATE grant.                       |
 
 Still uncovered: registered-user weekend gaps (`generate_weekend_code`,
 `expire_request` — the non-guest analogues of what `06` now covers for guests),

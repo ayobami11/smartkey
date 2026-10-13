@@ -108,8 +108,10 @@ export const POST = async (request: NextRequest) => {
     photoUrl = urlData.publicUrl;
   }
 
-  // Activate profile
-  const { error: profileError } = await supabase
+  // Activate profile.
+  // profiles columns other than full_name are server-written only: the
+  // protect_profile_columns trigger rejects them from a user session.
+  const { error: profileError } = await createAdminClient()
     .from('profiles')
     .update({ status: 'ACTIVE', ...(photoUrl ? { photo_url: photoUrl } : {}) })
     .eq('id', userId);
