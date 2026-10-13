@@ -177,13 +177,14 @@ describe('GET /api/ai/signature-alerts', () => {
     }
   );
 
-  // BUG (not fixed in this batch): with no weekend-request mismatches the
-  // route returns early, so held reference replacements never reach the CSO.
-  it('omits reference_replacements when there are no mismatch entries', async () => {
+  // CHANGED (bug fix): with no weekend-request mismatches the route used to
+  // return early, so held reference replacements never reached the CSO.
+  it('still returns held reference replacements when there are no mismatch entries', async () => {
     fake.tables.audit_log = { data: [], error: null };
     expect(await call(signatureAlerts, get(path))).toEqual(
-      success({ alerts: [] })
+      success({ alerts: [], reference_replacements: [pendingRefOut] })
     );
+    expect(fake.queries.some((q) => q.table === 'requests')).toBe(false);
   });
 
   it('returns held requests (latest mismatch, proxied URLs) and replacements', async () => {

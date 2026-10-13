@@ -65,24 +65,23 @@ export const GET = route({
       }
     }
 
+    // With no weekend-request mismatches there is nothing to look up, but the
+    // held reference replacements below must still be read: returning early
+    // here (until 2026-10-13) hid every held Dean signature or stamp from the
+    // CSO for as long as no weekend request was held too.
     const requestIds = [...latestByRequest.keys()];
-    if (requestIds.length === 0) {
-      // Known bug, pinned in src/tests/ai/alerts-contract.test.ts and left for
-      // a follow-up: returning here skips the reference-replacement query, so
-      // a held Dean reference never reaches the CSO while there are no
-      // weekend-request mismatches.
-      return respond.ok({ alerts: [] });
-    }
-
-    const { data: requests, error: requestsError } = await supabase
-      .from('requests')
-      .select(
-        `id, requested_for,
+    const { data: requests, error: requestsError } =
+      requestIds.length === 0
+        ? { data: [], error: null }
+        : await supabase
+            .from('requests')
+            .select(
+              `id, requested_for,
          requester:profiles!requester_id(id, full_name, institutional_email),
          key:keys!key_id(id, code, room_name, zone)`
-      )
-      .in('id', requestIds)
-      .eq('status', 'PENDING_HOD');
+            )
+            .in('id', requestIds)
+            .eq('status', 'PENDING_HOD');
 
     if (requestsError) {
       return respond.fail(500, FAILED);
