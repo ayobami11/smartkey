@@ -38,7 +38,7 @@ Routes build the envelope only through `respond.ok` / `fail` / `error` / `intern
 
 ## Auth conventions
 
-Route handlers are wrapped in `route()` from `src/lib/http/route.ts`. Routes are being moved onto it in batches; `POST /api/requests/hod-decision` is the first. `route()` runs these checks in a fixed order before the handler:
+Route handlers are wrapped in `route()` from `src/lib/http/route.ts`. Routes are being moved onto it in batches; every route under `/api/requests/` is on it (batch 1, 2026-10-13). `route()` runs these checks in a fixed order before the handler:
 
 1. **Auth**, chosen per route with `auth`:
    - `'user'` validates the Supabase session with `getUser()`, never `getSession()`. No session → `401 Unauthorized`.
@@ -454,9 +454,9 @@ The response carries an `is_guest` flag. For an external (guest) request it is `
 }
 ```
 
-**Errors**: `404` code not found or expired · `409` key already issued · `422` validation
+**Errors**: `404` code not found or expired · `409` key already issued, every copy already out, or no copy available (`NO_KEYS_AVAILABLE`) · `422` validation
 
-The `409` is raised by the `issue_key` capacity guard (see `docs/DATABASE.md`) when the room's copies are all already out — `count(KEY_ISSUED for this key) >= keys.key_count`. In practice it is unreachable through normal paths, because a request only reaches `CODE_ISSUED` by passing the `requests_key_capacity` trigger, which already reserved a copy; it is defence in depth at the physical handover. Unlike every other branch of the route's `mapRpcError`, the `CONFLICT` branch passes the RPC's own text through to the client (`msg.split(': ')[1]`), so the verifier sees **"this key is already issued and has not been returned"** (single-copy rooms) or **"all N keys on this bunch are out and none has been returned"** verbatim. Those messages are therefore UI copy: any `CONFLICT` message reaching this route must contain no second `': '`, or the split truncates it mid-clause.
+The capacity `409` is raised by the `issue_key` capacity guard (see `docs/DATABASE.md`) when the room's copies are all already out — `count(KEY_ISSUED for this key) >= keys.key_count`. In practice it is unreachable through normal paths, because a request only reaches `CODE_ISSUED` by passing the `requests_key_capacity` trigger, which already reserved a copy; it is defence in depth at the physical handover. Unlike any other route, `collect` passes that `CONFLICT`'s own text through to the client, so the verifier sees **"this key is already issued and has not been returned"** (single-copy rooms) or **"all N keys on this bunch are out and none has been returned"** verbatim. Those two messages are therefore UI copy. They pass only on an exact, anchored match (`VERIFIER_FACING_CONFLICTS` in the route); any other `CONFLICT` detail — such as the request having left `CODE_ISSUED` between lookup and issue — gets the fixed copy "This code has already been used." Until 2026-10-13 the route passed through `msg.split(': ')[1]` for every `CONFLICT`, which truncated a detail with a second `': '` mid-clause and leaked internal state ("request is not in CODE_ISSUED state (current"), and `NO_KEYS_AVAILABLE` was unmapped and came back as a `500`.
 
 ---
 

@@ -6,6 +6,20 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-10-13 — `requests/*` routes move onto `route()`
+
+- **Why**: ten of the fourteen routes under `src/app/api/requests/` still hand-rolled auth, the role check, body parsing and the ref'd 500, and five carried a private `mapRpcError` that matched RPC errors by substring. That is how `collect` came to leak a truncated internal state to the verifier and turn `NO_KEYS_AVAILABLE` into a `500`, and how three routes answered `403` instead of `401` for a session with no profile. This is batch 1 of the `src/lib/http/` migration (batch 0 shipped the module and `hod-decision`; `cancel`, `cso-decision` and `submit` moved in the atomic-transitions change).
+- **Contract tests first**: `src/tests/requests/` (`collect-contract`, `mutations-contract`, `reads-contract`, on a shared fake Supabase client in `route-harness.ts`) pin every route's auth outcomes, `422` body, each RPC error kind it maps, query failures and success shapes. They were committed passing against the unchanged routes; the only assertions changed afterwards are the behaviour changes below.
+- **Routes migrated** to `route()` + `callRpc` + `rpcFail` (or `respond.*` for the reads): `collect`, `request-return`, `weekend-code`, `expire`, `dismiss`, `my`, `pending`, `cso-queue`, `live-queue`, `[id]/letter`. Every status and message the UI branches on is unchanged.
+- **Behaviour changes** (bug fixes only):
+  - `collect`, a `CONFLICT` other than the two capacity messages (e.g. the request left `CODE_ISSUED` between lookup and issue): `409 "request is not in CODE_ISSUED state (current"` → `409 "This code has already been used."`. The two documented capacity messages still pass through verbatim, now only on an anchored full match instead of `split(': ')`.
+  - `collect`, `NO_KEYS_AVAILABLE`: `500` with a ref → `409` with the catalogue copy.
+  - `pending`, `dismiss`, `[id]/letter`, a signed-in user with no profile row: `403 Forbidden` → `401 Unauthorized`, like every other route.
+  - `expire`, `dismiss`, an RPC that returns no row: fabricated `200 { request_id: <body id>, status: "EXPIRED" }` → `500` with a ref. Unreachable today (both RPCs always return a row), but the old fallback claimed success the server never confirmed.
+  - Any uncaught throw in these routes: Next's bare 500 → enveloped `500 "Internal error. Ref: <ref>"`.
+- **Not changed**: `expire` still has no role gate (the RPC refuses anyone but the owner). `dismiss` maps the `CONFLICT` "date has not passed yet" case with an anchored `byDetail` instead of `msg.includes`.
+- **Docs**: `docs/API.md` auth conventions (batch status) and the `collect` error paragraph.
+
 ### 2026-10-13 — Stop CSO decline RPC fallthrough
 
 - **Why**: PL/pgSQL `RETURN QUERY` appends a row without exiting the function. A CSO decline therefore also ran the approval path, returning duplicate rows and writing an incorrect approval audit event.

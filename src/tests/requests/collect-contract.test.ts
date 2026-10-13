@@ -146,24 +146,37 @@ describe('collect — issue_key errors', () => {
     expect(await collect()).toEqual(failure(status, error));
   });
 
-  // Current behaviour, pinned before the migration: split(': ') truncates the
-  // detail mid-clause, and NO_KEYS_AVAILABLE is not mapped at all.
-  it('truncates a state CONFLICT at its second colon', async () => {
+  // Changed by the route() migration: this detail names internal state, and
+  // split(': ') used to leak it truncated mid-clause ("…(current").
+  it('409s a request that left CODE_ISSUED without leaking its state', async () => {
     fake.rpc.issue_key = rpcError(
       'CONFLICT: request is not in CODE_ISSUED state (current: KEY_ISSUED)'
     );
     expect(await collect()).toEqual(
-      failure(409, 'request is not in CODE_ISSUED state (current')
+      failure(409, 'This code has already been used.')
     );
   });
 
-  it('500s NO_KEYS_AVAILABLE', async () => {
+  it('never passes through a CONFLICT detail outside the allowlist', async () => {
+    fake.rpc.issue_key = rpcError(
+      'CONFLICT: this key is already issued and has not been returned (current: x)'
+    );
+    expect(await collect()).toEqual(
+      failure(409, 'This code has already been used.')
+    );
+  });
+
+  // Changed by the route() migration: was an unmapped 500.
+  it('409s NO_KEYS_AVAILABLE', async () => {
     fake.rpc.issue_key = rpcError(
       'NO_KEYS_AVAILABLE: every key on this bunch is currently out or reserved (3 of 3)'
     );
-    const res = await collect();
-    expect(res.status).toBe(500);
-    expect(res.body.error).toMatch(REF_PATTERN);
+    expect(await collect()).toEqual(
+      failure(
+        409,
+        'No key is available for this room right now. Every key is out or reserved — try again once one is returned.'
+      )
+    );
   });
 
   it('500s an unrecognised failure with a ref', async () => {

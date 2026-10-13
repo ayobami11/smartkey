@@ -76,7 +76,8 @@ const AUTH_CASES: AuthCase[] = [
     send: () => call(pending, get('/api/requests/pending')),
     role: 'DEAN',
     wrongRole: 'REQUESTER',
-    noProfile: [403, 'Forbidden'],
+    // Was 403 before the route() migration.
+    noProfile: [401, 'Unauthorized'],
   },
   {
     name: 'cso-queue',
@@ -100,7 +101,8 @@ const AUTH_CASES: AuthCase[] = [
       }),
     role: 'DEAN',
     wrongRole: 'VERIFIER',
-    noProfile: [403, 'Forbidden'],
+    // Was 403 before the route() migration.
+    noProfile: [401, 'Unauthorized'],
   },
 ];
 

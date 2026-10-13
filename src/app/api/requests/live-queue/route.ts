@@ -1,10 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
-
+import { respond } from '@/lib/http/respond';
+import { route } from '@/lib/http/route';
 import { rewriteStorageUrls } from '@/lib/storage/object-url';
-import { logger } from '@/lib/logger';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createServerClient } from '@/lib/supabase/server';
-import { err, ok } from '@/types/api';
 
 const REQUEST_SELECT = `
   id,
@@ -19,68 +16,49 @@ const REQUEST_SELECT = `
   key:keys!key_id(id, code, room_name, zone)
 `;
 
-export const GET = async (request: NextRequest) => {
-  const supabase = await createServerClient();
+// The verifier's queue of CODE_ISSUED requests. Read with the service role:
+// the verifier must see every pending collection, guests included, and the
+// route's VERIFIER gate is the check.
+export const GET = route({
+  name: 'requests/live-queue',
+  auth: 'user',
+  roles: ['VERIFIER'],
+  handler: async ({ request }) => {
+    const singleId = request.nextUrl.searchParams.get('id');
+    const admin = createAdminClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user)
-    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
+    if (singleId) {
+      // Targeted fetch for a single request (used by the Realtime INSERT
+      // handler to avoid refetching the whole queue on each new item).
+      const { data: row, error } = await admin
+        .from('requests')
+        .select(REQUEST_SELECT)
+        .eq('id', singleId)
+        .eq('status', 'CODE_ISSUED')
+        .maybeSingle();
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role, unit_id')
-    .eq('id', user.id)
-    .single();
-  if (!profile)
-    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
-  if (profile.role !== 'VERIFIER')
-    return NextResponse.json(err('Forbidden', 403), { status: 403 });
+      if (error) {
+        return respond.internal('requests/live-queue: single fetch failed', {
+          err: error.message,
+        });
+      }
 
-  const { searchParams } = new URL(request.url);
-  const singleId = searchParams.get('id');
+      return respond.ok(rewriteStorageUrls({ request: row }));
+    }
 
-  const admin = createAdminClient();
-
-  if (singleId) {
-    // Targeted fetch for a single request (used by Realtime INSERT handler to
-    // avoid refetching the whole queue on each new item).
-    const { data: row, error } = await admin
+    // Full queue fetch — initial load and fallback.
+    const { data: requests, error } = await admin
       .from('requests')
       .select(REQUEST_SELECT)
-      .eq('id', singleId)
       .eq('status', 'CODE_ISSUED')
-      .maybeSingle();
+      .order('created_at', { ascending: true });
 
     if (error) {
-      const ref = crypto.randomUUID();
-      logger.error('live-queue single fetch failed', {
+      return respond.internal('requests/live-queue: query failed', {
         err: error.message,
-        ref,
-      });
-      return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
-        status: 500,
       });
     }
 
-    return NextResponse.json(ok(rewriteStorageUrls({ request: row })));
-  }
-
-  // Full queue fetch — initial load and fallback.
-  const { data: requests, error } = await admin
-    .from('requests')
-    .select(REQUEST_SELECT)
-    .eq('status', 'CODE_ISSUED')
-    .order('created_at', { ascending: true });
-
-  if (error) {
-    const ref = crypto.randomUUID();
-    logger.error('live-queue query failed', { err: error.message, ref });
-    return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
-      status: 500,
-    });
-  }
-
-  return NextResponse.json(ok(rewriteStorageUrls({ requests })));
-};
+    return respond.ok(rewriteStorageUrls({ requests }));
+  },
+});

@@ -193,7 +193,8 @@ const SIMPLE_ROUTES: SimpleRoute[] = [
     path: '/api/requests/dismiss',
     rpc: 'dismiss_expired_request',
     role: 'DEAN',
-    noProfile: [403, 'Forbidden'],
+    // Was 403 before the route() migration; no profile is unauthenticated.
+    noProfile: [401, 'Unauthorized'],
     wrongRole: [403, 'Forbidden'],
     errors: [
       [
@@ -306,21 +307,18 @@ describe('empty RPC results', () => {
     );
   });
 
-  // Unreachable in practice (both RPCs always return a row) — pinned so the
-  // migration's handling of it is a deliberate choice.
+  // Unreachable in practice (both RPCs always return a row). Before the
+  // route() migration these fabricated success from the request body.
   it.each([
     ['expire', expire, 'expire_request', 'REQUESTER'],
     ['dismiss', dismiss, 'dismiss_expired_request', 'DEAN'],
-  ] as const)(
-    '%s falls back to the body id and EXPIRED',
-    async (_name, handler, rpc, role) => {
-      asRole(role);
-      fake.rpc[rpc] = { data: [], error: null };
-      expect(
-        await call(handler, post('/api/requests/x', { request_id: REQUEST_ID }))
-      ).toEqual(success({ request_id: REQUEST_ID, status: 'EXPIRED' }));
-    }
-  );
+  ] as const)('%s 500s with a ref', async (_name, handler, rpc, role) => {
+    asRole(role);
+    fake.rpc[rpc] = { data: [], error: null };
+    expectRef(
+      await call(handler, post('/api/requests/x', { request_id: REQUEST_ID }))
+    );
+  });
 });
 
 describe('weekend-code — notification', () => {

@@ -1,72 +1,36 @@
-import { NextRequest, NextResponse } from 'next/server';
 import * as z from 'zod';
 
-import { logger } from '@/lib/logger';
-import { createServerClient } from '@/lib/supabase/server';
-import { err, ok } from '@/types/api';
+import { respond } from '@/lib/http/respond';
+import { route } from '@/lib/http/route';
+import { rpcFail } from '@/lib/http/rpc-errors';
+import { callRpc } from '@/lib/rpc/call-rpc';
 
 const bodySchema = z.object({
   request_id: z.uuid(),
 });
 
-const mapRpcError = (msg: string): { status: number; message: string } => {
-  if (msg.includes('NOT_AUTHENTICATED'))
-    return { status: 401, message: 'Not authenticated' };
-  if (msg.includes('NOT_FOUND'))
-    return { status: 404, message: 'Request not found' };
-  if (msg.includes('FORBIDDEN'))
-    return { status: 403, message: 'This is not your request' };
-  if (msg.includes('NOT_EXPIRED'))
-    return { status: 409, message: 'This code has not expired yet.' };
-  return { status: 500, message: 'Internal error' };
-};
-
-export const POST = async (request: NextRequest) => {
-  const supabase = await createServerClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user)
-    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
-
-  const body = await request.json().catch(() => null);
-  const parsed = bodySchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json(err('Invalid request body', 422), { status: 422 });
-  }
-
-  const { data: rpcData, error: rpcError } = await supabase.rpc(
-    'expire_request',
-    {
-      p_request_id: parsed.data.request_id,
+// Fired by the UI when a collection code's countdown reaches 0. No role gate:
+// expire_request itself refuses anyone but the request's owner. Idempotent —
+// a request that already moved on comes back with its current status.
+export const POST = route({
+  name: 'requests/expire',
+  auth: 'user',
+  body: bodySchema,
+  handler: async ({ supabase, user, body }) => {
+    const result = await callRpc(supabase, 'expire_request', {
+      p_request_id: body.request_id,
       p_requester_id: user.id,
-    }
-  );
-
-  if (rpcError) {
-    const mapped = mapRpcError(rpcError.message);
-    if (mapped.status === 500) {
-      const ref = crypto.randomUUID();
-      logger.error('expire_request RPC failed', {
-        err: rpcError.message,
-        ref,
-      });
-      return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
-        status: 500,
-      });
-    }
-    return NextResponse.json(err(mapped.message, mapped.status), {
-      status: mapped.status,
     });
-  }
-
-  const result = Array.isArray(rpcData) ? rpcData[0] : rpcData;
-  return NextResponse.json(
-    ok({
-      request_id: result?.request_id ?? parsed.data.request_id,
-      status: result?.status ?? 'EXPIRED',
-    }),
-    { status: 200 }
-  );
-};
+    if (!result.ok) {
+      return rpcFail(result.error, {
+        NOT_AUTHENTICATED: 'Not authenticated',
+        NOT_FOUND: 'Request not found',
+        FORBIDDEN: 'This is not your request',
+      });
+    }
+    return respond.ok({
+      request_id: result.data.request_id,
+      status: result.data.status,
+    });
+  },
+});
