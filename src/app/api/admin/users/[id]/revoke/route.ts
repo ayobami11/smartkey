@@ -1,112 +1,68 @@
-import { NextRequest, NextResponse } from 'next/server';
+import * as z from 'zod';
 
-import { writeAuditEntry } from '@/lib/audit';
-import { logger } from '@/lib/logger';
+import { revokeUser, type RevokePorts } from '@/lib/admin/revoke-user';
+import { respond } from '@/lib/http/respond';
+import { route } from '@/lib/http/route';
+import { rpcFail } from '@/lib/http/rpc-errors';
+import { callRpc } from '@/lib/rpc/call-rpc';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createServerClient } from '@/lib/supabase/server';
-import { err, ok } from '@/types/api';
 
-export const PATCH = async (
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) => {
-  const { id } = await params;
+// ~100 years: effectively permanent. A ban rather than deleteUser keeps the
+// profile row and all of its audit history.
+const BAN_DURATION = '876000h';
 
-  const supabase = await createServerClient();
+export const PATCH = route({
+  name: 'admin/users/[id]/revoke',
+  auth: 'user',
+  roles: ['CSO'],
+  params: z.object({ id: z.uuid() }),
+  paramsError: { status: 404, message: 'User not found' },
+  handler: async ({ supabase, params }) => {
+    const admin = createAdminClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user)
-    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
+    const ports: RevokePorts = {
+      loadStatus: async (id) => {
+        const { data } = await supabase
+          .from('profiles')
+          .select('status')
+          .eq('id', id)
+          .maybeSingle();
+        return data?.status ?? null;
+      },
+      ban: async (id) => {
+        const { error } = await admin.auth.admin.updateUserById(id, {
+          ban_duration: BAN_DURATION,
+        });
+        return error ? { ok: false, message: error.message } : { ok: true };
+      },
+      unban: async (id) => {
+        const { error } = await admin.auth.admin.updateUserById(id, {
+          ban_duration: 'none',
+        });
+        return error ? { ok: false, message: error.message } : { ok: true };
+      },
+      // The CSO's own session: deactivate_user checks the actor is the CSO.
+      deactivate: (id) =>
+        callRpc(supabase, 'deactivate_user', { p_profile_id: id }),
+    };
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role, unit_id')
-    .eq('id', user.id)
-    .single();
-  if (!profile)
-    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
-  if (profile.role !== 'CSO')
-    return NextResponse.json(err('Forbidden', 403), { status: 403 });
+    const outcome = await revokeUser(params.id, ports);
 
-  // Fetch the target profile.
-  const { data: target, error: fetchError } = await supabase
-    .from('profiles')
-    .select('id, status')
-    .eq('id', id)
-    .single();
-
-  if (fetchError || !target) {
-    return NextResponse.json(err('User not found', 404), { status: 404 });
-  }
-
-  if (target.status === 'DEACTIVATED') {
-    return NextResponse.json(err('User is already deactivated', 409), {
-      status: 409,
-    });
-  }
-
-  // Server-written: protect_profile_columns rejects status changes from any
-  // user session, the CSO's included.
-  const { error: updateError } = await createAdminClient()
-    .from('profiles')
-    .update({ status: 'DEACTIVATED' })
-    .eq('id', id);
-
-  if (updateError) {
-    const ref = crypto.randomUUID();
-    logger.error('revoke: profile update failed', {
-      id,
-      err: updateError.message,
-      ref,
-    });
-    return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
-      status: 500,
-    });
-  }
-
-  const adminClient = createAdminClient();
-
-  // If this user is the current HOD of any department, clear the reverse link so
-  // the department (and its key inventory) no longer resolves a deactivated HOD.
-  const { error: deptError } = await adminClient
-    .from('units')
-    .update({ hod_id: null })
-    .eq('hod_id', id);
-  if (deptError) {
-    // Non-fatal: the profile is already DEACTIVATED and login is blocked. Log so
-    // a stale units.hod_id can be corrected if this ever fails.
-    logger.error('revoke: clearing units.hod_id failed', {
-      id,
-      err: deptError.message,
-    });
-  }
-
-  // Ban the auth user so they cannot log in again. We use ban_duration rather
-  // than deleteUser so the profiles row (and all audit history) is preserved.
-  const { error: banError } = await adminClient.auth.admin.updateUserById(id, {
-    ban_duration: '876000h', // ~100 years — effectively permanent
-  });
-  if (banError) {
-    logger.error('revoke: auth ban failed', { id, err: banError.message });
-    // Non-fatal — profile is already DEACTIVATED; RLS will block data access.
-  }
-
-  try {
-    await writeAuditEntry({
-      event: 'USER_DEACTIVATED',
-      actorId: user.id,
-      actorRole: 'CSO',
-      targetType: 'profile',
-      targetId: id,
-      payload: { deactivated_by: user.id },
-    });
-  } catch (auditErr) {
-    logger.error('revoke: audit write failed', { err: String(auditErr), id });
-  }
-
-  return NextResponse.json(ok({ profile_id: id, status: 'DEACTIVATED' }), {
-    status: 200,
-  });
-};
+    if (outcome.ok) {
+      return respond.ok({
+        profile_id: outcome.profileId,
+        status: outcome.status,
+      });
+    }
+    switch (outcome.reason) {
+      case 'NOT_FOUND':
+        return respond.fail(404, 'User not found');
+      case 'ALREADY_DEACTIVATED':
+        return respond.fail(409, 'User is already deactivated');
+      case 'BAN_FAILED':
+        return respond.fail(500, `Internal error. Ref: ${outcome.ref}`);
+      case 'RPC_FAILED':
+        return rpcFail(outcome.error, { NOT_FOUND: 'User not found' });
+    }
+  },
+});
