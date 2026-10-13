@@ -33,7 +33,8 @@ Nodemailer via Gmail SMTP. NOT Resend.
   Host : smtp.gmail.com
   Port : 587
   Auth : GMAIL_USER + GMAIL_APP_PASSWORD (Gmail App Password, no spaces)
-  File : src/lib/email/otp.ts
+  Files: src/lib/email/transport.ts (SMTP), src/lib/email/templates/ (HTML),
+         src/lib/notifications/ (who gets request emails, preferences)
 
 SIGNATURE VERIFICATION
 - Runs server-side only (Sharp + Pixelmatch), scored over the ink region (not whole canvas).
@@ -42,7 +43,8 @@ SIGNATURE VERIFICATION
   independent (either, both, or neither may run, depending on what was uploaded).
 - Mismatch > 55% (SIGNATURE_DIFF_THRESHOLD default) on either check → approval held → CSO
   alert at /cso (signature-alerts feed).
-- CSO resolves via POST /api/requests/hod-decision with cso_override: true.
+- CSO resolves by approving or declining on POST /api/requests/hod-decision (the server
+  treats the CSO acting on a Dean-authorised request as the override).
 - Administration-key approvals (CSO) skip signature verification (no reference).
 
 AI COMPONENTS

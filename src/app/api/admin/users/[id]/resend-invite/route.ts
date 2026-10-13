@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { sendActivationEmail } from '@/lib/email/otp';
+import { activationEmail } from '@/lib/email/templates/account';
+import { gmailTransport } from '@/lib/email/transport';
 import { logger } from '@/lib/logger';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
@@ -89,10 +90,9 @@ export const POST = async (
   const confirmLink = `${siteUrl}/auth/confirm?${confirmParams.toString()}`;
 
   try {
-    await sendActivationEmail({
+    await gmailTransport.send({
       to: target.institutional_email,
-      link: confirmLink,
-      isReinvite: true,
+      ...activationEmail({ link: confirmLink, isReinvite: true }),
     });
   } catch (e: unknown) {
     const ref = crypto.randomUUID();

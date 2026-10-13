@@ -1,21 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { sendWeekendReminderEmail } from '@/lib/email/otp';
 import { logger } from '@/lib/logger';
+import { notify } from '@/lib/notifications/notify';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { err, ok } from '@/types/api';
 
-// Scheduled (pg_cron) endpoint. On the morning of a weekend request's date it
-// emails the requester — registered or guest — a reminder to mint their
-// collection code, linking to the page where they do it. No code is emailed
-// for the weekend flow; the code is always minted on the day.
-//
-// Auth is a shared bearer secret (CRON_SECRET), not a user session: this runs
-// without an actor. The service-role admin client is used because there is no
-// session to satisfy RLS. The secret never reaches the browser.
-//
-// Idempotent: only requests with reminder_sent_at IS NULL are picked up, and the
-// column is stamped after a successful send, so a cron retry never double-emails.
 
 export const POST = async (request: NextRequest) => {
   const secret = process.env.CRON_SECRET;
@@ -35,7 +24,7 @@ export const POST = async (request: NextRequest) => {
 
   const { data: due, error } = await admin
     .from('requests')
-    .select('id, requester_id, guest_id, access_token')
+    .select('id')
     .eq('type', 'WEEKEND')
     .eq('status', 'APPROVED')
     .eq('requested_for', today)
@@ -56,69 +45,19 @@ export const POST = async (request: NextRequest) => {
     return NextResponse.json(ok({ sent: 0, failed: 0 }));
   }
 
-  const siteUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ?? 'https://smartkey-ochre.vercel.app';
-
-  const requesterIds = due
-    .map((r) => r.requester_id)
-    .filter((id): id is string => id !== null);
-  const guestIds = due
-    .map((r) => r.guest_id)
-    .filter((id): id is string => id !== null);
-
-  const [profilesRes, guestsRes] = await Promise.all([
-    requesterIds.length
-      ? admin
-          .from('profiles')
-          .select('id, full_name, institutional_email')
-          .in('id', requesterIds)
-      : Promise.resolve({ data: [] as const }),
-    guestIds.length
-      ? admin
-          .from('guest_requesters')
-          .select('id, full_name, email')
-          .in('id', guestIds)
-      : Promise.resolve({ data: [] as const }),
-  ]);
-
-  const profileById = new Map((profilesRes.data ?? []).map((p) => [p.id, p]));
-  const guestById = new Map((guestsRes.data ?? []).map((g) => [g.id, g]));
-
+  // Only a sent reminder is stamped; anything else retries on the next run
+  // the same morning.
   const sentIds: string[] = [];
   let failed = 0;
 
   for (const req of due) {
-    let to: string | null = null;
-    let fullName = 'there';
-    let link = `${siteUrl}/requester/dashboard`;
-
-    if (req.requester_id) {
-      const profile = profileById.get(req.requester_id);
-      to = profile?.institutional_email ?? null;
-      fullName = profile?.full_name ?? fullName;
-    } else if (req.guest_id) {
-      const guest = guestById.get(req.guest_id);
-      to = guest?.email ?? null;
-      fullName = guest?.full_name ?? fullName;
-      link = `${siteUrl}/weekend-access/${req.access_token}`;
-    }
-
-    if (!to) {
-      logger.error('weekend-reminders: no recipient for request', {
-        request_id: req.id,
-      });
-      failed += 1;
-      continue;
-    }
-
-    try {
-      await sendWeekendReminderEmail({ to, link, fullName });
+    const outcome = await notify({
+      type: 'WEEKEND_REMINDER',
+      requestId: req.id,
+    });
+    if (outcome === 'sent') {
       sentIds.push(req.id);
-    } catch (e) {
-      logger.error('weekend-reminders: send failed', {
-        request_id: req.id,
-        err: e instanceof Error ? e.message : String(e),
-      });
+    } else {
       failed += 1;
     }
   }

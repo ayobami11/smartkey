@@ -31,7 +31,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to public, extensions;
 
-select plan(40);
+select plan(42);
 
 -- ---------------------------------------------------------------------------
 -- Fixtures: two Dean-authorised faculties and one CSO-authorised
@@ -92,6 +92,24 @@ select * from public.create_guest_weekend_request(
   'https://example.test/letter.png', 'Dean''s Office, Ground Floor');
 
 select isnt((select access_token from t_c1), null, 'create_guest_weekend_request mints an access_token');
+
+select isnt(
+  (select decision_token from public.requests where id = (select request_id from t_c1)),
+  null,
+  'a guest request routed to a Dean unit is created with a decision_token'
+);
+
+create temp table t_c1_admin as
+select * from public.create_guest_weekend_request(
+  'pgTAP Admin Guest', 'pgtap.guest.admin@example.test', null, 'National ID', 'PGT-ID-701',
+  '66666666-6666-4666-8666-000000000012', current_date + 2, now() + interval '2 days',
+  'https://example.test/letter.png', 'Registry');
+
+select is(
+  (select decision_token from public.requests where id = (select request_id from t_c1_admin)),
+  null,
+  'a guest request routed to Administration (CSO) gets no decision_token'
+);
 
 select is(
   (select status::text from public.requests where id = (select request_id from t_c1)),

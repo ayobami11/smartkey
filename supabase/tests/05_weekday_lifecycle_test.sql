@@ -4,7 +4,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to public, extensions;
 
-select plan(42);
+select plan(45);
 
 insert into auth.users (id, email) values
   ('55555555-5555-4555-8555-000000000001', 'pgtap.week.dean@example.test'),
@@ -143,6 +143,37 @@ select * from public.create_request(
 
 select is((select status from t_a6), 'PENDING_HOD', 'a WEEKEND request starts PENDING_HOD');
 select is((select code from t_a6), null, 'a WEEKEND request mints no code yet');
+
+-- decision_token: created with the request for Dean-routed weekend requests
+-- (the one-click email link), never for weekday requests or Administration.
+select isnt(
+  (select decision_token from public.requests where id = (select request_id from t_a6)),
+  null,
+  'a WEEKEND request on a Dean unit is created with a decision_token'
+);
+
+select is(
+  (select decision_token from public.requests where id = (select request_id from t_a5)),
+  null,
+  'a WEEKDAY request gets no decision_token'
+);
+
+insert into public.units (id, name, faculty, authoriser) values
+  ('55555555-5555-4555-8555-000000000011', 'pgTAP Lifecycle Administration', 'pgTAP Lifecycle Administration', 'CSO');
+insert into public.keys (id, code, zone, room_name, unit_id, status) values
+  ('55555555-5555-4555-8555-00000000002e', 'PGT-515', 'OLD_SENATE', 'pgTAP Lifecycle Registry', '55555555-5555-4555-8555-000000000011', 'AVAILABLE');
+insert into public.authorisations (key_id, profile_id, authorised_by) values
+  ('55555555-5555-4555-8555-00000000002e', '55555555-5555-4555-8555-000000000003', '55555555-5555-4555-8555-000000000001');
+
+create temp table t_a6_admin as
+select * from public.create_request(
+  '55555555-5555-4555-8555-00000000002e', 'WEEKEND', now() + interval '2 days', current_date + 2);
+
+select is(
+  (select decision_token from public.requests where id = (select request_id from t_a6_admin)),
+  null,
+  'a WEEKEND request on an Administration (CSO) unit gets no decision_token'
+);
 
 select is(
   (select count(*)::int from public.audit_log

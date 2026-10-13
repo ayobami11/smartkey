@@ -4,7 +4,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as z from 'zod';
 
 import { writeAuditEntry } from '@/lib/audit';
-import { sendOtpEmail } from '@/lib/email/otp';
+import { otpEmail } from '@/lib/email/templates/account';
+import { gmailTransport } from '@/lib/email/transport';
 import { logger } from '@/lib/logger';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { DEFAULT_NAMESPACE, namespaceForRole } from '@/lib/supabase/cookies';
@@ -94,7 +95,7 @@ export const POST = async (request: NextRequest) => {
     // The client is told delivery failed so it can surface "resend" directly.
     let emailDeliveryFailed = false;
     try {
-      await sendOtpEmail({ to: email, code });
+      await gmailTransport.send({ to: email, ...otpEmail({ code }) });
     } catch (emailErr) {
       emailDeliveryFailed = true;
       logger.error('OTP email failed', {

@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { sendCsoDigestEmail, sendDeanDigestEmail } from '@/lib/email/otp';
+import {
+  csoDigestEmail,
+  deanDigestEmail,
+} from '@/lib/email/templates/digest';
+import { gmailTransport } from '@/lib/email/transport';
 import { logger } from '@/lib/logger';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { err, ok } from '@/types/api';
@@ -102,10 +106,9 @@ export const POST = async (request: NextRequest) => {
           skipped += 1;
           continue;
         }
-        await sendCsoDigestEmail({
+        await gmailTransport.send({
           to: profile.institutional_email,
-          fullName: profile.full_name,
-          stats: csoStats,
+          ...csoDigestEmail({ fullName: profile.full_name, stats: csoStats }),
         });
         sent += 1;
       } else {
@@ -123,10 +126,9 @@ export const POST = async (request: NextRequest) => {
           skipped += 1;
           continue;
         }
-        await sendDeanDigestEmail({
+        await gmailTransport.send({
           to: profile.institutional_email,
-          fullName: profile.full_name,
-          stats,
+          ...deanDigestEmail({ fullName: profile.full_name, stats }),
         });
         sent += 1;
       }
