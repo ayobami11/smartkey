@@ -6,6 +6,7 @@ import {
   type ActiveRequestRow,
   type KeyRow,
 } from '@/lib/keys/availability';
+import { occupancyOf, stateOf } from '@/lib/keys/occupancy';
 
 const KEY: KeyRow = { id: 'key-1', status: 'AVAILABLE', key_count: 1 };
 const NOW = new Date('2026-09-04T12:00:00.000Z');
@@ -59,7 +60,9 @@ describe('deriveKeyAvailability', () => {
       full_name: 'Dr. Bakare',
       is_guest: false,
     });
-    expect(result.holders).toEqual([{ full_name: 'Dr. Bakare', is_guest: false }]);
+    expect(result.holders).toEqual([
+      { full_name: 'Dr. Bakare', is_guest: false },
+    ]);
     expect(result.issued_at).toBe('2026-09-04T09:05:00.000Z');
     expect(result.return_deadline).toBe('2026-09-04T17:00:00.000Z');
   });
@@ -165,8 +168,10 @@ describe('deriveKeyAvailability', () => {
     const result = deriveKeyAvailability(
       { id: 'key-1', status: 'ISSUED', key_count: 3 },
       [
-        row({ created_at: '2026-09-04T10:00:00.000Z',
-              requester: { full_name: 'Dr. Adeyemi' } }),
+        row({
+          created_at: '2026-09-04T10:00:00.000Z',
+          requester: { full_name: 'Dr. Adeyemi' },
+        }),
         row(),
       ],
       NOW
@@ -185,8 +190,10 @@ describe('deriveKeyAvailability', () => {
     const result = deriveKeyAvailability(
       { id: 'key-1', status: 'ISSUED', key_count: 2 },
       [
-        row({ created_at: '2026-09-04T10:00:00.000Z',
-              requester: { full_name: 'Dr. Adeyemi' } }),
+        row({
+          created_at: '2026-09-04T10:00:00.000Z',
+          requester: { full_name: 'Dr. Adeyemi' },
+        }),
         row(),
       ],
       NOW
@@ -296,5 +303,52 @@ describe('deriveKeyAvailabilityList', () => {
 
   it('returns an empty list when the requester holds no slots', () => {
     expect(deriveKeyAvailabilityList([], [row()], NOW)).toEqual([]);
+  });
+});
+
+// Availability is built on the shared occupancy module; these pin the two
+// together so the requester tile and the CSO chart cannot drift apart.
+describe('deriveKeyAvailability on the occupancy module', () => {
+  it('keeps a partially-out room AVAILABLE even when a holder is overdue', () => {
+    const result = deriveKeyAvailability(
+      { id: 'key-1', status: 'OVERDUE', key_count: 3 },
+      [row({ return_deadline: '2026-09-04T11:00:00.000Z' })],
+      NOW
+    );
+
+    expect(result.state).toBe('AVAILABLE');
+    expect(result.available_count).toBe(2);
+    expect(result.holder?.full_name).toBe('Dr. Bakare');
+  });
+
+  it('agrees with occupancyOf and stateOf on a mixed bunch', () => {
+    const key: KeyRow = { id: 'key-1', status: 'ISSUED', key_count: 4 };
+    const requests = [
+      row({ return_deadline: '2026-09-04T11:00:00.000Z' }),
+      row({ requester: { full_name: 'Dr. Adeyemi' } }),
+      row({
+        status: 'CODE_ISSUED',
+        issued_at: null,
+        code_expires_at: '2026-09-04T12:10:00.000Z',
+      }),
+      row({
+        status: 'CODE_ISSUED',
+        issued_at: null,
+        code_expires_at: '2026-09-04T11:50:00.000Z',
+      }),
+      row({ status: 'APPROVED', issued_at: null }),
+    ];
+
+    const result = deriveKeyAvailability(key, requests, NOW);
+    const occupancy = occupancyOf(
+      { key_count: key.key_count, retired: false },
+      requests,
+      NOW
+    );
+
+    expect(occupancy).toMatchObject({ issued: 2, overdue: 1, reserved: 1 });
+    expect(result.available_count).toBe(occupancy.available);
+    expect(result.available_count).toBe(1);
+    expect(result.state).toBe(stateOf(occupancy));
   });
 });
