@@ -104,6 +104,12 @@ const TERMINAL_COPY: Record<string, { title: string; body: string }> = {
     title: 'Request cancelled',
     body: 'The requester cancelled this request.',
   },
+  // Still pending, but the requested weekend has passed, so it can no longer
+  // be approved; the nightly sweep will mark it expired.
+  PENDING_HOD: {
+    title: 'Date has passed',
+    body: 'The requested weekend has passed, so this request can no longer be decided.',
+  },
 };
 
 export const DeanDecisionView = ({ token }: DeanDecisionViewProps) => {

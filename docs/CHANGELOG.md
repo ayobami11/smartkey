@@ -6,6 +6,18 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-10-13 — The emailed Dean link stops showing details after the weekend, and past weekends are refused
+
+- **Why**: two gaps in the routes that need no login, found while moving them onto `route()`.
+  - The one-click Dean link never expired. For as long as the request existed, anyone holding a forwarded or leaked email could open it and see the guest's ID number and a freshly signed copy of their letter. `approve_weekend` already refused a past date, so the link could not decide anything late, but it kept disclosing.
+  - Only the day of the week was checked on a weekend request, so a past weekend could be requested. The Dean was emailed about a request that could never be approved, and the nightly sweep just expired it. A registered `WEEKEND` request with no `weekend_date` was booked for today, whatever day that was.
+- **`GET /api/public/dean-decision/[token]`**: `decidable` now also requires the requested weekend not to have passed (Lagos date). When not decidable, the letter and stamp are not signed and the ID fields are `null`. While decidable, the guest's ID number is masked to its last four characters; the full number stays on the signed-in dashboard.
+- **`POST /api/public/dean-decision/[token]`**: refuses a past date with `409` before calling `decideWeekend`.
+- **`src/lib/validation/weekend-date.ts`**: `weekendDateProblem(date)` returns `NOT_WEEKEND`, `PAST` or `null`, with today taken in Lagos (`todayDateISOTz` in `src/lib/dates.ts`; server code runs in UTC, so 00:00–01:00 WAT would otherwise still be yesterday). Used by `POST /api/public/weekend-request` and `POST /api/requests/submit`, which now also requires `weekend_date` on a `WEEKEND` request.
+- **Confirmation page**: a pending request past its date shows "Date has passed" instead of the generic "No longer pending".
+- **Tests**: `src/tests/validation/weekend-date.test.ts` (including the Lagos-midnight edge), and the public contract tests gain the past-date and not-decidable cases. Their fixtures request Saturday 2026-10-17, so they now pin the clock instead of depending on the day they run.
+- **Not changed**: the token itself still lives until the request leaves `PENDING_HOD` and the date passes; there is no separate expiry column, and no rate limit on the guest form yet. The SQL functions do not re-check the date (that needs `create_request` and `create_guest_weekend_request` recreated), so a direct RPC call can still book a past weekend; the route is the only check.
+
 ### 2026-10-13 — `public/*` routes move onto `route()`
 
 - **Why**: the seven session-less handlers under `src/app/api/public/` (guest weekend request, its status page and code/return-code/expire actions, and the emailed one-click Dean decision) are the only unauthenticated surface that writes data, yet each hand-rolled its own token check, envelope and ref'd 500, and four carried a private `mapRpcError` matching RPC errors by substring. An uncaught throw — a missing service-role key, or `decideWeekend` failing on storage — escaped as Next's bare `500` with no envelope and no ref for support. This is batch 2 of the `src/lib/http/` migration (stacked on the atomic-transitions change; independent of batch 1).

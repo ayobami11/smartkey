@@ -5,7 +5,25 @@
 // kind each route maps, malformed and unknown tokens, and success shapes.
 // Written against the routes before they moved onto route(); kept as the
 // regression net after.
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
+
+// The fixtures request Saturday 2026-10-17; pin "today" to the Tuesday before
+// so it is still a bookable weekend whatever day the suite runs.
+beforeAll(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-10-13T10:00:00Z'));
+});
+afterAll(() => {
+  vi.useRealTimers();
+});
 
 import { POST as submit } from '@/app/api/public/weekend-request/route';
 import { POST as expire } from '@/app/api/public/weekend-request/[token]/expire/route';
@@ -130,6 +148,17 @@ describe('POST /api/public/weekend-request', () => {
     expect(res).toEqual(
       failure(422, 'The selected date must be a Saturday or Sunday.')
     );
+  });
+
+  it('422 when the weekend has already passed, before any upload', async () => {
+    const res = await submitForm(formWith({ weekend_date: '2026-10-11' }));
+    expect(res).toEqual(
+      failure(
+        422,
+        'That weekend has already passed. Choose a date from today onwards.'
+      )
+    );
+    expect(fake.uploads).toHaveLength(0);
   });
 
   it('422 when no letter is attached', async () => {

@@ -1,5 +1,9 @@
 import * as z from 'zod';
 
+import {
+  WEEKEND_DATE_MESSAGES,
+  weekendDateProblem,
+} from '@/lib/validation/weekend-date';
 import { DEFAULT_RISK_CONFIG } from '@/lib/ai/risk/default-config';
 import { evaluateRisk } from '@/lib/ai/risk/engine';
 import type {
@@ -44,6 +48,17 @@ export const POST = route({
       letter_url,
       stamp_url,
     } = body;
+
+    // Without a date, create_request would book the weekend request for
+    // today, whatever day that is.
+    if (type === 'WEEKEND') {
+      const dateProblem = weekend_date
+        ? weekendDateProblem(weekend_date)
+        : 'NOT_WEEKEND';
+      if (dateProblem) {
+        return respond.fail(422, WEEKEND_DATE_MESSAGES[dateProblem]);
+      }
+    }
 
     // The letter/stamp are what the Dean's approval is verified against, so
     // they must be objects this requester uploaded: weekend-letters, in their

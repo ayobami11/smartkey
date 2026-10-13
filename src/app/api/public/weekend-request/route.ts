@@ -1,5 +1,9 @@
 import * as z from 'zod';
 
+import {
+  WEEKEND_DATE_MESSAGES,
+  weekendDateProblem,
+} from '@/lib/validation/weekend-date';
 import { respond } from '@/lib/http/respond';
 import { route } from '@/lib/http/route';
 import { rpcFail } from '@/lib/http/rpc-errors';
@@ -39,14 +43,6 @@ const fieldsSchema = z.object({
   return_deadline: z.iso.datetime({ offset: true }),
 });
 
-// True for a future (or today) Saturday or Sunday in UTC terms.
-const isWeekendDate = (isoDate: string): boolean => {
-  const date = new Date(`${isoDate}T00:00:00Z`);
-  if (Number.isNaN(date.getTime())) return false;
-  const day = date.getUTCDay();
-  return day === 0 || day === 6;
-};
-
 // Multipart, so no `body` schema: the handler reads the form itself.
 export const POST = route({
   name: 'public/weekend-request',
@@ -73,11 +69,9 @@ export const POST = route({
     if (!parsed.success) return respond.fail(422, 'Invalid request body');
     const fields = parsed.data;
 
-    if (!isWeekendDate(fields.weekend_date)) {
-      return respond.fail(
-        422,
-        'The selected date must be a Saturday or Sunday.'
-      );
+    const dateProblem = weekendDateProblem(fields.weekend_date);
+    if (dateProblem) {
+      return respond.fail(422, WEEKEND_DATE_MESSAGES[dateProblem]);
     }
 
     const letter = formData.get('letter');

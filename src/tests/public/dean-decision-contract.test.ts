@@ -6,7 +6,15 @@
 // covered by its own tests, so it is mocked here; rejectionToHttp is real.
 // Written against the routes before they moved onto route(); kept as the
 // regression net after.
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 
 import {
   GET,
@@ -44,6 +52,16 @@ vi.mock('@/lib/requests/decide-weekend', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@/lib/requests/decide-weekend')>();
   return { ...actual, decideWeekend: vi.fn() };
+});
+
+// The fixtures request Saturday 2026-10-17; pin "today" to the Tuesday before
+// so the link is still decidable whatever day the suite runs.
+beforeAll(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-10-13T10:00:00Z'));
+});
+afterAll(() => {
+  vi.useRealTimers();
 });
 
 const LETTER_URL =
@@ -196,7 +214,8 @@ describe('GET /api/public/dean-decision/[token]', () => {
         requester_name: 'Jane Doe',
         requested_room: 'Senate Hall A',
         id_document_type: 'National ID',
-        id_document_number: 'A1234567',
+        // Masked on this no-login page (2026-10-13); full on the dashboard.
+        id_document_number: '•••• 4567',
         key: null,
         available_keys: AVAILABLE_KEYS,
         letter_url: 'https://signed.example/u1/letter.png',
@@ -225,6 +244,42 @@ describe('GET /api/public/dean-decision/[token]', () => {
       available_keys: [],
     });
     expect(fake.queries.some((q) => q.table === 'keys')).toBe(false);
+  });
+
+  it('date passed: still pending but not decidable, and nothing sensitive is returned', async () => {
+    vi.setSystemTime(new Date('2026-10-18T10:00:00Z'));
+    try {
+      fake.tables.requests = { data: GUEST_ROW, error: null };
+      const res = await read();
+      expect(res.body.data).toMatchObject({
+        status: 'PENDING_HOD',
+        decidable: false,
+        id_document_type: null,
+        id_document_number: null,
+        letter_url: null,
+        stamp_url: null,
+        available_keys: [],
+      });
+      expect(fake.signCalls).toHaveLength(0);
+      expectNoMutation();
+    } finally {
+      vi.setSystemTime(new Date('2026-10-13T10:00:00Z'));
+    }
+  });
+
+  it('decided request: the letter is not signed and no ID details are returned', async () => {
+    fake.tables.requests = {
+      data: { ...GUEST_ROW, status: 'DECLINED' },
+      error: null,
+    };
+    const res = await read();
+    expect(res.body.data).toMatchObject({
+      decidable: false,
+      id_document_number: null,
+      letter_url: null,
+      stamp_url: null,
+    });
+    expect(fake.signCalls).toHaveLength(0);
   });
 
   it('a letter outside weekend-letters is not signed', async () => {
@@ -301,6 +356,21 @@ describe('POST /api/public/dean-decision/[token]', () => {
       failure(409, 'This request has already been decided.')
     );
     expect(decideWeekend).not.toHaveBeenCalled();
+  });
+
+  it('409 once the requested date has passed, without deciding', async () => {
+    vi.setSystemTime(new Date('2026-10-18T10:00:00Z'));
+    try {
+      expect(await decide({ decision: 'APPROVED' })).toEqual(
+        failure(
+          409,
+          'The requested date has passed, so this request can no longer be decided.'
+        )
+      );
+      expect(decideWeekend).not.toHaveBeenCalled();
+    } finally {
+      vi.setSystemTime(new Date('2026-10-13T10:00:00Z'));
+    }
   });
 
   it('404 when a registered request resolves to no unit', async () => {
