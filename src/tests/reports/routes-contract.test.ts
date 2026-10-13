@@ -32,7 +32,6 @@ import {
   resetFake,
   rpcError,
   success,
-  type Op,
 } from '../http/contract-harness';
 
 vi.mock('@/lib/supabase/server', async () => {
@@ -45,8 +44,6 @@ vi.mock('@/lib/supabase/admin', async () => {
 });
 vi.mock('@/lib/audit', () => ({ writeAuditEntry: vi.fn() }));
 vi.mock('@/lib/ai/reports/generate', () => ({ fillShiftReport: vi.fn() }));
-
-const hasOp = (ops: Op[], method: string) => ops.some(([m]) => m === method);
 
 const GENERATED_AT = '2026-10-13T18:00:00.000Z';
 
@@ -352,19 +349,36 @@ describe('POST /api/incidents', () => {
     expect(await call(logIncident, post(path, bad))).toEqual(
       failure(422, 'Invalid request body')
     );
+    expect(fake.rpcCalls).toHaveLength(0);
   });
 
+  // CHANGED: new — a whitespace-only description used to pass and be stored.
+  it('422 when the RPC rejects a blank description', async () => {
+    fake.rpc.log_incident = rpcError(
+      'VALIDATION: type, severity, description and occurred_at are required'
+    );
+    expect(await call(logIncident, post(path, body))).toEqual(
+      failure(422, 'Invalid request body')
+    );
+  });
+
+  // CHANGED: the insert moved into the log_incident RPC; an insert failure is
+  // now an RPC failure. Still a 500 with a ref.
   it('500 with a ref when the insert fails', async () => {
-    fake.tables.incidents = { data: null, error: { message: 'boom' } };
+    fake.rpc.log_incident = rpcError('insert failed');
     expectRef(await call(logIncident, post(path, body)));
   });
 
-  it('logs the incident against the open shift', async () => {
-    fake.tables.shifts = { data: { id: SHIFT_ID }, error: null };
-    fake.tables.incidents = (ops) =>
-      hasOp(ops, 'insert')
-        ? { data: { id: 'inc-1', reference: 'INC-2026-0042' }, error: null }
-        : { data: null, error: null };
+  it('500 with a ref when the RPC returns no row', async () => {
+    fake.rpc.log_incident = { data: [], error: null };
+    expectRef(await call(logIncident, post(path, body)));
+  });
+
+  it('logs the incident through log_incident', async () => {
+    fake.rpc.log_incident = {
+      data: [{ incident_id: 'inc-1', reference: 'INC-2026-0042' }],
+      error: null,
+    };
 
     const res = await call(logIncident, post(path, body));
     // CHANGED by the route() migration: the envelope status said 200 while
@@ -373,19 +387,23 @@ describe('POST /api/incidents', () => {
       success({ incident_id: 'inc-1', reference: 'INC-2026-0042' }, 201)
     );
 
-    const insert = fake.queries.find((q) => q.table === 'incidents')!;
-    expect(insert.client).toBe('admin');
-    const [, [row]] = insert.ops.find(([m]) => m === 'insert')!;
-    expect(row).toEqual({
-      shift_id: SHIFT_ID,
-      logged_by: USER_ID,
-      type: 'MISSING_KEY',
-      severity: 'HIGH',
-      description: 'Key not on hook',
-      related_key_id: KEY_ID,
-      related_person_id: null,
-      status: 'OPEN',
-      occurred_at: '2026-10-13T09:00:00Z',
-    });
+    // CHANGED: the open-shift lookup, the insert (formerly via the admin
+    // client) and the INCIDENT_LOGGED entry all happen inside the RPC, which
+    // takes the logger from the session; pgTAP file 15 pins the row.
+    expect(fake.rpcCalls).toEqual([
+      {
+        name: 'log_incident',
+        args: {
+          p_type: 'MISSING_KEY',
+          p_severity: 'HIGH',
+          p_description: 'Key not on hook',
+          p_occurred_at: '2026-10-13T09:00:00Z',
+          p_related_key_id: KEY_ID,
+          p_related_person_id: undefined,
+        },
+      },
+    ]);
+    expect(fake.queries.some((q) => q.table === 'incidents')).toBe(false);
+    expect(fake.queries.some((q) => q.table === 'shifts')).toBe(false);
   });
 });

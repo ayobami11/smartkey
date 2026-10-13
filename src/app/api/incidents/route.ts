@@ -2,7 +2,8 @@ import * as z from 'zod';
 
 import { respond } from '@/lib/http/respond';
 import { route } from '@/lib/http/route';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { rpcFail } from '@/lib/http/rpc-errors';
+import { callRpc } from '@/lib/rpc/call-rpc';
 import type {
   IncidentSeverity,
   IncidentStatus,
@@ -75,57 +76,36 @@ export const GET = route({
   },
 });
 
+// The insert and its INCIDENT_LOGGED audit entry commit together in
+// log_incident, which also resolves the open shift and leaves `reference` to
+// the DB's sequence default. The logger is the session user.
 export const POST = route({
   name: 'incidents',
   auth: 'user',
   roles: ['CSO', 'VERIFIER'],
   body: postBodySchema,
-  handler: async ({ user, body }) => {
-    const {
-      type,
-      severity,
-      description,
-      related_key_id,
-      related_person_id,
-      occurred_at,
-    } = body;
+  handler: async ({ supabase, body }) => {
+    const result = await callRpc(supabase, 'log_incident', {
+      p_type: body.type,
+      p_severity: body.severity,
+      p_description: body.description,
+      p_occurred_at: body.occurred_at,
+      p_related_key_id: body.related_key_id,
+      p_related_person_id: body.related_person_id,
+    });
 
-    const adminSupabase = createAdminClient();
-
-    const { data: currentShift } = await adminSupabase
-      .from('shifts')
-      .select('id')
-      .is('ended_at', null)
-      .order('started_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    // Do not pass `reference` — the DB generates it atomically via
-    // incident_reference_seq, avoiding the race condition of a manual count.
-    const { data: incident, error: insertError } = await adminSupabase
-      .from('incidents')
-      .insert({
-        shift_id: currentShift?.id ?? null,
-        logged_by: user.id,
-        type,
-        severity,
-        description,
-        related_key_id: related_key_id ?? null,
-        related_person_id: related_person_id ?? null,
-        status: 'OPEN',
-        occurred_at,
-      })
-      .select('id, reference')
-      .single();
-
-    if (insertError || !incident) {
-      return respond.internal('incidents: insert failed', {
-        err: insertError?.message,
+    if (!result.ok) {
+      return rpcFail(result.error, {
+        // A whitespace-only description passes the schema but not the RPC.
+        VALIDATION: 'Invalid request body',
       });
     }
 
     return respond.ok(
-      { incident_id: incident.id, reference: incident.reference },
+      {
+        incident_id: result.data.incident_id,
+        reference: result.data.reference,
+      },
       201
     );
   },

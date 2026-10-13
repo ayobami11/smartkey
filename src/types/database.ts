@@ -1148,6 +1148,28 @@ export type Database = {
           request_id: string;
         }[];
       };
+      log_incident: {
+        Args: {
+          p_description: string;
+          p_occurred_at: string;
+          p_related_key_id?: string;
+          p_related_person_id?: string;
+          p_severity: Database['public']['Enums']['incident_severity'];
+          p_type: Database['public']['Enums']['incident_type'];
+        };
+        Returns: {
+          incident_id: string;
+          reference: string;
+        }[];
+      };
+      mark_key_lost: {
+        Args: { p_key_id: string; p_note: string };
+        Returns: {
+          incident_id: string;
+          key_id: string;
+          reference: string;
+        }[];
+      };
       mark_key_overdue: {
         Args: never;
         Returns: {

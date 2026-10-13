@@ -15,6 +15,8 @@ describe('getEventType', () => {
     ['KEY_ISSUED', 'ISSUE'],
     ['KEY_RETURNED', 'RETURN'],
     ['KEY_OVERDUE', 'ANOMALY'],
+    ['KEY_MARKED_LOST', 'ANOMALY'],
+    ['INCIDENT_LOGGED', 'ANOMALY'],
     ['HANDOVER_KEY_ACKNOWLEDGED', 'HANDOVER'],
     ['LOGIN_SUCCEEDED', 'LOGIN'],
     ['USER_PROVISIONED', 'SETTINGS'],
