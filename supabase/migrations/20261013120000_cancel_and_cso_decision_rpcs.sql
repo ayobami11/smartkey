@@ -142,6 +142,7 @@ begin
     );
 
     return query select p_request_id, 'CANCELLED'::text;
+    return;
   end if;
 
   -- APPROVED: an acknowledgement that the CSO reviewed it and lets it stand.

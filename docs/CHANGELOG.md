@@ -6,6 +6,11 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-10-13 — Stop CSO decline RPC fallthrough
+
+- **Why**: PL/pgSQL `RETURN QUERY` appends a row without exiting the function. A CSO decline therefore also ran the approval path, returning duplicate rows and writing an incorrect approval audit event.
+- **Fix**: Return immediately after emitting the decline result.
+
 ### 2026-10-13 — Upload extensions are sanitised everywhere
 
 - **Why**: six upload sites took the object extension with `file.name.split('.').pop()`. For a filename with no dot that is the whole name (`scan copy` → `{uuid}.scan copy`), and any odd extension produces a path that `isValidObjectPath` rejects — so the storage proxy refused to serve the image ("Image unavailable"), and since `20261013120100` a registered requester's weekend letter with such a name would also be refused by `create_request`'s ownership check.
