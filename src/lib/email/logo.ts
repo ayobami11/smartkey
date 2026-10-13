@@ -2,20 +2,8 @@ import 'server-only';
 
 import sharp from 'sharp';
 
-export const LOGO_CID = 'smartkey-mark';
+import { LOGO_CID } from '@/lib/email/html';
 
-// Rasterized once per server process and cached — a static copy of the
-// SmartKeyMark SVG (src/components/smartkey/smart-key-mark.tsx) that renders
-// in every dashboard sidebar, so the email logo can never drift from the
-// in-app one *if kept in sync*. It's inlined as a plain string rather than
-// rendered via react-dom/server: Next.js's App Router build graph forbids
-// importing react-dom/server from any module reachable from a Route Handler
-// ("You're importing a component that imports react-dom/server" — it isn't
-// RSC-safe). If smart-key-mark.tsx's markup ever changes, mirror the change
-// here. Sharp rasterizes SVG input natively (also used for signature
-// verification in src/lib/ai/signature/verifier.ts), and the source SVG has
-// no background rect, so the PNG keeps transparency and sits directly on the
-// maroon header bar.
 const SMART_KEY_MARK_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" aria-hidden="true">' +
   '<g transform="translate(24 24) scale(0.8) translate(-24 -24)" stroke-linecap="round">' +

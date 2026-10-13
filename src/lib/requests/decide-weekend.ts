@@ -1,7 +1,6 @@
-import { after } from 'next/server';
-
 import { writeAuditEntry } from '@/lib/audit';
 import { logger } from '@/lib/logger';
+import { notifyAfterResponse } from '@/lib/notifications/notify';
 import {
   callRpc,
   type RpcArgs,
@@ -159,9 +158,8 @@ export const defaultPorts = (): WeekendDecisionPorts => {
     },
     rpc: (name, args) => callRpc(admin, name, args),
     loadImage: (url) => downloadStorageObject(admin, url),
-    // Loaded lazily: the verifier pulls in sharp, and the email adapters pull
-    // in nodemailer — neither belongs in the import graph of a test that
-    // replaces them.
+    // Loaded lazily: the verifier pulls in sharp, which does not belong in
+    // the import graph of a test that replaces it.
     verify: async (reference, submitted) => {
       const { verifySignature, DEFAULT_THRESHOLD } =
         await import('@/lib/ai/signature/verifier');
@@ -173,20 +171,21 @@ export const defaultPorts = (): WeekendDecisionPorts => {
       };
     },
     audit: writeAuditEntry,
-    // after(): Vercel may freeze the function once the response is sent, so
-    // an unawaited promise could be cut off mid-send.
+    // The notifications module schedules these after the response is sent.
     notify: {
       decided: (requestId, decision, note) =>
-        after(async () => {
-          const { notifyWeekendDecided } =
-            await import('@/lib/email/notify-weekend-decision');
-          await notifyWeekendDecided(requestId, decision, note);
+        notifyAfterResponse({
+          type: 'WEEKEND_DECIDED',
+          requestId,
+          decision,
+          note,
         }),
       signatureMismatch: (requestId, mismatches, thresholdPct) =>
-        after(async () => {
-          const { notifyCsoSignatureMismatch } =
-            await import('@/lib/email/notify-weekend-decision');
-          await notifyCsoSignatureMismatch(requestId, mismatches, thresholdPct);
+        notifyAfterResponse({
+          type: 'SIGNATURE_MISMATCH',
+          requestId,
+          mismatches,
+          thresholdPct,
         }),
     },
   };
