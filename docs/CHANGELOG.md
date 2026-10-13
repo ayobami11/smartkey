@@ -6,6 +6,29 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-10-13 — One key-occupancy rule: CSO chart counts copies, overdue from the clock
+
+- **Why**: "is this key free?" had five answers. The capacity trigger (`request_occupies_key`) was right; `src/lib/keys/availability.ts` mirrored it by hand with nothing holding the two together; and the CSO dashboard's zone chart, `GET /api/admin/units`' `has_slot_today` and the daily digest all read the coarse `keys.status`. That column counts key **records**, not copies, so the twelve-copy `FENG-005` and two-copy `ADM-VC` counted as one key each. It treated copies reserved by a live collection code as available, and only showed overdue after the hourly `mark_key_overdue()` cron. On top of that, the overdue rule existed in five TypeScript copies, and `/api/keys/out` invented a `KEY_OVERDUE` request status that does not exist (one verifier realtime branch listened for it and never fired).
+- **Migration `20261013110000_key_occupancy_rpc.sql`** (apply in the SQL editor **before** deploying, or the CSO chart and `admin/units` call a missing function):
+  - `request_is_overdue(status, return_deadline)`: the single overdue rule, beside `request_occupies_key`.
+  - `get_key_occupancy(zone?)`: CSO/VERIFIER only. Per key: `issued`, `overdue`, `reserved`, `occupied`, `available`, counted in copies.
+  - `get_digest_stats.overdue_count` now counts overdue holders, not `keys.status = 'OVERDUE'` records. The rest of the function is unchanged.
+  - `return_key` and `mark_key_overdue` are deliberately not recreated: their inline predicate already is the rule.
+- **`src/lib/keys/occupancy.ts`** (new): `occupiesKey` and `isOverdue` mirror the two SQL predicates; `occupancyOf`, `stateOf` and `summariseByZone` build on them. The truth tables in `src/tests/keys/occupancy.test.ts` and `supabase/tests/11_key_occupancy_test.sql` use the same labels, so a change on one side has an obvious counterpart.
+- **`availability.ts`** is rebuilt on it with an unchanged output shape. The 20 existing tests pass as they were.
+- **`src/lib/keys/outstanding.ts`** (new): `shapeOutstanding` replaces the copies in `/api/keys/out` and the verifier seed; `withOverdueFlag` replaces the two requester-dashboard copies. Rows gain `is_overdue`.
+- **`/api/keys/out`**: `is_overdue` is the field to read. `status: 'KEY_OVERDUE'` is kept, deprecated, for one release. The verifier outstanding keys, handover screen and CSO keys view now read `is_overdue`. The verifier list's dead `KEY_OVERDUE` realtime branch is gone; it now re-reads on any move into or out of `KEY_ISSUED` and on any `keys` update.
+- **`/api/admin/units` `has_slot_today`** is `available > 0` from `get_key_occupancy()`. No UI reads it today.
+- **Visible CSO dashboard changes** (the "Keys" zone chart):
+  - It counts **copies**: zone totals rise by the extra copies of multi-copy rooms (+12 today: 11 from `FENG-005`, 1 from `ADM-VC`).
+  - A new **Being collected** slice shows copies reserved by a live collection code; they no longer count as Available.
+  - **Overdue** shows from the deadline rather than after the hourly cron. The chart polls every 60 s, since a deadline passing changes no row, and still re-reads on any `requests` or `keys` realtime event.
+  - The hardcoded hex colours are gone. Slices use theme tokens: `--muted-foreground`, `--destructive`, and new `--success`/`--warning` tokens in `globals.css`, mirroring DESIGN.md's status colours. Every legend entry now has an icon as well as text, the `aria-label` lists every count, and a failed load shows an error with Retry instead of an empty chart.
+- **Requester tiles are unchanged.**
+- **Tests**: `occupancy.test.ts` (27), `outstanding.test.ts` (7), 2 new cases in `availability.test.ts`, pgTAP `11_key_occupancy_test.sql` (27 assertions).
+- Docs: `docs/DATABASE.md`, `docs/API.md` (`/keys/out`'s "`status = 'KEY_OVERDUE'`" sentence was false and is replaced), `docs/GLOSSARY.md` (**Occupancy**, a tighter **Overdue key**), `docs/TESTING.md`, `supabase/tests/README.md`, the Postman description of `keys/out`.
+- **Deferred**: the CSO `key-card.tsx` "x of n available" badge, and removing the deprecated `KEY_OVERDUE` from `/keys/out`.
+
 ### 2026-10-13 — One module for API route plumbing (`src/lib/http/`), batch 0
 
 - **Why**: about 47 routes repeated the same session check, role check, body parse and ref'd 500 by hand, and that copying had drifted:
