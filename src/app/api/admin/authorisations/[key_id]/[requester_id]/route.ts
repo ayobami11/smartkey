@@ -1,51 +1,33 @@
-import { NextRequest, NextResponse } from 'next/server';
+import * as z from 'zod';
 
-import { logger } from '@/lib/logger';
-import { createServerClient } from '@/lib/supabase/server';
-import { err } from '@/types/api';
+import { collectorForbidden } from '@/lib/admin/collector-errors';
+import { respond } from '@/lib/http/respond';
+import { route } from '@/lib/http/route';
+import { rpcFail } from '@/lib/http/rpc-errors';
+import { callRpcVoid } from '@/lib/rpc/call-rpc';
 
-const mapRpcError = (msg: string): { status: number; message: string } => {
-  if (msg.includes('NOT_AUTHENTICATED'))
-    return { status: 401, message: 'Unauthorized' };
-  if (msg.includes('FORBIDDEN'))
-    return { status: 403, message: 'Key not in your department' };
-  if (msg.includes('NOT_FOUND'))
-    return { status: 404, message: 'Authorisation not found' };
-  return { status: 500, message: msg };
-};
+// remove_collector is authoriser-aware, like nominate_collector: a Dean for
+// their own faculty's keys, the CSO for Administration keys.
+export const DELETE = route({
+  name: 'admin/authorisations/[key_id]/[requester_id]',
+  auth: 'user',
+  roles: ['CSO', 'DEAN'],
+  params: z.object({ key_id: z.uuid(), requester_id: z.uuid() }),
+  paramsError: { status: 404, message: 'Authorisation not found' },
+  handler: async ({ supabase, params }) => {
+    const result = await callRpcVoid(supabase, 'remove_collector', {
+      p_key_id: params.key_id,
+      p_requester_id: params.requester_id,
+    });
 
-export const DELETE = async (
-  _request: NextRequest,
-  { params }: { params: Promise<{ key_id: string; requester_id: string }> }
-) => {
-  const { key_id, requester_id } = await params;
-
-  const supabase = await createServerClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user)
-    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
-
-  const { error } = await supabase.rpc('remove_collector', {
-    p_key_id: key_id,
-    p_requester_id: requester_id,
-  });
-
-  if (error) {
-    const mapped = mapRpcError(error.message);
-    if (mapped.status === 500) {
-      const ref = crypto.randomUUID();
-      logger.error('remove_collector rpc failed', { err: error.message, ref });
-      return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
-        status: 500,
+    if (!result.ok) {
+      return rpcFail(result.error, {
+        FORBIDDEN: collectorForbidden,
+        // Raised both for an unknown key and for a requester not in a slot.
+        NOT_FOUND: 'Authorisation not found',
       });
     }
-    return NextResponse.json(err(mapped.message, mapped.status), {
-      status: mapped.status,
-    });
-  }
 
-  return new NextResponse(null, { status: 204 });
-};
+    return respond.noContent();
+  },
+});

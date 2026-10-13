@@ -38,7 +38,7 @@ Routes build the envelope only through `respond.ok` / `fail` / `error` / `intern
 
 ## Auth conventions
 
-Route handlers are wrapped in `route()` from `src/lib/http/route.ts`. Routes are being moved onto it in batches; every route under `/api/requests/` (batch 1), `/api/public/` (batch 2), and `keys/`, `shifts/`, `reports/` and `incidents` (batch 3) is on it (2026-10-13). `route()` runs these checks in a fixed order before the handler:
+Route handlers are wrapped in `route()` from `src/lib/http/route.ts`. Routes are being moved onto it in batches; every route under `/api/requests/` (batch 1), `/api/public/` (batch 2), `keys/`, `shifts/`, `reports/` and `incidents` (batch 3), and `/api/admin/` plus the `ai/risk-alerts` and `ai/signature-alerts` reads (batch 4) is on it (2026-10-13). `route()` runs these checks in a fixed order before the handler:
 
 1. **Auth**, chosen per route with `auth`:
    - `'user'` validates the Supabase session with `getUser()`, never `getSession()`. No session → `401 Unauthorized`.
@@ -911,11 +911,11 @@ Sets key `status = 'RETIRED'` (and `retired_at`), creates an incident of type `M
 | `role`                | `'DEAN' \| 'VERIFIER' \| 'REQUESTER'` | yes                |
 | `unit_id`             | `string` (uuid)                       | DEAN and REQUESTER |
 
-Creates the profile, generates a 24-hour activation token, queues the invite email via Nodemailer (Gmail SMTP), and writes the audit entry — all inside the RPC.
+For a new email the route first creates the auth user with `admin.generateLink({ type: 'invite' })` and emails the activation link via Nodemailer (Gmail SMTP); `provision_user` then creates the profile, the 24-hour activation token and the audit entry in one transaction. The token never leaves the server. An email that already has a `PENDING_ACTIVATION` or `DEACTIVATED` profile is re-invited instead (the ban is lifted, the profile reset through the service-role client, a fresh link sent) and answers `200`; that path writes no audit entry yet.
 
-**Response `data`**: `{ "profile_id": "<uuid>", "status": "PENDING_ACTIVATION" }`
+**Response `data`**: `{ "profile_id": "<uuid>", "status": "PENDING_ACTIVATION" }`. Returns `201` for a new user (the envelope `status` says `201` too since 2026-10-13; it used to say `200`), `200` for a re-invite.
 
-**Errors**: `409` email already registered · `422` validation
+**Errors**: `401` unauthenticated or no profile · `403` not CSO · `409` email already registered to an `ACTIVE` user, or the Dean's unit already has an active Dean · `422` validation, or no `unit_id` for a Dean or Requester · `500` link generation or RPC failure, with a correlation reference
 
 ---
 
@@ -1011,11 +1011,11 @@ No query params. Returns every unit (faculty or Administration) with its Dean, a
 | `unit_id`   | `string` (uuid)                      | yes                                                                                                      |
 | `key_count` | `integer` (1–20, default 1)          | no — how many interchangeable copies of this room’s key exist, i.e. how many people may hold one at once |
 
-Creates a new key record (status `AVAILABLE`). Returns `201`.
+Creates a new key record (status `AVAILABLE`). Returns `201`. A single-row insert under the `keys` RLS policy; no audit entry is written (known follow-up).
 
 **Response `data`**: `{ "key_id": "<uuid>" }`
 
-**Errors**: `403` not CSO · `422` validation
+**Errors**: `401` unauthenticated or no profile (a session with no profile row was `403` until 2026-10-13) · `403` not CSO · `409` key code already in use · `422` validation · `500` with a correlation reference
 
 ---
 
@@ -1034,7 +1034,11 @@ Submits a collector nomination. The route delegates entirely to the `nominate_co
 
 **Response `data`**: `{ "authorisation_id": "<composite>", "slot_number": 2 }`
 
-**Errors**: `403` key not in your scope (Dean on another faculty's key, or CSO/Dean on the wrong authoriser type) · `409` three slots already filled · `409` requester already authorised for this key
+The route checks the role (CSO or Dean) before the RPC, as defence in depth; until 2026-10-13 it had no role check, so any signed-in user reached the RPC. The RPC still decides which keys each may touch.
+
+**Errors**: `401` unauthenticated or no profile · `403` not a CSO or Dean · `403` "Key not in your department" (a Dean on another faculty's key) · `403` "Only the CSO can manage collectors for Administration keys" (anyone but the CSO on an Administration key; this used to say "Key not in your department" too) · `404` key not found · `409` three slots already filled · `409` requester already authorised for this key · `422` validation, or the requester is not an active REQUESTER · `500` with a correlation reference (including an RPC that returns no row, which used to answer `201` with a `null` `slot_number`)
+
+Returns `201`; the envelope `status` says `201` too since 2026-10-13 (it used to say `200`).
 
 ---
 
@@ -1048,7 +1052,7 @@ Removes a collector from a slot. Authoriser-aware via the `remove_collector` RPC
 
 **Response `data`**: `null` (204)
 
-**Errors**: `403` key not in your scope · `404` authorisation not found
+**Errors**: `401` unauthenticated or no profile · `403` not a CSO or Dean (route-level since 2026-10-13) · `403` key not in your scope, with the same two messages as the nomination route · `404` authorisation not found, the key does not exist, or either path segment is not a UUID (a malformed id used to reach the RPC and fail as a `500`)
 
 ---
 
@@ -1299,7 +1303,7 @@ Resolves a held reference-replacement mismatch from `POST /api/profile/signature
 
 **Response `data`**: `{ "status": "APPROVED" | "DECLINED", "new_url": "<url>" | null }` (`new_url` is the new reference URL on approval, `null` on decline)
 
-**Errors**: `401` unauthenticated · `403` not CSO · `404` no pending reference for this profile/type · `422` validation
+**Errors**: `401` unauthenticated · `403` not CSO · `404` no pending reference for this profile/type · `422` validation · `500` with a correlation reference (an RPC that returns no row used to throw past the handler as Next's bare `500`)
 
 ---
 

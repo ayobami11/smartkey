@@ -1,13 +1,14 @@
-import { NextRequest, NextResponse } from 'next/server';
 import * as z from 'zod';
 
-import { rewriteStorageUrls } from '@/lib/storage/object-url';
 import { activationEmail } from '@/lib/email/templates/account';
 import { gmailTransport } from '@/lib/email/transport';
+import { respond } from '@/lib/http/respond';
+import { route } from '@/lib/http/route';
+import { rpcFail } from '@/lib/http/rpc-errors';
 import { logger } from '@/lib/logger';
+import { callRpc } from '@/lib/rpc/call-rpc';
+import { rewriteStorageUrls } from '@/lib/storage/object-url';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createServerClient } from '@/lib/supabase/server';
-import { err, ok } from '@/types/api';
 
 const postBodySchema = z.object({
   full_name: z.string().min(1),
@@ -16,276 +17,196 @@ const postBodySchema = z.object({
   unit_id: z.uuid().optional(),
 });
 
-const mapRpcError = (msg: string): { status: number; message: string } => {
-  if (msg.includes('NOT_AUTHENTICATED'))
-    return { status: 401, message: 'Not authenticated' };
-  if (msg.includes('FORBIDDEN')) return { status: 403, message: 'Forbidden' };
-  if (msg.includes('DUPLICATE_PROFILE'))
-    return { status: 409, message: 'Email already registered' };
-  if (msg.includes('AUTH_USER_NOT_FOUND'))
-    return {
-      status: 409,
-      message:
-        'No auth account found for this email. Send an invite via Supabase Auth first, then provision.',
-    };
-  return { status: 500, message: 'Internal error' };
-};
-
-export const POST = async (request: NextRequest) => {
-  const supabase = await createServerClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user)
-    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role, unit_id')
-    .eq('id', user.id)
-    .single();
-  if (!profile)
-    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
-  if (profile.role !== 'CSO')
-    return NextResponse.json(err('Forbidden', 403), { status: 403 });
-
-  const body = await request.json().catch(() => null);
-  const parsed = postBodySchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json(err('Invalid request body', 422), { status: 422 });
-  }
-
-  const { full_name, institutional_email, role, unit_id } = parsed.data;
-
-  if ((role === 'DEAN' || role === 'REQUESTER') && !unit_id) {
-    return NextResponse.json(
-      err('unit_id is required for Dean and Requester roles', 422),
-      { status: 422 }
-    );
-  }
-
-  // Prevent assigning a second ACTIVE Dean to a unit that already has one.
-  if (role === 'DEAN' && unit_id) {
-    const { data: dept } = await supabase
-      .from('units')
-      .select('hod_id, hod:profiles!hod_id(status)')
-      .eq('id', unit_id)
-      .single();
-
-    const existingHod = dept?.hod as { status: string } | null;
-    if (dept?.hod_id && existingHod?.status === 'ACTIVE') {
-      return NextResponse.json(
-        err('This department already has an active HOD', 409),
-        { status: 409 }
-      );
-    }
-  }
-
+// generateLink mints a one-time token. We build our own /auth/confirm link
+// from the token hash (verified server-side via verifyOtp) and send it via
+// Gmail, so delivery is reliable regardless of Supabase's SMTP config.
+const confirmLink = (
+  properties: { hashed_token: string; verification_type: string },
+  next: string
+) => {
   const siteUrl =
     process.env.NEXT_PUBLIC_SITE_URL ?? 'https://smartkey-ochre.vercel.app';
-  const activationPath = role === 'DEAN' ? '/dean/onboarding' : '/activate';
-  const adminClient = createAdminClient();
+  const params = new URLSearchParams({
+    token_hash: properties.hashed_token,
+    type: properties.verification_type,
+    next,
+  });
+  return `${siteUrl}/auth/confirm?${params.toString()}`;
+};
 
-  // Check whether a profile already exists for this email.
-  // ACTIVE users are a real conflict. PENDING_ACTIVATION (never activated) and
-  // DEACTIVATED (revoked) can both be re-invited.
-  const { data: existingProfile } = await supabase
-    .from('profiles')
-    .select('id, status')
-    .eq('institutional_email', institutional_email)
-    .maybeSingle();
+export const POST = route({
+  name: 'admin/users',
+  auth: 'user',
+  roles: ['CSO'],
+  body: postBodySchema,
+  handler: async ({ supabase, body }) => {
+    const { full_name, institutional_email, role, unit_id } = body;
 
-  if (existingProfile) {
-    if (existingProfile.status === 'ACTIVE') {
-      return NextResponse.json(err('Email already registered', 409), {
-        status: 409,
-      });
+    if ((role === 'DEAN' || role === 'REQUESTER') && !unit_id) {
+      return respond.fail(
+        422,
+        'unit_id is required for Dean and Requester roles'
+      );
     }
 
-    // DEACTIVATED: lift the ban before resending so they can log in.
-    if (existingProfile.status === 'DEACTIVATED') {
-      await adminClient.auth.admin.updateUserById(existingProfile.id, {
-        ban_duration: 'none',
-      });
+    // Prevent assigning a second ACTIVE Dean to a unit that already has one.
+    if (role === 'DEAN' && unit_id) {
+      const { data: dept } = await supabase
+        .from('units')
+        .select('hod_id, hod:profiles!hod_id(status)')
+        .eq('id', unit_id)
+        .single();
+
+      const existingHod = dept?.hod as { status: string } | null;
+      if (dept?.hod_id && existingHod?.status === 'ACTIVE') {
+        return respond.fail(409, 'This department already has an active HOD');
+      }
     }
 
-    // Reset profile status and update name/department in case they changed.
-    // Server-written: protect_profile_columns rejects status/unit_id changes
-    // from any user session, the CSO's included.
-    const { error: resetError } = await createAdminClient()
+    const activationPath = role === 'DEAN' ? '/dean/onboarding' : '/activate';
+    const adminClient = createAdminClient();
+
+    // Check whether a profile already exists for this email.
+    // ACTIVE users are a real conflict. PENDING_ACTIVATION (never activated)
+    // and DEACTIVATED (revoked) can both be re-invited.
+    const { data: existingProfile } = await supabase
       .from('profiles')
-      .update({ status: 'PENDING_ACTIVATION', full_name, unit_id })
-      .eq('id', existingProfile.id);
+      .select('id, status')
+      .eq('institutional_email', institutional_email)
+      .maybeSingle();
 
-    if (resetError) {
-      const ref = crypto.randomUUID();
-      logger.error('re-invite: profile reset failed', {
-        err: resetError.message,
-        ref,
-      });
-      return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
-        status: 500,
+    if (existingProfile) {
+      if (existingProfile.status === 'ACTIVE') {
+        return respond.fail(409, 'Email already registered');
+      }
+
+      // DEACTIVATED: lift the ban before resending so they can log in.
+      if (existingProfile.status === 'DEACTIVATED') {
+        await adminClient.auth.admin.updateUserById(existingProfile.id, {
+          ban_duration: 'none',
+        });
+      }
+
+      // Reset profile status and update name/unit in case they changed.
+      // Server-written: protect_profile_columns rejects status/unit_id
+      // changes from any user session, the CSO's included.
+      // Known follow-up: this re-invite (including reinstating a
+      // DEACTIVATED user) writes no audit entry.
+      const { error: resetError } = await adminClient
+        .from('profiles')
+        .update({ status: 'PENDING_ACTIVATION', full_name, unit_id })
+        .eq('id', existingProfile.id);
+
+      if (resetError) {
+        return respond.internal('re-invite: profile reset failed', {
+          err: resetError.message,
+        });
+      }
+
+      const { data: linkData, error: linkError } =
+        await adminClient.auth.admin.generateLink({
+          type: 'magiclink',
+          email: institutional_email,
+        });
+
+      if (linkError || !linkData?.properties?.hashed_token) {
+        logger.error('re-invite: generateLink failed', {
+          err: linkError?.message ?? 'no hashed_token returned',
+        });
+      } else {
+        await gmailTransport
+          .send({
+            to: institutional_email,
+            ...activationEmail({
+              link: confirmLink(linkData.properties, activationPath),
+              isReinvite: true,
+            }),
+          })
+          .catch((e: unknown) =>
+            logger.error('re-invite: email send failed', { err: String(e) })
+          );
+      }
+
+      return respond.ok({
+        profile_id: existingProfile.id,
+        status: 'PENDING_ACTIVATION',
       });
     }
 
-    // generateLink mints a one-time token. We build our own /auth/confirm link
-    // from the token hash (verified server-side via verifyOtp) and send it via
-    // Gmail so delivery is reliable regardless of Supabase's SMTP config.
-    const { data: linkData, error: linkError } =
+    // New user: generateLink with type 'invite' creates the auth.users row
+    // and mints a one-time token; provision_user then needs that row.
+    const { data: newLinkData, error: inviteError } =
       await adminClient.auth.admin.generateLink({
-        type: 'magiclink',
+        type: 'invite',
         email: institutional_email,
       });
 
-    if (linkError || !linkData?.properties?.hashed_token) {
-      logger.error('re-invite: generateLink failed', {
-        err: linkError?.message ?? 'no hashed_token returned',
+    if (inviteError) {
+      return respond.internal('provision_user: generateLink failed', {
+        err: inviteError.message,
       });
-    } else {
-      const confirmParams = new URLSearchParams({
-        token_hash: linkData.properties.hashed_token,
-        type: linkData.properties.verification_type,
-        next: activationPath,
-      });
+    }
+
+    if (newLinkData?.properties?.hashed_token) {
       await gmailTransport
         .send({
           to: institutional_email,
           ...activationEmail({
-            link: `${siteUrl}/auth/confirm?${confirmParams.toString()}`,
-            isReinvite: true,
+            link: confirmLink(newLinkData.properties, activationPath),
+            isReinvite: false,
           }),
         })
         .catch((e: unknown) =>
-        logger.error('re-invite: email send failed', { err: String(e) })
-      );
+          logger.error('provision_user: email send failed', {
+            err: String(e),
+          })
+        );
     }
 
-    return NextResponse.json(
-      ok({ profile_id: existingProfile.id, status: 'PENDING_ACTIVATION' }),
-      { status: 200 }
-    );
-  }
-
-  // New user: generateLink with type 'invite' creates the auth.users row and
-  // mints a one-time token. We build our own /auth/confirm link from the token
-  // hash and send via our own Gmail for reliable delivery.
-  const { data: newLinkData, error: inviteError } =
-    await adminClient.auth.admin.generateLink({
-      type: 'invite',
-      email: institutional_email,
-    });
-
-  if (inviteError) {
-    const ref = crypto.randomUUID();
-    logger.error('provision_user: generateLink failed', {
-      err: inviteError.message,
-      ref,
-    });
-    return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
-      status: 500,
-    });
-  }
-
-  if (newLinkData?.properties?.hashed_token) {
-    const confirmParams = new URLSearchParams({
-      token_hash: newLinkData.properties.hashed_token,
-      type: newLinkData.properties.verification_type,
-      next: activationPath,
-    });
-    await gmailTransport
-      .send({
-        to: institutional_email,
-        ...activationEmail({
-          link: `${siteUrl}/auth/confirm?${confirmParams.toString()}`,
-          isReinvite: false,
-        }),
-      })
-      .catch((e: unknown) =>
-      logger.error('provision_user: email send failed', { err: String(e) })
-    );
-  }
-
-  const { data: rpcData, error: rpcError } = await supabase.rpc(
-    'provision_user',
-    {
+    const result = await callRpc(supabase, 'provision_user', {
       p_full_name: full_name,
       p_email: institutional_email,
       p_role: role,
       p_department_id: unit_id ?? undefined,
+    });
+
+    if (!result.ok) {
+      return rpcFail(result.error, { NOT_AUTHENTICATED: 'Not authenticated' });
     }
-  );
 
-  if (rpcError) {
-    const mapped = mapRpcError(rpcError.message);
-    if (mapped.status === 500) {
-      const ref = crypto.randomUUID();
-      logger.error('provision_user RPC failed', { err: rpcError.message, ref });
-      return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
-        status: 500,
-      });
+    // The activation token stays server-side; only the profile id is sent.
+    return respond.ok(
+      { profile_id: result.data.profile_id, status: 'PENDING_ACTIVATION' },
+      201
+    );
+  },
+});
+
+export const GET = route({
+  name: 'admin/users',
+  auth: 'user',
+  roles: ['CSO'],
+  handler: async ({ supabase }) => {
+    // Fetch all profiles in one shot — filtering, sorting, and pagination
+    // happen client-side via TanStack Table. At pilot scale (≤500 users)
+    // this is fine.
+    const { data, error } = await supabase
+      .from('profiles')
+      .select(
+        'id, full_name, institutional_email, role, status, photo_url, created_at, last_login_at, department:units!unit_id(name)'
+      )
+      .neq('status', 'DEACTIVATED')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      return respond.internal('admin/users GET failed', { err: error.message });
     }
-    return NextResponse.json(err(mapped.message, mapped.status), {
-      status: mapped.status,
-    });
-  }
 
-  const result = Array.isArray(rpcData) ? rpcData[0] : rpcData;
-  if (!result) {
-    const ref = crypto.randomUUID();
-    logger.error('provision_user RPC returned empty result', { ref });
-    return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
-      status: 500,
-    });
-  }
+    const users = (data ?? []).map(({ last_login_at, ...u }) => ({
+      ...u,
+      last_sign_in_at: last_login_at,
+    }));
 
-  return NextResponse.json(
-    ok({ profile_id: result.profile_id, status: 'PENDING_ACTIVATION' }),
-    { status: 201 }
-  );
-};
-
-export const GET = async () => {
-  const supabase = await createServerClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user)
-    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role, unit_id')
-    .eq('id', user.id)
-    .single();
-  if (!profile)
-    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
-  if (profile.role !== 'CSO')
-    return NextResponse.json(err('Forbidden', 403), { status: 403 });
-
-  // Fetch all profiles in one shot — filtering, sorting, and pagination happen
-  // client-side via TanStack Table. At pilot scale (≤500 users) this is fine.
-  const { data, error } = await supabase
-    .from('profiles')
-    .select(
-      'id, full_name, institutional_email, role, status, photo_url, created_at, last_login_at, department:units!unit_id(name)'
-    )
-    .neq('status', 'DEACTIVATED')
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    const ref = crypto.randomUUID();
-    logger.error('admin/users GET failed', { err: error.message, ref });
-    return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
-      status: 500,
-    });
-  }
-
-  const users = (data ?? []).map(({ last_login_at, ...u }) => ({
-    ...u,
-    last_sign_in_at: last_login_at,
-  }));
-
-  return NextResponse.json(ok(rewriteStorageUrls({ users })), { status: 200 });
-};
+    return respond.ok(rewriteStorageUrls({ users }));
+  },
+});
