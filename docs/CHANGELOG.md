@@ -33,6 +33,11 @@ Each entry: date, brief title, what changed, why.
   - `notify.test.ts` (outcomes, partial and total send failure)
 - Docs updated: `docs/API.md`, `docs/DATABASE.md`, `docs/ARCHITECTURE.md`, `docs/GLOSSARY.md` (**Notification event**), `docs/CONTEXT.txt`.
 
+### 2026-10-12 — CSO weekend-requests view refreshes on realtime events again
+
+- **Why**: the view's realtime handler invalidated `['requests','pending-weekend']`, but its query is keyed `['cso','requests','pending-weekend']`. React Query matches keys by prefix from the start, so the invalidation never matched and new or decided Administration weekend requests only appeared after a manual reload. Found in the 2026-10-12 architecture review (candidate 5, "live queries").
+- Both `invalidateQueries` calls in `src/app/cso/weekend-requests/_components/weekend-requests-view.tsx` now use the query's real key. No other caller used the wrong key.
+
 ### 2026-10-12 — Weekend decisions verify the stored letter, not one the client picks
 
 - **Why**: the Dean's signature check on weekend approvals could be bypassed in two ways.
