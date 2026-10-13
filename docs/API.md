@@ -246,7 +246,7 @@ The RPC runs the risk engine, generates the code, and writes the audit entry ato
 
 The two `409`s are distinct and the route maps them to different messages. `CONFLICT` means **you** already have an active request for this key; `NO_KEYS_AVAILABLE` means every copy of the room's key is out or reserved by other people, so telling this requester to cancel something would point them at a request they never made. The latter is raised by the `requests_key_capacity` trigger (`docs/DATABASE.md`) and only on the `WEEKDAY` branch, which mints a code immediately — a `WEEKEND` request starts `PENDING_HOD` and reserves nothing.
 
-For a `WEEKDAY` request, fires a fire-and-forget `sendCollectionCodeEmail` to the requester. For a `WEEKEND` request, fires a fire-and-forget `sendWeekendSubmittedEmail` to the key's unit's Dean (resolved via `getDeanRecipientForKey`) — no-op for Administration (`authoriser='CSO'`) keys, which have no Dean. When a Dean recipient does resolve, a `decision_token` is minted and persisted on the request first, and the email's `decisionLink` points at `/dean-decision/[token]` — the one-click Approve/Decline flow (see "Public one-click Dean decision" below). Neither send can fail the response.
+After the response, sends a request notification through `notifyAfterResponse` (`src/lib/notifications/`): `CODE_ISSUED` for a `WEEKDAY` request (the collection code), `WEEKEND_SUBMITTED` for a `WEEKEND` request — to the key's unit's Dean, or to every active CSO for an Administration (`authoriser='CSO'`) key, each subject to their `weekend_submitted_email` preference. For a Dean-routed weekend request, `create_request` itself sets `decision_token` in the same transaction as the insert, and the Dean's email links to `/dean-decision/[token]` — the one-click Approve/Decline flow (see "Public one-click Dean decision" below). No send can fail the response.
 
 ---
 
@@ -496,7 +496,7 @@ These routes let an external person with no SmartKey account submit a weekend ke
 **Roles**: ALL (unauthenticated)
 **RPC**: `create_guest_weekend_request(full_name, email, phone, id_type, id_number, department_id, weekend_date, return_deadline, letter_url, requested_room)`
 
-Multipart form. Uploads the Dean authorisation letter to the `weekend-letters` bucket, creates the guest + request (`PENDING_HOD`, no code), and emails the status link to the guest (via the shared email sender in `src/lib/email/`). Also fires a fire-and-forget `sendWeekendSubmittedEmail` to the target unit's Dean (resolved via `getDeanRecipientForUnit`, `department_id`) — no-op for Administration units. When a Dean recipient does resolve, a `decision_token` is minted and persisted on the request first, and the email's `decisionLink` points at `/dean-decision/[token]` with `isGuest: true` (renders the "External" badge) — the same one-click Approve/Decline flow as registered requests (see "Public one-click Dean decision" below), except approving here requires the Dean to also pick a key on that page. Neither send can fail the request. Returns `201`.
+Multipart form. Uploads the Dean authorisation letter to the `weekend-letters` bucket and creates the guest + request (`PENDING_HOD`, no code). For a Dean-authorised unit, `create_guest_weekend_request` sets `decision_token` in the same transaction. After the response, two notifications go out through `notifyAfterResponse` (`src/lib/notifications/`): `GUEST_SUBMISSION_RECEIVED` emails the guest their status link, and `WEEKEND_SUBMITTED` emails the unit's Dean — with the "External" badge and the one-click `/dean-decision/[token]` link, where approving also requires picking a key — or every active CSO for an Administration unit. No send can fail the request. Returns `201`.
 
 | Field                | Type                       | Required |
 | -------------------- | -------------------------- | -------- |
@@ -609,7 +609,7 @@ Returns a short-lived (5-minute) signed URL for a request's uploaded authorisati
 
 Lets a Dean act on a Dean-authorised weekend request straight from the "New weekend request" email — no login. Covers both **registered-requester** and **guest (external)** requests. Reuses the same Weekend decision module (`decideWeekend`) as `POST /api/requests/hod-decision` (`src/lib/requests/decide-weekend.ts`), so verification, mismatch-holding, guest key-assignment, the CSO mismatch email, and the requester notification all behave identically to the dashboard flow. Scoped to Dean-authorised units only — Administration/CSO-routed requests (no submission email exists for those today) never receive a `decision_token` and so 404 here.
 
-The email itself distinguishes the two: a guest submission renders a small cyan "External" badge next to the requester's name (`sendWeekendSubmittedEmail`'s `isGuest` param), matching the `GuestBadge` treatment already used on the CSO/Dean dashboards and on the confirmation page below.
+The email itself distinguishes the two: a guest submission renders a small cyan "External" badge next to the requester's name (`weekendSubmittedEmail`'s `isGuest` param, `src/lib/email/templates/request.ts`), matching the `GuestBadge` treatment already used on the CSO/Dean dashboards and on the confirmation page below.
 
 Security note: `GET` is strictly read-only. It must never mutate state — mail scanners (Outlook Safe Links, Gmail, etc.) prefetch every link in an email, so if a page load could decide the request, the scanner itself would silently approve or decline it before a human opened the email. The actual decision only happens on `POST`, triggered by an explicit button click on `/dean-decision/[token]`.
 
@@ -1333,7 +1333,7 @@ If `severity = 'HIGH'`, the AI shift-report generation is triggered immediately 
 **File**: `src/app/api/cron/weekend-reminders/route.ts`
 **Roles**: SYSTEM (pg_cron; no user session)
 
-Not user-facing. Called by the `weekend-code-reminders` pg_cron job at 06:00 UTC on Sat/Sun. Authenticated by a shared bearer secret (`Authorization: Bearer ${CRON_SECRET}`), not a session; uses the service-role admin client. Finds `APPROVED` weekend requests due today (registered and guest) with `reminder_sent_at IS NULL`, emails each requester a reminder to mint their collection code (registered → `/requester/dashboard`, guest → `/weekend-access/[token]`), and stamps `reminder_sent_at` so a retry never double-sends. No collection code is included — the code is always minted on the day.
+Not user-facing. Called by the `weekend-code-reminders` pg_cron job at 06:00 UTC on Sat/Sun. Authenticated by a shared bearer secret (`Authorization: Bearer ${CRON_SECRET}`), not a session; uses the service-role admin client. Finds `APPROVED` weekend requests due today (registered and guest) with `reminder_sent_at IS NULL`, emails each requester a reminder to mint their collection code via `notify({ type: 'WEEKEND_REMINDER' })` (registered → `/requester/dashboard`, guest → `/weekend-access/[token]`), and stamps `reminder_sent_at` on each one actually sent so a retry never double-sends. No collection code is included — the code is always minted on the day.
 
 No request body.
 
@@ -1350,11 +1350,11 @@ The pg_cron job reads its bearer secret from Supabase Vault (`weekend_cron_secre
 **File**: `src/app/api/cron/overdue-reminders/route.ts`
 **Roles**: SYSTEM (pg_cron; no user session)
 
-Not user-facing. Called by the `overdue-key-check` pg_cron job hourly, right after `mark_key_overdue()` in the same job (see `supabase/migrations/20260812110000_requester_notifications.sql`) — reuses the `weekend_cron_secret` Vault bearer secret. Finds `KEY_ISSUED` requests (registered and guest) whose `return_deadline` has passed with `overdue_reminder_sent_at IS NULL`, and for each registered requester checks `notification_preferences.overdue_email` (default true if no row) before emailing; guests have no preference and always receive it. Stamps `overdue_reminder_sent_at` for every processed row — including ones suppressed by preference, so they aren't re-queried every hour.
+Not user-facing. Called by the `overdue-key-check` pg_cron job hourly, right after `mark_key_overdue()` in the same job (see `supabase/migrations/20260812110000_requester_notifications.sql`) — reuses the `weekend_cron_secret` Vault bearer secret. Finds `KEY_ISSUED` requests (registered and guest) whose `return_deadline` has passed with `overdue_reminder_sent_at IS NULL`, and calls `notify({ type: 'OVERDUE_REMINDER' })` for each — which applies a registered requester's `notification_preferences.overdue_email` (default true if no row); guests have no preference and always receive it. Stamps `overdue_reminder_sent_at` for every row that was handled: sent, suppressed by preference, or with no recipient address (re-querying those every hour helps no one). Only a failed send stays unstamped, to retry next hour.
 
 No request body.
 
-**Response `data`**: `{ "sent": 1, "suppressed": 1, "failed": 0 }`
+**Response `data`**: `{ "sent": 1, "suppressed": 1, "no_recipient": 0, "failed": 0 }`
 
 **Errors**: `401` missing/incorrect bearer secret · `500` `CRON_SECRET` not configured or query failure
 

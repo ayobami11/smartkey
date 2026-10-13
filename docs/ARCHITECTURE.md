@@ -61,7 +61,8 @@ src/
 │   │   ├── risk/        # rule engine
 │   │   ├── reports/     # Gemini integration
 │   │   └── signature/   # Sharp + Pixelmatch
-│   ├── email/           # Nodemailer/Gmail SMTP templates and senders
+│   ├── email/           # html.ts (escaping `markup` template), transport.ts (Gmail SMTP), templates/
+│   ├── notifications/   # request-lifecycle emails: notify(event) → who, preferences, send
 │   ├── queries/         # TanStack Query client + role-specific query builders
 │   ├── requests/        # shared request-decision logic (e.g. decide-weekend.ts)
 │   ├── validation/      # shared zod primitives and schemas

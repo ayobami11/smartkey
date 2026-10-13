@@ -6,6 +6,33 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-10-13 — Request emails go through one notifications module, with HTML escaping
+
+- **Why**: emails about a request were assembled in eight routes, two crons and `src/lib/email/otp.ts` (772 lines, the most-changed file in the repo), and that spread had produced real bugs:
+  - **No HTML escaping anywhere.** A guest's self-entered name and free-text room, and a Dean's decline note, went into email HTML as-is. The guest form is public and unauthenticated, so anyone could put markup into an email sent to a Dean.
+  - **A CSO's `weekend_submitted_email` preference was ignored.** Both submit routes called `getCsoRecipients(admin)` without a preference key, so turning the toggle off in CSO settings did nothing. Preference defaults were written in three places.
+  - **`decision_token` was minted outside the transaction.** Both submit routes wrote it in a separate UPDATE after the response, inside `after()`. If that write failed, the Dean's email went out without its one-click link.
+  - **Duplication.** The ~70-line "weekend submitted" block was copied in two routes and the collection-code send in three, while the recipient lookup ("registered requester or guest?") existed four times.
+- **`src/lib/email/html.ts`**: the `markup` tagged template. Every interpolated value is escaped unless it is already an `HtmlFragment`, so no code path can put a plain string into an email as markup. The layout helpers (`nP`, `nBtn`, `nDetailRow`, …) moved here unchanged and now return `HtmlFragment`. The tag is deliberately not named `html`: Prettier formats the body of any `` html`...` `` template as HTML, which would rewrite every email's whitespace on save.
+- **`src/lib/email/transport.ts`**: the Gmail SMTP adapter (same configuration, timeouts and logo attachment as before) and an in-memory outbox for tests. `siteUrl()` is defined here once.
+- **`src/lib/email/templates/`**: `account.ts` (OTP, activation, password reset), `digest.ts`, and `request.ts` (9 request-lifecycle templates). They are pure functions returning `{ subject, html }`. Account and digest emails are still sent directly by their routes.
+- **`src/lib/notifications/`**: the new module.
+  - `notify(event)` returns `sent | suppressed | no_recipient | failed` and never throws. `notifyAfterResponse(event)` is the version routes use.
+  - `context.ts` loads everything about a request once.
+  - `rules.ts` is the routing and preference table as a pure function, covering all 7 events: code issued, weekend submitted, decided, signature mismatch, guest submission received, weekend reminder, overdue reminder.
+- **Migration `20261013090000_decision_token_in_create_rpcs.sql`**: `create_request` and `create_guest_weekend_request` now set `decision_token` in the insert, for weekend requests routed to a Dean-authorised unit. pgTAP covers the Dean-unit, Administration-unit and weekday cases in `05_` and `06_`.
+- **Deleted**: `src/lib/email/otp.ts`, `request-recipient.ts`, `notify-weekend-decision.ts`. `decideWeekend`'s `notify` adapter now calls the module, and its interface is unchanged.
+- **Behaviour changes, all deliberate:**
+  - CSOs who turned off weekend-request emails no longer receive them for Administration requests.
+  - The submitted-request email shows a readable date (`formatDateLongTz`) instead of a raw `YYYY-MM-DD`, matching the decided emails.
+  - The guest's "request received" email no longer blocks the submit response. It used to be awaited inline.
+  - The overdue cron stamps rows with no recipient address instead of retrying them every hour forever, and reports a new `no_recipient` count.
+- **Tests**: 47 new ones.
+  - `src/tests/email/` (escaping; every request template fed `<img onerror>` in every free-text field)
+  - `src/tests/notifications/rules.test.ts` (one test per row of the routing table)
+  - `notify.test.ts` (outcomes, partial and total send failure)
+- Docs updated: `docs/API.md`, `docs/DATABASE.md`, `docs/ARCHITECTURE.md`, `docs/GLOSSARY.md` (**Notification event**), `docs/CONTEXT.txt`.
+
 ### 2026-10-12 — Weekend decisions verify the stored letter, not one the client picks
 
 - **Why**: the Dean's signature check on weekend approvals could be bypassed in two ways.

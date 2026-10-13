@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as z from 'zod';
 
-import { sendPasswordResetEmail } from '@/lib/email/otp';
+import { passwordResetEmail } from '@/lib/email/templates/account';
+import { gmailTransport } from '@/lib/email/transport';
 import { logger } from '@/lib/logger';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ok } from '@/types/api';
@@ -32,9 +33,11 @@ export const POST = async (request: NextRequest) => {
         type: data.properties.verification_type,
         next: '/reset-password',
       });
-      await sendPasswordResetEmail({
+      await gmailTransport.send({
         to: parsed.data.email,
-        link: `${siteUrl}/auth/confirm?${confirmParams.toString()}`,
+        ...passwordResetEmail({
+          link: `${siteUrl}/auth/confirm?${confirmParams.toString()}`,
+        }),
       });
     }
   } catch (e) {

@@ -2,7 +2,7 @@ import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 
 // SmartKey's email-OTP MFA sends real codes over live Gmail SMTP
-// (src/lib/email/otp.ts) — there is no test-mode bypass, deliberately (see
+// (src/lib/email/templates/account.ts) — there is no test-mode bypass, deliberately (see
 // docs/E2E_OTP_SETUP.md). This reads the code back out of a real mailbox via
 // IMAP so CSO/DEAN/VERIFIER specs can complete login unattended.
 //
@@ -145,7 +145,7 @@ const searchMailbox = async ({
       if (receivedAt && receivedAt.getTime() < sentAfter.getTime()) continue;
 
       const parsed = await simpleParser(message.source);
-      // .text first, not .html: the email template (src/lib/email/otp.ts)
+      // .text first, not .html: the email template (src/lib/email/templates/account.ts)
       // sets the "Your sign-in verification code:" label to color:#475569
       // (slate-600) ahead of the code <div> in source order. That hex value
       // is 6 pure digits, so a naive \d{6} match against raw HTML always

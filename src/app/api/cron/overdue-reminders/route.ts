@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { sendOverdueReminderEmail } from '@/lib/email/otp';
 import { logger } from '@/lib/logger';
+import { notify } from '@/lib/notifications/notify';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { err, ok } from '@/types/api';
 
@@ -24,9 +24,7 @@ export const POST = async (request: NextRequest) => {
 
   const { data: due, error } = await admin
     .from('requests')
-    .select(
-      'id, requester_id, guest_id, return_deadline, key:keys(code, room_name)'
-    )
+    .select('id')
     .eq('status', 'KEY_ISSUED')
     .lt('return_deadline', now)
     .is('overdue_reminder_sent_at', null);
@@ -43,102 +41,25 @@ export const POST = async (request: NextRequest) => {
   }
 
   if (!due || due.length === 0) {
-    return NextResponse.json(ok({ sent: 0, suppressed: 0, failed: 0 }));
+    return NextResponse.json(
+      ok({ sent: 0, suppressed: 0, no_recipient: 0, failed: 0 })
+    );
   }
 
-  const requesterIds = due
-    .map((r) => r.requester_id)
-    .filter((id): id is string => id !== null);
-  const guestIds = due
-    .map((r) => r.guest_id)
-    .filter((id): id is string => id !== null);
-
-  const [profilesRes, guestsRes, prefsRes] = await Promise.all([
-    requesterIds.length
-      ? admin
-          .from('profiles')
-          .select('id, full_name, institutional_email')
-          .in('id', requesterIds)
-      : Promise.resolve({ data: [] as const }),
-    guestIds.length
-      ? admin
-          .from('guest_requesters')
-          .select('id, full_name, email')
-          .in('id', guestIds)
-      : Promise.resolve({ data: [] as const }),
-    requesterIds.length
-      ? admin
-          .from('notification_preferences')
-          .select('profile_id, overdue_email')
-          .in('profile_id', requesterIds)
-      : Promise.resolve({ data: [] as const }),
-  ]);
-
-  const profileById = new Map((profilesRes.data ?? []).map((p) => [p.id, p]));
-  const guestById = new Map((guestsRes.data ?? []).map((g) => [g.id, g]));
-  const prefByProfileId = new Map(
-    (prefsRes.data ?? []).map((p) => [p.profile_id, p])
-  );
-
+  // Stamped once handled, so the hourly run never re-sends: sent, turned off
+  // by the requester's overdue_email preference, or with nobody to send to
+  // (re-querying a requester with no address every hour helps no one).
+  // Only a failed send is left unstamped, to be retried next hour.
   const processedIds: string[] = [];
-  let sent = 0;
-  let suppressed = 0;
-  let failed = 0;
+  const counts = { sent: 0, suppressed: 0, no_recipient: 0, failed: 0 };
 
   for (const req of due) {
-    const key = Array.isArray(req.key) ? req.key[0] : req.key;
-    const keyCode = key?.code ?? '';
-    const roomName = key?.room_name ?? '';
-
-    let to: string | null = null;
-    let fullName = 'there';
-    // Absence of a preference row means the default (true) applies — it is
-    // not an opt-out.
-    let shouldSend = true;
-
-    if (req.requester_id) {
-      const profile = profileById.get(req.requester_id);
-      to = profile?.institutional_email ?? null;
-      fullName = profile?.full_name ?? fullName;
-      const pref = prefByProfileId.get(req.requester_id);
-      shouldSend = pref?.overdue_email ?? true;
-    } else if (req.guest_id) {
-      const guest = guestById.get(req.guest_id);
-      to = guest?.email ?? null;
-      fullName = guest?.full_name ?? fullName;
-    }
-
-    if (!to) {
-      logger.error('overdue-reminders: no recipient for request', {
-        request_id: req.id,
-      });
-      failed += 1;
-      continue;
-    }
-
-    if (!shouldSend) {
-      suppressed += 1;
-      processedIds.push(req.id);
-      continue;
-    }
-
-    try {
-      await sendOverdueReminderEmail({
-        to,
-        fullName,
-        keyCode,
-        roomName,
-        returnDeadline: req.return_deadline!,
-      });
-      sent += 1;
-      processedIds.push(req.id);
-    } catch (e) {
-      logger.error('overdue-reminders: send failed', {
-        request_id: req.id,
-        err: e instanceof Error ? e.message : String(e),
-      });
-      failed += 1;
-    }
+    const outcome = await notify({
+      type: 'OVERDUE_REMINDER',
+      requestId: req.id,
+    });
+    counts[outcome] += 1;
+    if (outcome !== 'failed') processedIds.push(req.id);
   }
 
   if (processedIds.length > 0) {
@@ -148,8 +69,8 @@ export const POST = async (request: NextRequest) => {
       .in('id', processedIds);
 
     if (stampError) {
-      // Emails (for the non-suppressed rows) already went out; failing to
-      // stamp risks a duplicate send on the next run.
+      // The emails already went out; failing to stamp risks a duplicate
+      // send on the next run.
       logger.error(
         'overdue-reminders: failed to stamp overdue_reminder_sent_at',
         {
@@ -160,5 +81,5 @@ export const POST = async (request: NextRequest) => {
     }
   }
 
-  return NextResponse.json(ok({ sent, suppressed, failed }));
+  return NextResponse.json(ok(counts));
 };

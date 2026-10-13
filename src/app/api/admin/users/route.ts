@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as z from 'zod';
 
 import { rewriteStorageUrls } from '@/lib/storage/object-url';
-import { sendActivationEmail } from '@/lib/email/otp';
+import { activationEmail } from '@/lib/email/templates/account';
+import { gmailTransport } from '@/lib/email/transport';
 import { logger } from '@/lib/logger';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
@@ -145,11 +146,15 @@ export const POST = async (request: NextRequest) => {
         type: linkData.properties.verification_type,
         next: activationPath,
       });
-      await sendActivationEmail({
-        to: institutional_email,
-        link: `${siteUrl}/auth/confirm?${confirmParams.toString()}`,
-        isReinvite: true,
-      }).catch((e: unknown) =>
+      await gmailTransport
+        .send({
+          to: institutional_email,
+          ...activationEmail({
+            link: `${siteUrl}/auth/confirm?${confirmParams.toString()}`,
+            isReinvite: true,
+          }),
+        })
+        .catch((e: unknown) =>
         logger.error('re-invite: email send failed', { err: String(e) })
       );
     }
@@ -186,11 +191,15 @@ export const POST = async (request: NextRequest) => {
       type: newLinkData.properties.verification_type,
       next: activationPath,
     });
-    await sendActivationEmail({
-      to: institutional_email,
-      link: `${siteUrl}/auth/confirm?${confirmParams.toString()}`,
-      isReinvite: false,
-    }).catch((e: unknown) =>
+    await gmailTransport
+      .send({
+        to: institutional_email,
+        ...activationEmail({
+          link: `${siteUrl}/auth/confirm?${confirmParams.toString()}`,
+          isReinvite: false,
+        }),
+      })
+      .catch((e: unknown) =>
       logger.error('provision_user: email send failed', { err: String(e) })
     );
   }

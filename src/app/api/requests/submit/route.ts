@@ -1,4 +1,4 @@
-import { after, NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import * as z from 'zod';
 
 import { DEFAULT_RISK_CONFIG } from '@/lib/ai/risk/default-config';
@@ -8,16 +8,8 @@ import type {
   RiskEngineConfig,
   RiskRuleKey,
 } from '@/lib/ai/risk/types';
-import {
-  sendCollectionCodeEmail,
-  sendWeekendSubmittedEmail,
-} from '@/lib/email/otp';
-import {
-  getCsoRecipients,
-  getDeanRecipientForKey,
-  getRequestRecipient,
-} from '@/lib/email/request-recipient';
 import { logger } from '@/lib/logger';
+import { notifyAfterResponse } from '@/lib/notifications/notify';
 import { parseStorageUrl } from '@/lib/storage/object-url';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
@@ -254,88 +246,11 @@ export const POST = async (request: NextRequest) => {
   }
 
   if (type === 'WEEKEND') {
-    // Resolves to null (no send) for Administration (authoriser='CSO') keys
-    // via getDeanRecipientForKey — those have no Dean, so branch on the
-    // key's unit authoriser and notify the CSO instead. Runs via after()
-    // rather than a bare fire-and-forget promise — Vercel may freeze the
-    // function as soon as the response below is sent, so an unawaited
-    // promise here can be silently cut off mid-send. after() keeps it alive
-    // until it finishes.
-    after(async () => {
-      try {
-        const siteUrl =
-          process.env.NEXT_PUBLIC_SITE_URL ??
-          'https://smartkey-ochre.vercel.app';
-        const roomLabel =
-          keyRes.data?.room_name && keyRes.data.code
-            ? `${keyRes.data.room_name} (${keyRes.data.code})`
-            : '';
-
-        const { data: keyUnit } = await adminClient
-          .from('keys')
-          .select('department:units!unit_id(authoriser)')
-          .eq('id', key_id)
-          .single();
-        const keyUnitDept = Array.isArray(keyUnit?.department)
-          ? keyUnit.department[0]
-          : keyUnit?.department;
-
-        if (keyUnitDept?.authoriser === 'CSO') {
-          const recipients = await getCsoRecipients(adminClient);
-          await Promise.all(
-            recipients.map((recipient) =>
-              sendWeekendSubmittedEmail({
-                to: recipient.to,
-                fullName: recipient.fullName,
-                requesterName: profile.full_name,
-                unitName: 'Administration',
-                roomLabel: roomLabel || 'Administration',
-                requestedFor: weekend_date ?? '',
-                // No one-click decision token for the CSO path — that flow
-                // is Dean-only (docs/API.md). Falls back to the CSO's queue.
-                link: `${siteUrl}/cso/weekend-requests`,
-              })
-            )
-          );
-          return;
-        }
-
-        const recipient = await getDeanRecipientForKey(adminClient, key_id);
-        if (!recipient) return;
-
-        // One-click email Approve/Decline — only for this (registered,
-        // Dean-routed) case. Mint and persist the token before sending so
-        // the email link is never dead on arrival.
-        const decisionToken = crypto.randomUUID();
-        const { error: tokenError } = await adminClient
-          .from('requests')
-          .update({ decision_token: decisionToken })
-          .eq('id', result.request_id);
-        if (tokenError) {
-          logger.error('submit: failed to persist decision_token', {
-            requestId: result.request_id,
-            err: tokenError.message,
-          });
-        }
-
-        await sendWeekendSubmittedEmail({
-          to: recipient.to,
-          fullName: recipient.fullName,
-          requesterName: profile.full_name,
-          unitName: recipient.unitName,
-          roomLabel: roomLabel || recipient.unitName,
-          requestedFor: weekend_date ?? '',
-          link: `${siteUrl}/dean/weekend-requests`,
-          decisionLink: tokenError
-            ? undefined
-            : `${siteUrl}/dean-decision/${decisionToken}`,
-        });
-      } catch (e: unknown) {
-        logger.error('submit: weekend-submitted email failed', {
-          requestId: result.request_id,
-          err: e instanceof Error ? e.message : String(e),
-        });
-      }
+    // Emails the Dean (or the CSOs, for Administration keys). The one-click
+    // decision token was created with the request by create_request.
+    notifyAfterResponse({
+      type: 'WEEKEND_SUBMITTED',
+      requestId: result.request_id,
     });
 
     return NextResponse.json(
@@ -348,32 +263,8 @@ export const POST = async (request: NextRequest) => {
     );
   }
 
-  // A failed send must not fail an otherwise-successful request — the code
-  // is already usable in-app regardless of email delivery. Runs via after()
-  // rather than a bare fire-and-forget promise; see the comment above the
-  // weekend-submitted email send further up in this file.
-  if (result.code && result.code_expires_at) {
-    after(() =>
-      getRequestRecipient(adminClient, result.request_id)
-        .then((recipient) => {
-          if (!recipient) return;
-          return sendCollectionCodeEmail({
-            to: recipient.to,
-            fullName: recipient.fullName,
-            code: result.code!,
-            codeExpiresAt: result.code_expires_at!,
-            keyCode: recipient.keyCode,
-            roomName: recipient.roomName,
-          });
-        })
-        .catch((e: unknown) => {
-          logger.error('submit: collection-code email failed', {
-            requestId: result.request_id,
-            err: e instanceof Error ? e.message : String(e),
-          });
-        })
-    );
-  }
+  // A failed send never fails the request: the code is already shown in-app.
+  notifyAfterResponse({ type: 'CODE_ISSUED', requestId: result.request_id });
 
   return NextResponse.json(
     ok({
