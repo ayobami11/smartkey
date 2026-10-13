@@ -1,10 +1,11 @@
 // Shared fake Supabase client for the route contract tests (keys, shifts,
-// reports, incidents). Adapted from the requests/* harness in batch 1, with
-// insert/update/is added for the routes here that write tables directly.
+// reports, incidents, admin, ai). Adapted from the requests/* harness in
+// batch 1, with insert/update/is added for the routes that write tables
+// directly, and neq + auth.admin (generateLink, updateUserById) for admin/*.
 //
 // The fake records every query a route builds and answers it from `fake`,
 // which each test configures. It is deliberately loose: any chain of
-// select/eq/in/is/gte/lte/lt/order/limit/insert/update is accepted, and the answer is chosen by
+// select/eq/neq/in/is/gte/lte/lt/order/limit/insert/update is accepted, and the answer is chosen by
 // table (or by a function of the recorded ops when one table is read twice).
 import { NextRequest } from 'next/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -17,7 +18,8 @@ export const REPORT_ID = '55555555-5555-4555-8555-555555555555';
 export type Op = [method: string, args: unknown[]];
 export type Result = {
   data?: unknown;
-  error?: { message: string } | null;
+  // `code` is the Postgres SQLSTATE PostgREST passes through (e.g. 23505).
+  error?: { message: string; code?: string } | null;
   count?: number | null;
 };
 type Answer = Result | ((ops: Op[]) => Result);
@@ -42,6 +44,21 @@ const freshState = () => ({
   rpc: {} as Record<string, Result>,
   queries: [] as QueryCall[],
   rpcCalls: [] as { name: string; args: unknown }[],
+  // What the service-role client's auth.admin methods answer, and a record
+  // of every call made to them.
+  authAdmin: {
+    generateLink: {
+      data: {
+        properties: { hashed_token: 'hashed', verification_type: 'invite' },
+      },
+      error: null,
+    } as { data: unknown; error: { message: string } | null },
+    updateUserById: { data: {}, error: null } as {
+      data: unknown;
+      error: { message: string } | null;
+    },
+  },
+  authAdminCalls: [] as { method: string; args: unknown[] }[],
 });
 
 export const fake = freshState();
@@ -70,6 +87,7 @@ const builder = (client: QueryCall['client'], table: string) => {
   for (const method of [
     'select',
     'eq',
+    'neq',
     'in',
     'is',
     'gte',
@@ -103,6 +121,16 @@ const builder = (client: QueryCall['client'], table: string) => {
 export const makeClient = (client: QueryCall['client']) => ({
   auth: {
     getUser: vi.fn(async () => ({ data: { user: fake.user } })),
+    admin: {
+      generateLink: async (...args: unknown[]) => {
+        fake.authAdminCalls.push({ method: 'generateLink', args });
+        return fake.authAdmin.generateLink;
+      },
+      updateUserById: async (...args: unknown[]) => {
+        fake.authAdminCalls.push({ method: 'updateUserById', args });
+        return fake.authAdmin.updateUserById;
+      },
+    },
   },
   from: (table: string) => builder(client, table),
   rpc: async (name: string, args: unknown) => {
@@ -131,7 +159,9 @@ export const call = async (
   const res = await (handler as Handler)(request, {
     params: Promise.resolve(params),
   });
-  return { status: res.status, body: await res.json() };
+  // A 204 has no body; everything else is a JSON envelope.
+  const text = await res.text();
+  return { status: res.status, body: text ? JSON.parse(text) : null };
 };
 
 export const post = (path: string, body: unknown) =>
@@ -143,6 +173,18 @@ export const post = (path: string, body: unknown) =>
 
 export const get = (path: string) =>
   new NextRequest(`http://localhost${path}`, { method: 'GET' });
+
+/** A JSON request with any method (PATCH, DELETE, …). */
+export const send = (method: string, path: string, body?: unknown) =>
+  new NextRequest(`http://localhost${path}`, {
+    method,
+    ...(body === undefined
+      ? {}
+      : {
+          body: typeof body === 'string' ? body : JSON.stringify(body),
+          headers: { 'content-type': 'application/json' },
+        }),
+  });
 
 /** The `{ data: null, error, status }` envelope an error response carries. */
 export const failure = (status: number, error: string) => ({
