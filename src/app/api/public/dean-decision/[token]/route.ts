@@ -1,16 +1,28 @@
-import { NextRequest, NextResponse } from 'next/server';
 import * as z from 'zod';
 
-import { logger } from '@/lib/logger';
+import { respond } from '@/lib/http/respond';
+import { route } from '@/lib/http/route';
 import { decideWeekend, rejectionToHttp } from '@/lib/requests/decide-weekend';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { err, ok } from '@/types/api';
 
+// The emailed one-click Dean decision. Unauthenticated: the unguessable
+// decision_token is the authorisation, and every read and write goes through
+// the service-role client created explicitly below.
+//
+// GET must never mutate. Mail scanners (Outlook Safe Links, Gmail) prefetch
+// every link in an email, so a GET that decided anything would let the
+// scanner approve or decline the request before a human opened it. Only the
+// explicit button click (POST) decides.
+
+type AdminClient = ReturnType<typeof createAdminClient>;
 
 const SIGNED_URL_TTL_SECONDS = 300;
 
+const paramsSchema = z.object({ token: z.uuid() });
+const NOT_FOUND = { status: 404, message: 'Request not found' };
+
 const signLetterUrl = async (
-  admin: ReturnType<typeof createAdminClient>,
+  admin: AdminClient,
   fileUrl: string | null
 ): Promise<string | null> => {
   if (!fileUrl) return null;
@@ -24,10 +36,7 @@ const signLetterUrl = async (
   return signed?.signedUrl ?? null;
 };
 
-const findRequestByToken = async (
-  admin: ReturnType<typeof createAdminClient>,
-  token: string
-) =>
+const findRequestByToken = async (admin: AdminClient, token: string) =>
   admin
     .from('requests')
     .select(
@@ -44,7 +53,7 @@ const findRequestByToken = async (
 // carry it indirectly via key_id -> keys.unit_id; guest requests have no
 // key yet, so they carry it directly as requested_unit_id.
 const resolveUnitId = async (
-  admin: ReturnType<typeof createAdminClient>,
+  admin: AdminClient,
   reqRow: {
     guest_id: string | null;
     key_id: string | null;
@@ -61,53 +70,50 @@ const resolveUnitId = async (
   return key?.unit_id ?? null;
 };
 
-export const GET = async (
-  _request: NextRequest,
-  { params }: { params: Promise<{ token: string }> }
-) => {
-  const { token } = await params;
-  if (!z.uuid().safeParse(token).success) {
-    return NextResponse.json(err('Request not found', 404), { status: 404 });
-  }
+export const GET = route({
+  name: 'public/dean-decision',
+  auth: 'public',
+  params: paramsSchema,
+  paramsError: NOT_FOUND,
+  handler: async ({ params }) => {
+    const admin = createAdminClient();
+    const { data: reqRow, error } = await findRequestByToken(
+      admin,
+      params.token
+    );
 
-  const admin = createAdminClient();
-  const { data: reqRow, error } = await findRequestByToken(admin, token);
+    if (error) {
+      return respond.internal('dean-decision: lookup failed', {
+        err: error.message,
+      });
+    }
+    if (!reqRow) return respond.error(NOT_FOUND);
 
-  if (error) {
-    const ref = crypto.randomUUID();
-    logger.error('dean-decision: lookup failed', { ref, err: error.message });
-    return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
-      status: 500,
-    });
-  }
-  if (!reqRow) {
-    return NextResponse.json(err('Request not found', 404), { status: 404 });
-  }
+    const isGuest = !!reqRow.guest_id;
+    const decidable = reqRow.status === 'PENDING_HOD';
 
-  const isGuest = !!reqRow.guest_id;
-  const decidable = reqRow.status === 'PENDING_HOD';
+    const [letterSignedUrl, stampSignedUrl, availableKeys] = await Promise.all(
+      [
+        signLetterUrl(admin, reqRow.letter_url),
+        signLetterUrl(admin, reqRow.stamp_url),
+        (async () => {
+          if (!isGuest || !decidable) return [];
+          // Only reached for guest requests — resolveUnitId gives the
+          // requested unit, from which the Dean must assign a key.
+          const unitId = await resolveUnitId(admin, reqRow);
+          if (!unitId) return [];
+          const { data } = await admin
+            .from('keys')
+            .select('id, code, room_name')
+            .eq('unit_id', unitId)
+            .neq('status', 'RETIRED')
+            .order('code', { ascending: true });
+          return data ?? [];
+        })(),
+      ]
+    );
 
-  const [letterSignedUrl, stampSignedUrl, availableKeys] = await Promise.all([
-    signLetterUrl(admin, reqRow.letter_url),
-    signLetterUrl(admin, reqRow.stamp_url),
-    (async () => {
-      if (!isGuest || !decidable) return [];
-      // Only reached for guest requests — resolveUnitId gives the
-      // requested unit, from which the Dean must assign a key.
-      const unitId = await resolveUnitId(admin, reqRow);
-      if (!unitId) return [];
-      const { data } = await admin
-        .from('keys')
-        .select('id, code, room_name')
-        .eq('unit_id', unitId)
-        .neq('status', 'RETIRED')
-        .order('code', { ascending: true });
-      return data ?? [];
-    })(),
-  ]);
-
-  return NextResponse.json(
-    ok({
+    return respond.ok({
       request_id: reqRow.id,
       status: reqRow.status,
       decidable,
@@ -125,10 +131,9 @@ export const GET = async (
       available_keys: availableKeys,
       letter_url: letterSignedUrl,
       stamp_url: stampSignedUrl,
-    }),
-    { status: 200 }
-  );
-};
+    });
+  },
+});
 
 const decisionBodySchema = z.object({
   decision: z.enum(['APPROVED', 'DECLINED']),
@@ -138,91 +143,71 @@ const decisionBodySchema = z.object({
   key_id: z.uuid().optional(),
 });
 
-export const POST = async (
-  request: NextRequest,
-  { params }: { params: Promise<{ token: string }> }
-) => {
-  const { token } = await params;
-  if (!z.uuid().safeParse(token).success) {
-    return NextResponse.json(err('Request not found', 404), { status: 404 });
-  }
-
-  const body = await request.json().catch(() => null);
-  const parsed = decisionBodySchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json(err('Invalid request body', 422), {
-      status: 422,
-    });
-  }
-
-  const admin = createAdminClient();
-  const { data: reqRow, error } = await findRequestByToken(admin, token);
-
-  if (error) {
-    const ref = crypto.randomUUID();
-    logger.error('dean-decision: lookup failed', { ref, err: error.message });
-    return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
-      status: 500,
-    });
-  }
-  if (!reqRow) {
-    return NextResponse.json(err('Request not found', 404), { status: 404 });
-  }
-  if (reqRow.status !== 'PENDING_HOD') {
-    return NextResponse.json(
-      err('This request has already been decided.', 409),
-      { status: 409 }
+export const POST = route({
+  name: 'public/dean-decision',
+  auth: 'public',
+  params: paramsSchema,
+  paramsError: NOT_FOUND,
+  body: decisionBodySchema,
+  handler: async ({ params, body }) => {
+    const admin = createAdminClient();
+    const { data: reqRow, error } = await findRequestByToken(
+      admin,
+      params.token
     );
-  }
 
-  const unitId = await resolveUnitId(admin, reqRow);
-  if (!unitId) {
-    return NextResponse.json(err('Request not found', 404), { status: 404 });
-  }
+    if (error) {
+      return respond.internal('dean-decision: lookup failed', {
+        err: error.message,
+      });
+    }
+    if (!reqRow) return respond.error(NOT_FOUND);
+    if (reqRow.status !== 'PENDING_HOD') {
+      return respond.fail(409, 'This request has already been decided.');
+    }
 
-  // Re-resolve the *current* Dean of the unit at decision time, rather than
-  // trusting an identity captured when the email was sent — handles a Dean
-  // handover between submission and decision correctly.
-  const { data: unit } = await admin
-    .from('units')
-    .select('authoriser, hod_id')
-    .eq('id', unitId)
-    .single();
-  if (!unit || unit.authoriser !== 'DEAN' || !unit.hod_id) {
-    return NextResponse.json(
-      err('This request can no longer be decided by email.', 403),
-      { status: 403 }
-    );
-  }
+    const unitId = await resolveUnitId(admin, reqRow);
+    if (!unitId) return respond.error(NOT_FOUND);
 
-  // The letter/stamp to verify are read from the request row by
-  // decideWeekend itself, so nothing is signed or passed here.
-  const result = await decideWeekend({
-    requestId: reqRow.id,
-    actorId: unit.hod_id,
-    decision: parsed.data.decision,
-    note: parsed.data.note,
-    keyId: parsed.data.key_id,
-  });
+    // Re-resolve the *current* Dean of the unit at decision time, rather than
+    // trusting an identity captured when the email was sent — handles a Dean
+    // handover between submission and decision correctly.
+    const { data: unit } = await admin
+      .from('units')
+      .select('authoriser, hod_id')
+      .eq('id', unitId)
+      .single();
+    if (!unit || unit.authoriser !== 'DEAN' || !unit.hod_id) {
+      return respond.fail(
+        403,
+        'This request can no longer be decided by email.'
+      );
+    }
 
-  if (result.outcome === 'REJECTED') {
-    const { status, message } = rejectionToHttp(result.reason, result.ref);
-    return NextResponse.json(err(message, status), { status });
-  }
+    // The letter/stamp to verify are read from the request row by
+    // decideWeekend itself, so nothing is signed or passed here.
+    const result = await decideWeekend({
+      requestId: reqRow.id,
+      actorId: unit.hod_id,
+      decision: body.decision,
+      note: body.note,
+      keyId: body.key_id,
+    });
 
-  if (result.outcome === 'HELD') {
-    return NextResponse.json(
-      ok({
+    if (result.outcome === 'REJECTED') {
+      return respond.error(rejectionToHttp(result.reason, result.ref));
+    }
+
+    if (result.outcome === 'HELD') {
+      return respond.ok({
         request_id: result.requestId,
         status: 'HELD_SIGNATURE_MISMATCH',
         mismatches: result.mismatches,
         message:
           'This approval has been held for review — the submitted signature or stamp did not match. The CSO has been notified.',
-      })
-    );
-  }
+      });
+    }
 
-  return NextResponse.json(
-    ok({ request_id: result.requestId, status: result.outcome })
-  );
-};
+    return respond.ok({ request_id: result.requestId, status: result.outcome });
+  },
+});

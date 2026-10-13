@@ -431,25 +431,31 @@ describe('POST /api/public/dean-decision/[token]', () => {
 
 // ---------------------------------------------------------------------------
 // Uncaught throws
+//
+// Behaviour change (route() migration): these used to reject, which Next
+// turned into a bare, unenveloped 500. route() now catches the throw and
+// answers an enveloped 500 with a ref, never the thrown text.
 // ---------------------------------------------------------------------------
 
 describe('uncaught throws', () => {
-  it('GET rejects when the admin client cannot be built', async () => {
+  it('GET: enveloped 500 when the admin client cannot be built', async () => {
     fake.adminThrows = new Error('supabaseKey is required');
-    await expect(
-      call(GET, get(`/api/public/dean-decision/${TOKEN}`), { token: TOKEN })
-    ).rejects.toThrow('supabaseKey is required');
+    const res = await call(GET, get(`/api/public/dean-decision/${TOKEN}`), {
+      token: TOKEN,
+    });
+    expectRef(res);
+    expect(res.body.error).not.toContain('supabaseKey');
   });
 
-  it('POST rejects when decideWeekend throws', async () => {
+  it('POST: enveloped 500 when decideWeekend throws', async () => {
     fake.tables.requests = { data: REGISTERED_ROW, error: null };
     vi.mocked(decideWeekend).mockRejectedValue(new Error('storage down'));
-    await expect(
-      call(
-        POST,
-        post(`/api/public/dean-decision/${TOKEN}`, { decision: 'APPROVED' }),
-        { token: TOKEN }
-      )
-    ).rejects.toThrow('storage down');
+    const res = await call(
+      POST,
+      post(`/api/public/dean-decision/${TOKEN}`, { decision: 'APPROVED' }),
+      { token: TOKEN }
+    );
+    expectRef(res);
+    expect(res.body.error).not.toContain('storage');
   });
 });

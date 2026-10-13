@@ -38,7 +38,7 @@ Routes build the envelope only through `respond.ok` / `fail` / `error` / `intern
 
 ## Auth conventions
 
-Route handlers are wrapped in `route()` from `src/lib/http/route.ts`. Routes are being moved onto it in batches; every route under `/api/requests/` is on it (batch 1, 2026-10-13). `route()` runs these checks in a fixed order before the handler:
+Route handlers are wrapped in `route()` from `src/lib/http/route.ts`. Routes are being moved onto it in batches; every route under `/api/requests/` (batch 1) and `/api/public/` (batch 2) is on it (2026-10-13). `route()` runs these checks in a fixed order before the handler:
 
 1. **Auth**, chosen per route with `auth`:
    - `'user'` validates the Supabase session with `getUser()`, never `getSession()`. No session → `401 Unauthorized`.
@@ -558,6 +558,8 @@ A Dean may dismiss requests routed to their own faculty; the CSO may dismiss any
 
 These routes let an external person with no SmartKey account submit a weekend key request and reach their session-less status/code page. They require **no authentication** and run server-side via the service-role admin client (`createAdminClient`); the guest RPCs are revoked from `anon`/`public`, so nothing new is exposed to the browser. The guest is identified throughout by the unguessable `access_token` returned at submit.
 
+All five are wrapped in `route({ auth: 'public' })`, which gives them no Supabase client: each handler creates the admin client itself. A malformed token is rejected by the `params` schema before any query runs, with the route's own `404` copy. RPC errors map through `rpcFail`, so an unrecognised failure is a `500` with a ref and the RPC's text never reaches the guest. Until 2026-10-13 an uncaught throw (for example a misconfigured service-role key) escaped as Next's bare, unenveloped `500`; it is now `500 "Internal error. Ref: <ref>"` like every other failure.
+
 #### POST /api/public/weekend-request
 
 **File**: `src/app/api/public/weekend-request/route.ts`
@@ -678,6 +680,8 @@ Returns a short-lived (5-minute) signed URL for a request's uploaded authorisati
 Lets a Dean act on a Dean-authorised weekend request straight from the "New weekend request" email — no login. Covers both **registered-requester** and **guest (external)** requests. Reuses the same Weekend decision module (`decideWeekend`) as `POST /api/requests/hod-decision` (`src/lib/requests/decide-weekend.ts`), so verification, mismatch-holding, guest key-assignment, the CSO mismatch email, and the requester notification all behave identically to the dashboard flow. Scoped to Dean-authorised units only — Administration/CSO-routed requests (no submission email exists for those today) never receive a `decision_token` and so 404 here.
 
 The email itself distinguishes the two: a guest submission renders a small cyan "External" badge next to the requester's name (`weekendSubmittedEmail`'s `isGuest` param, `src/lib/email/templates/request.ts`), matching the `GuestBadge` treatment already used on the CSO/Dean dashboards and on the confirmation page below.
+
+Both methods are wrapped in `route({ auth: 'public' })` and create the admin client in the handler; the token is validated by a `params` schema (`404 Request not found` when malformed), checked before the `POST` body. Since 2026-10-13 an uncaught throw, including one from `decideWeekend`, is an enveloped `500` with a ref instead of Next's bare `500`.
 
 Security note: `GET` is strictly read-only. It must never mutate state — mail scanners (Outlook Safe Links, Gmail, etc.) prefetch every link in an email, so if a page load could decide the request, the scanner itself would silently approve or decline it before a human opened the email. The actual decision only happens on `POST`, triggered by an explicit button click on `/dean-decision/[token]`.
 

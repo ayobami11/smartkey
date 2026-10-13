@@ -1,68 +1,34 @@
-import { NextRequest, NextResponse } from 'next/server';
 import * as z from 'zod';
 
-import { logger } from '@/lib/logger';
+import { respond } from '@/lib/http/respond';
+import { route } from '@/lib/http/route';
+import { rpcFail } from '@/lib/http/rpc-errors';
+import { callRpc } from '@/lib/rpc/call-rpc';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { err, ok } from '@/types/api';
 
 // Unauthenticated. Fired automatically by the status page when a collection
 // code's countdown reaches 0. Flips a genuinely-expired CODE_ISSUED guest
-// request to EXPIRED. Idempotent — returns the current status with no error if
-// the request already moved on.
-
-const mapRpcError = (msg: string): { status: number; message: string } => {
-  if (msg.includes('NOT_FOUND'))
-    return { status: 404, message: 'Request not found' };
-  if (msg.includes('NOT_EXPIRED'))
-    return { status: 409, message: 'The code has not expired yet.' };
-  return { status: 500, message: 'Internal error' };
-};
-
-export const POST = async (
-  _request: NextRequest,
-  { params }: { params: Promise<{ token: string }> }
-) => {
-  const { token } = await params;
-
-  if (!z.uuid().safeParse(token).success) {
-    return NextResponse.json(err('Request not found', 404), { status: 404 });
-  }
-
-  const adminClient = createAdminClient();
-
-  const { data: rpcData, error: rpcError } = await adminClient.rpc(
-    'expire_guest_request',
-    { p_access_token: token }
-  );
-
-  if (rpcError) {
-    const mapped = mapRpcError(rpcError.message);
-    if (mapped.status === 500) {
-      const ref = crypto.randomUUID();
-      logger.error('expire_guest_request RPC failed', {
-        ref,
-        err: rpcError.message,
-      });
-      return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
-        status: 500,
+// request to EXPIRED (or back to APPROVED on the requested day). Idempotent —
+// returns the current status with no error if the request already moved on.
+export const POST = route({
+  name: 'public/weekend-request/expire',
+  auth: 'public',
+  params: z.object({ token: z.uuid() }),
+  paramsError: { status: 404, message: 'Request not found' },
+  handler: async ({ params }) => {
+    const result = await callRpc(createAdminClient(), 'expire_guest_request', {
+      p_access_token: params.token,
+    });
+    if (!result.ok) {
+      return rpcFail(result.error, {
+        NOT_FOUND: 'Request not found',
+        NOT_EXPIRED: 'The code has not expired yet.',
       });
     }
-    return NextResponse.json(err(mapped.message, mapped.status), {
-      status: mapped.status,
-    });
-  }
 
-  const result = Array.isArray(rpcData) ? rpcData[0] : rpcData;
-  if (!result) {
-    const ref = crypto.randomUUID();
-    logger.error('expire_guest_request returned empty result', { ref });
-    return NextResponse.json(err(`Internal error. Ref: ${ref}`, 500), {
-      status: 500,
+    return respond.ok({
+      request_id: result.data.request_id,
+      status: result.data.status,
     });
-  }
-
-  return NextResponse.json(
-    ok({ request_id: result.request_id, status: result.status }),
-    { status: 200 }
-  );
-};
+  },
+});

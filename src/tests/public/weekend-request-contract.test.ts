@@ -499,23 +499,52 @@ describe.each(TOKEN_ROUTES)('POST /api/public/weekend-request/[token]/$name', (r
 // Uncaught throws (e.g. a misconfigured service-role client)
 // ---------------------------------------------------------------------------
 
+// Behaviour change (route() migration): these used to reject, which Next
+// turned into a bare, unenveloped 500. route() now catches the throw and
+// answers an enveloped 500 with a ref, never the thrown text.
 describe('uncaught throws', () => {
   beforeEach(() => {
     fake.adminThrows = new Error('supabaseKey is required');
   });
 
+  const validSubmitForm = () => {
+    const form = new FormData();
+    form.set('full_name', 'Jane Doe');
+    form.set('email', 'jane@example.com');
+    form.set('id_document_type', 'National ID');
+    form.set('id_document_number', 'A1234567');
+    form.set('requested_room', 'Senate Hall A');
+    form.set('department_id', UNIT_ID);
+    form.set('weekend_date', '2026-10-17');
+    form.set('return_deadline', '2026-10-17T17:00:00+01:00');
+    form.set(
+      'letter',
+      new File([new Uint8Array(16)], 'l.pdf', { type: 'application/pdf' })
+    );
+    return form;
+  };
+
   it.each([
-    ['status', status, get(`/api/public/weekend-request/${TOKEN}`)],
-    ['code', code, post(`/api/public/weekend-request/${TOKEN}/code`)],
+    ['status', status, () => get(`/api/public/weekend-request/${TOKEN}`)],
+    ['code', code, () => post(`/api/public/weekend-request/${TOKEN}/code`)],
     [
       'return-code',
       returnCode,
-      post(`/api/public/weekend-request/${TOKEN}/return-code`),
+      () => post(`/api/public/weekend-request/${TOKEN}/return-code`),
     ],
-    ['expire', expire, post(`/api/public/weekend-request/${TOKEN}/expire`)],
-  ])('%s rejects (Next turns it into a bare 500)', async (_n, handler, req) => {
-    await expect(call(handler, req, { token: TOKEN })).rejects.toThrow(
-      'supabaseKey is required'
-    );
+    [
+      'expire',
+      expire,
+      () => post(`/api/public/weekend-request/${TOKEN}/expire`),
+    ],
+    [
+      'submit',
+      submit,
+      () => postForm('/api/public/weekend-request', validSubmitForm()),
+    ],
+  ])('%s answers an enveloped 500 with a ref', async (_n, handler, req) => {
+    const res = await call(handler, req(), { token: TOKEN });
+    expectRef(res);
+    expect(res.body.error).not.toContain('supabaseKey');
   });
 });
