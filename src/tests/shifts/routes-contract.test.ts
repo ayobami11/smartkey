@@ -63,13 +63,14 @@ describe('GET /api/shifts/current', () => {
     );
   });
 
-  // BUG, fixed by the route() migration: a throw escapes the handler, so
-  // Next answers with its own unenveloped 500.
-  it('a throw escapes the handler', async () => {
+  // CHANGED by the route() migration: a throw used to escape the handler, so
+  // Next answered with its own unenveloped 500. It is now an enveloped,
+  // ref'd 500.
+  it('a throw becomes an enveloped 500 with a ref', async () => {
     fake.tables.shifts = () => {
       throw new Error('client exploded');
     };
-    await expect(call(current, get(path))).rejects.toThrow('client exploded');
+    expectRef(await call(current, get(path)));
   });
 
   it('returns null when no shift is open', async () => {
@@ -156,14 +157,9 @@ describe('POST /api/shifts/start', () => {
 
     const res = await call(start, post(path, {}));
 
-    // BUG, fixed by the route() migration: the envelope status says 200
-    // while the HTTP status is 201.
-    expect(res.status).toBe(201);
-    expect(res.body).toEqual({
-      data: { shift: created },
-      error: null,
-      status: 200,
-    });
+    // CHANGED by the route() migration: the envelope status said 200 while
+    // the HTTP status was 201.
+    expect(res).toEqual(success({ shift: created }, 201));
 
     const insert = fake.queries.find(
       (q) => q.table === 'shifts' && hasOp(q.ops, 'insert')

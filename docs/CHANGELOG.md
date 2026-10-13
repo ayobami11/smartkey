@@ -6,6 +6,20 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-10-13 — `keys`, `shifts`, `reports` and `incidents` routes move onto `route()`
+
+- **Why**: the thirteen handlers under `src/app/api/keys/`, `shifts/`, `reports/` and `incidents` each hand-rolled auth, the role check, body parsing and the ref'd 500, and four carried a private `mapRpcError` matching RPC errors by substring. Four `201` responses carried an envelope `status` of `200`, a throw escaped as Next's bare 500, and a non-UUID report id reached the RPC and came back as a `500`. This is batch 3 of the `src/lib/http/` migration (batches 1 and 2, `requests/*` and `public/*`, are in open PRs #65 and #66).
+- **Contract tests first**: `src/tests/keys/routes-contract.test.ts`, `src/tests/shifts/routes-contract.test.ts` and `src/tests/reports/routes-contract.test.ts` (reports and incidents), on a shared fake Supabase client in `src/tests/http/contract-harness.ts` (adapted from the batch-1 harness, plus `insert`/`update`/`is`). They pin every route's auth outcomes, `422` body, each RPC error kind it maps, query failures and success shapes, and were committed passing against the unchanged routes. The only assertions changed afterwards are the behaviour changes below, each marked `CHANGED` in the tests.
+- **Routes migrated** to `route()` + `callRpc` + `rpcFail` (or `respond.*` where there is no RPC): `keys/return`, `keys/mark-lost`, `keys/out`, `keys/history`, `keys/availability`, `shifts/start`, `shifts/current`, `shifts/handover`, `reports` (GET), `reports/generate`, `reports/[id]/comments`, `incidents` (GET and POST). Every status and message the UI branches on is unchanged, including the routes' own copy (`Not authenticated`, `Transaction not found`, `Key has already been returned`, `Handover already completed for this shift`, `Shift not found`, `Report not found`, `Comment text cannot be empty`) and the read routes' plain `Failed to fetch …` 500s.
+- **Behaviour changes** (bug fixes only):
+  - `shifts/start`, `incidents` POST, `reports/generate`, `reports/[id]/comments`: envelope `status: 200` on an HTTP `201` → `status: 201`.
+  - `reports/[id]/comments` with a non-UUID `[id]`: `500` with a ref (the RPC's uuid cast failed) → `404 "Report not found"`, without calling the RPC.
+  - Any uncaught throw in these routes: Next's bare 500 → enveloped `500 "Internal error. Ref: <ref>"`.
+  - An RPC kind a route did not map now gets the catalogue default instead of a ref'd `500`. None of these RPCs raises such a kind today.
+  - Every route here already answered `401` for a signed-in user with no profile, so that fix changes nothing in this batch.
+- **Migrated faithfully, not fixed** (known follow-ups, now commented in the code and pinned by tests): `keys/mark-lost` retires the key and inserts the incident as two separate writes, not one transaction, and writes no audit entry; `reports/generate` writes the `SHIFT_REPORT_INITIATED` audit entry for an adopted placeholder before the report is filled, without checking its result.
+- **Docs**: `docs/API.md` auth conventions (batch status), `keys/mark-lost` (no audit entry, non-atomic, error list), `reports/generate` and `reports/[id]/comments` (`201`, error lists).
+
 ### 2026-10-13 — The emailed Dean link stops showing details after the weekend, and past weekends are refused
 
 - **Why**: two gaps in the routes that need no login, found while moving them onto `route()`.

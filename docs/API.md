@@ -38,7 +38,7 @@ Routes build the envelope only through `respond.ok` / `fail` / `error` / `intern
 
 ## Auth conventions
 
-Route handlers are wrapped in `route()` from `src/lib/http/route.ts`. Routes are being moved onto it in batches; every route under `/api/requests/` (batch 1) and `/api/public/` (batch 2) is on it (2026-10-13). `route()` runs these checks in a fixed order before the handler:
+Route handlers are wrapped in `route()` from `src/lib/http/route.ts`. Routes are being moved onto it in batches; every route under `/api/requests/` (batch 1), `/api/public/` (batch 2), and `keys/`, `shifts/`, `reports/` and `incidents` (batch 3) is on it (2026-10-13). `route()` runs these checks in a fixed order before the handler:
 
 1. **Auth**, chosen per route with `auth`:
    - `'user'` validates the Supabase session with `getUser()`, never `getSession()`. No session → `401 Unauthorized`.
@@ -887,9 +887,11 @@ Dean sees only their faculty's keys (RLS enforced). CSO sees all.
 | `key_id` | `string` (uuid) | yes      |
 | `note`   | `string`        | yes      |
 
-Sets key `status = 'RETIRED'`, creates an incident log entry of type `MISSING_KEY`, severity `HIGH`. Writes audit entry.
+Sets key `status = 'RETIRED'`, then creates an incident log entry of type `MISSING_KEY`, severity `HIGH`. No `audit_log` entry is written. The two writes are separate statements, not one transaction, so an incident-insert failure leaves the key retired with no incident; moving them into an RPC is a known follow-up.
 
 **Response `data`**: `{ "key_id": "<uuid>", "incident_id": "<uuid>" }`
+
+**Errors**: `401` unauthenticated or no profile · `403` not CSO · `404` key not found · `409` key already retired · `422` validation · `500` either write failed, with a correlation reference
 
 ---
 
@@ -1367,9 +1369,9 @@ The generated report body, event timeline, immutable comments, and the "Generate
 
 Generation and persistence are shared with `POST /api/cron/shift-report` through `fillShiftReport` in `src/lib/ai/reports/generate.ts`.
 
-**Response `data`**: `{ "report_id": "<uuid>", "generated_at": "<iso>" }`
+**Response `data`**: `{ "report_id": "<uuid>", "generated_at": "<iso>" }`. Returns `201`.
 
-**Errors**: `409` a **generated** report already exists for this shift (a pending placeholder is adopted instead) · `500` generation or persistence failure, with a correlation reference
+**Errors**: `404` shift not found · `409` a **generated** report already exists for this shift (a pending placeholder is adopted instead) · `500` generation or persistence failure, with a correlation reference
 
 ---
 
@@ -1385,7 +1387,9 @@ Generation and persistence are shared with `POST /api/cron/shift-report` through
 
 Comment is immutable after insert.
 
-**Response `data`**: `{ "comment_id": "<uuid>", "created_at": "<iso>" }`
+**Response `data`**: `{ "comment_id": "<uuid>", "created_at": "<iso>" }`. Returns `201`.
+
+**Errors**: `401` unauthenticated or no profile · `403` not CSO · `404` report not found, including an `[id]` that is not a UUID (it used to reach the RPC and fail as a `500`) · `422` empty `text` · `500` with a correlation reference
 
 ---
 

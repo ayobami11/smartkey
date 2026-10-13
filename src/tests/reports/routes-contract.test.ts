@@ -155,16 +155,10 @@ describe('POST /api/reports/generate', () => {
     expectRef(await call(generate, post(path, body)));
   });
 
-  // BUG, fixed by the route() migration: the envelope status says 200
-  // while the HTTP status is 201.
-  const created = (reportId: string) => ({
-    status: 201,
-    body: {
-      data: { report_id: reportId, generated_at: GENERATED_AT },
-      error: null,
-      status: 200,
-    },
-  });
+  // CHANGED by the route() migration: the envelope status said 200 while
+  // the HTTP status was 201.
+  const created = (reportId: string) =>
+    success({ report_id: reportId, generated_at: GENERATED_AT }, 201);
 
   it('creates the placeholder via the RPC and fills it', async () => {
     fake.rpc.generate_shift_report = {
@@ -259,14 +253,13 @@ describe('POST /api/reports/[id]/comments', () => {
     expectRef(await call(comment, post(path, body), params));
   });
 
-  // BUG, fixed by the route() migration: a non-UUID id reaches the RPC, whose
-  // uuid cast fails, so the caller sees a 500 for what is a missing report.
-  it('a non-uuid report id reaches the RPC and 500s', async () => {
-    fake.rpc.add_report_comment = rpcError(
-      'invalid input syntax for type uuid: "nope"'
+  // CHANGED by the route() migration: a non-UUID id used to reach the RPC,
+  // whose uuid cast failed, so the caller saw a 500 for a missing report.
+  it('404 for a non-uuid report id, without calling the RPC', async () => {
+    expect(await call(comment, post(path, body), { id: 'nope' })).toEqual(
+      failure(404, 'Report not found')
     );
-    expectRef(await call(comment, post(path, body), { id: 'nope' }));
-    expect(fake.rpcCalls).toHaveLength(1);
+    expect(fake.rpcCalls).toHaveLength(0);
   });
 
   it('500 with a ref when the RPC returns no row', async () => {
@@ -280,16 +273,11 @@ describe('POST /api/reports/[id]/comments', () => {
       error: null,
     };
     const res = await call(comment, post(path, body), params);
-    // BUG, fixed by the route() migration: the envelope status says 200
-    // while the HTTP status is 201.
-    expect(res).toEqual({
-      status: 201,
-      body: {
-        data: { comment_id: 'c-1', created_at: '2026-10-13T19:00:00Z' },
-        error: null,
-        status: 200,
-      },
-    });
+    // CHANGED by the route() migration: the envelope status said 200 while
+    // the HTTP status was 201.
+    expect(res).toEqual(
+      success({ comment_id: 'c-1', created_at: '2026-10-13T19:00:00Z' }, 201)
+    );
     expect(fake.rpcCalls).toEqual([
       {
         name: 'add_report_comment',
@@ -379,16 +367,11 @@ describe('POST /api/incidents', () => {
         : { data: null, error: null };
 
     const res = await call(logIncident, post(path, body));
-    // BUG, fixed by the route() migration: the envelope status says 200
-    // while the HTTP status is 201.
-    expect(res).toEqual({
-      status: 201,
-      body: {
-        data: { incident_id: 'inc-1', reference: 'INC-2026-0042' },
-        error: null,
-        status: 200,
-      },
-    });
+    // CHANGED by the route() migration: the envelope status said 200 while
+    // the HTTP status was 201.
+    expect(res).toEqual(
+      success({ incident_id: 'inc-1', reference: 'INC-2026-0042' }, 201)
+    );
 
     const insert = fake.queries.find((q) => q.table === 'incidents')!;
     expect(insert.client).toBe('admin');
