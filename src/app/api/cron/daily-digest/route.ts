@@ -51,12 +51,23 @@ export const POST = route({
     }
 
     const ids = (profiles ?? []).map((p) => p.id);
-    const { data: prefs } = ids.length
+    const { data: prefs, error: prefsError } = ids.length
       ? await admin
           .from('notification_preferences')
           .select('profile_id, digest_email')
           .in('profile_id', ids)
-      : { data: [] as { profile_id: string; digest_email: boolean }[] };
+      : {
+          data: [] as { profile_id: string; digest_email: boolean }[],
+          error: null,
+        };
+
+    // A failed read must not look like "nobody opted in": that answered
+    // 200 { sent: 0 } and pg_cron recorded a run that silently sent nothing.
+    if (prefsError) {
+      return respond.internal('daily-digest: preferences query failed', {
+        err: prefsError.message,
+      });
+    }
 
     const prefByProfile = new Map((prefs ?? []).map((p) => [p.profile_id, p]));
     // digest_email defaults false — absence of a row is NOT an opt-in.
@@ -67,7 +78,18 @@ export const POST = route({
     let sent = 0;
     let skipped = 0;
     let failed = 0;
-    let csoStats: DigestStats | null = null;
+    // The building-wide stats are the same for every CSO, so fetch them once
+    // and share the outcome. Caching the promise, not the value, caches a
+    // failure too: one failed call fails every CSO send instead of being
+    // retried once per CSO.
+    let csoStats: Promise<DigestStats> | null = null;
+    const loadCsoStats = async (): Promise<DigestStats> => {
+      const { data, error } = await admin.rpc('get_digest_stats', {
+        p_since: since,
+      });
+      if (error) throw error;
+      return (Array.isArray(data) ? data[0] : data) as DigestStats;
+    };
 
     for (const profile of optedIn) {
       if (!profile.institutional_email) {
@@ -77,20 +99,15 @@ export const POST = route({
 
       try {
         if (profile.role === 'CSO') {
-          if (!csoStats) {
-            const { data, error } = await admin.rpc('get_digest_stats', {
-              p_since: since,
-            });
-            if (error) throw error;
-            csoStats = (Array.isArray(data) ? data[0] : data) as DigestStats;
-          }
-          if (isCsoQuiet(csoStats)) {
+          csoStats ??= loadCsoStats();
+          const stats = await csoStats;
+          if (isCsoQuiet(stats)) {
             skipped += 1;
             continue;
           }
           await gmailTransport.send({
             to: profile.institutional_email,
-            ...csoDigestEmail({ fullName: profile.full_name, stats: csoStats }),
+            ...csoDigestEmail({ fullName: profile.full_name, stats }),
           });
           sent += 1;
         } else {

@@ -11,57 +11,59 @@ export const POST = route({
     const admin = createAdminClient();
     const now = new Date().toISOString();
 
-    // The filter below is the overdue rule — KEY_ISSUED with a passed
+    // Claim, then send (see cron/weekend-reminders). One UPDATE ... WHERE
+    // overdue_reminder_sent_at IS NULL RETURNING id stamps the rows before any
+    // email goes out, so an overlapping run cannot send the same reminder.
+    //
+    // The filter is the overdue rule — KEY_ISSUED with a passed
     // return_deadline — written as a PostgREST query. It must stay in step
     // with public.request_is_overdue() and isOverdue() in
     // src/lib/keys/occupancy.ts; the shared helpers are not used here only
     // because this is a server-side filter, not an in-memory check.
-    const { data: due, error } = await admin
+    const { data: claimed, error } = await admin
       .from('requests')
-      .select('id')
+      .update({ overdue_reminder_sent_at: now })
       .eq('status', 'KEY_ISSUED')
       .lt('return_deadline', now)
-      .is('overdue_reminder_sent_at', null);
+      .is('overdue_reminder_sent_at', null)
+      .select('id');
 
     if (error) {
-      return respond.internal('overdue-reminders: query failed', {
+      return respond.internal('overdue-reminders: claim failed', {
         err: error.message,
       });
     }
 
-    if (!due || due.length === 0) {
-      return respond.ok({ sent: 0, suppressed: 0, no_recipient: 0, failed: 0 });
-    }
-
-    // Stamped once handled, so the hourly run never re-sends: sent, turned off
-    // by the requester's overdue_email preference, or with nobody to send to
-    // (re-querying a requester with no address every hour helps no one).
-    // Only a failed send is left unstamped, to be retried next hour.
-    const processedIds: string[] = [];
     const counts = { sent: 0, suppressed: 0, no_recipient: 0, failed: 0 };
+    if (!claimed || claimed.length === 0) return respond.ok(counts);
 
-    for (const req of due) {
+    // Handled rows keep their stamp, so the hourly run never re-sends: sent,
+    // turned off by the requester's overdue_email preference, or with nobody
+    // to send to. Only a failed send is released, to be retried next hour.
+    const failedIds: string[] = [];
+    for (const req of claimed) {
       const outcome = await notify({
         type: 'OVERDUE_REMINDER',
         requestId: req.id,
       });
       counts[outcome] += 1;
-      if (outcome !== 'failed') processedIds.push(req.id);
+      if (outcome === 'failed') failedIds.push(req.id);
     }
 
-    if (processedIds.length > 0) {
-      const { error: stampError } = await admin
+    if (failedIds.length > 0) {
+      // Only our own claim: never clear a stamp some other writer set.
+      const { error: releaseError } = await admin
         .from('requests')
-        .update({ overdue_reminder_sent_at: new Date().toISOString() })
-        .in('id', processedIds);
+        .update({ overdue_reminder_sent_at: null })
+        .in('id', failedIds)
+        .eq('overdue_reminder_sent_at', now);
 
-      if (stampError) {
-        // The emails already went out; failing to stamp risks a duplicate
-        // send on the next run.
-        logger.error(
-          'overdue-reminders: failed to stamp overdue_reminder_sent_at',
-          { ids: processedIds, err: stampError.message }
-        );
+      if (releaseError) {
+        // The claim stands, so these reminders are not retried.
+        logger.error('overdue-reminders: failed to release claim', {
+          ids: failedIds,
+          err: releaseError.message,
+        });
       }
     }
 

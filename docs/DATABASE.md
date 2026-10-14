@@ -83,7 +83,7 @@ An external (non-registered) person who may collect a key for a single weekend. 
 - `code_expires_at` timestamptz
 - `return_code` text (6-digit return code; set by `request_return` while KEY_ISSUED, cleared on return)
 - `return_code_expires_at` timestamptz (15 minutes from generation)
-- `reminder_sent_at` timestamptz nullable (when the morning-of weekend collection-code reminder email was sent; stamped by `POST /api/cron/weekend-reminders` so a cron retry never double-emails)
+- `reminder_sent_at` timestamptz nullable (when the morning-of weekend collection-code reminder email was sent; claimed by `POST /api/cron/weekend-reminders` with a conditional UPDATE before the email is sent, so neither a retry nor an overlapping run double-emails; cleared again only when the send fails. Since 2026-10-14 it also stays set for a reminder suppressed or with no recipient, meaning "handled", not "delivered")
 - `return_deadline` timestamptz
 - `risk_tier` enum: 'LOW' | 'MEDIUM' | 'HIGH' (computed at request time)
 - `risk_factors` jsonb (array of {rule, description, weight})
@@ -133,7 +133,7 @@ An external (non-registered) person who may collect a key for a single weekend. 
 - `shift_id` UUID FK shifts unique
 - `markdown` text (Gemini output)
 - `timeline` jsonb (structured event timeline)
-- `metadata` jsonb
+- `metadata` jsonb — generation provenance and counts (`docs/AI.md`). While a row is still `PENDING_GENERATION`, `POST /api/cron/shift-report` records failed attempts here (`generation_attempts`, `last_generation_error`, `last_attempt_at`), orders by `generation_attempts` and skips a row after 5; a successful generation replaces the object
 - `generated_at` timestamptz
 - IMMUTABLE after insert (RLS denies UPDATE)
 
@@ -230,7 +230,7 @@ Self-service notification preferences, shared by the `/requester/settings`, `/de
 
 ### requests.overdue_reminder_sent_at
 
-Added alongside `notification_preferences`. Mirrors `requests.reminder_sent_at` (the weekend-code reminder's idempotency column) but scoped to the overdue-return reminder — that one is queried for `type='WEEKEND', status='APPROVED'` rows specifically, so a second column avoids ambiguity. Stamped for every handled `KEY_ISSUED`/overdue row — sent, suppressed by preference, or with no recipient address (since 2026-10-13; those used to be retried every hour forever) — it means "this cycle was handled," not "an email was delivered." Only a failed send stays unstamped.
+Added alongside `notification_preferences`. Mirrors `requests.reminder_sent_at` (the weekend-code reminder's idempotency column) but scoped to the overdue-return reminder — that one is queried for `type='WEEKEND', status='APPROVED'` rows specifically, so a second column avoids ambiguity. Claimed (set) before the email is sent, by a conditional UPDATE in `POST /api/cron/overdue-reminders` (since 2026-10-14; previously stamped after sending), and left set for every handled `KEY_ISSUED`/overdue row — sent, suppressed by preference, or with no recipient address (since 2026-10-13; those used to be retried every hour forever) — it means "this cycle was handled," not "an email was delivered." Only a failed send has the stamp cleared again, so the next hour retries it.
 
 ### notification_preferences.digest_email
 
