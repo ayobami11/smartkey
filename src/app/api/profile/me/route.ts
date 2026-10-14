@@ -3,6 +3,7 @@ import { respond } from '@/lib/http/respond';
 import { route } from '@/lib/http/route';
 import { logger } from '@/lib/logger';
 import { toProxyUrl } from '@/lib/storage/object-url';
+import { FULL_NAME_MAX, FULL_NAME_TOO_LONG } from '@/lib/validation/primitives';
 
 // Returns the authenticated user's profile. Used by settings pages to surface
 // role-specific fields such as signature_ref_url and stamp_ref_url for Deans.
@@ -49,7 +50,7 @@ export const GET = route({
 //
 // The body is parsed here rather than by a `body` schema so the two
 // messages the settings forms show ('Invalid JSON', 'full_name is required')
-// stay as they were.
+// stay as they were; an over-long name gets the shared FULL_NAME_TOO_LONG.
 export const PATCH = route({
   name: 'profile/me',
   auth: 'user',
@@ -71,6 +72,11 @@ export const PATCH = route({
       return respond.fail(422, 'full_name is required');
     }
     const full_name = raw.trim();
+    // The name is copied into audit actor_name and into emails, so it is
+    // bounded (the same limit as every other place a name is set).
+    if (full_name.length > FULL_NAME_MAX) {
+      return respond.fail(422, FULL_NAME_TOO_LONG);
+    }
 
     const { error } = await supabase
       .from('profiles')

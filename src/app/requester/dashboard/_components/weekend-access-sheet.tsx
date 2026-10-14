@@ -31,7 +31,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { uploadExtension } from '@/lib/storage/extension';
+import { checkUpload, SNIFF_BYTES } from '@/lib/storage/upload-type';
 import { apiFetch } from '@/lib/api';
 import { createBrowserClient } from '@/lib/supabase/client';
 import {
@@ -134,12 +134,20 @@ export const WeekendAccessSheet = ({
 
     const supabase = createBrowserClient();
 
+    // Uploads straight to Storage from the browser, so this check is a
+    // courtesy, not the boundary: /api/requests/submit re-reads the stored
+    // bytes and refuses a letter or stamp that is not a raster image, and
+    // GET /api/storage/object serves whatever is stored safely. Its job is to
+    // label the object with its real type and extension rather than the
+    // browser-declared ones (see upload-type.ts).
     const uploadToWeekendLetters = async (file: File) => {
-      const ext = uploadExtension(file.name, 'bin');
-      const path = `${userId}/${crypto.randomUUID()}.${ext}`;
+      const head = await file.slice(0, SNIFF_BYTES).arrayBuffer();
+      const detected = checkUpload(head, 'image');
+      if (!detected) throw new Error('UNSUPPORTED_TYPE');
+      const path = `${userId}/${crypto.randomUUID()}.${detected.extension}`;
       const { error: uploadError } = await supabase.storage
         .from('weekend-letters')
-        .upload(path, file, { contentType: file.type });
+        .upload(path, file, { contentType: detected.contentType });
       if (uploadError) throw uploadError;
       const { data: urlData } = supabase.storage
         .from('weekend-letters')
@@ -153,8 +161,12 @@ export const WeekendAccessSheet = ({
     if (letterFile) {
       try {
         letterUrl = await uploadToWeekendLetters(letterFile);
-      } catch {
-        setSubmitError('Failed to upload signature image. Try again.');
+      } catch (e) {
+        setSubmitError(
+          e instanceof Error && e.message === 'UNSUPPORTED_TYPE'
+            ? 'The signature image must be a PNG, JPEG or WebP file.'
+            : 'Failed to upload signature image. Try again.'
+        );
         setStep('weekend_form');
         return;
       }
@@ -163,8 +175,12 @@ export const WeekendAccessSheet = ({
     if (stampFile) {
       try {
         stampUrl = await uploadToWeekendLetters(stampFile);
-      } catch {
-        setSubmitError('Failed to upload stamp image. Try again.');
+      } catch (e) {
+        setSubmitError(
+          e instanceof Error && e.message === 'UNSUPPORTED_TYPE'
+            ? 'The stamp image must be a PNG, JPEG or WebP file.'
+            : 'Failed to upload stamp image. Try again.'
+        );
         setStep('weekend_form');
         return;
       }

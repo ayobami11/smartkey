@@ -18,6 +18,8 @@ import { logger } from '@/lib/logger';
 import { notifyAfterResponse } from '@/lib/notifications/notify';
 import { callRpc } from '@/lib/rpc/call-rpc';
 import { parseStorageUrl } from '@/lib/storage/object-url';
+import { checkUpload, SNIFF_BYTES } from '@/lib/storage/upload-type';
+import { createAdminClient } from '@/lib/supabase/admin';
 import type { Json } from '@/types/database';
 
 const bodySchema = z.object({
@@ -33,6 +35,30 @@ const bodySchema = z.object({
 });
 
 const INVALID_UPLOAD = 'Invalid letter or stamp upload';
+
+// The requester uploads the letter and stamp straight to Storage from the
+// browser, so nothing server-side saw those bytes or chose their content type.
+// Read the stored object back and require a raster image (the only thing the
+// signature check can compare): an SVG or HTML file labelled image/png is
+// refused here rather than recorded on the request. A missing object fails
+// the same way. The service-role client is needed because the read happens
+// outside the requester's own storage policy context.
+const isStoredImage = async (url: string): Promise<boolean> => {
+  const ref = parseStorageUrl(url);
+  if (!ref) return false;
+  const { data, error } = await createAdminClient()
+    .storage.from(ref.bucket)
+    .download(ref.path);
+  if (error || !data) {
+    logger.warn('requests/submit: letter or stamp not readable', {
+      path: ref.path,
+      err: error?.message,
+    });
+    return false;
+  }
+  const head = await data.slice(0, SNIFF_BYTES).arrayBuffer();
+  return checkUpload(head, 'image') !== null;
+};
 
 export const POST = route({
   name: 'requests/submit',
@@ -74,6 +100,16 @@ export const POST = route({
     };
     if (!isOwnWeekendLetter(letter_url) || !isOwnWeekendLetter(stamp_url)) {
       return respond.fail(422, INVALID_UPLOAD);
+    }
+
+    // Only a weekend request keeps its letter/stamp (they are dropped below
+    // for a weekday one), so only those are worth reading back.
+    if (type === 'WEEKEND') {
+      for (const url of [letter_url, stamp_url]) {
+        if (url && !(await isStoredImage(url))) {
+          return respond.fail(422, INVALID_UPLOAD);
+        }
+      }
     }
 
     // Fetch risk context data in parallel before calling the RPC.

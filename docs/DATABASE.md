@@ -412,6 +412,37 @@ deliberate: it stays the durable identifier, and
 (`toProxyUrl`, `rewriteStorageUrls`) or to bytes for server-side verification
 (`downloadStorageObject`). No data migration was needed.
 
+### Upload content types (2026-10-14)
+
+Until 2026-10-14 every upload stored the content type the client declared, and
+`GET /api/storage/object` served each object inline under that stored type. A requester's
+`image/svg+xml` passport photo, or a Dean's valid PNG labelled `text/html`, therefore ran
+script on the app's origin when opened directly. Three layers now close that:
+
+- **Upload**: every route that writes to a bucket detects the type from the file's bytes
+  (`src/lib/storage/upload-type.ts`: PNG, JPEG, WebP, and PDF for weekend letters only) and
+  stores that content type and extension. SVG is refused everywhere. The requester's weekend
+  letter and stamp are uploaded from the browser, so `POST /api/requests/submit` reads them
+  back and refuses anything that is not a raster image.
+- **Bucket** (`20261014110000_bucket_mime_types.sql`): `allowed_mime_types` is
+  `image/png, image/jpeg, image/webp` on `passport-photos` and `hod-signatures`, plus
+  `application/pdf` on `weekend-letters`; `file_size_limit` is 5 MB on all three. Storage
+  checks the declared type, so this stops an upload that openly declares SVG or HTML (from
+  any client, service role included) but not one whose bytes lie. Apply it after, or together
+  with, the application deploy: the previous guest route stored `image/jpg`, which the list
+  refuses.
+- **Serve**: `GET /api/storage/object` ignores the stored type and sniffs the bytes. Raster
+  images are served inline; a PDF or anything unrecognised is an attachment
+  (`application/pdf` / `application/octet-stream`); every response carries a
+  `default-src 'none'; …; sandbox` CSP and `nosniff` (`docs/API.md` §7a). This is what
+  protects objects stored before the fix: their `metadata.mimetype` may still be anything.
+
+Objects stored before the fix keep their declared type in `storage.objects.metadata`. The
+proxy no longer trusts it, but the Supabase signed URLs used for weekend letters
+(`GET /api/requests/[id]/letter`, the one-click Dean page) are served by Supabase under the
+stored type, on Supabase's origin. See `docs/CHANGELOG.md` 2026-10-14 for the query that
+lists objects stored under anything but the four accepted types.
+
 ## Migrations workflow
 
 1. Create migration: `supabase migration new <name>`.

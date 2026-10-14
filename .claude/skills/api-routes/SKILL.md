@@ -61,9 +61,9 @@ The handler only ever sees a validated `body`, an authenticated `user`, and (bec
    - `auth: 'user'`: `supabase.auth.getUser()`, never `getSession()`. No user → `401 Unauthorized`.
    - `auth: 'cron'`: `Authorization: Bearer ${CRON_SECRET}`, compared in constant time. An unset secret → ref'd `500`; a mismatch → `401`.
    - `auth: 'public'`: nothing. Use it only for token-authorised routes such as `/api/public/*`.
-2. **Role**, if `roles` is given. Reads `profiles.role`, never the JWT claim. No profile → `401`; wrong role → `403 Forbidden`. Omitting `roles` skips the profile query entirely.
+2. **Role**, if `roles` is given. Reads `profiles.role`, never the JWT claim. No profile, or a `DEACTIVATED` one → `401`; wrong role → `403 Forbidden`. Omitting `roles` skips the profile query (and the status check) entirely.
 3. **Params**, if a `params` schema is given (dynamic segments). Failure → `paramsError`, default `404 Not found`.
-4. **Body**, if a `body` schema is given. Bad JSON or schema failure → `422 Invalid request body`. Multipart routes omit `body` and read `ctx.request.formData()` themselves.
+4. **Body**, if a `body` schema is given. Bad JSON or schema failure → `422 Invalid request body`. Multipart routes omit `body` and read `ctx.request.formData()` themselves; a file is stored under the type `checkUpload` (`src/lib/storage/upload-type.ts`) detects from its bytes, never `File.type` or the filename.
 5. **Handler.** Anything thrown anywhere becomes `500 "Internal error. Ref: <ref>"`, logged as `<name>: unhandled error`.
 
 A dynamic route:

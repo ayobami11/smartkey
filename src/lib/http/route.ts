@@ -15,6 +15,7 @@ export type RouteProfile = {
   role: Role;
   unit_id: string | null;
   full_name: string;
+  status: Database['public']['Enums']['user_status'];
 };
 
 export type ServerClient = Awaited<ReturnType<typeof createServerClient>>;
@@ -140,10 +141,18 @@ const run = async (
     if (roles) {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('role, unit_id, full_name')
+        .select('role, unit_id, full_name, status')
         .eq('id', user.id)
         .single();
-      if (!profile) return respond.fail(401, 'Unauthorized');
+      // A deactivated user is banned in Auth, but a session issued before the
+      // ban stays valid until its token expires. Treat it as no session at
+      // all, the same 401 as a missing profile, so the client sends them to
+      // sign in (where the ban stops them) rather than showing a 403 that
+      // reads as "wrong page". PENDING_ACTIVATION is not refused: nothing
+      // wrapped here is part of activation, and those users are not banned.
+      if (!profile || profile.status === 'DEACTIVATED') {
+        return respond.fail(401, 'Unauthorized');
+      }
       if (!roles.includes(profile.role)) return respond.fail(403, 'Forbidden');
       ctx.profile = profile;
     }
@@ -167,7 +176,7 @@ const run = async (
 
 /**
  * Wraps an App Router handler with the checks every SmartKey route repeats,
- * in a fixed order: auth (session or cron secret) → profile + role → params
+ * in a fixed order: auth (session or cron secret) → profile, status + role → params
  * → JSON body → handler. Any throw becomes an enveloped 500 with a ref.
  *
  * `roles` omitted means no profile query at all — the handler gets `user` but

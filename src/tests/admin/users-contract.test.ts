@@ -85,6 +85,9 @@ describe('POST /api/admin/users', () => {
     ['a bad email', { ...body, institutional_email: 'nope' }],
     ['the CSO role', { ...body, role: 'CSO' }],
     ['an empty name', { ...body, full_name: '' }],
+    // CHANGED: a blank or over-long name used to be accepted (no trim, no max).
+    ['a blank name', { ...body, full_name: '   ' }],
+    ['a 121-character name', { ...body, full_name: 'a'.repeat(121) }],
     ['a non-uuid unit', { ...body, unit_id: 'unit-1' }],
   ])('422 for %s', async (_label, bad) => {
     expect(await call(provision, post(path, bad))).toEqual(
@@ -537,6 +540,8 @@ describe('PATCH /api/admin/users/[id]', () => {
   it.each([
     ['not JSON', 'not json'],
     ['a blank name', { full_name: '   ' }],
+    // CHANGED: an over-long name used to be accepted.
+    ['a 121-character name', { full_name: 'a'.repeat(121) }],
     ['a non-uuid unit', { full_name: 'Ada', unit_id: 'x' }],
   ])('422 for %s', async (_label, bad) => {
     expect(await call(editUser, send('PATCH', path, bad), params)).toEqual(

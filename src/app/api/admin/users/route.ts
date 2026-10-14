@@ -11,9 +11,10 @@ import { logger } from '@/lib/logger';
 import { callRpc } from '@/lib/rpc/call-rpc';
 import { rewriteStorageUrls } from '@/lib/storage/object-url';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { fullName } from '@/lib/validation/primitives';
 
 const postBodySchema = z.object({
-  full_name: z.string().min(1),
+  full_name: fullName(),
   institutional_email: z.email(),
   role: z.enum(['DEAN', 'VERIFIER', 'REQUESTER']),
   unit_id: z.uuid().optional(),

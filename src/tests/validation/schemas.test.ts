@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { password } from '@/lib/validation/primitives';
+import { FULL_NAME_MAX, fullName, password } from '@/lib/validation/primitives';
 import {
   guestWeekendRequestFormSchema,
   LETTER_MAX_BYTES,
@@ -30,6 +30,33 @@ const SUNDAY = '2026-06-28';
 const MONDAY = '2026-06-29';
 
 // ---
+
+describe('fullName primitive', () => {
+  it('trims, and accepts up to FULL_NAME_MAX characters', () => {
+    expect(FULL_NAME_MAX).toBe(120);
+    expect(fullName().parse('  Ada Obi  ')).toBe('Ada Obi');
+    expect(fullName().safeParse('a'.repeat(120)).success).toBe(true);
+  });
+
+  it('rejects a blank or over-long name with its message', () => {
+    expect(
+      fullName('Name, please').safeParse('   ').error?.issues[0].message
+    ).toBe('Name, please');
+    expect(fullName().safeParse('a'.repeat(121)).error?.issues[0].message).toBe(
+      'Full name must be 120 characters or fewer.'
+    );
+  });
+
+  it('bounds the guest and CSO forms too', () => {
+    expect(
+      provisionUserSchema.safeParse({
+        full_name: 'a'.repeat(121),
+        institutional_email: 'a@unilag.edu.ng',
+        role: 'VERIFIER',
+      }).success
+    ).toBe(false);
+  });
+});
 
 describe('password primitive', () => {
   it('accepts a valid strong password', () => {

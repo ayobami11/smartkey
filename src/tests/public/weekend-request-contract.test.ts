@@ -15,6 +15,21 @@ import {
   vi,
 } from 'vitest';
 
+// Bytes that really are what `type` says: a %PDF- header for a PDF, a PNG
+// signature for anything image/*, zeroes (no recognised type) otherwise.
+const letterBytes = (type: string, size: number) => {
+  const bytes = new Uint8Array(size);
+  if (size === 0) return bytes;
+  if (type === 'application/pdf') {
+    bytes.set(new TextEncoder().encode('%PDF-1.7').slice(0, size));
+  } else if (type.startsWith('image/')) {
+    bytes.set(
+      [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].slice(0, size)
+    );
+  }
+  return bytes;
+};
+
 // The fixtures request Saturday 2026-10-17; pin "today" to the Tuesday before
 // so it is still a bookable weekend whatever day the suite runs.
 beforeAll(() => {
@@ -98,11 +113,14 @@ describe('POST /api/public/weekend-request', () => {
     return form;
   };
 
+  // CHANGED: the bytes match the declared type (a %PDF- header for a PDF, a
+  // PNG signature for an image). The route now detects the stored type from
+  // the bytes, and all-zero bytes are rejected as neither.
   const letter = (
     name = 'letter.pdf',
     type = 'application/pdf',
     size = 1024
-  ) => new File([new Uint8Array(size)], name, { type });
+  ) => new File([letterBytes(type, size)], name, { type });
 
   const formWith = (
     overrides: Record<string, string | null> = {},
@@ -259,13 +277,43 @@ describe('POST /api/public/weekend-request', () => {
     ]);
   });
 
-  it('sends an empty phone when none is given, and falls back to .bin', async () => {
+  // CHANGED: was "... and falls back to .bin" for a filename with no
+  // extension. The extension now comes from the bytes, never the filename.
+  it('sends an empty phone when none is given, and names the object by its bytes', async () => {
     const res = await submitForm(
       formWith({ phone: null }, letter('scan copy', 'image/png'))
     );
     expect(res.status).toBe(201);
-    expect(fake.uploads[0].path).toMatch(/^guest\/[0-9a-f-]{36}\.bin$/);
+    expect(fake.uploads[0].path).toMatch(/^guest\/[0-9a-f-]{36}\.png$/);
+    expect(fake.uploads[0].options).toEqual({
+      contentType: 'image/png',
+      upsert: false,
+    });
     expect(fake.rpcCalls[0].args).toMatchObject({ p_phone: '' });
+  });
+
+  it('stores an image labelled application/pdf as the image it is', async () => {
+    const lying = new File([letterBytes('image/png', 64)], 'letter.pdf', {
+      type: 'application/pdf',
+    });
+    expect((await submitForm(formWith({}, lying))).status).toBe(201);
+    expect(fake.uploads[0].path).toMatch(/^guest\/[0-9a-f-]{36}\.png$/);
+    expect(fake.uploads[0].options).toMatchObject({ contentType: 'image/png' });
+  });
+
+  it.each([
+    ['an SVG', '<svg xmlns="http://www.w3.org/2000/svg"><script/></svg>', 'image/svg+xml'],
+    ['an SVG labelled as a PDF', '<svg><script/></svg>', 'application/pdf'],
+    ['HTML labelled as a PNG', '<!doctype html><script>x</script>', 'image/png'],
+  ])('422 for %s, before anything is uploaded', async (_label, body, type) => {
+    const res = await submitForm(
+      formWith({}, new File([body], 'letter', { type }))
+    );
+    expect(res).toEqual(
+      failure(422, 'The authorisation letter must be an image or a PDF.')
+    );
+    expect(fake.uploads).toHaveLength(0);
+    expect(fake.rpcCalls).toHaveLength(0);
   });
 });
 
@@ -548,7 +596,10 @@ describe('uncaught throws', () => {
     form.set('return_deadline', '2026-10-17T17:00:00+01:00');
     form.set(
       'letter',
-      new File([new Uint8Array(16)], 'l.pdf', { type: 'application/pdf' })
+      // CHANGED: real PDF bytes, so the throw is reached after validation.
+      new File([letterBytes('application/pdf', 16)], 'l.pdf', {
+        type: 'application/pdf',
+      })
     );
     return form;
   };

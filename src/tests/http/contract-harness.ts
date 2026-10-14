@@ -44,7 +44,12 @@ const freshState = () => ({
     role: 'CSO',
     unit_id: 'unit-1',
     full_name: 'Dr. Bakare',
-  } as { role: string; unit_id: string | null; full_name: string } | null,
+  } as {
+    role: string;
+    unit_id: string | null;
+    full_name: string;
+    status?: string;
+  } | null,
   tables: {} as Record<string, Answer>,
   // A function answer sees the call's args, for an RPC called more than once
   // with different arguments in one request (cron/daily-digest).
@@ -90,6 +95,19 @@ export type StorageCall = {
   bucket: string;
   method: string;
   args: unknown[];
+};
+
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+const JPEG_SIGNATURE = [0xff, 0xd8, 0xff, 0xe0];
+
+/**
+ * `size` bytes that start with a real image signature, for the upload routes,
+ * which detect the stored type from the bytes (src/lib/storage/upload-type.ts).
+ */
+export const imageBytes = (size = 16, kind: 'png' | 'jpeg' = 'png') => {
+  const bytes = new Uint8Array(Math.max(size, 8));
+  bytes.set(kind === 'png' ? PNG_SIGNATURE : JPEG_SIGNATURE);
+  return bytes;
 };
 
 /** What the fake's getPublicUrl returns: a canonical public storage URL. */
@@ -299,7 +317,8 @@ export const expectRef = (res: {
 
 /**
  * The auth half of every role-gated route's contract: no session → 401, a
- * session with no profile row → 401, each role outside `allowed` → 403.
+ * session with no profile row → 401, a DEACTIVATED profile → 401, each role
+ * outside `allowed` → 403.
  * `makeRequest` is called fresh per case (a request body is single-use).
  */
 export const describeAuth = (
@@ -319,6 +338,18 @@ export const describeAuth = (
 
     it('401 Unauthorized when the user has no profile', async () => {
       fake.profile = null;
+      expect(await call(handler, makeRequest(), params)).toEqual(
+        failure(401, 'Unauthorized')
+      );
+    });
+
+    it('401 Unauthorized when the profile is DEACTIVATED', async () => {
+      fake.profile = {
+        role: allowed[0],
+        unit_id: 'unit-1',
+        full_name: 'Test User',
+        status: 'DEACTIVATED',
+      };
       expect(await call(handler, makeRequest(), params)).toEqual(
         failure(401, 'Unauthorized')
       );
