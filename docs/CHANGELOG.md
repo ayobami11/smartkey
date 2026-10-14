@@ -6,6 +6,33 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-10-14 — Admin actions that skipped the audit log are audited and atomic
+
+- **Why**: CLAUDE.md requires every consequential action to write its audit entry in the same transaction as the state change. The batch-4 route migration left five admin paths that did not: reinstating a deactivated user and re-inviting a pending one (`POST /api/admin/users`) reset the profile through the service-role client with no audit entry; re-sending an invite (`POST /api/admin/users/[id]/resend-invite`) and creating a key (`POST /api/admin/keys`) wrote none either; and the `incidents_insert_cso_verifier` / `keys_insert_cso` RLS policies still let a user session insert straight into `incidents` and `keys`, skipping the audited RPCs. Provisioning a new user also emailed the invite and created the auth account before `provision_user`, so an RPC failure left an orphaned, invited account.
+- **Deploy order**: apply `supabase/migrations/20261014090000_admin_audit_gaps.sql` **before** the code deploys. The new routes call `reinstate_user`, `record_invite_resent` and `create_key`; against a database without them, re-invites, invite re-sends and key creation all answer `500`.
+- **Migration** (`SECURITY DEFINER`, `set search_path = public`, actor from `auth.uid()`, audit via `_write_audit`, `revoke ... from public, anon`, `grant ... to authenticated`, CSO-only):
+  - `reinstate_user(profile_id, full_name?, unit_id?)` — `DEACTIVATED` → `PENDING_ACTIVATION` with an optional name/unit correction, the one-active-Dean check under a unit lock, `units.hod_id` restored for a Dean, and `USER_REINSTATED {reinstated_by, previous_status, status, changes}`.
+  - `record_invite_resent(profile_id, full_name?, unit_id?)` — `PENDING_ACTIVATION` only; the same optional correction; `USER_INVITE_RESENT {resent_by, institutional_email, changes}`. Returns the stored role and email.
+  - `create_key(code, zone, room_name, unit_id, key_count?)` — validates, inserts, writes `KEY_CREATED {key_id, code, zone, room_name, unit_id, key_count}`; a duplicate code raises `CONFLICT`.
+  - Drops `incidents_insert_cso_verifier` and `keys_insert_cso`. Nothing in the app inserted into either table directly (checked by grep); incidents come from `log_incident`, `mark_key_lost` and `return_key`, keys from `create_key`.
+- **Ordering around what cannot be transactional**:
+  - Reinstatement (`src/lib/admin/reinstate-user.ts`, mirroring `revoke-user.ts`): link, then `reinstate_user`, then lift the GoTrue ban. If the ban cannot be lifted, `deactivate_user` puts the profile back and the route answers `500`. The reverse order's worst case is a deactivated profile whose account can sign in; this order's worst case is a pending profile that is still banned.
+  - New user (`src/lib/admin/provision-new-user.ts`): auth account and link, then `provision_user`, and only then the email. If `provision_user` fails the just-created auth user is deleted (`auth.admin.deleteUser`) — except on `DUPLICATE_PROFILE`, where a profile owns that account and `profiles.id` cascades from `auth.users`.
+  - Re-invite and re-send: the link is generated first, then the RPC records the entry, then the email is sent.
+- **Behaviour changes**:
+  - `admin/users` POST re-invite and reinstatement now write `USER_INVITE_RESENT` / `USER_REINSTATED`; `resend-invite` writes `USER_INVITE_RESENT`; `admin/keys` writes `KEY_CREATED`.
+  - `admin/users` POST, re-invite whose link cannot be generated: `200` (after the profile had been reset) → ref'd `500`, nothing changed.
+  - `admin/users` POST, reinstatement: the ban is now lifted after the profile change, not before; a ban that cannot be lifted → ref'd `500` (it was ignored).
+  - `admin/users` POST, new user: no email and no leftover auth account when `provision_user` fails.
+  - `admin/users` POST, re-invite: the activation link follows the stored role, not the form's role (a re-invite never changed the role, so a Dean re-invited through a Requester form was sent to `/activate`). A Dean re-invited into another unit now moves `units.hod_id` with them.
+  - `admin/users` POST, an active Dean in the unit: `409 "This department already has an active HOD"` → `409 "That unit already has an active Dean."`. New `404 User not found` / `409` / `422 Unit not found` cases when a concurrent change beats a re-invite.
+  - `admin/keys`, an unknown `unit_id`: ref'd `500` (foreign-key failure) → `422 Unit not found`. Duplicate code: same `409` and copy, now from the RPC's `CONFLICT`.
+  - `admin/signature-references/resolve`: `new_url` is the storage proxy URL (`toProxyUrl`), not the raw URL of the private `hod-signatures` bucket. The CSO dialog does not read it, so no UI change.
+  - `ai/signature-alerts`: reads the `PENDING_HOD` requests first, then the latest `SIGNATURE_MISMATCH` entry for each. It used to read the 200 newest entries first, so an older request still held dropped off the CSO's list. Response shape unchanged.
+  - The three new events map to the `SETTINGS` category (`src/lib/audit/event-types.ts`) and the CSO audit log's Settings filter.
+- **Tests**: `supabase/tests/16_admin_audit_gaps_test.sql` (45 assertions: each RPC's happy path with its state and exactly one audit row, the CSO-only gate, error kinds, grants, and that a CSO session's direct insert into `incidents` / `keys` is refused). `src/tests/admin/reinstate-user.test.ts` and `provision-new-user.test.ts` pin the orderings with injected ports. The batch-4 contract tests (`users-contract`, `config-contract`, `authorisations-contract`, `alerts-contract`) follow the new behaviour; every changed assertion is marked `CHANGED`. The contract harness gained `auth.admin.deleteUser` and a `user` on `generateLink`.
+- **Docs**: `docs/API.md` (§4 users, resend-invite, keys, resolve; signature-alerts; RPC cross-reference), `docs/DATABASE.md` (RPC list, `keys` and `incidents` insert policies), `docs/AUDIT_EVENTS.md`, `docs/TESTING.md`, `supabase/tests/README.md`.
+
 ### 2026-10-14 — cron routes: claim before sending, surface silent failures
 
 - **Why**: moving the cron routes onto `route()` (the entry below) pinned five gaps in their contract tests. The two reminder routes could email the same person twice; `daily-digest` answered `200 { sent: 0 }` when it could not read preferences, so pg_cron recorded success for a run that sent nothing; `weekend-reminders` counted handled rows as failures; and five shift-report placeholders that always failed would block the report queue for good.
