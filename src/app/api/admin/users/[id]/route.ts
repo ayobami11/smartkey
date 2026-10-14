@@ -4,9 +4,10 @@ import { respond } from '@/lib/http/respond';
 import { route } from '@/lib/http/route';
 import { byDetail, rpcFail } from '@/lib/http/rpc-errors';
 import { callRpc } from '@/lib/rpc/call-rpc';
+import { fullName } from '@/lib/validation/primitives';
 
 const bodySchema = z.object({
-  full_name: z.string().trim().min(1),
+  full_name: fullName(),
   unit_id: z.uuid().optional(),
 });
 

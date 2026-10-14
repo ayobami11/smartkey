@@ -11,6 +11,7 @@ import { notifyAfterResponse } from '@/lib/notifications/notify';
 import { callRpc } from '@/lib/rpc/call-rpc';
 import { uploadExtension } from '@/lib/storage/extension';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { fullName } from '@/lib/validation/primitives';
 
 // Unauthenticated. An external person (no SmartKey account) submits a weekend
 // key request: declares an ID document, picks a department, and uploads the
@@ -32,7 +33,7 @@ const ALLOWED_LETTER_TYPES = [
 
 // Validates the non-file fields. The letter File is validated separately.
 const fieldsSchema = z.object({
-  full_name: z.string().trim().min(1).max(200),
+  full_name: fullName(),
   email: z.email(),
   phone: z.string().trim().max(50).optional(),
   id_document_type: z.string().trim().min(1).max(100),

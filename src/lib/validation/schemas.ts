@@ -9,7 +9,7 @@
 import * as z from 'zod';
 
 import { todayDateISO } from '@/lib/dates';
-import { password } from '@/lib/validation/primitives';
+import { fullName, password } from '@/lib/validation/primitives';
 
 // Auth
 
@@ -44,7 +44,7 @@ export const resetPasswordSchema = z.object({
 
 export const provisionUserSchema = z
   .object({
-    full_name: z.string().trim().min(1, 'Full name is required'),
+    full_name: fullName(),
     institutional_email: z.email('Enter a valid email address'),
     role: z.enum(['DEAN', 'VERIFIER', 'REQUESTER'], {
       error: 'Select a role',
@@ -66,7 +66,7 @@ export const provisionUserSchema = z
 // login identity and chain-of-trust anchor); role is not editable here. Only
 // the full name and — for departmental roles — the department can change.
 export const editUserSchema = z.object({
-  full_name: z.string().trim().min(1, 'Full name is required'),
+  full_name: fullName(),
   /** Required when the target is an HOD or REQUESTER. UUID from GET /api/admin/units. */
   unit_id: z.string().optional(),
 });
@@ -138,7 +138,7 @@ export const LETTER_MAX_BYTES = 5 * 1024 * 1024;
 
 /** Public (non-registered) weekend access request form. */
 export const guestWeekendRequestFormSchema = z.object({
-  full_name: z.string().trim().min(1, 'Your full name is required.'),
+  full_name: fullName('Your full name is required.'),
   email: z.email('Enter a valid email address.'),
   phone: z.string().trim().optional(),
   id_document_type: z.enum(ID_DOCUMENT_TYPES, {
@@ -323,7 +323,7 @@ export const customDateRangeSchema = z
 // Profile
 
 export const updateProfileSchema = z.object({
-  full_name: z.string().trim().min(1, 'Full name is required'),
+  full_name: fullName(),
 });
 
 // Inferred TypeScript types

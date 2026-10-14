@@ -201,6 +201,22 @@ describe('PATCH /api/profile/me', () => {
     });
   }
 
+  // CHANGED: there was no maximum. The name flows into audit actor_name and
+  // into emails, so it is now bounded by the shared FULL_NAME_MAX (120).
+  it('422 for a name over 120 characters', async () => {
+    expect(await call(patchMe, patch({ full_name: 'a'.repeat(121) }))).toEqual(
+      failure(422, 'Full name must be 120 characters or fewer.')
+    );
+    expect(queriesOn('profiles')).toHaveLength(0);
+  });
+
+  it('accepts exactly 120 characters, measured after trimming', async () => {
+    const name = 'a'.repeat(120);
+    expect(await call(patchMe, patch({ full_name: `  ${name}  ` }))).toEqual(
+      success({ full_name: name })
+    );
+  });
+
   it("updates only full_name, trimmed, on the caller's own row with the user session", async () => {
     const res = await call(
       patchMe,
