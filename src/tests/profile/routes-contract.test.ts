@@ -21,6 +21,7 @@ import { logger } from '@/lib/logger';
 
 import {
   call,
+  expectRef,
   failure,
   fake,
   get,
@@ -99,18 +100,20 @@ describe('GET /api/profile/me', () => {
     expect(await call(getMe, get(path))).toEqual(failure(401, 'Unauthorized'));
   });
 
-  it('404 Profile not found when the user has no profile row', async () => {
+  // CHANGED: was 404 'Profile not found'. A session with no profile row is
+  // unauthenticated as far as the app is concerned, as on every other route.
+  it('401 Unauthorized when the user has no profile row', async () => {
     fake.profile = null;
     fake.tables.profiles = { data: null, error: null };
-    expect(await call(getMe, get(path))).toEqual(
-      failure(404, 'Profile not found')
-    );
+    expect(await call(getMe, get(path))).toEqual(failure(401, 'Unauthorized'));
   });
 
-  it('404 Profile not found when the query fails', async () => {
+  // CHANGED: was 404 'Profile not found'. A failed query is not a missing
+  // profile; it is now a ref'd 500, logged with the database error.
+  it('500 with a ref when the query fails', async () => {
     fake.tables.profiles = { data: null, error: { message: DB_TEXT } };
     const res = await call(getMe, get(path));
-    expect(res).toEqual(failure(404, 'Profile not found'));
+    expectRef(res);
     expectNoLeak(res.body);
   });
 
@@ -140,11 +143,12 @@ describe('GET /api/profile/me', () => {
     expect(res.body.data.profile.photo_url).toBeNull();
   });
 
-  it('a throw escapes the handler', async () => {
+  // CHANGED: a throw escaped as Next's bare 500; route() envelopes it.
+  it('a throw becomes an enveloped 500 with a ref', async () => {
     fake.tables.profiles = () => {
       throw new Error('boom');
     };
-    await expect(call(getMe, get(path))).rejects.toThrow('boom');
+    expectRef(await call(getMe, get(path)));
   });
 });
 
@@ -167,11 +171,13 @@ describe('PATCH /api/profile/me', () => {
     );
   });
 
-  it('200 and a no-op update when the user has no profile row', async () => {
+  // CHANGED: was 200 with an update that matched no row.
+  it('401 Unauthorized when the user has no profile row', async () => {
     fake.profile = null;
     expect(await call(patchMe, patch({ full_name: 'X' }))).toEqual(
-      success({ full_name: 'X' })
+      failure(401, 'Unauthorized')
     );
+    expect(queriesOn('profiles')).toHaveLength(0);
   });
 
   it('422 Invalid JSON for an unparseable body', async () => {
@@ -220,13 +226,12 @@ describe('PATCH /api/profile/me', () => {
     expectNoLeak(res.body);
   });
 
-  it('a throw escapes the handler', async () => {
+  // CHANGED: a throw escaped as Next's bare 500; route() envelopes it.
+  it('a throw becomes an enveloped 500 with a ref', async () => {
     fake.tables.profiles = () => {
       throw new Error('boom');
     };
-    await expect(call(patchMe, patch({ full_name: 'Ada' }))).rejects.toThrow(
-      'boom'
-    );
+    expectRef(await call(patchMe, patch({ full_name: 'Ada' })));
   });
 });
 
@@ -247,10 +252,13 @@ describe('POST /api/profile/photo', () => {
     expect(fake.storageCalls).toHaveLength(0);
   });
 
-  it('uploads anyway when the user has no profile row', async () => {
+  // CHANGED: was 200 after uploading a file and "saving" it to no row.
+  it('401 Unauthorized when the user has no profile row', async () => {
     fake.profile = null;
-    const res = await call(postPhoto, upload({ photo: image() }));
-    expect(res.status).toBe(200);
+    expect(await call(postPhoto, upload({ photo: image() }))).toEqual(
+      failure(401, 'Unauthorized')
+    );
+    expect(fake.storageCalls).toHaveLength(0);
   });
 
   it('422 Invalid form data for a non-multipart body', async () => {
@@ -337,13 +345,12 @@ describe('POST /api/profile/photo', () => {
     expectNoLeak(res.body);
   });
 
-  it('a throw escapes the handler', async () => {
+  // CHANGED: a throw escaped as Next's bare 500; route() envelopes it.
+  it('a throw becomes an enveloped 500 with a ref', async () => {
     fake.tables.profiles = () => {
       throw new Error('boom');
     };
-    await expect(call(postPhoto, upload({ photo: image() }))).rejects.toThrow(
-      'boom'
-    );
+    expectRef(await call(postPhoto, upload({ photo: image() })));
   });
 });
 
@@ -371,9 +378,13 @@ describe('DELETE /api/profile/photo', () => {
     expect(fake.storageCalls).toHaveLength(0);
   });
 
-  it('200 when the user has no profile row', async () => {
+  // CHANGED: was 200.
+  it('401 Unauthorized when the user has no profile row', async () => {
     fake.profile = null;
-    expect(await call(deletePhoto, del())).toEqual(success(null));
+    expect(await call(deletePhoto, del())).toEqual(
+      failure(401, 'Unauthorized')
+    );
+    expect(fake.storageCalls).toHaveLength(0);
   });
 
   it("removes every file in the caller's own folder and clears photo_url", async () => {
@@ -424,11 +435,12 @@ describe('DELETE /api/profile/photo', () => {
     expectNoLeak(res.body);
   });
 
-  it('a throw escapes the handler', async () => {
+  // CHANGED: a throw escaped as Next's bare 500; route() envelopes it.
+  it('a throw becomes an enveloped 500 with a ref', async () => {
     fake.tables.profiles = () => {
       throw new Error('boom');
     };
-    await expect(call(deletePhoto, del())).rejects.toThrow('boom');
+    expectRef(await call(deletePhoto, del()));
   });
 });
 
@@ -455,9 +467,12 @@ describe('GET /api/profile/notification-preferences', () => {
     );
   });
 
-  it('200 defaults when the user has no profile row', async () => {
+  // CHANGED: was 200 with the defaults.
+  it('401 Unauthorized when the user has no profile row', async () => {
     fake.profile = null;
-    expect(await call(getPrefs, get(path))).toEqual(success(DEFAULTS));
+    expect(await call(getPrefs, get(path))).toEqual(
+      failure(401, 'Unauthorized')
+    );
   });
 
   it('defaults when no row exists: all true except digest_email', async () => {
@@ -485,11 +500,12 @@ describe('GET /api/profile/notification-preferences', () => {
     expectNoLeak(res.body);
   });
 
-  it('a throw escapes the handler', async () => {
+  // CHANGED: a throw escaped as Next's bare 500; route() envelopes it.
+  it('a throw becomes an enveloped 500 with a ref', async () => {
     fake.tables.notification_preferences = () => {
       throw new Error('boom');
     };
-    await expect(call(getPrefs, get(path))).rejects.toThrow('boom');
+    expectRef(await call(getPrefs, get(path)));
   });
 });
 
@@ -512,11 +528,14 @@ describe('PATCH /api/profile/notification-preferences', () => {
     );
   });
 
-  it('200 when the user has no profile row', async () => {
+  // CHANGED: was 200 (and, against the real database, a foreign-key failure
+  // on the upsert).
+  it('401 Unauthorized when the user has no profile row', async () => {
     fake.profile = null;
     expect(await call(patchPrefs, patch({ overdue_email: false }))).toEqual(
-      success({ overdue_email: false })
+      failure(401, 'Unauthorized')
     );
+    expect(queriesOn('notification_preferences')).toHaveLength(0);
   });
 
   for (const [label, body] of [
@@ -571,12 +590,11 @@ describe('PATCH /api/profile/notification-preferences', () => {
     expectNoLeak(res.body);
   });
 
-  it('a throw escapes the handler', async () => {
+  // CHANGED: a throw escaped as Next's bare 500; route() envelopes it.
+  it('a throw becomes an enveloped 500 with a ref', async () => {
     fake.tables.notification_preferences = () => {
       throw new Error('boom');
     };
-    await expect(
-      call(patchPrefs, patch({ overdue_email: false }))
-    ).rejects.toThrow('boom');
+    expectRef(await call(patchPrefs, patch({ overdue_email: false })));
   });
 });
