@@ -1445,18 +1445,20 @@ Severity changes nothing about how the incident is handled. The `INCIDENT_LOGGED
 
 ## 6a. Scheduled (cron)
 
-All five cron routes are wrapped in `route({ auth: 'cron' })` (batch 5, 2026-10-14). The wrapper checks `Authorization: Bearer ${CRON_SECRET}` before the handler runs: an unset `CRON_SECRET` is a `500` with a ref, a missing or wrong header a `401 Unauthorized`, and no query runs in either case. The secret is compared in constant time; until 2026-10-14 each route compared it with `!==`. Cron handlers get no Supabase client from the wrapper and create the service-role admin client themselves. A failed query is a `500 "Internal error. Ref: <ref>"` whose only content is the ref. An uncaught throw (for example a misconfigured service-role key) is now the same enveloped `500`; it used to escape as Next's bare, unenveloped `500`. pg_cron only reads the HTTP status, and the success bodies below are unchanged.
+All five cron routes are wrapped in `route({ auth: 'cron' })` (batch 5, 2026-10-14). The wrapper checks `Authorization: Bearer ${CRON_SECRET}` before the handler runs: an unset `CRON_SECRET` is a `500` with a ref, a missing or wrong header a `401 Unauthorized`, and no query runs in either case. The secret is compared in constant time; until 2026-10-14 each route compared it with `!==`. Cron handlers get no Supabase client from the wrapper and create the service-role admin client themselves. A failed query is a `500 "Internal error. Ref: <ref>"` whose only content is the ref. An uncaught throw (for example a misconfigured service-role key) is now the same enveloped `500`; it used to escape as Next's bare, unenveloped `500`. pg_cron only reads the HTTP status. Since 2026-10-14 (`fix/cron-gaps`) `weekend-reminders` reports the same four counters as `overdue-reminders`, and `daily-digest` answers a failed preferences read with a ref'd `500` instead of `200 { sent: 0 }`.
+
+**Claim, then send.** Both reminder routes stamp their rows _before_ sending, with one conditional PostgREST update: `UPDATE requests SET <stamp> = now WHERE <stamp> IS NULL AND <due> RETURNING id`. Postgres locks each row it updates and, under READ COMMITTED, re-checks the `WHERE` once a concurrent writer commits, so two overlapping runs can never both get the same row back. Only the rows a run claimed are sent; a failed send's stamp is set back to `null` (only where it still holds this run's value), so a later run retries it. Until 2026-10-14 they selected, sent, then stamped, so a failed stamp or an overlapping run re-sent the reminder. The trade is at-most-once instead of at-least-once: a crash between claim and send, or a failed release, leaves a row stamped with no email (the release failure is logged with the ids).
 
 ### POST /api/cron/weekend-reminders
 
 **File**: `src/app/api/cron/weekend-reminders/route.ts`
 **Roles**: SYSTEM (pg_cron; no user session)
 
-Not user-facing. Called by the `weekend-code-reminders` pg_cron job at 06:00 UTC on Sat/Sun. Authenticated by a shared bearer secret (`Authorization: Bearer ${CRON_SECRET}`), not a session; uses the service-role admin client. Finds `APPROVED` weekend requests due today (registered and guest) with `reminder_sent_at IS NULL`, emails each requester a reminder to mint their collection code via `notify({ type: 'WEEKEND_REMINDER' })` (registered → `/requester/dashboard`, guest → `/weekend-access/[token]`), and stamps `reminder_sent_at` on each one actually sent so a retry never double-sends. No collection code is included — the code is always minted on the day.
+Not user-facing. Called by the `weekend-code-reminders` pg_cron job at 06:00 UTC on Sat/Sun. Authenticated by a shared bearer secret (`Authorization: Bearer ${CRON_SECRET}`), not a session; uses the service-role admin client. Finds `APPROVED` weekend requests due today (registered and guest) with `reminder_sent_at IS NULL`, emails each requester a reminder to mint their collection code via `notify({ type: 'WEEKEND_REMINDER' })` (registered → `/requester/dashboard`, guest → `/weekend-access/[token]`), claiming each row by stamping `reminder_sent_at` before sending (see "Claim, then send" above). A row stays stamped once handled: sent, suppressed (no current case), or with no recipient address. Only a failed send is released, so a later run the same morning retries it. Until 2026-10-14 `suppressed` and `no_recipient` were counted as `failed` and left unstamped. No collection code is included — the code is always minted on the day.
 
 No request body.
 
-**Response `data`**: `{ "sent": 2, "failed": 0 }`
+**Response `data`**: `{ "sent": 2, "suppressed": 0, "no_recipient": 0, "failed": 0 }` (was `{ "sent", "failed" }` until 2026-10-14)
 
 **Errors**: `401` missing/incorrect bearer secret · `500` `CRON_SECRET` not configured or query failure
 
@@ -1469,7 +1471,7 @@ The pg_cron job reads its bearer secret from Supabase Vault (`weekend_cron_secre
 **File**: `src/app/api/cron/overdue-reminders/route.ts`
 **Roles**: SYSTEM (pg_cron; no user session)
 
-Not user-facing. Called by the `overdue-key-check` pg_cron job hourly, right after `mark_key_overdue()` in the same job (see `supabase/migrations/20260812110000_requester_notifications.sql`) — reuses the `weekend_cron_secret` Vault bearer secret. Finds `KEY_ISSUED` requests (registered and guest) whose `return_deadline` has passed with `overdue_reminder_sent_at IS NULL`, and calls `notify({ type: 'OVERDUE_REMINDER' })` for each — which applies a registered requester's `notification_preferences.overdue_email` (default true if no row); guests have no preference and always receive it. Stamps `overdue_reminder_sent_at` for every row that was handled: sent, suppressed by preference, or with no recipient address (re-querying those every hour helps no one). Only a failed send stays unstamped, to retry next hour.
+Not user-facing. Called by the `overdue-key-check` pg_cron job hourly, right after `mark_key_overdue()` in the same job (see `supabase/migrations/20260812110000_requester_notifications.sql`) — reuses the `weekend_cron_secret` Vault bearer secret. Finds `KEY_ISSUED` requests (registered and guest) whose `return_deadline` has passed with `overdue_reminder_sent_at IS NULL`, claims them by stamping `overdue_reminder_sent_at` (see "Claim, then send" above), and calls `notify({ type: 'OVERDUE_REMINDER' })` for each — which applies a registered requester's `notification_preferences.overdue_email` (default true if no row); guests have no preference and always receive it. A row stays stamped once handled: sent, suppressed by preference, or with no recipient address (re-querying those every hour helps no one). Only a failed send is released, to retry next hour.
 
 No request body.
 
@@ -1484,13 +1486,13 @@ No request body.
 **File**: `src/app/api/cron/daily-digest/route.ts`
 **Roles**: SYSTEM (pg_cron; no user session)
 
-Not user-facing. Called by the `daily-digest` pg_cron job at 07:00 UTC daily — same `CRON_SECRET` bearer-auth pattern as the other two cron routes. Finds every `ACTIVE` `DEAN`/`CSO` profile with `notification_preferences.digest_email = true` (absence of a row means **not** opted in — the opposite default from every other preference column) and, for each, calls the `get_digest_stats` RPC (building-wide once, cached, for every CSO; per-unit for each Dean) covering the last 24 hours. Skips sending entirely for a recipient whose window has nothing to report in any relevant field — an always-firing digest with all zeros trains people to ignore it.
+Not user-facing. Called by the `daily-digest` pg_cron job at 07:00 UTC daily — same `CRON_SECRET` bearer-auth pattern as the other two cron routes. Finds every `ACTIVE` `DEAN`/`CSO` profile with `notification_preferences.digest_email = true` (absence of a row means **not** opted in — the opposite default from every other preference column) and, for each, calls the `get_digest_stats` RPC (building-wide once for every CSO, per-unit for each Dean). The building-wide result is shared, and so is its failure: if that one call fails, every CSO counts as `failed` and it is not retried per CSO (until 2026-10-14 it was) covering the last 24 hours. Skips sending entirely for a recipient whose window has nothing to report in any relevant field — an always-firing digest with all zeros trains people to ignore it.
 
 No request body.
 
 **Response `data`**: `{ "sent": 1, "skipped": 1, "failed": 0 }`
 
-**Errors**: `401` missing/incorrect bearer secret · `500` `CRON_SECRET` not configured or query failure
+**Errors**: `401` missing/incorrect bearer secret · `500` `CRON_SECRET` not configured, or the profiles or `notification_preferences` query failed
 
 ---
 
@@ -1501,7 +1503,7 @@ No request body.
 
 Not user-facing. Called by the `daily-shift-summary` pg_cron job at 18:00 UTC daily, right after `schedule_pending_shift_report()` in the same job (see `supabase/migrations/20260904103000_shift_report_cron_generation.sql`) — reuses the `weekend_cron_secret` Vault bearer secret, same pattern as the other cron routes. Generating a report means calling Gemini, which plpgsql cannot do, so the SQL function schedules the placeholder and this route fills it in.
 
-Selects the oldest `shift_reports` rows still at `markdown = 'PENDING_GENERATION'` (capped at 5 per invocation — one Gemini call each, inside pg_cron's 25s HTTP timeout) and generates each through the shared `fillShiftReport` helper in `src/lib/ai/reports/generate.ts`, the same code path `POST /api/reports/generate` uses. Because it drains by row rather than by "today's shift", placeholders stranded before this route existed are picked up too. One row failing is logged and skipped, not fatal to the rest.
+Selects `shift_reports` rows still at `markdown = 'PENDING_GENERATION'`, fewest failed attempts first and then oldest (capped at 5 per invocation — one Gemini call each, inside pg_cron's 25s HTTP timeout) and generates each through the shared `fillShiftReport` helper in `src/lib/ai/reports/generate.ts`, the same code path `POST /api/reports/generate` uses. Because it drains by row rather than by "today's shift", placeholders stranded before this route existed are picked up too. One row failing is logged and skipped, not fatal to the rest. The failure is also recorded on the placeholder's `metadata` (`generation_attempts`, `last_generation_error` truncated to 200 characters, `last_attempt_at`), guarded on the row still being `PENDING_GENERATION`; a successful generation replaces `metadata` wholesale. A placeholder that keeps failing therefore sinks behind fresh ones, and after 5 failed attempts the cron skips it (logged as a warning) — the CSO's "Generate now" (`POST /api/reports/generate`) still adopts it. Until 2026-10-14 the oldest placeholders were always picked first, so five that always failed blocked the queue for good. No schema change: `metadata` is `jsonb`.
 
 No request body.
 

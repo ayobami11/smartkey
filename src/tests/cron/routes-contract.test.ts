@@ -145,112 +145,186 @@ for (const [name, handler] of ROUTES) {
 }
 
 // ---------------------------------------------------------------------------
+// The two reminder routes claim, then send (fix/cron-gaps). Both used to
+// select the due rows, send, then stamp what they had handled, so a stamp
+// failure or two overlapping runs re-sent the same reminder. Now one
+// conditional UPDATE ... WHERE <stamp> IS NULL RETURNING id stamps the rows
+// first, and only a failed send has its stamp cleared again.
+//
+// In the fake, the claim is the `requests` query that has both `update` and
+// `select`; the release is an `update` with no `select`.
+// ---------------------------------------------------------------------------
+
+const claimsOn = () =>
+  updatesOn('requests').filter((q) => has(q.ops, 'select'));
+const releasesOn = () =>
+  updatesOn('requests').filter((q) => !has(q.ops, 'select'));
+
+/** Answers the claim with `ids` (or `claimError`) and the release with `releaseError`. */
+const claimable = (
+  ids: string[] | null,
+  {
+    claimError = null,
+    releaseError = null,
+  }: { claimError?: string | null; releaseError?: string | null } = {}
+) => {
+  fake.tables.requests = (ops) => {
+    if (has(ops, 'select')) {
+      return claimError
+        ? { data: null, error: { message: claimError } }
+        : { data: ids && ids.map((id) => ({ id })), error: null };
+    }
+    return {
+      data: null,
+      error: releaseError ? { message: releaseError } : null,
+    };
+  };
+};
+
+const outcomes = (...list: DeliveryOutcome[]) => {
+  for (const o of list) vi.mocked(notify).mockResolvedValueOnce(o);
+};
+
+const ZERO = { sent: 0, suppressed: 0, no_recipient: 0, failed: 0 };
+
+// ---------------------------------------------------------------------------
 // POST /api/cron/weekend-reminders
 // ---------------------------------------------------------------------------
 
 describe('POST /api/cron/weekend-reminders', () => {
   const path = '/api/cron/weekend-reminders';
-  const due = (ids: string[], stampError: string | null = null) => {
-    fake.tables.requests = (ops) =>
-      has(ops, 'update')
-        ? { data: null, error: stampError ? { message: stampError } : null }
-        : { data: ids.map((id) => ({ id })), error: null };
-  };
-  const outcomes = (...list: DeliveryOutcome[]) => {
-    for (const o of list) vi.mocked(notify).mockResolvedValueOnce(o);
-  };
 
-  it("selects APPROVED weekend requests due today that haven't been reminded", async () => {
-    due([]);
+  it("claims APPROVED weekend requests due today that haven't been reminded", async () => {
+    // CHANGED: a stamping UPDATE ... RETURNING id, not a read. Same filters.
+    claimable([]);
     await call(weekendReminders, authed(path));
-    const [select] = queriesOn('requests');
-    expect(select.client).toBe('admin');
+    expect(queriesOn('requests')).toHaveLength(1);
+    const [claim] = claimsOn();
+    expect(claim.client).toBe('admin');
+    const [[patch]] = argsOf(claim.ops, 'update') as [
+      [{ reminder_sent_at: string }],
+    ];
+    expect(Object.keys(patch)).toEqual(['reminder_sent_at']);
+    expect(Number.isNaN(Date.parse(patch.reminder_sent_at))).toBe(false);
     const today = new Date().toISOString().slice(0, 10);
-    expect(argsOf(select.ops, 'eq')).toEqual([
+    expect(argsOf(claim.ops, 'eq')).toEqual([
       ['type', 'WEEKEND'],
       ['status', 'APPROVED'],
       ['requested_for', today],
     ]);
-    expect(argsOf(select.ops, 'is')).toEqual([['reminder_sent_at', null]]);
+    expect(argsOf(claim.ops, 'is')).toEqual([['reminder_sent_at', null]]);
+    expect(argsOf(claim.ops, 'select')).toEqual([['id']]);
   });
 
-  it('ref’d 500 when the query fails, without the DB text', async () => {
-    fake.tables.requests = {
-      data: null,
-      error: { message: 'relation "requests" leaked' },
-    };
+  it('ref’d 500 when the claim fails, without the DB text', async () => {
+    claimable(null, { claimError: 'relation "requests" leaked' });
     const res = await call(weekendReminders, authed(path));
     expectRef(res);
     expect(JSON.stringify(res.body)).not.toContain('leaked');
     expect(notify).not.toHaveBeenCalled();
   });
 
-  it('nothing due → { sent: 0, failed: 0 }, no sends, no stamp', async () => {
-    due([]);
-    expect(await call(weekendReminders, authed(path))).toEqual(
-      success({ sent: 0, failed: 0 })
-    );
+  it('nothing claimed → all-zero counters, no sends, no release', async () => {
+    // CHANGED: { sent, failed } → { sent, suppressed, no_recipient, failed }.
+    claimable([]);
+    expect(await call(weekendReminders, authed(path))).toEqual(success(ZERO));
     expect(notify).not.toHaveBeenCalled();
-    expect(updatesOn('requests')).toHaveLength(0);
+    expect(releasesOn()).toHaveLength(0);
   });
 
-  it('null data is treated as nothing due', async () => {
-    fake.tables.requests = { data: null, error: null };
-    expect(await call(weekendReminders, authed(path))).toEqual(
-      success({ sent: 0, failed: 0 })
-    );
+  it('null data is treated as nothing claimed', async () => {
+    // CHANGED: the four-counter shape.
+    claimable(null);
+    expect(await call(weekendReminders, authed(path))).toEqual(success(ZERO));
   });
 
-  it('sends one WEEKEND_REMINDER per row and stamps only the sent ones', async () => {
-    due(['a', 'b', 'c', 'd']);
-    outcomes('sent', 'failed', 'suppressed', 'sent');
+  it('sends one WEEKEND_REMINDER per claimed row and counts every outcome', async () => {
+    // CHANGED: suppressed and no_recipient are their own counters, not
+    // failures, and keep their stamp; only the failed row is released.
+    claimable(['a', 'b', 'c', 'd']);
+    outcomes('sent', 'failed', 'suppressed', 'no_recipient');
     expect(await call(weekendReminders, authed(path))).toEqual(
-      success({ sent: 2, failed: 2 })
+      success({ sent: 1, suppressed: 1, no_recipient: 1, failed: 1 })
     );
-    expect(vi.mocked(notify).mock.calls.map(([e]) => e)).toEqual([
-      { type: 'WEEKEND_REMINDER', requestId: 'a' },
-      { type: 'WEEKEND_REMINDER', requestId: 'b' },
-      { type: 'WEEKEND_REMINDER', requestId: 'c' },
-      { type: 'WEEKEND_REMINDER', requestId: 'd' },
-    ]);
-    const [stamp] = updatesOn('requests');
-    expect(stamp.client).toBe('admin');
-    const [[patch]] = argsOf(stamp.ops, 'update') as [
+    expect(vi.mocked(notify).mock.calls.map(([e]) => e)).toEqual(
+      ['a', 'b', 'c', 'd'].map((requestId) => ({
+        type: 'WEEKEND_REMINDER',
+        requestId,
+      }))
+    );
+    const [claim] = claimsOn();
+    const [[{ reminder_sent_at: claimedAt }]] = argsOf(claim.ops, 'update') as [
       [{ reminder_sent_at: string }],
     ];
-    expect(Object.keys(patch)).toEqual(['reminder_sent_at']);
-    expect(Number.isNaN(Date.parse(patch.reminder_sent_at))).toBe(false);
-    expect(argsOf(stamp.ops, 'in')).toEqual([['id', ['a', 'd']]]);
+    const [release] = releasesOn();
+    expect(release.client).toBe('admin');
+    expect(argsOf(release.ops, 'update')).toEqual([
+      [{ reminder_sent_at: null }],
+    ]);
+    expect(argsOf(release.ops, 'in')).toEqual([['id', ['b']]]);
+    // Only this run's claim is cleared.
+    expect(argsOf(release.ops, 'eq')).toEqual([
+      ['reminder_sent_at', claimedAt],
+    ]);
   });
 
-  it('a no_recipient outcome counts as failed and is not stamped', async () => {
-    due(['a']);
+  it('nothing failed → the claim is the stamp, no release', async () => {
+    claimable(['a', 'b']);
+    outcomes('sent', 'sent');
+    expect(await call(weekendReminders, authed(path))).toEqual(
+      success({ ...ZERO, sent: 2 })
+    );
+    expect(releasesOn()).toHaveLength(0);
+  });
+
+  it('a no_recipient outcome is counted on its own and stays stamped', async () => {
+    // CHANGED: was counted as failed and left unstamped.
+    claimable(['a']);
     outcomes('no_recipient');
     expect(await call(weekendReminders, authed(path))).toEqual(
-      success({ sent: 0, failed: 1 })
+      success({ ...ZERO, no_recipient: 1 })
     );
-    expect(updatesOn('requests')).toHaveLength(0);
+    expect(releasesOn()).toHaveLength(0);
   });
 
-  it('every send failing → no stamp at all', async () => {
-    due(['a', 'b']);
+  it('every send failing → every claim released, so a later run retries', async () => {
+    // CHANGED: the claim is released rather than never stamped.
+    claimable(['a', 'b']);
     outcomes('failed', 'failed');
     expect(await call(weekendReminders, authed(path))).toEqual(
-      success({ sent: 0, failed: 2 })
+      success({ ...ZERO, failed: 2 })
     );
-    expect(updatesOn('requests')).toHaveLength(0);
+    const [release] = releasesOn();
+    expect(argsOf(release.ops, 'in')).toEqual([['id', ['a', 'b']]]);
   });
 
-  it('a stamp failure is logged, and the sends are still reported', async () => {
-    due(['a'], 'stamp broke');
-    outcomes('sent');
+  it('a release failure is logged, and the counters still reported', async () => {
+    // CHANGED: the stamp-failure case is now a release failure.
+    claimable(['a'], { releaseError: 'release broke' });
+    outcomes('failed');
     expect(await call(weekendReminders, authed(path))).toEqual(
-      success({ sent: 1, failed: 0 })
+      success({ ...ZERO, failed: 1 })
     );
     expect(logger.error).toHaveBeenCalledWith(
-      'weekend-reminders: failed to stamp reminder_sent_at',
+      'weekend-reminders: failed to release claim',
       expect.objectContaining({ ids: ['a'] })
     );
+  });
+
+  it('an overlapping run sends only what it claimed itself', async () => {
+    // The second run's claim finds every row already stamped by the first.
+    let runs = 0;
+    fake.tables.requests = (ops) => {
+      if (!has(ops, 'select')) return { data: null, error: null };
+      runs += 1;
+      return { data: runs === 1 ? [{ id: 'a' }] : [], error: null };
+    };
+    outcomes('sent');
+    await Promise.all([
+      call(weekendReminders, authed(path)),
+      call(weekendReminders, authed(path)),
+    ]);
+    expect(notify).toHaveBeenCalledTimes(1);
   });
 
   it('an uncaught throw is an enveloped, ref’d 500', async () => {
@@ -267,49 +341,50 @@ describe('POST /api/cron/weekend-reminders', () => {
 
 describe('POST /api/cron/overdue-reminders', () => {
   const path = '/api/cron/overdue-reminders';
-  const due = (ids: string[], stampError: string | null = null) => {
-    fake.tables.requests = (ops) =>
-      has(ops, 'update')
-        ? { data: null, error: stampError ? { message: stampError } : null }
-        : { data: ids.map((id) => ({ id })), error: null };
-  };
-  const outcomes = (...list: DeliveryOutcome[]) => {
-    for (const o of list) vi.mocked(notify).mockResolvedValueOnce(o);
-  };
-  const ZERO = { sent: 0, suppressed: 0, no_recipient: 0, failed: 0 };
 
-  it('selects KEY_ISSUED requests past their deadline not yet reminded', async () => {
-    due([]);
+  it('claims KEY_ISSUED requests past their deadline not yet reminded', async () => {
+    // CHANGED: a stamping UPDATE ... RETURNING id, not a read. Same filters.
+    claimable([]);
     const before = Date.now();
     await call(overdueReminders, authed(path));
-    const [select] = queriesOn('requests');
-    expect(select.client).toBe('admin');
-    expect(argsOf(select.ops, 'eq')).toEqual([['status', 'KEY_ISSUED']]);
-    const [[column, cutoff]] = argsOf(select.ops, 'lt') as [[string, string]];
+    expect(queriesOn('requests')).toHaveLength(1);
+    const [claim] = claimsOn();
+    expect(claim.client).toBe('admin');
+    const [[patch]] = argsOf(claim.ops, 'update') as [
+      [{ overdue_reminder_sent_at: string }],
+    ];
+    expect(Object.keys(patch)).toEqual(['overdue_reminder_sent_at']);
+    expect(argsOf(claim.ops, 'eq')).toEqual([['status', 'KEY_ISSUED']]);
+    const [[column, cutoff]] = argsOf(claim.ops, 'lt') as [[string, string]];
     expect(column).toBe('return_deadline');
     expect(Date.parse(cutoff)).toBeGreaterThanOrEqual(before - 1000);
     expect(Date.parse(cutoff)).toBeLessThanOrEqual(Date.now());
-    expect(argsOf(select.ops, 'is')).toEqual([
+    // The stamp is the same instant as the cutoff.
+    expect(patch.overdue_reminder_sent_at).toBe(cutoff);
+    expect(argsOf(claim.ops, 'is')).toEqual([
       ['overdue_reminder_sent_at', null],
     ]);
+    expect(argsOf(claim.ops, 'select')).toEqual([['id']]);
   });
 
-  it('ref’d 500 when the query fails, without the DB text', async () => {
-    fake.tables.requests = { data: null, error: { message: 'pg leaked' } };
+  it('ref’d 500 when the claim fails, without the DB text', async () => {
+    claimable(null, { claimError: 'pg leaked' });
     const res = await call(overdueReminders, authed(path));
     expectRef(res);
     expect(JSON.stringify(res.body)).not.toContain('leaked');
   });
 
-  it('nothing due → all-zero counters, no sends, no stamp', async () => {
-    due([]);
+  it('nothing claimed → all-zero counters, no sends, no release', async () => {
+    claimable([]);
     expect(await call(overdueReminders, authed(path))).toEqual(success(ZERO));
     expect(notify).not.toHaveBeenCalled();
-    expect(updatesOn('requests')).toHaveLength(0);
+    expect(releasesOn()).toHaveLength(0);
   });
 
-  it('counts every outcome and stamps all but the failed', async () => {
-    due(['a', 'b', 'c', 'd']);
+  it('counts every outcome and releases only the failed', async () => {
+    // CHANGED: the claim stamps all four; the failed one is released, instead
+    // of the other three being stamped afterwards.
+    claimable(['a', 'b', 'c', 'd']);
     outcomes('sent', 'suppressed', 'no_recipient', 'failed');
     expect(await call(overdueReminders, authed(path))).toEqual(
       success({ sent: 1, suppressed: 1, no_recipient: 1, failed: 1 })
@@ -320,29 +395,41 @@ describe('POST /api/cron/overdue-reminders', () => {
         requestId,
       }))
     );
-    const [stamp] = updatesOn('requests');
-    const [[patch]] = argsOf(stamp.ops, 'update') as [[object]];
-    expect(Object.keys(patch)).toEqual(['overdue_reminder_sent_at']);
-    expect(argsOf(stamp.ops, 'in')).toEqual([['id', ['a', 'b', 'c']]]);
+    const [claim] = claimsOn();
+    const [[{ overdue_reminder_sent_at: claimedAt }]] = argsOf(
+      claim.ops,
+      'update'
+    ) as [[{ overdue_reminder_sent_at: string }]];
+    const [release] = releasesOn();
+    expect(argsOf(release.ops, 'update')).toEqual([
+      [{ overdue_reminder_sent_at: null }],
+    ]);
+    expect(argsOf(release.ops, 'in')).toEqual([['id', ['d']]]);
+    expect(argsOf(release.ops, 'eq')).toEqual([
+      ['overdue_reminder_sent_at', claimedAt],
+    ]);
   });
 
-  it('every send failing → no stamp, so the next hour retries', async () => {
-    due(['a', 'b']);
+  it('every send failing → every claim released, so the next hour retries', async () => {
+    // CHANGED: released rather than never stamped.
+    claimable(['a', 'b']);
     outcomes('failed', 'failed');
     expect(await call(overdueReminders, authed(path))).toEqual(
       success({ ...ZERO, failed: 2 })
     );
-    expect(updatesOn('requests')).toHaveLength(0);
+    const [release] = releasesOn();
+    expect(argsOf(release.ops, 'in')).toEqual([['id', ['a', 'b']]]);
   });
 
-  it('a stamp failure is logged, and the counters still reported', async () => {
-    due(['a'], 'stamp broke');
-    outcomes('sent');
+  it('a release failure is logged, and the counters still reported', async () => {
+    // CHANGED: the stamp-failure case is now a release failure.
+    claimable(['a'], { releaseError: 'release broke' });
+    outcomes('failed');
     expect(await call(overdueReminders, authed(path))).toEqual(
-      success({ ...ZERO, sent: 1 })
+      success({ ...ZERO, failed: 1 })
     );
     expect(logger.error).toHaveBeenCalledWith(
-      'overdue-reminders: failed to stamp overdue_reminder_sent_at',
+      'overdue-reminders: failed to release claim',
       expect.objectContaining({ ids: ['a'] })
     );
   });
@@ -447,14 +534,16 @@ describe('POST /api/cron/daily-digest', () => {
     expect(queriesOn('notification_preferences')).toHaveLength(0);
   });
 
-  it('a preferences query failure sends nothing and still answers 200', async () => {
-    // Current behaviour, pinned (see the batch 5 report): the error is
-    // ignored, so nobody counts as opted in.
-    setup([cso('c1')], ['c1'], 'prefs broke');
+  it('a preferences query failure is a ref’d 500, and nothing is sent', async () => {
+    // CHANGED: the error used to be ignored, so nobody counted as opted in
+    // and pg_cron saw 200 { sent: 0, skipped: 0, failed: 0 } for a run that
+    // silently sent nothing.
+    setup([cso('c1')], ['c1'], 'prefs leaked');
     stats(BUSY);
-    expect(await call(dailyDigest, authed(path))).toEqual(
-      success({ sent: 0, skipped: 0, failed: 0 })
-    );
+    const res = await call(dailyDigest, authed(path));
+    expectRef(res);
+    expect(JSON.stringify(res.body)).not.toContain('leaked');
+    expect(fake.rpcCalls).toHaveLength(0);
     expect(gmailTransport.send).not.toHaveBeenCalled();
   });
 
@@ -486,6 +575,24 @@ describe('POST /api/cron/daily-digest', () => {
     expect(fake.rpcCalls).toHaveLength(1);
     const [{ args }] = fake.rpcCalls;
     expect(Object.keys(args as object)).toEqual(['p_since']);
+  });
+
+  it('a failed building-wide call is made once and fails every CSO', async () => {
+    // Was retried once per CSO: a failure left the cache empty.
+    setup([cso('c1'), cso('c2'), cso('c3'), dean('d1')]);
+    stats((args) =>
+      (args as { p_unit_id?: string }).p_unit_id
+        ? { data: [BUSY], error: null }
+        : { data: null, error: { message: 'rpc broke' } }
+    );
+    expect(await call(dailyDigest, authed(path))).toEqual(
+      success({ sent: 1, skipped: 0, failed: 3 })
+    );
+    const buildingWide = fake.rpcCalls.filter(
+      (c) => !(c.args as { p_unit_id?: string }).p_unit_id
+    );
+    expect(buildingWide).toHaveLength(1);
+    expect(sentTo()).toEqual(['d1@unilag.edu.ng']);
   });
 
   it('a Dean gets their own unit’s stats', async () => {
@@ -578,26 +685,133 @@ describe('POST /api/cron/daily-digest', () => {
 
 describe('POST /api/cron/shift-report', () => {
   const path = '/api/cron/shift-report';
-  const pending = (n: number) => {
-    fake.tables.shift_reports = {
-      data: Array.from({ length: n }, (_, i) => ({
+  type Row = { id: string; shift_id: string; metadata: unknown };
+  /** The placeholders the read returns; `recordError` answers the attempt write. */
+  const rows = (list: Row[], recordError: string | null = null) => {
+    fake.tables.shift_reports = (ops) =>
+      has(ops, 'update')
+        ? { data: null, error: recordError ? { message: recordError } : null }
+        : { data: list, error: null };
+  };
+  const pending = (n: number) =>
+    rows(
+      Array.from({ length: n }, (_, i) => ({
         id: `r${i}`,
         shift_id: `s${i}`,
-      })),
-      error: null,
-    };
-  };
+        metadata: { scheduled_by: 'pg_cron' },
+      }))
+    );
+  const attemptWrites = () =>
+    updatesOn('shift_reports').map((q) => ({
+      patch: argsOf(q.ops, 'update')[0][0] as {
+        metadata: Record<string, unknown>;
+      },
+      eq: argsOf(q.ops, 'eq'),
+    }));
 
-  it('drains the oldest PENDING_GENERATION placeholders, at most 5 per run', async () => {
+  it('drains PENDING_GENERATION placeholders fewest-attempts first, at most 5 per run', async () => {
+    // CHANGED: ordered by metadata->generation_attempts (no attempts first)
+    // before age, so a placeholder that keeps failing sinks behind fresh ones
+    // instead of holding a slot every run. The read also takes metadata.
     pending(0);
     await call(shiftReport, authed(path));
     const [q] = queriesOn('shift_reports');
     expect(q.client).toBe('admin');
+    expect(argsOf(q.ops, 'select')).toEqual([['id, shift_id, metadata']]);
     expect(argsOf(q.ops, 'eq')).toEqual([['markdown', 'PENDING_GENERATION']]);
     expect(argsOf(q.ops, 'order')).toEqual([
+      ['metadata->generation_attempts', { ascending: true, nullsFirst: true }],
       ['generated_at', { ascending: true }],
     ]);
     expect(argsOf(q.ops, 'limit')).toEqual([[5]]);
+  });
+
+  it('a failed generation records the attempt on the placeholder', async () => {
+    rows([
+      {
+        id: 'r0',
+        shift_id: 's0',
+        metadata: { scheduled_by: 'pg_cron', generation_attempts: 2 },
+      },
+    ]);
+    vi.mocked(fillShiftReport).mockRejectedValueOnce(
+      new Error('persist broke: ' + 'x'.repeat(500))
+    );
+    expect(await call(shiftReport, authed(path))).toEqual(
+      success({ generated: 0, failed: 1 })
+    );
+    const [write] = attemptWrites();
+    expect(write.patch.metadata).toMatchObject({
+      scheduled_by: 'pg_cron',
+      generation_attempts: 3,
+    });
+    expect(
+      (write.patch.metadata.last_generation_error as string).length
+    ).toBeLessThanOrEqual(200);
+    expect(
+      Number.isNaN(Date.parse(write.patch.metadata.last_attempt_at as string))
+    ).toBe(false);
+    // Only a row that is still a placeholder.
+    expect(write.eq).toEqual([
+      ['id', 'r0'],
+      ['markdown', 'PENDING_GENERATION'],
+    ]);
+  });
+
+  it('a placeholder with no metadata starts counting at one', async () => {
+    rows([{ id: 'r0', shift_id: 's0', metadata: null }]);
+    vi.mocked(fillShiftReport).mockRejectedValueOnce(new Error('boom'));
+    await call(shiftReport, authed(path));
+    const [write] = attemptWrites();
+    expect(write.patch.metadata).toMatchObject({
+      generation_attempts: 1,
+      last_generation_error: 'boom',
+    });
+  });
+
+  it('a successful generation records nothing', async () => {
+    pending(2);
+    vi.mocked(fillShiftReport).mockResolvedValue({} as never);
+    await call(shiftReport, authed(path));
+    expect(attemptWrites()).toHaveLength(0);
+  });
+
+  it('a placeholder past 5 failed attempts is skipped, not retried', async () => {
+    rows([
+      { id: 'r0', shift_id: 's0', metadata: {} },
+      { id: 'r1', shift_id: 's1', metadata: { generation_attempts: 5 } },
+    ]);
+    vi.mocked(fillShiftReport).mockResolvedValue({} as never);
+    expect(await call(shiftReport, authed(path))).toEqual(
+      success({ generated: 1, failed: 0 })
+    );
+    expect(vi.mocked(fillShiftReport).mock.calls.map(([, ids]) => ids)).toEqual(
+      [{ shiftId: 's0', reportId: 'r0' }]
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      'shift-report: placeholder past retry limit, skipped',
+      expect.objectContaining({ reportId: 'r1', attempts: 5 })
+    );
+  });
+
+  it('a failure to record the attempt is logged and the run goes on', async () => {
+    rows(
+      [
+        { id: 'r0', shift_id: 's0', metadata: {} },
+        { id: 'r1', shift_id: 's1', metadata: {} },
+      ],
+      'record broke'
+    );
+    vi.mocked(fillShiftReport)
+      .mockRejectedValueOnce(new Error('gemini down'))
+      .mockResolvedValueOnce({} as never);
+    expect(await call(shiftReport, authed(path))).toEqual(
+      success({ generated: 1, failed: 1 })
+    );
+    expect(logger.error).toHaveBeenCalledWith(
+      'shift-report: failed to record attempt',
+      expect.objectContaining({ reportId: 'r0' })
+    );
   });
 
   it('ref’d 500 when the query fails, without the DB text', async () => {
