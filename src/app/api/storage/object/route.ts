@@ -6,11 +6,11 @@ import {
   PROXIED_BUCKETS,
   type ProxiedBucket,
 } from '@/lib/storage/object-url';
+import { objectResponseHeaders } from '@/lib/storage/object-headers';
+import { SNIFF_BYTES } from '@/lib/storage/upload-type';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
 import { err } from '@/types/api';
-
-const CACHE_CONTROL = 'private, max-age=300, must-revalidate';
 
 type Role = 'CSO' | 'DEAN' | 'VERIFIER' | 'REQUESTER';
 
@@ -73,10 +73,12 @@ export const GET = async (request: NextRequest) => {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role')
+    .select('role, status')
     .eq('id', user.id)
     .single();
-  if (!profile) {
+  // A deactivated user's session can outlive the ban by up to the token's
+  // lifetime; treat it as no session, as route() does.
+  if (!profile || profile.status === 'DEACTIVATED') {
     return NextResponse.json(err('Unauthorized', 401), { status: 401 });
   }
 
@@ -99,15 +101,10 @@ export const GET = async (request: NextRequest) => {
     return NextResponse.json(err('Not found', 404), { status: 404 });
   }
 
+  const head = new Uint8Array(await data.slice(0, SNIFF_BYTES).arrayBuffer());
+
   return new NextResponse(data, {
     status: 200,
-    headers: {
-      'Content-Type': data.type || 'application/octet-stream',
-      'Cache-Control': CACHE_CONTROL,
-      // These are user-supplied images; never let a browser sniff them into
-      // something executable.
-      'X-Content-Type-Options': 'nosniff',
-      'Content-Disposition': 'inline',
-    },
+    headers: objectResponseHeaders(head),
   });
 };
