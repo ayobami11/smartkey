@@ -26,7 +26,12 @@ vi.mock('@/lib/supabase/server', () => ({
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: vi.fn() }));
 
 const USER = { id: '11111111-1111-4111-8111-111111111111' };
-const PROFILE = { role: 'DEAN', unit_id: 'u1', full_name: 'Dr. Bakare' };
+const PROFILE = {
+  role: 'DEAN',
+  unit_id: 'u1',
+  full_name: 'Dr. Bakare',
+  status: 'ACTIVE',
+};
 
 const post = (body?: string, headers: Record<string, string> = {}) =>
   new NextRequest('http://localhost/api/test', {
@@ -81,6 +86,51 @@ describe('route — user auth', () => {
     expect((await read(res)).status).toBe(401);
   });
 
+  it('401s a DEACTIVATED profile whose session is still valid', async () => {
+    mocks.single.mockResolvedValue({
+      data: { ...PROFILE, status: 'DEACTIVATED' },
+    });
+    const handler = vi.fn();
+    const res = await route({
+      name: 't',
+      auth: 'user',
+      roles: ['DEAN'],
+      handler,
+    })(post(), ctx());
+    expect(await read(res)).toEqual({
+      status: 401,
+      body: { data: null, error: 'Unauthorized', status: 401 },
+    });
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('401s a DEACTIVATED profile before the role check', async () => {
+    mocks.single.mockResolvedValue({
+      data: { ...PROFILE, role: 'REQUESTER', status: 'DEACTIVATED' },
+    });
+    const res = await route({
+      name: 't',
+      auth: 'user',
+      roles: ['DEAN'],
+      handler: () => respond.ok(null),
+    })(post(), ctx());
+    expect(res.status).toBe(401);
+  });
+
+  it.each(['ACTIVE', 'PENDING_ACTIVATION'])(
+    'lets a %s profile through',
+    async (status) => {
+      mocks.single.mockResolvedValue({ data: { ...PROFILE, status } });
+      const res = await route({
+        name: 't',
+        auth: 'user',
+        roles: ['DEAN'],
+        handler: ({ profile }) => respond.ok({ status: profile.status }),
+      })(post(), ctx());
+      expect((await read(res)).body.data).toEqual({ status });
+    }
+  );
+
   it('403s on the wrong role', async () => {
     mocks.single.mockResolvedValue({ data: { ...PROFILE, role: 'REQUESTER' } });
     const res = await route({
@@ -112,7 +162,10 @@ describe('route — user auth', () => {
       role: 'DEAN',
       hasClient: true,
     });
-    expect(mocks.select).toHaveBeenCalledWith('role, unit_id, full_name');
+    // CHANGED: status is selected in the same query, for the DEACTIVATED check.
+    expect(mocks.select).toHaveBeenCalledWith(
+      'role, unit_id, full_name, status'
+    );
   });
 
   it('runs no profile query when roles is omitted', async () => {

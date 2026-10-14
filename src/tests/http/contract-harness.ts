@@ -44,7 +44,12 @@ const freshState = () => ({
     role: 'CSO',
     unit_id: 'unit-1',
     full_name: 'Dr. Bakare',
-  } as { role: string; unit_id: string | null; full_name: string } | null,
+  } as {
+    role: string;
+    unit_id: string | null;
+    full_name: string;
+    status?: string;
+  } | null,
   tables: {} as Record<string, Answer>,
   // A function answer sees the call's args, for an RPC called more than once
   // with different arguments in one request (cron/daily-digest).
@@ -299,7 +304,8 @@ export const expectRef = (res: {
 
 /**
  * The auth half of every role-gated route's contract: no session → 401, a
- * session with no profile row → 401, each role outside `allowed` → 403.
+ * session with no profile row → 401, a DEACTIVATED profile → 401, each role
+ * outside `allowed` → 403.
  * `makeRequest` is called fresh per case (a request body is single-use).
  */
 export const describeAuth = (
@@ -319,6 +325,18 @@ export const describeAuth = (
 
     it('401 Unauthorized when the user has no profile', async () => {
       fake.profile = null;
+      expect(await call(handler, makeRequest(), params)).toEqual(
+        failure(401, 'Unauthorized')
+      );
+    });
+
+    it('401 Unauthorized when the profile is DEACTIVATED', async () => {
+      fake.profile = {
+        role: allowed[0],
+        unit_id: 'unit-1',
+        full_name: 'Test User',
+        status: 'DEACTIVATED',
+      };
       expect(await call(handler, makeRequest(), params)).toEqual(
         failure(401, 'Unauthorized')
       );
