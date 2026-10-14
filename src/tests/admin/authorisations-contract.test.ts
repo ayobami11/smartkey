@@ -245,6 +245,9 @@ describe('DELETE /api/admin/authorisations/[key_id]/[requester_id]', () => {
 // POST /api/admin/signature-references/resolve
 // ---------------------------------------------------------------------------
 
+const NEW_REF_URL = `https://x.supabase.co/storage/v1/object/public/hod-signatures/${DEAN_ID}/signature-new.png`;
+const NEW_REF_PROXY = `/api/storage/object?bucket=hod-signatures&path=${DEAN_ID}%2Fsignature-new.png`;
+
 describe('POST /api/admin/signature-references/resolve', () => {
   const path = '/api/admin/signature-references/resolve';
   const body = { profile_id: DEAN_ID, type: 'signature', decision: 'APPROVED' };
@@ -259,7 +262,7 @@ describe('POST /api/admin/signature-references/resolve', () => {
   beforeEach(() => {
     asRole('CSO');
     fake.rpc.resolve_pending_signature_reference = {
-      data: [{ status: 'APPROVED', new_url: 'https://x/new.png' }],
+      data: [{ status: 'APPROVED', new_url: NEW_REF_URL }],
       error: null,
     };
   });
@@ -314,7 +317,8 @@ describe('POST /api/admin/signature-references/resolve', () => {
   it('returns the decision and new URL, note passed through', async () => {
     expect(
       await call(resolveReference, post(path, { ...body, note: 'ok' }))
-    ).toEqual(success({ status: 'APPROVED', new_url: 'https://x/new.png' }));
+      // CHANGED: new_url was the raw storage URL of a private bucket.
+    ).toEqual(success({ status: 'APPROVED', new_url: NEW_REF_PROXY }));
     expect(fake.rpcCalls).toEqual([
       {
         name: 'resolve_pending_signature_reference',

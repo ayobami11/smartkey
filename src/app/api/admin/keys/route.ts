@@ -2,6 +2,8 @@ import * as z from 'zod';
 
 import { respond } from '@/lib/http/respond';
 import { route } from '@/lib/http/route';
+import { byDetail, rpcFail } from '@/lib/http/rpc-errors';
+import { callRpc } from '@/lib/rpc/call-rpc';
 
 const bodySchema = z.object({
   code: z
@@ -15,11 +17,9 @@ const bodySchema = z.object({
   key_count: z.coerce.number().int().min(1).max(20).default(1),
 });
 
-// Postgres unique_violation, raised here by keys.code.
-const UNIQUE_VIOLATION = '23505';
-
-// Known follow-up: creating a key writes no audit entry. It is a single-row
-// insert under the keys RLS policy (CSO write), not an RPC.
+// create_key inserts the key and writes KEY_CREATED in one transaction, with
+// the CSO's own session (the RPC checks the actor). The keys_insert_cso RLS
+// policy is gone, so this is the only way a key is created.
 export const POST = route({
   name: 'admin/keys',
   auth: 'user',
@@ -28,28 +28,21 @@ export const POST = route({
   handler: async ({ supabase, body }) => {
     const { code, zone, room_name, unit_id, key_count } = body;
 
-    const { data: key, error: insertError } = await supabase
-      .from('keys')
-      .insert({
-        code,
-        zone,
-        room_name,
-        unit_id,
-        key_count,
-        status: 'AVAILABLE',
-      })
-      .select('id')
-      .single();
+    const result = await callRpc(supabase, 'create_key', {
+      p_code: code,
+      p_zone: zone,
+      p_room_name: room_name,
+      p_unit_id: unit_id,
+      p_key_count: key_count,
+    });
 
-    if (insertError) {
-      if (insertError.code === UNIQUE_VIOLATION) {
-        return respond.fail(409, `Key code "${code}" is already in use.`);
-      }
-      return respond.internal('create-key: insert failed', {
-        err: insertError.message,
+    if (!result.ok) {
+      return rpcFail(result.error, {
+        CONFLICT: `Key code "${code}" is already in use.`,
+        VALIDATION: byDetail([[/^unit not found/, 'Unit not found']]),
       });
     }
 
-    return respond.ok({ key_id: key.id }, 201);
+    return respond.ok({ key_id: result.data.key_id }, 201);
   },
 });

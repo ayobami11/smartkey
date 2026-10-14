@@ -184,7 +184,25 @@ describe('GET /api/ai/signature-alerts', () => {
     expect(await call(signatureAlerts, get(path))).toEqual(
       success({ alerts: [], reference_replacements: [pendingRefOut] })
     );
-    expect(fake.queries.some((q) => q.table === 'requests')).toBe(false);
+  });
+
+  // CHANGED: the route now starts from the PENDING_HOD requests, so with
+  // none there is no audit query at all (it used to skip the requests one).
+  it('skips the audit read when no request is pending', async () => {
+    fake.tables.requests = { data: [], error: null };
+    expect(await call(signatureAlerts, get(path))).toEqual(
+      success({ alerts: [], reference_replacements: [pendingRefOut] })
+    );
+    expect(fake.queries.some((q) => q.table === 'audit_log')).toBe(false);
+  });
+
+  // CHANGED (bug fix): the 200 newest SIGNATURE_MISMATCH entries were read
+  // first, so a still-held request older than those dropped off the list.
+  it('reads mismatch entries for exactly the pending requests, with no cap', async () => {
+    await call(signatureAlerts, get(path));
+    const audit = fake.queries.find((q) => q.table === 'audit_log')!.ops;
+    expect(opArgs(audit, 'in')).toEqual([['target_id', [REQUEST_ID]]]);
+    expect(audit.some(([m]) => m === 'limit')).toBe(false);
   });
 
   it('returns held requests (latest mismatch, proxied URLs) and replacements', async () => {
@@ -211,12 +229,13 @@ describe('GET /api/ai/signature-alerts', () => {
       ['target_type', 'request'],
     ]);
     const requests = fake.queries.find((q) => q.table === 'requests')!.ops;
-    expect(opArgs(requests, 'in')).toEqual([['id', [REQUEST_ID]]]);
+    // CHANGED: the pending requests are read first, unfiltered by id.
+    expect(opArgs(requests, 'in')).toEqual([]);
     expect(opArgs(requests, 'eq')).toEqual([['status', 'PENDING_HOD']]);
   });
 
-  it('drops a mismatch whose request is no longer PENDING_HOD', async () => {
-    fake.tables.requests = { data: [], error: null };
+  it('lists no alert for a pending request with no mismatch entry', async () => {
+    fake.tables.audit_log = { data: [], error: null };
     expect(await call(signatureAlerts, get(path))).toEqual(
       success({ alerts: [], reference_replacements: [pendingRefOut] })
     );

@@ -18,6 +18,7 @@ import { logger } from '@/lib/logger';
 
 import {
   asRole,
+  AUTH_USER_ID,
   call,
   describeAuth,
   expectRef,
@@ -112,7 +113,8 @@ describe('POST /api/admin/users', () => {
         provision,
         post(path, { ...body, role: 'DEAN', unit_id: UNIT_ID })
       )
-    ).toEqual(failure(409, 'This department already has an active HOD'));
+      // CHANGED: the copy said "This department already has an active HOD".
+    ).toEqual(failure(409, 'That unit already has an active Dean.'));
     expect(fake.authAdminCalls).toHaveLength(0);
   });
 
@@ -140,12 +142,37 @@ describe('POST /api/admin/users', () => {
   });
 
   describe('an existing profile for the email', () => {
-    const existing = (status: string, updateError: unknown = null) => {
-      fake.tables.profiles = (ops) =>
-        hasOp(ops, 'update')
-          ? { data: null, error: updateError as null }
-          : { data: { id: TARGET_ID, status }, error: null };
+    const existing = (status: string) => {
+      fake.tables.profiles = { data: { id: TARGET_ID, status }, error: null };
     };
+
+    beforeEach(() => {
+      fake.rpc.record_invite_resent = {
+        data: [
+          {
+            profile_id: TARGET_ID,
+            status: 'PENDING_ACTIVATION',
+            role: 'VERIFIER',
+            institutional_email: 'ada@unilag.edu.ng',
+          },
+        ],
+        error: null,
+      };
+      fake.rpc.reinstate_user = {
+        data: [
+          {
+            profile_id: TARGET_ID,
+            status: 'PENDING_ACTIVATION',
+            role: 'VERIFIER',
+          },
+        ],
+        error: null,
+      };
+      fake.rpc.deactivate_user = {
+        data: [{ profile_id: TARGET_ID, status: 'DEACTIVATED' }],
+        error: null,
+      };
+    });
 
     it('409 Email already registered when ACTIVE', async () => {
       existing('ACTIVE');
@@ -153,14 +180,26 @@ describe('POST /api/admin/users', () => {
         failure(409, 'Email already registered')
       );
       expect(fake.rpcCalls).toHaveLength(0);
+      expect(fake.authAdminCalls).toHaveLength(0);
     });
 
-    it('re-invites a PENDING_ACTIVATION user with 200, no RPC', async () => {
+    // CHANGED: the re-invite used to reset the profile through the
+    // service-role client with no audit entry and no RPC.
+    it('re-invites a PENDING_ACTIVATION user through record_invite_resent', async () => {
       existing('PENDING_ACTIVATION');
       expect(await call(provision, post(path, body))).toEqual(
         success({ profile_id: TARGET_ID, status: 'PENDING_ACTIVATION' })
       );
-      expect(fake.rpcCalls).toHaveLength(0);
+      expect(fake.rpcCalls).toEqual([
+        {
+          name: 'record_invite_resent',
+          args: {
+            p_profile_id: TARGET_ID,
+            p_full_name: 'Ada Obi',
+            p_unit_id: undefined,
+          },
+        },
+      ]);
       expect(fake.authAdminCalls.map((c) => c.method)).toEqual([
         'generateLink',
       ]);
@@ -168,33 +207,134 @@ describe('POST /api/admin/users', () => {
         type: 'magiclink',
         email: 'ada@unilag.edu.ng',
       });
-      // The status reset goes through the service-role client.
-      const update = fake.queries.find(
-        (q) => q.table === 'profiles' && hasOp(q.ops, 'update')
-      );
-      expect(update?.client).toBe('admin');
+      // No direct profile write from either client any more.
+      expect(fake.queries.some((q) => hasOp(q.ops, 'update'))).toBe(false);
       expect(mail.send).toHaveBeenCalledTimes(1);
     });
 
-    it('lifts the ban before re-inviting a DEACTIVATED user', async () => {
-      existing('DEACTIVATED');
+    // CHANGED: the activation link followed the role in the form; a
+    // re-invite never changes the stored role, so it now follows that.
+    it('points the re-invite at the stored role, not the form role', async () => {
+      existing('PENDING_ACTIVATION');
+      fake.rpc.record_invite_resent = {
+        data: [
+          {
+            profile_id: TARGET_ID,
+            status: 'PENDING_ACTIVATION',
+            role: 'DEAN',
+            institutional_email: 'ada@unilag.edu.ng',
+          },
+        ],
+        error: null,
+      };
       expect((await call(provision, post(path, body))).status).toBe(200);
-      expect(fake.authAdminCalls[0]).toEqual({
-        method: 'updateUserById',
-        args: [TARGET_ID, { ban_duration: 'none' }],
-      });
+      expect(JSON.stringify(mail.send.mock.calls[0][0])).toContain(
+        encodeURIComponent('/dean/onboarding')
+      );
     });
 
-    it('500 with a ref when the profile reset fails', async () => {
-      existing('PENDING_ACTIVATION', { message: 'boom' });
+    // CHANGED: the ban was lifted first, before any profile change, and
+    // nothing was audited. Now: link, reinstate_user (USER_REINSTATED), then
+    // the ban is lifted.
+    it('reinstates a DEACTIVATED user, then lifts the ban', async () => {
+      existing('DEACTIVATED');
+      expect(await call(provision, post(path, body))).toEqual(
+        success({ profile_id: TARGET_ID, status: 'PENDING_ACTIVATION' })
+      );
+      expect(fake.rpcCalls).toEqual([
+        {
+          name: 'reinstate_user',
+          args: {
+            p_profile_id: TARGET_ID,
+            p_full_name: 'Ada Obi',
+            p_unit_id: undefined,
+          },
+        },
+      ]);
+      expect(fake.authAdminCalls).toEqual([
+        {
+          method: 'generateLink',
+          args: [{ type: 'magiclink', email: 'ada@unilag.edu.ng' }],
+        },
+        {
+          method: 'updateUserById',
+          args: [TARGET_ID, { ban_duration: 'none' }],
+        },
+      ]);
+      expect(mail.send).toHaveBeenCalledTimes(1);
+    });
+
+    it('500 with a ref, deactivated again and no email, when the ban cannot be lifted', async () => {
+      existing('DEACTIVATED');
+      fake.authAdmin.updateUserById = { data: null, error: { message: 'x' } };
+      expectRef(await call(provision, post(path, body)));
+      expect(fake.rpcCalls.map((c) => c.name)).toEqual([
+        'reinstate_user',
+        'deactivate_user',
+      ]);
+      expect(mail.send).not.toHaveBeenCalled();
+    });
+
+    it('does not lift the ban when reinstate_user refuses', async () => {
+      existing('DEACTIVATED');
+      fake.rpc.reinstate_user = rpcError(
+        'CONFLICT: that unit already has an active Dean'
+      );
+      expect(await call(provision, post(path, body))).toEqual(
+        failure(409, 'That unit already has an active Dean.')
+      );
+      expect(fake.authAdminCalls.map((c) => c.method)).toEqual([
+        'generateLink',
+      ]);
+      expect(mail.send).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      [
+        'CONFLICT: that unit already has an active Dean',
+        409,
+        'That unit already has an active Dean.',
+      ],
+      ['CONFLICT: user is already active', 409, 'Email already registered'],
+      [
+        'CONFLICT: user is deactivated',
+        409,
+        'User status changed. Refresh and try again.',
+      ],
+      [`NOT_FOUND: profile ${TARGET_ID} does not exist`, 404, 'User not found'],
+      ['VALIDATION: unit not found', 422, 'Unit not found'],
+      [
+        'VALIDATION: unit is required for this role',
+        422,
+        'unit_id is required for Dean and Requester roles',
+      ],
+      ['FORBIDDEN: only the CSO can re-send an invite', 403, 'Forbidden'],
+    ])('re-invite maps %s → %i, no email', async (raised, status, message) => {
+      existing('PENDING_ACTIVATION');
+      fake.rpc.record_invite_resent = rpcError(raised);
+      expect(await call(provision, post(path, body))).toEqual(
+        failure(status, message)
+      );
+      expect(mail.send).not.toHaveBeenCalled();
+    });
+
+    it('500 with a ref for an unrecognised re-invite RPC failure', async () => {
+      existing('PENDING_ACTIVATION');
+      fake.rpc.record_invite_resent = rpcError('connection reset');
       expectRef(await call(provision, post(path, body)));
       expect(mail.send).not.toHaveBeenCalled();
     });
 
-    it('still 200 when the re-invite link cannot be generated', async () => {
-      existing('PENDING_ACTIVATION');
+    // CHANGED: a failed link used to be logged and still answer 200, after
+    // the profile had already been reset. Now nothing changes.
+    it('500 with a ref, and no RPC, when the re-invite link cannot be generated', async () => {
+      existing('DEACTIVATED');
       fake.authAdmin.generateLink = { data: null, error: { message: 'x' } };
-      expect((await call(provision, post(path, body))).status).toBe(200);
+      expectRef(await call(provision, post(path, body)));
+      expect(fake.rpcCalls).toHaveLength(0);
+      expect(fake.authAdminCalls.map((c) => c.method)).toEqual([
+        'generateLink',
+      ]);
       expect(mail.send).not.toHaveBeenCalled();
     });
 
@@ -209,16 +349,12 @@ describe('POST /api/admin/users', () => {
     fake.authAdmin.generateLink = { data: null, error: { message: 'x' } };
     expectRef(await call(provision, post(path, body)));
     expect(fake.rpcCalls).toHaveLength(0);
+    expect(mail.send).not.toHaveBeenCalled();
   });
 
   it.each([
     ['NOT_AUTHENTICATED', 401, 'Not authenticated'],
     ['FORBIDDEN: only CSO can provision users', 403, 'Forbidden'],
-    [
-      'DUPLICATE_PROFILE: profile already exists for this user',
-      409,
-      'Email already registered',
-    ],
     [
       'AUTH_USER_NOT_FOUND: no auth.users row for email ada@unilag.edu.ng',
       409,
@@ -229,11 +365,43 @@ describe('POST /api/admin/users', () => {
     expect(await call(provision, post(path, body))).toEqual(
       failure(status, message)
     );
+    // CHANGED: the invite was emailed before provision_user and the auth
+    // account was left behind when it failed.
+    expect(mail.send).not.toHaveBeenCalled();
+    expect(fake.authAdminCalls.map((c) => c.method)).toEqual([
+      'generateLink',
+      'deleteUser',
+    ]);
+    expect(fake.authAdminCalls[1].args).toEqual([AUTH_USER_ID]);
   });
 
-  it('500 with a ref for an unrecognised RPC failure', async () => {
+  it('maps DUPLICATE_PROFILE → 409 and keeps the auth account', async () => {
+    fake.rpc.provision_user = rpcError(
+      'DUPLICATE_PROFILE: profile already exists for this user'
+    );
+    expect(await call(provision, post(path, body))).toEqual(
+      failure(409, 'Email already registered')
+    );
+    // A profile owns that account; deleting it would cascade to the profile.
+    expect(fake.authAdminCalls.map((c) => c.method)).toEqual(['generateLink']);
+    expect(mail.send).not.toHaveBeenCalled();
+  });
+
+  it('500 with a ref for an unrecognised RPC failure, auth account deleted', async () => {
     fake.rpc.provision_user = rpcError('connection reset');
     expectRef(await call(provision, post(path, body)));
+    expect(fake.authAdminCalls.map((c) => c.method)).toEqual([
+      'generateLink',
+      'deleteUser',
+    ]);
+    expect(mail.send).not.toHaveBeenCalled();
+  });
+
+  it('still answers the RPC error when the auth account cannot be deleted', async () => {
+    fake.rpc.provision_user = rpcError('connection reset');
+    fake.authAdmin.deleteUser = { data: null, error: { message: 'x' } };
+    expectRef(await call(provision, post(path, body)));
+    expect(mail.send).not.toHaveBeenCalled();
   });
 
   it('500 with a ref when the RPC returns no row', async () => {
@@ -535,6 +703,17 @@ describe('POST /api/admin/users/[id]/resend-invite', () => {
   beforeEach(() => {
     asRole('CSO');
     target('PENDING_ACTIVATION');
+    fake.rpc.record_invite_resent = {
+      data: [
+        {
+          profile_id: TARGET_ID,
+          status: 'PENDING_ACTIVATION',
+          role: 'REQUESTER',
+          institutional_email: 'ada@unilag.edu.ng',
+        },
+      ],
+      error: null,
+    };
   });
 
   it('404 User not found for a non-uuid id', async () => {
@@ -575,6 +754,12 @@ describe('POST /api/admin/users/[id]/resend-invite', () => {
     expect(mail.send).not.toHaveBeenCalled();
   });
 
+  it('500 Could not generate link: nothing recorded', async () => {
+    fake.authAdmin.generateLink = { data: null, error: { message: 'x' } };
+    await call(resendInvite, post(path, {}), params);
+    expect(fake.rpcCalls).toHaveLength(0);
+  });
+
   it('500 Could not send email with a ref', async () => {
     mail.send.mockRejectedValue(new Error('smtp down'));
     const res = await call(resendInvite, post(path, {}), params);
@@ -582,6 +767,31 @@ describe('POST /api/admin/users/[id]/resend-invite', () => {
     expect(res.body.error).toMatch(
       /^Could not send email\. Ref: [0-9a-f-]{36}$/
     );
+    // The link was generated and the re-send recorded before the send.
+    expect(fake.rpcCalls.map((c) => c.name)).toEqual(['record_invite_resent']);
+  });
+
+  it.each([
+    ['CONFLICT: user is already active', 409, 'User is already active'],
+    [
+      'CONFLICT: user is deactivated',
+      409,
+      'User is deactivated — reinstate them first',
+    ],
+    [`NOT_FOUND: profile ${TARGET_ID} does not exist`, 404, 'User not found'],
+    ['FORBIDDEN: only the CSO can re-send an invite', 403, 'Forbidden'],
+  ])('maps %s → %i, no email', async (raised, status, message) => {
+    fake.rpc.record_invite_resent = rpcError(raised);
+    expect(await call(resendInvite, post(path, {}), params)).toEqual(
+      failure(status, message)
+    );
+    expect(mail.send).not.toHaveBeenCalled();
+  });
+
+  it('500 with a ref, no email, for an unrecognised RPC failure', async () => {
+    fake.rpc.record_invite_resent = rpcError('connection reset');
+    expectRef(await call(resendInvite, post(path, {}), params));
+    expect(mail.send).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -599,5 +809,10 @@ describe('POST /api/admin/users/[id]/resend-invite', () => {
     expect(JSON.stringify(mail.send.mock.calls[0][0])).toContain(
       encodeURIComponent(next)
     );
+    // CHANGED: a re-sent invite wrote no audit entry; record_invite_resent
+    // writes USER_INVITE_RESENT, with the CSO's own session.
+    expect(fake.rpcCalls).toEqual([
+      { name: 'record_invite_resent', args: { p_profile_id: TARGET_ID } },
+    ]);
   });
 });

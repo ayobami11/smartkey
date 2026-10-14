@@ -4,6 +4,7 @@ import { respond } from '@/lib/http/respond';
 import { route } from '@/lib/http/route';
 import { rpcFail } from '@/lib/http/rpc-errors';
 import { callRpc } from '@/lib/rpc/call-rpc';
+import { toProxyUrl } from '@/lib/storage/object-url';
 
 const bodySchema = z.object({
   profile_id: z.uuid(),
@@ -41,9 +42,12 @@ export const POST = route({
       });
     }
 
+    // The RPC returns the canonical storage URL (what the profile and the
+    // audit entry keep); hod-signatures is private, so the browser gets the
+    // proxy URL like every other storage URL in a response.
     return respond.ok({
       status: result.data.status,
-      new_url: result.data.new_url,
+      new_url: toProxyUrl(result.data.new_url),
     });
   },
 });
