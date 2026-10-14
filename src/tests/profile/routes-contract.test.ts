@@ -25,6 +25,7 @@ import {
   failure,
   fake,
   get,
+  imageBytes,
   multipart,
   publicUrl,
   resetFake,
@@ -59,8 +60,16 @@ const queriesOn = (table: string) =>
       )
   );
 
-const image = (name = 'me.png', type = 'image/png', size = 16) =>
-  new File([new Uint8Array(size)], name, { type });
+// CHANGED: the bytes start with a real image signature. The photo route now
+// detects the stored type from the bytes, and all-zero bytes are rejected.
+const image = (
+  name = 'me.png',
+  type = 'image/png',
+  size = 16,
+  kind: 'png' | 'jpeg' = 'png'
+) => new File([imageBytes(size, kind)], name, { type });
+
+const NOT_AN_IMAGE = 'File must be a PNG, JPEG or WebP image';
 
 const expectNoLeak = (body: unknown) => {
   expect(JSON.stringify(body)).not.toContain(DB_TEXT);
@@ -295,11 +304,47 @@ describe('POST /api/profile/photo', () => {
     );
   });
 
-  it('422 File must be an image for a non-image type', async () => {
-    expect(
-      await call(postPhoto, upload({ photo: image('a.txt', 'text/plain') }))
-    ).toEqual(failure(422, 'File must be an image'));
+  // CHANGED: was 422 'File must be an image', judged on the declared type.
+  // The bytes decide now, so a text file is refused whatever it claims.
+  it('422 for a file whose bytes are not an image', async () => {
+    const text = new File(['hello'], 'a.png', { type: 'image/png' });
+    expect(await call(postPhoto, upload({ photo: text }))).toEqual(
+      failure(422, NOT_AN_IMAGE)
+    );
     expect(fake.storageCalls).toHaveLength(0);
+  });
+
+  it('422 for an SVG, which can carry script', async () => {
+    const svg = new File(
+      [
+        '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
+      ],
+      'me.svg',
+      { type: 'image/svg+xml' }
+    );
+    expect(await call(postPhoto, upload({ photo: svg }))).toEqual(
+      failure(422, NOT_AN_IMAGE)
+    );
+    expect(fake.storageCalls).toHaveLength(0);
+  });
+
+  it('422 for a PDF', async () => {
+    const pdf = new File(['%PDF-1.7\n'], 'me.pdf', {
+      type: 'application/pdf',
+    });
+    expect(await call(postPhoto, upload({ photo: pdf }))).toEqual(
+      failure(422, NOT_AN_IMAGE)
+    );
+  });
+
+  it('stores a PNG labelled text/html as image/png', async () => {
+    await call(postPhoto, upload({ photo: image('me.html', 'text/html') }));
+    const uploadCall = fake.storageCalls.find((c) => c.method === 'upload');
+    expect(uploadCall?.args[0]).toBe(`${USER_ID}/passport.png`);
+    expect(uploadCall?.args[2]).toEqual({
+      contentType: 'image/png',
+      upsert: true,
+    });
   });
 
   it('413 Photo must be under 5 MB', async () => {
@@ -340,10 +385,80 @@ describe('POST /api/profile/photo', () => {
     expect(opArgs(update.ops, 'eq')).toEqual(['id', USER_ID]);
   });
 
-  it('falls back to .jpg for a filename with no usable extension', async () => {
-    await call(postPhoto, upload({ photo: image('scan copy', 'image/jpeg') }));
+  // CHANGED: was "falls back to .jpg for a filename with no usable
+  // extension". The extension comes from the bytes, never the filename.
+  it('names the object after the detected type, not the filename', async () => {
+    await call(
+      postPhoto,
+      upload({ photo: image('scan copy.png', 'image/png', 16, 'jpeg') })
+    );
     const uploadCall = fake.storageCalls.find((c) => c.method === 'upload');
     expect(uploadCall?.args[0]).toBe(`${USER_ID}/passport.jpg`);
+    expect(uploadCall?.args[2]).toEqual({
+      contentType: 'image/jpeg',
+      upsert: true,
+    });
+  });
+
+  it('removes passport photos with another extension after a replace', async () => {
+    fake.tables.profiles = { data: null, error: null };
+    fake.storage.list = {
+      data: [
+        { name: 'passport.jpg' },
+        { name: 'passport.png' },
+        { name: 'passport.webp' },
+        { name: 'unrelated.png' },
+      ],
+      error: null,
+    };
+    const res = await call(postPhoto, upload({ photo: image() }));
+    expect(res.status).toBe(200);
+
+    const list = fake.storageCalls.find((c) => c.method === 'list');
+    expect(list).toMatchObject({ client: 'admin', args: [USER_ID] });
+    const remove = fake.storageCalls.find((c) => c.method === 'remove');
+    expect(remove?.args[0]).toEqual([
+      `${USER_ID}/passport.jpg`,
+      `${USER_ID}/passport.webp`,
+    ]);
+  });
+
+  it('removes nothing when the folder holds only the new photo', async () => {
+    fake.tables.profiles = { data: null, error: null };
+    fake.storage.list = { data: [{ name: 'passport.png' }], error: null };
+    await call(postPhoto, upload({ photo: image() }));
+    expect(fake.storageCalls.some((c) => c.method === 'remove')).toBe(false);
+  });
+
+  it('still succeeds, and logs, when the old photos cannot be listed or removed', async () => {
+    fake.tables.profiles = { data: null, error: null };
+    fake.storage.list = { data: null, error: { message: DB_TEXT } };
+    expect((await call(postPhoto, upload({ photo: image() }))).status).toBe(
+      200
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      'profile/photo: could not list old photos',
+      expect.anything()
+    );
+
+    resetFake();
+    fake.tables.profiles = { data: null, error: null };
+    fake.storage.list = { data: [{ name: 'passport.jpg' }], error: null };
+    fake.storage.remove = { data: null, error: { message: DB_TEXT } };
+    expect((await call(postPhoto, upload({ photo: image() }))).status).toBe(
+      200
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      'profile/photo: could not remove old photos',
+      expect.anything()
+    );
+  });
+
+  it('does not touch old photos when the profile update fails', async () => {
+    fake.tables.profiles = { data: null, error: { message: DB_TEXT } };
+    fake.storage.list = { data: [{ name: 'passport.jpg' }], error: null };
+    await call(postPhoto, upload({ photo: image() }));
+    expect(fake.storageCalls.some((c) => c.method === 'list')).toBe(false);
   });
 
   it('500 Photo upload failed when the upload fails', async () => {

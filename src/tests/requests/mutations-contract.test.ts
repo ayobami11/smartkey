@@ -521,6 +521,61 @@ describe('submit', () => {
     expect(fake.rpcCalls).toEqual([]);
   });
 
+  const WEEKEND_WITH = (extra: Record<string, string>) => ({
+    ...WEEKDAY,
+    type: 'WEEKEND',
+    weekend_date: '2026-10-17',
+    ...extra,
+  });
+  const OWN_STAMP = OWN_LETTER.replace('letter.png', 'stamp.png');
+
+  it('reads a weekend letter and stamp back from storage before creating', async () => {
+    expect(
+      (
+        await send(
+          WEEKEND_WITH({ letter_url: OWN_LETTER, stamp_url: OWN_STAMP })
+        )
+      ).status
+    ).toBe(201);
+    expect(fake.downloadCalls).toEqual([
+      { bucket: 'weekend-letters', path: `${USER_ID}/letter.png` },
+      { bucket: 'weekend-letters', path: `${USER_ID}/stamp.png` },
+    ]);
+  });
+
+  it.each([
+    ['an SVG', '<svg xmlns="http://www.w3.org/2000/svg"><script/></svg>'],
+    ['an HTML page', '<!doctype html><script>alert(1)</script>'],
+    ['a PDF', '%PDF-1.7\n'],
+  ])('422s a stored letter that is really %s', async (_label, body) => {
+    fake.downloads[`${USER_ID}/letter.png`] = {
+      data: new Blob([body]),
+      error: null,
+    };
+    expect(await send(WEEKEND_WITH({ letter_url: OWN_LETTER }))).toEqual(
+      failure(422, 'Invalid letter or stamp upload')
+    );
+    expect(fake.rpcCalls).toEqual([]);
+  });
+
+  it('422s a stamp that is not in storage', async () => {
+    fake.downloads[`${USER_ID}/stamp.png`] = {
+      data: null,
+      error: { message: 'Object not found' },
+    };
+    expect(
+      await send(WEEKEND_WITH({ letter_url: OWN_LETTER, stamp_url: OWN_STAMP }))
+    ).toEqual(failure(422, 'Invalid letter or stamp upload'));
+    expect(fake.rpcCalls).toEqual([]);
+  });
+
+  it('does not read back a letter sent with a weekday request', async () => {
+    expect((await send({ ...WEEKDAY, letter_url: OWN_LETTER })).status).toBe(
+      201
+    );
+    expect(fake.downloadCalls).toEqual([]);
+  });
+
   it.each([
     ['NOT_AUTHENTICATED', 401, 'Not authenticated'],
     [

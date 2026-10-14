@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { uploadExtension } from '@/lib/storage/extension';
 import { logger } from '@/lib/logger';
+import { checkUpload, type DetectedUpload } from '@/lib/storage/upload-type';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { DEFAULT_NAMESPACE, namespaceForRole } from '@/lib/supabase/cookies';
 import { createServerClient } from '@/lib/supabase/server';
@@ -38,6 +38,22 @@ export const POST = async (request: NextRequest) => {
     });
   }
 
+  // The stored type and extension come from the bytes, never from the
+  // browser-declared type or filename (see upload-type.ts). Checked before
+  // anything changes, so a refused photo leaves the password untouched.
+  let photoUpload: { bytes: ArrayBuffer; type: DetectedUpload } | null = null;
+  if (photo instanceof File) {
+    const bytes = await photo.arrayBuffer();
+    const type = checkUpload(bytes, 'image');
+    if (!type) {
+      return NextResponse.json(
+        err('Passport photo must be a PNG, JPEG or WebP image', 422),
+        { status: 422 }
+      );
+    }
+    photoUpload = { bytes, type };
+  }
+
   // Session is established by /auth/confirm after the invite link is clicked.
   const {
     data: { user },
@@ -60,7 +76,7 @@ export const POST = async (request: NextRequest) => {
 
   const userRole = (profileRow as { role: string } | null)?.role;
 
-  if (userRole === 'REQUESTER' && !(photo instanceof File)) {
+  if (userRole === 'REQUESTER' && !photoUpload) {
     return NextResponse.json(err('Passport photo is required', 422), {
       status: 422,
     });
@@ -80,18 +96,19 @@ export const POST = async (request: NextRequest) => {
 
   let photoUrl: string | undefined;
 
-  if (photo instanceof File) {
+  if (photoUpload) {
     // Upload via the service-role client. The user is already verified above
     // and the path is built from their verified id, so this is safe and avoids
     // the storage RLS auth-context fragility of the cookie-based server client.
     const adminClient = createAdminClient();
-    const photoBytes = await photo.arrayBuffer();
-    const ext = uploadExtension(photo.name, 'jpg');
-    const photoPath = `${userId}/passport.${ext}`;
+    const photoPath = `${userId}/passport.${photoUpload.type.extension}`;
 
     const { error: uploadError } = await adminClient.storage
       .from('passport-photos')
-      .upload(photoPath, photoBytes, { contentType: photo.type, upsert: true });
+      .upload(photoPath, photoUpload.bytes, {
+        contentType: photoUpload.type.contentType,
+        upsert: true,
+      });
 
     if (uploadError) {
       logger.error('register: photo upload failed', {

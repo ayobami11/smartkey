@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { uploadExtension } from '@/lib/storage/extension';
 import { assessPlausibility } from '@/lib/ai/signature/verifier';
 import { logger } from '@/lib/logger';
+import { checkUpload } from '@/lib/storage/upload-type';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerClient } from '@/lib/supabase/server';
 import { password as passwordSchema } from '@/lib/validation/primitives';
@@ -53,6 +53,24 @@ export const POST = async (request: NextRequest) => {
   // storage upload further down — no need to re-read the File a second time.
   const sigBytes = await signature.arrayBuffer();
   const stampBytes = await stamp.arrayBuffer();
+
+  // The stored type and extension come from the bytes, never from the
+  // browser-declared type or filename (see upload-type.ts). Checked before
+  // the plausibility pass, since Sharp would happily rasterise an SVG.
+  const sigType = checkUpload(sigBytes, 'image');
+  if (!sigType) {
+    return NextResponse.json(
+      err('Signature image must be a PNG, JPEG or WebP file', 422),
+      { status: 422 }
+    );
+  }
+  const stampType = checkUpload(stampBytes, 'image');
+  if (!stampType) {
+    return NextResponse.json(
+      err('Stamp image must be a PNG, JPEG or WebP file', 422),
+      { status: 422 }
+    );
+  }
 
   // Coarse sanity check that these actually look like a signature/stamp
   // before anything else happens — fails fast with no side effects (no
@@ -124,12 +142,14 @@ export const POST = async (request: NextRequest) => {
   // storage RLS auth-context fragility of the cookie-based server client.
   const adminClient = createAdminClient();
 
-  const sigExt = uploadExtension(signature.name, 'png');
-  const sigPath = `${userId}/signature.${sigExt}`;
+  const sigPath = `${userId}/signature.${sigType.extension}`;
 
   const { error: sigUploadError } = await adminClient.storage
     .from('hod-signatures')
-    .upload(sigPath, sigBytes, { contentType: signature.type, upsert: true });
+    .upload(sigPath, sigBytes, {
+      contentType: sigType.contentType,
+      upsert: true,
+    });
 
   if (sigUploadError) {
     logger.error('activate-hod: signature upload failed', {
@@ -141,12 +161,14 @@ export const POST = async (request: NextRequest) => {
     });
   }
 
-  const stampExt = uploadExtension(stamp.name, 'png');
-  const stampPath = `${userId}/stamp.${stampExt}`;
+  const stampPath = `${userId}/stamp.${stampType.extension}`;
 
   const { error: stampUploadError } = await adminClient.storage
     .from('hod-signatures')
-    .upload(stampPath, stampBytes, { contentType: stamp.type, upsert: true });
+    .upload(stampPath, stampBytes, {
+      contentType: stampType.contentType,
+      upsert: true,
+    });
 
   if (stampUploadError) {
     logger.error('activate-hod: stamp upload failed', {

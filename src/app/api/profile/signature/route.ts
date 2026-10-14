@@ -3,13 +3,13 @@ import {
   DEFAULT_THRESHOLD,
   verifySignature,
 } from '@/lib/ai/signature/verifier';
-import { uploadExtension } from '@/lib/storage/extension';
 import { respond } from '@/lib/http/respond';
 import { route } from '@/lib/http/route';
 import { rpcFail } from '@/lib/http/rpc-errors';
 import { logger } from '@/lib/logger';
 import { callRpc } from '@/lib/rpc/call-rpc';
 import { downloadStorageObject, toProxyUrl } from '@/lib/storage/object-url';
+import { checkUpload } from '@/lib/storage/upload-type';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -71,6 +71,14 @@ export const POST = route({
     }
 
     const imageBytes = await image.arrayBuffer();
+
+    // The stored type and extension come from the bytes, never from the
+    // browser-declared type or filename (see upload-type.ts). Checked before
+    // the plausibility pass: Sharp would happily rasterise an SVG.
+    const detected = checkUpload(imageBytes, 'image');
+    if (!detected) {
+      return respond.fail(422, 'image must be a PNG, JPEG or WebP file');
+    }
     const imageBuffer = Buffer.from(imageBytes);
 
     // Coarse sanity check that this actually looks like a signature/stamp
@@ -122,12 +130,11 @@ export const POST = route({
       }
     }
 
-    const ext = uploadExtension(image.name, 'png');
-    const storagePath = `${user.id}/${type}-${crypto.randomUUID()}.${ext}`;
+    const storagePath = `${user.id}/${type}-${crypto.randomUUID()}.${detected.extension}`;
 
     const { error: uploadError } = await admin.storage
       .from(BUCKET)
-      .upload(storagePath, imageBytes, { contentType: image.type });
+      .upload(storagePath, imageBytes, { contentType: detected.contentType });
     if (uploadError) {
       return respond.internal('profile/signature: upload failed', {
         err: uploadError.message,

@@ -44,7 +44,18 @@ const freshState = () => ({
   queries: [] as QueryCall[],
   rpcCalls: [] as { name: string; args: unknown }[],
   signCalls: [] as { bucket: string; path: string; ttl: number }[],
+  // What storage download() answers, by object path. Unlisted paths answer
+  // a small PNG, so a stored letter reads back as a real image by default.
+  downloads: {} as Record<
+    string,
+    { data: Blob | null; error: { message: string } | null }
+  >,
+  downloadCalls: [] as { bucket: string; path: string }[],
 });
+
+const PNG_HEAD = new Uint8Array([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0, 0, 0, 0, 0,
+]);
 
 export const fake = freshState();
 
@@ -104,6 +115,12 @@ export const makeClient = (client: QueryCall['client']) => ({
       createSignedUrl: async (path: string, ttl: number) => {
         fake.signCalls.push({ bucket, path, ttl });
         return fake.signedUrl;
+      },
+      download: async (path: string) => {
+        fake.downloadCalls.push({ bucket, path });
+        return (
+          fake.downloads[path] ?? { data: new Blob([PNG_HEAD]), error: null }
+        );
       },
     }),
   },

@@ -9,7 +9,7 @@ import { route } from '@/lib/http/route';
 import { rpcFail } from '@/lib/http/rpc-errors';
 import { notifyAfterResponse } from '@/lib/notifications/notify';
 import { callRpc } from '@/lib/rpc/call-rpc';
-import { uploadExtension } from '@/lib/storage/extension';
+import { checkUpload } from '@/lib/storage/upload-type';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { fullName } from '@/lib/validation/primitives';
 
@@ -23,13 +23,6 @@ import { fullName } from '@/lib/validation/primitives';
 // abuse, since it is unauthenticated and writes rows + uploads files.
 
 const MAX_LETTER_BYTES = 5 * 1024 * 1024; // 5MB
-const ALLOWED_LETTER_TYPES = [
-  'image/png',
-  'image/jpeg',
-  'image/jpg',
-  'image/webp',
-  'application/pdf',
-];
 
 // Validates the non-file fields. The letter File is validated separately.
 const fieldsSchema = z.object({
@@ -85,7 +78,13 @@ export const POST = route({
         'The authorisation letter must be 5MB or smaller.'
       );
     }
-    if (!ALLOWED_LETTER_TYPES.includes(letter.type)) {
+    // The stored type and extension come from the bytes (PNG, JPEG, WebP or
+    // PDF), never from the browser-declared type or filename — see
+    // upload-type.ts. A letter labelled application/pdf that is really HTML
+    // or SVG is refused here.
+    const letterBytes = await letter.arrayBuffer();
+    const letterType = checkUpload(letterBytes, 'image-or-pdf');
+    if (!letterType) {
       return respond.fail(
         422,
         'The authorisation letter must be an image or a PDF.'
@@ -97,12 +96,11 @@ export const POST = route({
     // Upload the letter to the existing weekend-letters bucket. Guest letters
     // live under a guest/ prefix to keep them separate from registered
     // uploads.
-    const ext = uploadExtension(letter.name, 'bin');
-    const letterPath = `guest/${crypto.randomUUID()}.${ext}`;
+    const letterPath = `guest/${crypto.randomUUID()}.${letterType.extension}`;
     const { error: uploadError } = await admin.storage
       .from('weekend-letters')
-      .upload(letterPath, await letter.arrayBuffer(), {
-        contentType: letter.type,
+      .upload(letterPath, letterBytes, {
+        contentType: letterType.contentType,
         upsert: false,
       });
     if (uploadError) {

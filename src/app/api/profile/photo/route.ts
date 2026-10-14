@@ -2,12 +2,50 @@ import { USER_ROLES } from '@/lib/constants';
 import { respond } from '@/lib/http/respond';
 import { route } from '@/lib/http/route';
 import { logger } from '@/lib/logger';
-import { uploadExtension } from '@/lib/storage/extension';
 import { toProxyUrl } from '@/lib/storage/object-url';
+import { checkUpload } from '@/lib/storage/upload-type';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024; // 5 MB
 const BUCKET = 'passport-photos';
+
+type AdminClient = ReturnType<typeof createAdminClient>;
+
+// A replacement with a different extension (passport.jpg → passport.png)
+// upserts a new object and leaves the old one behind, still readable through
+// the proxy. Once the profile points at the new file, remove every other
+// passport.* in the folder. Best-effort: the replace has already succeeded,
+// and a leftover file is only clutter, so failures are logged, not returned.
+const removeStalePhotos = async (
+  admin: AdminClient,
+  userId: string,
+  keep: string
+) => {
+  const { data: files, error: listError } = await admin.storage
+    .from(BUCKET)
+    .list(userId);
+  if (listError) {
+    logger.warn('profile/photo: could not list old photos', {
+      userId,
+      err: listError.message,
+    });
+    return;
+  }
+  const stale = (files ?? [])
+    .map((f) => f.name)
+    .filter((name) => name.startsWith('passport.') && name !== keep)
+    .map((name) => `${userId}/${name}`);
+  if (stale.length === 0) return;
+
+  const { error: removeError } = await admin.storage.from(BUCKET).remove(stale);
+  if (removeError) {
+    logger.warn('profile/photo: could not remove old photos', {
+      userId,
+      stale,
+      err: removeError.message,
+    });
+  }
+};
 
 // Lets a signed-in user replace their own profile photo from account settings.
 // The storage folder is keyed by the caller's id, so this one route serves
@@ -32,11 +70,17 @@ export const POST = route({
     if (!(photo instanceof File)) {
       return respond.fail(422, 'A photo file is required');
     }
-    if (!photo.type.startsWith('image/')) {
-      return respond.fail(422, 'File must be an image');
-    }
     if (photo.size > MAX_PHOTO_BYTES) {
       return respond.fail(413, 'Photo must be under 5 MB');
+    }
+
+    // The stored type and extension come from the bytes, never from the
+    // browser-declared type or filename (see upload-type.ts): an SVG or a
+    // mislabelled file must not be stored as something a browser would run.
+    const photoBytes = await photo.arrayBuffer();
+    const detected = checkUpload(photoBytes, 'image');
+    if (!detected) {
+      return respond.fail(422, 'File must be a PNG, JPEG or WebP image');
     }
 
     const userId = user.id;
@@ -46,13 +90,15 @@ export const POST = route({
     // storage RLS auth-context fragility of the cookie-based server client
     // (same pattern as the registration flow).
     const admin = createAdminClient();
-    const photoBytes = await photo.arrayBuffer();
-    const ext = uploadExtension(photo.name, 'jpg');
-    const photoPath = `${userId}/passport.${ext}`;
+    const photoFile = `passport.${detected.extension}`;
+    const photoPath = `${userId}/${photoFile}`;
 
     const { error: uploadError } = await admin.storage
       .from(BUCKET)
-      .upload(photoPath, photoBytes, { contentType: photo.type, upsert: true });
+      .upload(photoPath, photoBytes, {
+        contentType: detected.contentType,
+        upsert: true,
+      });
 
     if (uploadError) {
       logger.error('profile/photo: upload failed', {
@@ -79,6 +125,8 @@ export const POST = route({
       });
       return respond.fail(500, 'Failed to save photo');
     }
+
+    await removeStalePhotos(admin, userId, photoFile);
 
     // The object path is stable across replacements (`{id}/passport.ext`), so
     // the proxy URL carries a version param to bust the browser cache. Done

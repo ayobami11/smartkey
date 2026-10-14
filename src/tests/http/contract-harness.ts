@@ -97,6 +97,19 @@ export type StorageCall = {
   args: unknown[];
 };
 
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+const JPEG_SIGNATURE = [0xff, 0xd8, 0xff, 0xe0];
+
+/**
+ * `size` bytes that start with a real image signature, for the upload routes,
+ * which detect the stored type from the bytes (src/lib/storage/upload-type.ts).
+ */
+export const imageBytes = (size = 16, kind: 'png' | 'jpeg' = 'png') => {
+  const bytes = new Uint8Array(Math.max(size, 8));
+  bytes.set(kind === 'png' ? PNG_SIGNATURE : JPEG_SIGNATURE);
+  return bytes;
+};
+
 /** What the fake's getPublicUrl returns: a canonical public storage URL. */
 export const publicUrl = (bucket: string, path: string) =>
   `https://project.supabase.co/storage/v1/object/public/${bucket}/${path}`;

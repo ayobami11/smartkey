@@ -16,6 +16,7 @@ import {
   failure,
   fake,
   asRole,
+  imageBytes,
   multipart,
   publicUrl,
   resetFake,
@@ -47,8 +48,10 @@ const path = '/api/profile/signature';
 const CURRENT_REF = publicUrl('hod-signatures', `${USER_ID}/signature-old.png`);
 const DB_TEXT = 'storage internal failure text';
 
+// CHANGED: the bytes start with a PNG signature. The route now detects the
+// stored type from the bytes, and all-zero bytes are rejected as not an image.
 const image = (name = 'sig.png', size = 16) =>
-  new File([new Uint8Array(size)], name, { type: 'image/png' });
+  new File([imageBytes(size)], name, { type: 'image/png' });
 
 const upload = (fields: Record<string, string | File>) =>
   multipart('POST', path, fields);
@@ -143,6 +146,59 @@ describe('POST /api/profile/signature validation', () => {
     const res = await call(postSignature, validUpload());
     expect(res.status).toBe(422);
     expect(res.body.error).toMatch(/too much dark content/);
+  });
+});
+
+describe('POST /api/profile/signature upload type', () => {
+  const svg = () =>
+    new File(
+      ['<svg xmlns="http://www.w3.org/2000/svg"><script/></svg>'],
+      'sig.svg',
+      {
+        type: 'image/svg+xml',
+      }
+    );
+
+  it('422 for an SVG, before anything is stored or compared', async () => {
+    const res = await call(
+      postSignature,
+      upload({ type: 'signature', image: svg() })
+    );
+    expect(res).toEqual(failure(422, 'image must be a PNG, JPEG or WebP file'));
+    expect(verifier.assessPlausibility).not.toHaveBeenCalled();
+    expect(fake.storageCalls).toHaveLength(0);
+    expect(fake.rpcCalls).toHaveLength(0);
+  });
+
+  it('422 for a PDF', async () => {
+    const pdf = new File(['%PDF-1.7\n'], 'sig.png', { type: 'image/png' });
+    expect(
+      await call(postSignature, upload({ type: 'signature', image: pdf }))
+    ).toEqual(failure(422, 'image must be a PNG, JPEG or WebP file'));
+  });
+
+  it('stores a PNG labelled text/html as image/png with a .png path', async () => {
+    const lying = new File([imageBytes()], 'sig.html', { type: 'text/html' });
+    const res = await call(
+      postSignature,
+      upload({ type: 'signature', image: lying })
+    );
+    expect(res.status).toBe(200);
+    const uploadCall = fake.storageCalls.find((c) => c.method === 'upload');
+    expect(uploadCall?.args[0]).toMatch(UPLOAD_PATH);
+    expect(uploadCall?.args[2]).toEqual({ contentType: 'image/png' });
+  });
+
+  it('names the object after the detected type, not the filename', async () => {
+    const jpeg = new File([imageBytes(16, 'jpeg')], 'sig.png', {
+      type: 'image/png',
+    });
+    await call(postSignature, upload({ type: 'signature', image: jpeg }));
+    const uploadCall = fake.storageCalls.find((c) => c.method === 'upload');
+    expect(uploadCall?.args[0]).toMatch(
+      new RegExp(`^${USER_ID}/signature-[0-9a-f-]{36}\\.jpg$`)
+    );
+    expect(uploadCall?.args[2]).toEqual({ contentType: 'image/jpeg' });
   });
 });
 
