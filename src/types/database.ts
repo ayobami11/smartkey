@@ -1001,6 +1001,18 @@ export type Database = {
           request_id: string;
         }[];
       };
+      create_key: {
+        Args: {
+          p_code: string;
+          p_key_count?: number;
+          p_room_name: string;
+          p_unit_id: string;
+          p_zone: Database['public']['Enums']['zone'];
+        };
+        Returns: {
+          key_id: string;
+        }[];
+      };
       create_request: {
         Args: {
           p_key_id: string;
@@ -1192,6 +1204,31 @@ export type Database = {
         Returns: {
           activation_token: string;
           profile_id: string;
+        }[];
+      };
+      record_invite_resent: {
+        Args: {
+          p_full_name?: string;
+          p_profile_id: string;
+          p_unit_id?: string;
+        };
+        Returns: {
+          institutional_email: string;
+          profile_id: string;
+          role: string;
+          status: string;
+        }[];
+      };
+      reinstate_user: {
+        Args: {
+          p_full_name?: string;
+          p_profile_id: string;
+          p_unit_id?: string;
+        };
+        Returns: {
+          profile_id: string;
+          role: string;
+          status: string;
         }[];
       };
       remove_collector: {
