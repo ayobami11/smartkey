@@ -38,7 +38,7 @@ Routes build the envelope only through `respond.ok` / `fail` / `error` / `intern
 
 ## Auth conventions
 
-Route handlers are wrapped in `route()` from `src/lib/http/route.ts`. Routes are being moved onto it in batches; every route under `/api/requests/` (batch 1), `/api/public/` (batch 2), `keys/`, `shifts/`, `reports/` and `incidents` (batch 3), and `/api/admin/` plus the `ai/risk-alerts` and `ai/signature-alerts` reads (batch 4) is on it (2026-10-13). `route()` runs these checks in a fixed order before the handler:
+Route handlers are wrapped in `route()` from `src/lib/http/route.ts`. Routes are being moved onto it in batches; every route under `/api/requests/` (batch 1), `/api/public/` (batch 2), `keys/`, `shifts/`, `reports/` and `incidents` (batch 3), `/api/admin/` plus the `ai/risk-alerts` and `ai/signature-alerts` reads (batch 4), and the `/api/cron/` routes (batch 5, 2026-10-14) is on it. `route()` runs these checks in a fixed order before the handler:
 
 1. **Auth**, chosen per route with `auth`:
    - `'user'` validates the Supabase session with `getUser()`, never `getSession()`. No session → `401 Unauthorized`.
@@ -1438,6 +1438,8 @@ Severity changes nothing about how the incident is handled. The `INCIDENT_LOGGED
 ---
 
 ## 6a. Scheduled (cron)
+
+All five cron routes are wrapped in `route({ auth: 'cron' })` (batch 5, 2026-10-14). The wrapper checks `Authorization: Bearer ${CRON_SECRET}` before the handler runs: an unset `CRON_SECRET` is a `500` with a ref, a missing or wrong header a `401 Unauthorized`, and no query runs in either case. The secret is compared in constant time; until 2026-10-14 each route compared it with `!==`. Cron handlers get no Supabase client from the wrapper and create the service-role admin client themselves. A failed query is a `500 "Internal error. Ref: <ref>"` whose only content is the ref. An uncaught throw (for example a misconfigured service-role key) is now the same enveloped `500`; it used to escape as Next's bare, unenveloped `500`. pg_cron only reads the HTTP status, and the success bodies below are unchanged.
 
 ### POST /api/cron/weekend-reminders
 

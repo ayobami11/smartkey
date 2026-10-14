@@ -51,10 +51,11 @@ const cron = (path: string, authorization: string | null) =>
 
 const authed = (path: string) => cron(path, `Bearer ${SECRET}`);
 
-// Today a throw escapes the hand-rolled handler, so Next answers with a bare
-// 500 and no envelope or ref.
+// BEHAVIOUR CHANGE (batch 5): a throw used to escape the hand-rolled handler,
+// so Next answered with a bare 500 and no envelope or ref. route() turns it
+// into an enveloped 500 carrying only a ref.
 const expectUncaught = async (handler: unknown, path: string) => {
-  await expect(call(handler, authed(path))).rejects.toThrow('boom');
+  expectRef(await call(handler, authed(path)));
 };
 
 const has = (ops: Op[], method: string) => ops.some(([m]) => m === method);
@@ -84,7 +85,11 @@ afterEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// The bearer-secret gate, identical on every cron route
+// The bearer-secret gate, identical on every cron route.
+//
+// BEHAVIOUR CHANGE (batch 5), not observable here: the old routes compared the
+// header with `!==`; route()'s cronAuth compares SHA-256 digests with
+// timingSafeEqual. Every status and message below is unchanged.
 // ---------------------------------------------------------------------------
 
 const ROUTES = [
@@ -248,7 +253,7 @@ describe('POST /api/cron/weekend-reminders', () => {
     );
   });
 
-  it('an uncaught throw escapes the handler (no envelope)', async () => {
+  it('an uncaught throw is an enveloped, ref’d 500', async () => {
     fake.tables.requests = () => {
       throw new Error('boom');
     };
@@ -342,7 +347,7 @@ describe('POST /api/cron/overdue-reminders', () => {
     );
   });
 
-  it('an uncaught throw escapes the handler (no envelope)', async () => {
+  it('an uncaught throw is an enveloped, ref’d 500', async () => {
     fake.tables.requests = () => {
       throw new Error('boom');
     };
@@ -559,7 +564,7 @@ describe('POST /api/cron/daily-digest', () => {
     );
   });
 
-  it('an uncaught throw escapes the handler (no envelope)', async () => {
+  it('an uncaught throw is an enveloped, ref’d 500', async () => {
     fake.tables.profiles = () => {
       throw new Error('boom');
     };
@@ -628,7 +633,7 @@ describe('POST /api/cron/shift-report', () => {
     );
   });
 
-  it('an uncaught throw escapes the handler (no envelope)', async () => {
+  it('an uncaught throw is an enveloped, ref’d 500', async () => {
     fake.tables.shift_reports = () => {
       throw new Error('boom');
     };
@@ -808,7 +813,7 @@ describe('POST /api/cron/audit-export', () => {
     expect(put).toHaveBeenCalledTimes(1);
   });
 
-  it('an uncaught throw escapes the handler (no envelope)', async () => {
+  it('an uncaught throw is an enveloped, ref’d 500', async () => {
     fake.tables.audit_export_state = () => {
       throw new Error('boom');
     };
