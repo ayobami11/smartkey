@@ -902,7 +902,7 @@ Sets key `status = 'RETIRED'` (and `retired_at`), creates an incident of type `M
 
 **File**: `src/app/api/admin/users/route.ts`
 **Roles**: CSO
-**RPC**: `provision_user(name, email, role, department_id?)` — the RPC parameter keeps its historical `p_department_id` name but writes to `profiles.unit_id`
+**RPC**: `provision_user(name, email, role, department_id?)` — the RPC parameter keeps its historical `p_department_id` name but writes to `profiles.unit_id`; `record_invite_resent(profile_id, full_name?, unit_id?)` for a re-invite; `reinstate_user(profile_id, full_name?, unit_id?)` (and `deactivate_user` as compensation) for a reinstatement
 
 | Field                 | Type                                  | Required           |
 | --------------------- | ------------------------------------- | ------------------ |
@@ -911,11 +911,17 @@ Sets key `status = 'RETIRED'` (and `retired_at`), creates an incident of type `M
 | `role`                | `'DEAN' \| 'VERIFIER' \| 'REQUESTER'` | yes                |
 | `unit_id`             | `string` (uuid)                       | DEAN and REQUESTER |
 
-For a new email the route first creates the auth user with `admin.generateLink({ type: 'invite' })` and emails the activation link via Nodemailer (Gmail SMTP); `provision_user` then creates the profile, the 24-hour activation token and the audit entry in one transaction. The token never leaves the server. An email that already has a `PENDING_ACTIVATION` or `DEACTIVATED` profile is re-invited instead (the ban is lifted, the profile reset through the service-role client, a fresh link sent) and answers `200`; that path writes no audit entry yet.
+The auth account (GoTrue) and the profile (Postgres) cannot share a transaction, and neither can the email, so each path is ordered so that a failure leaves nothing half-done:
+
+- **New email** (`src/lib/admin/provision-new-user.ts`): `admin.generateLink({ type: 'invite' })` creates the auth user and mints its token; `provision_user` then creates the profile, the activation token and `USER_PROVISIONED` in one transaction; only then is the activation link emailed via Nodemailer (Gmail SMTP). If `provision_user` fails the route deletes the auth user it just created (`admin.deleteUser`), so no invited account is left without a profile, and no email is sent — except on `DUPLICATE_PROFILE`, where a profile already owns that auth account and `profiles.id` cascades from `auth.users`. Until 2026-10-14 the email went out before `provision_user`, and a failure left an orphaned, invited auth account.
+- **`PENDING_ACTIVATION` profile** (re-invite): a fresh `magiclink` is generated first; `record_invite_resent` then applies the form's name/unit correction and writes `USER_INVITE_RESENT` in one transaction; then the email. Answers `200`.
+- **`DEACTIVATED` profile** (reinstatement, `src/lib/admin/reinstate-user.ts`): link first, then `reinstate_user` (status back to `PENDING_ACTIVATION`, the name/unit correction, `units.hod_id` for a Dean, and `USER_REINSTATED`, atomically), then the auth ban is lifted. If the ban cannot be lifted, `deactivate_user` puts the profile back (a `USER_DEACTIVATED` entry follows the `USER_REINSTATED` one, which is what happened) and the route answers `500`. The reverse order could leave a `DEACTIVATED` profile whose account can sign in. Answers `200`.
+
+Until 2026-10-14 both re-invite paths reset the profile through the service-role client and wrote no audit entry. A re-invite never changes the profile's role, so the activation link follows the stored role, not the form's. The token never leaves the server; the email is best effort on every path (a send failure is logged and the response is unchanged).
 
 **Response `data`**: `{ "profile_id": "<uuid>", "status": "PENDING_ACTIVATION" }`. Returns `201` for a new user (the envelope `status` says `201` too since 2026-10-13; it used to say `200`), `200` for a re-invite.
 
-**Errors**: `401` unauthenticated or no profile · `403` not CSO · `409` email already registered to an `ACTIVE` user, or the Dean's unit already has an active Dean · `422` validation, or no `unit_id` for a Dean or Requester · `500` link generation or RPC failure, with a correlation reference
+**Errors**: `401` unauthenticated or no profile · `403` not CSO · `404` the re-invited profile disappeared · `409` email already registered to an `ACTIVE` user, or `"That unit already has an active Dean."` (until 2026-10-14: "This department already has an active HOD"), or `"User status changed. Refresh and try again."` when a concurrent change beat the re-invite · `422` validation, no `unit_id` for a Dean or Requester, or `Unit not found` · `500` link generation (on a re-invite too, since 2026-10-14; it used to answer `200` without a link), RPC failure, or a ban that could not be lifted, with a correlation reference
 
 ---
 
@@ -959,11 +965,13 @@ Until 2026-10-13 a failed ban was logged and the route still answered `200`, lea
 **File**: `src/app/api/admin/users/[id]/resend-invite/route.ts`
 **Roles**: CSO
 
-No request body. Re-sends a fresh activation link for a user still `PENDING_ACTIVATION` (e.g. their original 24-hour link expired unused).
+**RPC**: `record_invite_resent(profile_id)`
+
+No request body. Re-sends a fresh activation link for a user still `PENDING_ACTIVATION` (e.g. their original 24-hour link expired unused). The link is generated first, then `record_invite_resent` re-checks the status under a lock and writes `USER_INVITE_RESENT`, then the email is sent. An email cannot be part of a transaction, so the entry records that a fresh link was issued; a send that then fails still answers `500 Could not send email`. Until 2026-10-14 nothing was audited.
 
 **Response `data`**: `{ "profile_id": "<uuid>", "status": "PENDING_ACTIVATION" }`
 
-**Errors**: `404` user not found · `409` user is already `ACTIVE` or is `DEACTIVATED` (reinstate first)
+**Errors**: `404` user not found · `409` user is already `ACTIVE` or is `DEACTIVATED` (reinstate first) · `500 Could not generate link. Ref: …` / `Could not send email. Ref: …`, or a ref'd `500` for an RPC failure
 
 ---
 
@@ -1011,11 +1019,13 @@ No query params. Returns every unit (faculty or Administration) with its Dean, a
 | `unit_id`   | `string` (uuid)                      | yes                                                                                                      |
 | `key_count` | `integer` (1–20, default 1)          | no — how many interchangeable copies of this room’s key exist, i.e. how many people may hold one at once |
 
-Creates a new key record (status `AVAILABLE`). Returns `201`. A single-row insert under the `keys` RLS policy; no audit entry is written (known follow-up).
+**RPC**: `create_key(code, zone, room_name, unit_id, key_count?)`
+
+Creates a new key record (status `AVAILABLE`) and writes `KEY_CREATED` in one transaction. Returns `201`. Until 2026-10-14 it was a direct insert under the `keys_insert_cso` RLS policy with no audit entry; that policy is dropped, so `create_key` is the only way a key is created.
 
 **Response `data`**: `{ "key_id": "<uuid>" }`
 
-**Errors**: `401` unauthenticated or no profile (a session with no profile row was `403` until 2026-10-13) · `403` not CSO · `409` key code already in use · `422` validation · `500` with a correlation reference
+**Errors**: `401` unauthenticated or no profile (a session with no profile row was `403` until 2026-10-13) · `403` not CSO · `409` `Key code "<code>" is already in use.` · `422` validation, or `Unit not found` (an unknown unit was a ref'd `500` until 2026-10-14) · `500` with a correlation reference
 
 ---
 
@@ -1305,7 +1315,7 @@ Resolves a held reference-replacement mismatch from `POST /api/profile/signature
 | `decision`   | `'APPROVED' \| 'DECLINED'` | yes      |
 | `note`       | `string`                   | no       |
 
-**Response `data`**: `{ "status": "APPROVED" | "DECLINED", "new_url": "<url>" | null }` (`new_url` is the new reference URL on approval, `null` on decline)
+**Response `data`**: `{ "status": "APPROVED" | "DECLINED", "new_url": "<url>" | null }` (`new_url` is the new reference's proxy URL, `/api/storage/object?...`, on approval, `null` on decline). Until 2026-10-14 it was the raw storage URL, which a browser cannot load from the private `hod-signatures` bucket. The profile and the audit entry keep the canonical URL.
 
 **Errors**: `401` unauthenticated · `403` not CSO · `404` no pending reference for this profile/type · `422` validation · `500` with a correlation reference (an RPC that returns no row used to throw past the handler as Next's bare `500`)
 
@@ -1548,7 +1558,7 @@ Returns active high-risk access patterns: requests with `risk_tier = 'HIGH'` in 
 
 Returns two independent lists of held signature/stamp mismatches. Read-only.
 
-- `alerts` — weekend requests currently held on `PENDING_HOD` with an unresolved `SIGNATURE_MISMATCH` audit entry (written by `POST /api/requests/hod-decision` when the request's stored letter and/or stamp fails verification against the Dean's reference). A request drops off this list once the CSO approves or declines it on `POST /api/requests/hod-decision`.
+- `alerts` — weekend requests currently held on `PENDING_HOD` with an unresolved `SIGNATURE_MISMATCH` audit entry (written by `POST /api/requests/hod-decision` when the request's stored letter and/or stamp fails verification against the Dean's reference). A request drops off this list once the CSO approves or declines it on `POST /api/requests/hod-decision`. The route reads the `PENDING_HOD` requests first, then the latest `SIGNATURE_MISMATCH` entry for each of them; until 2026-10-14 it read the 200 newest entries first, so an older request that was still held fell off the list.
 - `reference_replacements` — Dean signature/stamp reference-replacement uploads currently held (written by `POST /api/profile/signature`). Sourced from `pending_signature_references` row existence rather than audit-log scraping (there is no request status to key off here). An entry drops off this list once the CSO resolves it via `POST /api/admin/signature-references/resolve`.
 
 **Response `data`**: `signature` and/or `stamp` is present on an `alerts` entry depending on which check(s) failed — never both null.
@@ -1672,6 +1682,9 @@ Liveness probe for external uptime monitoring (e.g. UptimeRobot). The landing pa
 | `cso_decide_request`                  | POST /api/requests/cso-decision                      | yes                     |
 | `update_user_profile`                 | PATCH /api/admin/users/[id]                          | yes                     |
 | `deactivate_user`                     | PATCH /api/admin/users/[id]/revoke                   | yes                     |
+| `reinstate_user`                      | POST /api/admin/users (reinstatement)                | yes                     |
+| `record_invite_resent`                | POST /api/admin/users, …/[id]/resend-invite          | yes                     |
+| `create_key`                          | POST /api/admin/keys                                 | yes                     |
 | `set_signature_reference`             | POST /api/profile/signature (service role)           | yes                     |
 | `hold_signature_reference`            | POST /api/profile/signature (service role)           | yes                     |
 | `issue_key`                           | POST /api/requests/collect                           | yes                     |

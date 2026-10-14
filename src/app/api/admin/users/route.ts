@@ -1,10 +1,12 @@
 import * as z from 'zod';
 
+import { provisionNewUser } from '@/lib/admin/provision-new-user';
+import { reinstateUser, type ReinstatePorts } from '@/lib/admin/reinstate-user';
 import { activationEmail } from '@/lib/email/templates/account';
 import { gmailTransport } from '@/lib/email/transport';
 import { respond } from '@/lib/http/respond';
 import { route } from '@/lib/http/route';
-import { rpcFail } from '@/lib/http/rpc-errors';
+import { byDetail, rpcFail } from '@/lib/http/rpc-errors';
 import { logger } from '@/lib/logger';
 import { callRpc } from '@/lib/rpc/call-rpc';
 import { rewriteStorageUrls } from '@/lib/storage/object-url';
@@ -16,6 +18,13 @@ const postBodySchema = z.object({
   role: z.enum(['DEAN', 'VERIFIER', 'REQUESTER']),
   unit_id: z.uuid().optional(),
 });
+
+const ACTIVE_DEAN_CONFLICT = 'That unit already has an active Dean.';
+
+// The stored role decides where activation lands, not the form's: a
+// re-invite never changes a profile's role.
+const activationPathFor = (role: string) =>
+  role === 'DEAN' ? '/dean/onboarding' : '/activate';
 
 // generateLink mints a one-time token. We build our own /auth/confirm link
 // from the token hash (verified server-side via verifyOtp) and send it via
@@ -34,6 +43,24 @@ const confirmLink = (
   return `${siteUrl}/auth/confirm?${params.toString()}`;
 };
 
+// The RPC copy for the re-invite and reinstatement paths. Each CONFLICT
+// detail maps to fixed copy; the detail itself never reaches the client.
+const reinviteErrors = {
+  NOT_FOUND: 'User not found',
+  CONFLICT: byDetail([
+    [/^that unit already has an active Dean/, ACTIVE_DEAN_CONFLICT],
+    [/^user is already active/, 'Email already registered'],
+    [
+      /^user is (?:not )?deactivated/,
+      'User status changed. Refresh and try again.',
+    ],
+  ]),
+  VALIDATION: byDetail([
+    [/^unit not found/, 'Unit not found'],
+    [/^unit is required/, 'unit_id is required for Dean and Requester roles'],
+  ]),
+};
+
 export const POST = route({
   name: 'admin/users',
   auth: 'user',
@@ -50,6 +77,8 @@ export const POST = route({
     }
 
     // Prevent assigning a second ACTIVE Dean to a unit that already has one.
+    // reinstate_user / record_invite_resent repeat this check under a lock;
+    // this read answers early, before any auth account is touched.
     if (role === 'DEAN' && unit_id) {
       const { data: dept } = await supabase
         .from('units')
@@ -59,12 +88,33 @@ export const POST = route({
 
       const existingHod = dept?.hod as { status: string } | null;
       if (dept?.hod_id && existingHod?.status === 'ACTIVE') {
-        return respond.fail(409, 'This department already has an active HOD');
+        return respond.fail(409, ACTIVE_DEAN_CONFLICT);
       }
     }
 
-    const activationPath = role === 'DEAN' ? '/dean/onboarding' : '/activate';
     const adminClient = createAdminClient();
+
+    // Best effort: the account change is already committed and audited, and
+    // the CSO can re-send from the users table.
+    const sendActivation = async (
+      link: { hashed_token: string; verification_type: string },
+      profileRole: string,
+      isReinvite: boolean
+    ) => {
+      await gmailTransport
+        .send({
+          to: institutional_email,
+          ...activationEmail({
+            link: confirmLink(link, activationPathFor(profileRole)),
+            isReinvite,
+          }),
+        })
+        .catch((e: unknown) =>
+          logger.error('admin/users: activation email send failed', {
+            err: String(e),
+          })
+        );
+    };
 
     // Check whether a profile already exists for this email.
     // ACTIVE users are a real conflict. PENDING_ACTIVATION (never activated)
@@ -80,29 +130,9 @@ export const POST = route({
         return respond.fail(409, 'Email already registered');
       }
 
-      // DEACTIVATED: lift the ban before resending so they can log in.
-      if (existingProfile.status === 'DEACTIVATED') {
-        await adminClient.auth.admin.updateUserById(existingProfile.id, {
-          ban_duration: 'none',
-        });
-      }
-
-      // Reset profile status and update name/unit in case they changed.
-      // Server-written: protect_profile_columns rejects status/unit_id
-      // changes from any user session, the CSO's included.
-      // Known follow-up: this re-invite (including reinstating a
-      // DEACTIVATED user) writes no audit entry.
-      const { error: resetError } = await adminClient
-        .from('profiles')
-        .update({ status: 'PENDING_ACTIVATION', full_name, unit_id })
-        .eq('id', existingProfile.id);
-
-      if (resetError) {
-        return respond.internal('re-invite: profile reset failed', {
-          err: resetError.message,
-        });
-      }
-
+      // The link comes first: if it cannot be generated nothing has changed
+      // and the CSO can simply retry. The profile change and its audit entry
+      // follow; the email, which can never be part of a transaction, last.
       const { data: linkData, error: linkError } =
         await adminClient.auth.admin.generateLink({
           type: 'magiclink',
@@ -110,22 +140,53 @@ export const POST = route({
         });
 
       if (linkError || !linkData?.properties?.hashed_token) {
-        logger.error('re-invite: generateLink failed', {
+        return respond.internal('re-invite: generateLink failed', {
           err: linkError?.message ?? 'no hashed_token returned',
         });
-      } else {
-        await gmailTransport
-          .send({
-            to: institutional_email,
-            ...activationEmail({
-              link: confirmLink(linkData.properties, activationPath),
-              isReinvite: true,
-            }),
-          })
-          .catch((e: unknown) =>
-            logger.error('re-invite: email send failed', { err: String(e) })
-          );
       }
+
+      let profileRole: string;
+
+      if (existingProfile.status === 'DEACTIVATED') {
+        // reinstate_user, then lift the auth ban, compensating if the lift
+        // fails: see src/lib/admin/reinstate-user.ts for the order.
+        const ports: ReinstatePorts = {
+          // The CSO's own session: the RPCs check the actor is the CSO.
+          reinstate: (id) =>
+            callRpc(supabase, 'reinstate_user', {
+              p_profile_id: id,
+              p_full_name: full_name,
+              p_unit_id: unit_id ?? undefined,
+            }),
+          unban: async (id) => {
+            const { error } = await adminClient.auth.admin.updateUserById(id, {
+              ban_duration: 'none',
+            });
+            return error ? { ok: false, message: error.message } : { ok: true };
+          },
+          deactivate: (id) =>
+            callRpc(supabase, 'deactivate_user', { p_profile_id: id }),
+        };
+
+        const outcome = await reinstateUser(existingProfile.id, ports);
+        if (!outcome.ok) {
+          if (outcome.reason === 'RPC_FAILED') {
+            return rpcFail(outcome.error, reinviteErrors);
+          }
+          return respond.fail(500, `Internal error. Ref: ${outcome.ref}`);
+        }
+        profileRole = outcome.role;
+      } else {
+        const result = await callRpc(supabase, 'record_invite_resent', {
+          p_profile_id: existingProfile.id,
+          p_full_name: full_name,
+          p_unit_id: unit_id ?? undefined,
+        });
+        if (!result.ok) return rpcFail(result.error, reinviteErrors);
+        profileRole = result.data.role;
+      }
+
+      await sendActivation(linkData.properties, profileRole, true);
 
       return respond.ok({
         profile_id: existingProfile.id,
@@ -133,50 +194,60 @@ export const POST = route({
       });
     }
 
-    // New user: generateLink with type 'invite' creates the auth.users row
-    // and mints a one-time token; provision_user then needs that row.
-    const { data: newLinkData, error: inviteError } =
-      await adminClient.auth.admin.generateLink({
-        type: 'invite',
-        email: institutional_email,
-      });
-
-    if (inviteError) {
-      return respond.internal('provision_user: generateLink failed', {
-        err: inviteError.message,
-      });
-    }
-
-    if (newLinkData?.properties?.hashed_token) {
-      await gmailTransport
-        .send({
-          to: institutional_email,
-          ...activationEmail({
-            link: confirmLink(newLinkData.properties, activationPath),
-            isReinvite: false,
-          }),
-        })
-        .catch((e: unknown) =>
-          logger.error('provision_user: email send failed', {
-            err: String(e),
-          })
-        );
-    }
-
-    const result = await callRpc(supabase, 'provision_user', {
-      p_full_name: full_name,
-      p_email: institutional_email,
-      p_role: role,
-      p_department_id: unit_id ?? undefined,
+    // New user: auth account first, then the profile, and the email only
+    // once the profile exists. A failed provision_user deletes the auth
+    // account it would have belonged to (src/lib/admin/provision-new-user.ts).
+    const outcome = await provisionNewUser({
+      createInvite: async () => {
+        const { data, error } = await adminClient.auth.admin.generateLink({
+          type: 'invite',
+          email: institutional_email,
+        });
+        if (error) return { ok: false, message: error.message };
+        if (!data?.properties?.hashed_token || !data.user?.id) {
+          return { ok: false, message: 'no hashed_token or user returned' };
+        }
+        return {
+          ok: true,
+          link: {
+            userId: data.user.id,
+            hashedToken: data.properties.hashed_token,
+            verificationType: data.properties.verification_type,
+          },
+        };
+      },
+      provision: () =>
+        callRpc(supabase, 'provision_user', {
+          p_full_name: full_name,
+          p_email: institutional_email,
+          p_role: role,
+          p_department_id: unit_id ?? undefined,
+        }),
+      deleteAuthUser: async (userId) => {
+        const { error } = await adminClient.auth.admin.deleteUser(userId);
+        return error ? { ok: false, message: error.message } : { ok: true };
+      },
+      sendInvite: (link) =>
+        sendActivation(
+          {
+            hashed_token: link.hashedToken,
+            verification_type: link.verificationType,
+          },
+          role,
+          false
+        ),
     });
 
-    if (!result.ok) {
-      return rpcFail(result.error, { NOT_AUTHENTICATED: 'Not authenticated' });
+    if (!outcome.ok) {
+      if (outcome.reason === 'INVITE_FAILED') {
+        return respond.fail(500, `Internal error. Ref: ${outcome.ref}`);
+      }
+      return rpcFail(outcome.error, { NOT_AUTHENTICATED: 'Not authenticated' });
     }
 
     // The activation token stays server-side; only the profile id is sent.
     return respond.ok(
-      { profile_id: result.data.profile_id, status: 'PENDING_ACTIVATION' },
+      { profile_id: outcome.profileId, status: 'PENDING_ACTIVATION' },
       201
     );
   },

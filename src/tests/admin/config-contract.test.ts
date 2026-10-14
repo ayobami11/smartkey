@@ -456,7 +456,7 @@ describe('POST /api/admin/keys', () => {
 
   beforeEach(() => {
     asRole('CSO');
-    fake.tables.keys = { data: { id: KEY_ID }, error: null };
+    fake.rpc.create_key = { data: [{ key_id: KEY_ID }], error: null };
   });
 
   it.each([
@@ -469,32 +469,63 @@ describe('POST /api/admin/keys', () => {
     expect(await call(createKey, post(path, bad))).toEqual(
       failure(422, 'Invalid request body')
     );
+    expect(fake.rpcCalls).toHaveLength(0);
   });
 
+  // CHANGED: the duplicate was detected from the insert's SQLSTATE 23505;
+  // create_key now raises CONFLICT. Same status and copy.
   it('409 when the key code is taken', async () => {
-    fake.tables.keys = {
-      data: null,
-      error: { message: 'duplicate key', code: '23505' },
-    };
+    fake.rpc.create_key = rpcError(
+      'CONFLICT: key code NS-304 is already in use'
+    );
     expect(await call(createKey, post(path, body))).toEqual(
       failure(409, 'Key code "NS-304" is already in use.')
     );
   });
 
-  it('500 with a ref for any other insert failure', async () => {
-    fake.tables.keys = { data: null, error: { message: 'boom' } };
+  // CHANGED: an unknown unit failed the insert's foreign key and came back
+  // as a ref'd 500.
+  it('422 Unit not found for an unknown unit', async () => {
+    fake.rpc.create_key = rpcError('VALIDATION: unit not found');
+    expect(await call(createKey, post(path, body))).toEqual(
+      failure(422, 'Unit not found')
+    );
+  });
+
+  it.each([
+    ['NOT_AUTHENTICATED', 401, 'Unauthorized'],
+    ['FORBIDDEN: only the CSO can create keys', 403, 'Forbidden'],
+    ['VALIDATION: key_count must be between 1 and 20', 422, 'Invalid request'],
+  ])('maps %s → %i', async (raised, status, message) => {
+    fake.rpc.create_key = rpcError(raised);
+    expect(await call(createKey, post(path, body))).toEqual(
+      failure(status, message)
+    );
+  });
+
+  it('500 with a ref for any other RPC failure', async () => {
+    fake.rpc.create_key = rpcError('boom');
     expectRef(await call(createKey, post(path, body)));
   });
 
+  // CHANGED: the route inserted into keys directly, with no audit entry;
+  // create_key inserts and writes KEY_CREATED in one transaction.
   it('201 with the new key id, key_count defaulting to 1', async () => {
     expect(await call(createKey, post(path, body))).toEqual(
       success({ key_id: KEY_ID }, 201)
     );
-    const insert = fake.queries.find((q) => q.table === 'keys');
-    expect(insert?.client).toBe('server');
-    expect(insert?.ops[0]).toEqual([
-      'insert',
-      [{ ...body, key_count: 1, status: 'AVAILABLE' }],
+    expect(fake.queries.some((q) => q.table === 'keys')).toBe(false);
+    expect(fake.rpcCalls).toEqual([
+      {
+        name: 'create_key',
+        args: {
+          p_code: 'NS-304',
+          p_zone: 'NEW_SENATE',
+          p_room_name: 'Senate Hall A',
+          p_unit_id: UNIT_ID,
+          p_key_count: 1,
+        },
+      },
     ]);
   });
 });

@@ -1,8 +1,8 @@
 // Shared fake Supabase client for the route contract tests (keys, shifts,
 // reports, incidents, admin, ai, cron, profile). Adapted from the requests/*
 // harness in batch 1, with insert/update/is added for the routes that write
-// tables directly, neq + auth.admin (generateLink, updateUserById) for
-// admin/*, gt + per-call RPC answers (a function of the args) for cron/*, and
+// tables directly, neq + auth.admin (generateLink, updateUserById,
+// deleteUser) for admin/*, gt + per-call RPC answers (a function of the args) for cron/*, and
 // upsert + storage (upload/getPublicUrl/list/remove/download) for profile/*.
 //
 // The fake records every query a route builds and answers it from `fake`,
@@ -17,6 +17,8 @@ export const USER_ID = '11111111-1111-4111-8111-111111111111';
 export const KEY_ID = '33333333-3333-4333-8333-333333333333';
 export const SHIFT_ID = '44444444-4444-4444-8444-444444444444';
 export const REPORT_ID = '55555555-5555-4555-8555-555555555555';
+// The auth account generateLink({ type: 'invite' }) answers with.
+export const AUTH_USER_ID = '88888888-8888-4888-8888-888888888888';
 
 export type Op = [method: string, args: unknown[]];
 export type Result = {
@@ -55,10 +57,15 @@ const freshState = () => ({
     generateLink: {
       data: {
         properties: { hashed_token: 'hashed', verification_type: 'invite' },
+        user: { id: AUTH_USER_ID },
       },
       error: null,
     } as { data: unknown; error: { message: string } | null },
     updateUserById: { data: {}, error: null } as {
+      data: unknown;
+      error: { message: string } | null;
+    },
+    deleteUser: { data: {}, error: null } as {
       data: unknown;
       error: { message: string } | null;
     },
@@ -159,6 +166,10 @@ export const makeClient = (client: QueryCall['client']) => ({
       updateUserById: async (...args: unknown[]) => {
         fake.authAdminCalls.push({ method: 'updateUserById', args });
         return fake.authAdmin.updateUserById;
+      },
+      deleteUser: async (...args: unknown[]) => {
+        fake.authAdminCalls.push({ method: 'deleteUser', args });
+        return fake.authAdmin.deleteUser;
       },
     },
   },

@@ -38,13 +38,40 @@ export const GET = route({
     // path in POST /api/requests/hod-decision, which holds the request (never
     // calls approve_weekend) — so it stays PENDING_HOD until the CSO resolves it
     // via the override RPC path. Once resolved, it naturally drops off here.
-    const { data: auditRows, error: auditError } = await supabase
-      .from('audit_log')
-      .select('target_id, payload, occurred_at')
-      .eq('event', 'SIGNATURE_MISMATCH')
-      .eq('target_type', 'request')
-      .order('occurred_at', { ascending: false })
-      .limit(200);
+    //
+    // Start from the held requests, then read the mismatch entries for exactly
+    // those. Until 2026-10-14 this read the 200 newest SIGNATURE_MISMATCH
+    // entries first, so an old request that was still held dropped off the
+    // CSO's list once 200 newer mismatches had been written.
+    const { data: pending, error: requestsError } = await supabase
+      .from('requests')
+      .select(
+        `id, requested_for,
+         requester:profiles!requester_id(id, full_name, institutional_email),
+         key:keys!key_id(id, code, room_name, zone)`
+      )
+      .eq('status', 'PENDING_HOD');
+
+    if (requestsError) {
+      return respond.fail(500, FAILED);
+    }
+
+    // With no pending request there is nothing to look up, but the held
+    // reference replacements below must still be read: returning early here
+    // (until 2026-10-13) hid every held Dean signature or stamp from the CSO
+    // for as long as no weekend request was held too.
+    const requests = pending ?? [];
+    const requestIds = requests.map((request) => request.id);
+    const { data: auditRows, error: auditError } =
+      requestIds.length === 0
+        ? { data: [], error: null }
+        : await supabase
+            .from('audit_log')
+            .select('target_id, payload, occurred_at')
+            .eq('event', 'SIGNATURE_MISMATCH')
+            .eq('target_type', 'request')
+            .in('target_id', requestIds)
+            .order('occurred_at', { ascending: false });
 
     if (auditError) {
       return respond.fail(500, FAILED);
@@ -65,29 +92,7 @@ export const GET = route({
       }
     }
 
-    // With no weekend-request mismatches there is nothing to look up, but the
-    // held reference replacements below must still be read: returning early
-    // here (until 2026-10-13) hid every held Dean signature or stamp from the
-    // CSO for as long as no weekend request was held too.
-    const requestIds = [...latestByRequest.keys()];
-    const { data: requests, error: requestsError } =
-      requestIds.length === 0
-        ? { data: [], error: null }
-        : await supabase
-            .from('requests')
-            .select(
-              `id, requested_for,
-         requester:profiles!requester_id(id, full_name, institutional_email),
-         key:keys!key_id(id, code, room_name, zone)`
-            )
-            .in('id', requestIds)
-            .eq('status', 'PENDING_HOD');
-
-    if (requestsError) {
-      return respond.fail(500, FAILED);
-    }
-
-    const alerts = (requests ?? [])
+    const alerts = requests
       .map((request) => {
         const mismatch = latestByRequest.get(request.id);
         if (!mismatch) return null;
