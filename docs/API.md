@@ -44,7 +44,10 @@ Route handlers are wrapped in `route()` from `src/lib/http/route.ts`. Every rout
    - `'user'` validates the Supabase session with `getUser()`, never `getSession()`. No session → `401 Unauthorized`.
    - `'cron'` requires `Authorization: Bearer ${CRON_SECRET}`, compared in constant time (`timingSafeEqual` over SHA-256 digests). An unset `CRON_SECRET` → `500` with a ref; a wrong or missing header → `401 Unauthorized`.
    - `'public'` performs no check. Used by the session-less guest and one-click Dean decision routes, which authorise by an unguessable token instead.
-2. **Role**, only when `roles` is given. The role comes from `profiles.role`, never from the JWT claim alone. No profile row → `401 Unauthorized`; a role not in the list → `403 Forbidden`. With `roles` omitted there is no profile query at all.
+2. **Role**, only when `roles` is given. The role comes from `profiles.role`, never from the JWT claim alone. No profile row → `401 Unauthorized`; a `DEACTIVATED` profile → `401 Unauthorized` (since 2026-10-14); a role not in the list → `403 Forbidden`. With `roles` omitted there is no profile query at all, so no status check either.
+
+   The `DEACTIVATED` check exists because deactivation bans the user in Supabase Auth, but a session issued before the ban stays valid until its access token expires. It answers `401` rather than `403` because the account no longer has a usable session: a `401` sends the client to sign in, where the ban stops them, while a `403` reads as "wrong page". `PENDING_ACTIVATION` is not refused — activation runs through the unwrapped `auth/*` routes. `GET /api/storage/object` applies the same check itself.
+
 3. **Path params**, when a `params` schema is given. Failure → the route's `paramsError`, by default `404 Not found`.
 4. **JSON body**, when a `body` schema is given. Unparseable JSON or a schema failure → `422 Invalid request body`. Multipart routes omit `body` and read `ctx.request` themselves.
 5. **Handler.** Any throw, from the handler or from the checks above, becomes an enveloped `500 Internal error. Ref: <ref>`, logged as `<name>: unhandled error`.
@@ -159,7 +162,9 @@ Completes requester registration. There is no `token` field — the invite link 
 
 **Response `data`**: `{ "profile_id": "<uuid>" }`
 
-**Errors**: `401` no valid activation session · `422` password fails the `src/lib/validation/primitives.ts` rule, or missing photo · `413` photo over 5MB
+The photo's type is detected from its bytes (PNG, JPEG or WebP — see "Uploads" under §7a) and stored under that type and extension, never the declared one. It is checked before the password changes.
+
+**Errors**: `401` no valid activation session · `422` password fails the `src/lib/validation/primitives.ts` rule, missing photo, or a photo that is not a PNG/JPEG/WebP ("Passport photo must be a PNG, JPEG or WebP image") · `413` photo over 5MB
 
 ---
 
@@ -176,9 +181,11 @@ One-time Dean onboarding. There is no `token` field — as with `/api/auth/regis
 | `signature` | `File` (image)                                | yes      |
 | `stamp`     | `File` (image)                                | yes      |
 
+Each image's type is detected from its bytes (PNG, JPEG or WebP) and stored under that type and extension, checked before the plausibility pass and before the password changes.
+
 **Response `data`**: `{ "profile_id": "<uuid>", "redirect": "/dean" }`
 
-**Errors**: `401` no valid activation session · `422` validation · `413` image too large
+**Errors**: `401` no valid activation session · `422` validation, including a signature or stamp that is not a PNG/JPEG/WebP ("Signature image must be a PNG, JPEG or WebP file" / "Stamp image …") · `413` image too large
 
 ---
 
@@ -282,7 +289,7 @@ Verifies `current_password` by re-authenticating (`signInWithPassword`) before a
 | `letter_url`      | `string`                   | no — optional Dean-signature image the requester uploaded client-side to `weekend-letters`; persisted on the request row for later signature verification at Dean approval |
 | `stamp_url`       | `string`                   | no — optional stamp close-up, same rules as `letter_url`                                                                                                                   |
 
-The route runs the risk engine and passes the result to the RPC, which writes the request (with `risk_tier`, `risk_factors` and, for a weekend request, `letter_url`/`stamp_url`), the code and the `REQUEST_CREATED` entry (carrying the tier) in one transaction. Until 2026-10-13 the tier and the letter/stamp were back-filled after the RPC by two best-effort admin-client UPDATEs, so a failure could leave a HIGH-risk request stored as LOW. A `letter_url`/`stamp_url` outside the requester's own `weekend-letters/{uid}/` folder is refused (`422`) by the route and again by the RPC; on a weekday request the route drops them.
+The route runs the risk engine and passes the result to the RPC, which writes the request (with `risk_tier`, `risk_factors` and, for a weekend request, `letter_url`/`stamp_url`), the code and the `REQUEST_CREATED` entry (carrying the tier) in one transaction. Until 2026-10-13 the tier and the letter/stamp were back-filled after the RPC by two best-effort admin-client UPDATEs, so a failure could leave a HIGH-risk request stored as LOW. A `letter_url`/`stamp_url` outside the requester's own `weekend-letters/{uid}/` folder is refused (`422`) by the route and again by the RPC; on a weekday request the route drops them. The browser uploads these straight to Storage, so no route sees the bytes at upload time; since 2026-10-14 the route reads each stored object back (service role) and refuses one that is not a PNG, JPEG or WebP — or that is missing — with the same `422 Invalid letter or stamp upload`, before `create_request` runs.
 
 **Response `data`** (WEEKDAY):
 
@@ -568,22 +575,24 @@ All five are wrapped in `route({ auth: 'public' })`, which gives them no Supabas
 
 Multipart form. Uploads the Dean authorisation letter to the `weekend-letters` bucket and creates the guest + request (`PENDING_HOD`, no code). For a Dean-authorised unit, `create_guest_weekend_request` sets `decision_token` in the same transaction. After the response, two notifications go out through `notifyAfterResponse` (`src/lib/notifications/`): `GUEST_SUBMISSION_RECEIVED` emails the guest their status link, and `WEEKEND_SUBMITTED` emails the unit's Dean — with the "External" badge and the one-click `/dean-decision/[token]` link, where approving also requires picking a key — or every active CSO for an Administration unit. No send can fail the request. Returns `201`.
 
-| Field                | Type                       | Required |
-| -------------------- | -------------------------- | -------- |
-| `full_name`          | `string`                   | yes      |
-| `email`              | `string` (email)           | yes      |
-| `phone`              | `string`                   | no       |
-| `id_document_type`   | `string`                   | yes      |
-| `id_document_number` | `string`                   | yes      |
-| `department_id`      | `string` (uuid)            | yes      |
-| `requested_room`     | `string` (max 200)         | yes      |
-| `weekend_date`       | `string` (ISO date)        | yes      |
-| `return_deadline`    | `string` (ISO timestamptz) | yes      |
-| `letter`             | `File` (image/PDF)         | yes      |
+| Field                | Type                        | Required |
+| -------------------- | --------------------------- | -------- |
+| `full_name`          | `string` (trimmed, max 120) | yes      |
+| `email`              | `string` (email)            | yes      |
+| `phone`              | `string`                    | no       |
+| `id_document_type`   | `string`                    | yes      |
+| `id_document_number` | `string`                    | yes      |
+| `department_id`      | `string` (uuid)             | yes      |
+| `requested_room`     | `string` (max 200)          | yes      |
+| `weekend_date`       | `string` (ISO date)         | yes      |
+| `return_deadline`    | `string` (ISO timestamptz)  | yes      |
+| `letter`             | `File` (image/PDF)          | yes      |
 
 **Response `data`**: `{ "access_token": "<uuid>", "request_id": "<uuid>" }`
 
-**Errors**: `404` department not found · `422` validation, or `weekend_date` is not a Saturday/Sunday from today onwards (Lagos date) · `413` letter too large
+The letter's type is detected from its bytes — PNG, JPEG, WebP or PDF — and it is stored as `guest/{uuid}.{ext}` under that type, never the declared one (a file labelled `application/pdf` that is really SVG or HTML is refused). `full_name` is at most 120 characters (200 until 2026-10-14).
+
+**Errors**: `404` department not found · `422` validation, a letter that is not an image or PDF, or `weekend_date` is not a Saturday/Sunday from today onwards (Lagos date) · `413` letter too large
 
 ---
 
@@ -906,7 +915,7 @@ Sets key `status = 'RETIRED'` (and `retired_at`), creates an incident of type `M
 
 | Field                 | Type                                  | Required           |
 | --------------------- | ------------------------------------- | ------------------ |
-| `full_name`           | `string`                              | yes                |
+| `full_name`           | `string` (trimmed, max 120)           | yes                |
 | `institutional_email` | `string` (email)                      | yes                |
 | `role`                | `'DEAN' \| 'VERIFIER' \| 'REQUESTER'` | yes                |
 | `unit_id`             | `string` (uuid)                       | DEAN and REQUESTER |
@@ -984,10 +993,10 @@ No request body. Re-sends a fresh activation link for a user still `PENDING_ACTI
 
 Edits an existing user's `full_name` and — for departmental roles (Dean, REQUESTER) — `unit_id`. Email and role are intentionally **not** editable here: the email is the auth login identity and chain-of-trust anchor, and role changes are out of scope. The RPC writes the profile, keeps the `units.hod_id` reverse link in sync when a Dean moves, and writes a `USER_UPDATED` entry recording only the fields that changed, in one transaction. The one-Dean-per-unit check runs under a lock on the destination unit.
 
-| Field       | Type            | Required                   |
-| ----------- | --------------- | -------------------------- |
-| `full_name` | `string`        | yes                        |
-| `unit_id`   | `string` (uuid) | Dean and REQUESTER targets |
+| Field       | Type                        | Required                   |
+| ----------- | --------------------------- | -------------------------- |
+| `full_name` | `string` (trimmed, max 120) | yes                        |
+| `unit_id`   | `string` (uuid)             | Dean and REQUESTER targets |
 
 **Response `data`**: `{ "profile_id": "<uuid>", "full_name": "<name>", "unit_id": "<uuid|null>" }`
 
@@ -1235,15 +1244,15 @@ Returns the caller's own profile, including role-specific fields (`signature_ref
 
 Only `full_name` is mutable here — email is managed by Supabase Auth, photo by `POST /api/profile/photo`, and a Dean's signature/stamp by `POST /api/profile/signature`.
 
-| Field       | Type     | Required |
-| ----------- | -------- | -------- |
-| `full_name` | `string` | yes      |
+| Field       | Type                        | Required |
+| ----------- | --------------------------- | -------- |
+| `full_name` | `string` (trimmed, max 120) | yes      |
 
-The update runs with the caller's session, so the `profiles` column guard (`docs/DATABASE.md`) would reject any other column even if the route sent one. The body is read by hand to keep its two messages, `422 Invalid JSON` and `422 full_name is required`.
+The update runs with the caller's session, so the `profiles` column guard (`docs/DATABASE.md`) would reject any other column even if the route sent one. The body is read by hand to keep its two messages, `422 Invalid JSON` and `422 full_name is required`. The name is trimmed and at most 120 characters (`FULL_NAME_MAX` in `src/lib/validation/primitives.ts`, the same limit as the CSO user-admin routes and the guest form); longer is `422 Full name must be 120 characters or fewer.` (no limit until 2026-10-14).
 
 **Response `data`**: `{ "full_name": "<name>" }`
 
-**Errors**: `401` unauthenticated, or no profile row (until 2026-10-14 the update ran anyway and answered `200`) · `422` unparseable body, or missing/blank `full_name` · `500` update failure
+**Errors**: `401` unauthenticated, or no profile row (until 2026-10-14 the update ran anyway and answered `200`) · `422` unparseable body, missing/blank `full_name`, or over 120 characters · `500` update failure
 
 ---
 
@@ -1258,11 +1267,11 @@ Multipart form; replaces the caller's own profile photo in the `passport-photos`
 | ------- | ----------------------- | -------- |
 | `photo` | `File` (image, max 5MB) | yes      |
 
-Uploaded and saved with the service-role client, since `photo_url` is not writable from a user session; the object path (`{uid}/passport.{ext}`) comes from the session user, never the request.
+Uploaded and saved with the service-role client, since `photo_url` is not writable from a user session; the object path (`{uid}/passport.{ext}`) comes from the session user, never the request. The type and `{ext}` are detected from the file's bytes (PNG, JPEG or WebP); the declared type and filename are ignored, and SVG is refused. After the profile is saved, any other `passport.*` in the folder (an earlier photo with a different extension) is removed, best-effort: a failure is logged and the response is still `200`.
 
 **Response `data`**: `{ "photo_url": "<url>" }` — a proxy URL with a cache-busting `v` param.
 
-**Errors**: `401` unauthenticated, or no profile row (until 2026-10-14 the photo was uploaded and the route answered `200`) · `413` over 5MB · `422` not multipart, missing file, or not an `image/*` type · `500` upload or save failure
+**Errors**: `401` unauthenticated, or no profile row (until 2026-10-14 the photo was uploaded and the route answered `200`) · `413` over 5MB · `422` not multipart, missing file, or bytes that are not a PNG/JPEG/WebP ("File must be a PNG, JPEG or WebP image"; until 2026-10-14 "File must be an image", judged on the declared `image/*` type, which let SVG through) · `500` upload or save failure
 
 ---
 
@@ -1291,12 +1300,14 @@ Replaces a Dean's signature or stamp reference image (post-onboarding). If a ref
 | `type`  | `'signature' \| 'stamp'` | yes      |
 | `image` | `File` (image, max 5MB)  | yes      |
 
+The image's type is detected from its bytes (PNG, JPEG or WebP) before the plausibility pass, and the upload is stored under that type and extension. Until 2026-10-14 the declared `image.type` was stored as given, so a valid PNG labelled `text/html` was stored as HTML.
+
 If the mismatch exceeds `SIGNATURE_DIFF_THRESHOLD`, the reference is **held, not replaced**: the service-only `hold_signature_reference` RPC writes the `pending_signature_references` row (see `docs/DATABASE.md`) and the `SIGNATURE_MISMATCH` audit entry (`context: 'reference_replacement'`, including `pending_url`) together. Every upload is stored at its own Storage path (`{uid}/{type}-{uuid}.{ext}`), so the live reference file is never overwritten in place. The response reports the held state (still HTTP 200) and the current reference stays active in the meantime. The CSO reviews the pending upload against the current reference on `/cso/dashboard` (same "Signature mismatches" card as the weekend-request mismatches) and resolves it via `POST /api/admin/signature-references/resolve` — approve to replace the reference, or decline to discard the pending upload. Otherwise (verification passes) the service-only `set_signature_reference` RPC replaces the reference, clears any stale held upload for that type, and writes `SIGNATURE_REFERENCE_UPDATED`. Both RPCs refuse (`409`) if the reference changed while the upload was being verified, and the unused upload is then removed.
 
 **Response `data`** (held): `{ "status": "HELD_SIGNATURE_MISMATCH", "mismatch_pct": <number>, "message": "..." }`
 **Response `data`** (updated): `{ "status": "updated", "new_url": "<url>" }`
 
-**Errors**: `401` unauthenticated · `403` not DEAN · `409` the reference changed during verification — retry · `413` over 5MB · `422` missing/invalid type or image · `500` storage, verification or RPC failure (correlation ref)
+**Errors**: `401` unauthenticated · `403` not DEAN · `409` the reference changed during verification — retry · `413` over 5MB · `422` missing/invalid type or image, or an image that is not a PNG/JPEG/WebP ("image must be a PNG, JPEG or WebP file") · `500` storage, verification or RPC failure (correlation ref)
 
 ---
 
@@ -1646,7 +1657,27 @@ The authenticated read path for every private storage bucket. Returns the object
 
 Ownership is derived from the object path's first segment, which is always the profile id (or request id) the object belongs to.
 
-Bytes are streamed behind the session cookie rather than handed out as signed URLs: these images render in dashboards that stay open for a whole shift, so a signed URL would expire mid-shift and leave broken images, and would remain a bearer token for its whole lifetime. A proxied request is re-authorised every time and stops working the moment the session does. Responses carry `Cache-Control: private, max-age=300, must-revalidate` and `X-Content-Type-Options: nosniff`.
+Bytes are streamed behind the session cookie rather than handed out as signed URLs: these images render in dashboards that stay open for a whole shift, so a signed URL would expire mid-shift and leave broken images, and would remain a bearer token for its whole lifetime. A proxied request is re-authorised every time and stops working the moment the session does. A `DEACTIVATED` profile is refused with `401`, as in `route()`.
+
+**Response headers.** The content type is taken from the object's leading bytes (`src/lib/storage/upload-type.ts`), never from the type stored with the object, which is whatever the uploader declared. Built by `objectResponseHeaders` in `src/lib/storage/object-headers.ts`:
+
+| Bytes are         | `Content-Type`                            | `Content-Disposition` |
+| ----------------- | ----------------------------------------- | --------------------- |
+| PNG / JPEG / WebP | `image/png` / `image/jpeg` / `image/webp` | `inline`              |
+| PDF               | `application/pdf`                         | `attachment`          |
+| anything else     | `application/octet-stream`                | `attachment`          |
+
+Every response also carries:
+
+- `Content-Security-Policy: default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox` — ignored for an `<img>`, but if the URL is opened directly the document gets an opaque origin, no script and no loads.
+- `X-Content-Type-Options: nosniff`
+- `Cache-Control: private, max-age=300, must-revalidate`
+
+A PDF is an attachment because inline it would render on the app origin, and Chrome will not render a PDF under `sandbox` at all; nothing embeds one from this route (Deans and the CSO view letters through Supabase signed URLs, below). Until 2026-10-14 every object was served `inline` under its stored type, so an SVG photo or an HTML file labelled as a signature ran script on the app origin when opened. Sniffing on the way out protects objects stored before the upload fix as well as new ones.
+
+**Uploads.** Every server-side upload path (`auth/register`, `auth/activate-hod`, `profile/photo`, `profile/signature`, `public/weekend-request`) runs `checkUpload` from `src/lib/storage/upload-type.ts` on the file's bytes and stores the detected content type and extension; the declared type and filename are never used. Accepted: PNG, JPEG, WebP, and PDF only for weekend letters. SVG is accepted nowhere. The requester's weekend letter and stamp go straight from the browser to Storage; the sheet runs the same check to label them, and `POST /api/requests/submit` reads each object back and refuses one that is not an image. Bucket-level `allowed_mime_types` and a 5 MB `file_size_limit` back this up (`20261014110000_bucket_mime_types.sql`, `docs/DATABASE.md`).
+
+**Signed URLs.** `GET /api/requests/[id]/letter` and `GET /api/public/dean-decision/[token]` hand out 5-minute Supabase signed URLs instead. Those are served by Supabase's own origin (`*.supabase.co`), not the app's, so a hostile document there cannot read the app's cookies or storage. Supabase serves them with the object's stored content type; what it does with a stored `text/html` or `image/svg+xml` (whether it forces a safe type or adds its own CSP) has not been verified. New letters can no longer be stored under such a type (the checks above and the bucket list); objects stored earlier could be, so see the check in `docs/CHANGELOG.md` 2026-10-14.
 
 Callers never build these URLs by hand — `toProxyUrl` / `rewriteStorageUrls` in `src/lib/storage/object-url.ts` rewrite stored storage URLs at the response boundary, so every route listed in §2–§7 that carries a `photo_url`, `signature_ref_url`, `stamp_ref_url`, `ref_url`, `submitted_url`, `pending_url`, or `current_ref_url` returns a proxy URL rather than a raw Storage URL. The canonical Storage URL is what stays in the database column and in audit payloads.
 
