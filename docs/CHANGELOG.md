@@ -6,6 +6,23 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-10-14 — `profile/*` routes move onto `route()`; the migration is complete
+
+- **Why**: the self-service profile routes let any signed-in user change their own name, photo and notification preferences, yet they hand-rolled auth and envelopes and never checked that the session had a profile row. A session with no profile could upload a passport photo and be told it was saved, write preferences that the foreign key then refused, or get `404` from `GET /api/profile/me` for a database error. A throw escaped as Next's bare 500. This is batch 6, the last of the `src/lib/http/` migration (batches 1–5 are merged).
+- **Contract tests first**: `src/tests/profile/routes-contract.test.ts` (me, photo, notification-preferences) and `src/tests/profile/signature-contract.test.ts`, on the shared fake client in `src/tests/http/contract-harness.ts` (now with `upsert`, a storage fake — `upload`, `getPublicUrl`, `list`, `remove`, `download` — and a `multipart()` request helper). They pin auth outcomes, multipart validation (`422`, `413`), storage and query failures, each RPC error kind `profile/signature` maps, success shapes, proxied storage URLs, the preference defaults (all `true` except `digest_email`), and the exact write payloads: `PATCH me` updates only `full_name` on the caller's row with the user session; the photo goes to `{uid}/passport.{ext}` and `photo_url` is written with the service role; a preferences PATCH upserts only the columns sent, and a `profile_id` in the body is ignored. Committed passing against the unchanged routes; the only assertions changed afterwards are marked `CHANGED`.
+- **Routes migrated** to `route()` + `respond.*`: `profile/me` (GET, PATCH), `profile/photo` (POST, DELETE), `profile/notification-preferences` (GET, PATCH). None calls an RPC. `profile/signature` was already on `route()` (#64) and is pinned without change. Every other status and message is unchanged, including `PATCH me`'s `Invalid JSON` / `full_name is required` (it still parses its body by hand to keep them) and the plain `500` messages the settings screens toast.
+- **Behaviour changes** (bug fixes only):
+  - A signed-in user with no profile row gets `401 Unauthorized` from every handler. Before: `404 Profile not found` from `GET me`, and `200` from the rest, including a photo uploaded to storage and "saved" to no row.
+  - `GET me`, a failed profile query: `404 Profile not found` → `500` with a ref.
+  - Any uncaught throw: Next's bare 500 → enveloped `500 "Internal error. Ref: <ref>"`.
+  - The envelope `status` already matched the HTTP status, and no route leaked database text; nothing changed there. The two handlers that returned a `500` without logging now log the database error.
+- **The migration is complete.** Every route under `src/app/api/` is on `route()` except, by design, `auth/*`, `health`, `storage/object` and `ai/verify-signature`.
+- **Not changed, flagged for follow-up**:
+  - `profile/photo` accepts any `image/*` the client declares, including `image/svg+xml`, and stores that declared type; `storage/object` serves it back inline under it. `profile/signature` does not check the type at all (it does check the bytes decode as an image). No bucket restricts MIME types in the migrations and the app sets no CSP, so an uploaded SVG or a mislabelled file opened directly would run on the app's origin. Fix: allow-list types (and sniff the bytes) at upload, or have the proxy serve only image types and `Content-Disposition: attachment` otherwise.
+  - `PATCH me` puts no upper bound on `full_name`, which is copied into audit entries and emails.
+  - Replacing a photo with a different extension leaves the old `{uid}/passport.*` object in storage, still readable by staff until `DELETE` removes the whole folder.
+- **Docs**: `docs/API.md` auth conventions (all six batches, what is not wrapped) and §5a; `.claude/skills/api-routes/SKILL.md`.
+
 ### 2026-10-14 — `cron/*` routes move onto `route()`
 
 - **Why**: the five cron routes run with the service role and send email, yet each hand-rolled its own bearer-secret check — a plain `!==` string compare — and its own ref'd 500, and a throw anywhere in them escaped as Next's bare, unenveloped 500. This is batch 5 of the `src/lib/http/` migration (batches 1–4 are merged).

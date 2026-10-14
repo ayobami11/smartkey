@@ -185,7 +185,7 @@ Rules:
 
 ## Not wrapped by `route()`
 
-These routes keep their own flow but still build responses with `respond.*`: the `auth/*` routes (they establish sessions, set cookies and redirect), `health`, `storage/object` (it returns bytes), and `ai/verify-signature`.
+Every other route under `src/app/api/` is on `route()`; the migration finished on 2026-10-14. These routes keep their own flow but still build responses with `respond.*`: the `auth/*` routes (they establish sessions, set cookies and redirect), `health`, `storage/object` (it returns bytes), and `ai/verify-signature`.
 
 ## Route checklist
 

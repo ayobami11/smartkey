@@ -38,7 +38,7 @@ Routes build the envelope only through `respond.ok` / `fail` / `error` / `intern
 
 ## Auth conventions
 
-Route handlers are wrapped in `route()` from `src/lib/http/route.ts`. Routes are being moved onto it in batches; every route under `/api/requests/` (batch 1), `/api/public/` (batch 2), `keys/`, `shifts/`, `reports/` and `incidents` (batch 3), `/api/admin/` plus the `ai/risk-alerts` and `ai/signature-alerts` reads (batch 4), and the `/api/cron/` routes (batch 5, 2026-10-14) is on it. `route()` runs these checks in a fixed order before the handler:
+Route handlers are wrapped in `route()` from `src/lib/http/route.ts`. Every route is on it except the four listed under "Not wrapped" below. The migration ran in six batches, finishing 2026-10-14: `/api/requests/` (batch 1), `/api/public/` (batch 2), `keys/`, `shifts/`, `reports/` and `incidents` (batch 3), `/api/admin/` plus the `ai/risk-alerts` and `ai/signature-alerts` reads (batch 4), the `/api/cron/` routes (batch 5) and `/api/profile/` (batch 6). `route()` runs these checks in a fixed order before the handler:
 
 1. **Auth**, chosen per route with `auth`:
    - `'user'` validates the Supabase session with `getUser()`, never `getSession()`. No session → `401 Unauthorized`.
@@ -1210,11 +1210,11 @@ If `bulk = true`, all keys are acknowledged in one confirmation. Audit entry wri
 **File**: `src/app/api/profile/me/route.ts`
 **Roles**: ALL (authenticated)
 
-Returns the caller's own profile, including role-specific fields (`signature_ref_url`, `stamp_ref_url` for Deans) and the joined unit name. Backs every role's account-settings page.
+Returns the caller's own profile, including role-specific fields (`signature_ref_url`, `stamp_ref_url` for Deans) and the joined unit name. Backs every role's account-settings page. Storage URLs are returned as proxy URLs (`toProxyUrl`), never raw Storage URLs.
 
 **Response `data`**: `{ "profile": { "id", "full_name", "institutional_email", "role", "status", "photo_url", "signature_ref_url", "stamp_ref_url", "unit_id", "unit": { "id", "name" } } }`
 
-**Errors**: `401` unauthenticated · `404` profile not found
+**Errors**: `401` unauthenticated, or no profile row · `500` query failure, with a correlation reference. Until 2026-10-14 both a missing profile and a failed query were `404 Profile not found`.
 
 ---
 
@@ -1229,9 +1229,11 @@ Only `full_name` is mutable here — email is managed by Supabase Auth, photo by
 | ----------- | -------- | -------- |
 | `full_name` | `string` | yes      |
 
+The update runs with the caller's session, so the `profiles` column guard (`docs/DATABASE.md`) would reject any other column even if the route sent one. The body is read by hand to keep its two messages, `422 Invalid JSON` and `422 full_name is required`.
+
 **Response `data`**: `{ "full_name": "<name>" }`
 
-**Errors**: `401` unauthenticated · `422` missing/blank full_name
+**Errors**: `401` unauthenticated, or no profile row (until 2026-10-14 the update ran anyway and answered `200`) · `422` unparseable body, or missing/blank `full_name` · `500` update failure
 
 ---
 
@@ -1246,9 +1248,11 @@ Multipart form; replaces the caller's own profile photo in the `passport-photos`
 | ------- | ----------------------- | -------- |
 | `photo` | `File` (image, max 5MB) | yes      |
 
-**Response `data`**: `{ "photo_url": "<url>" }`
+Uploaded and saved with the service-role client, since `photo_url` is not writable from a user session; the object path (`{uid}/passport.{ext}`) comes from the session user, never the request.
 
-**Errors**: `401` unauthenticated · `422` missing file or not an image type · `413` over 5MB
+**Response `data`**: `{ "photo_url": "<url>" }` — a proxy URL with a cache-busting `v` param.
+
+**Errors**: `401` unauthenticated, or no profile row (until 2026-10-14 the photo was uploaded and the route answered `200`) · `413` over 5MB · `422` not multipart, missing file, or not an `image/*` type · `500` upload or save failure
 
 ---
 
@@ -1261,7 +1265,7 @@ No request body. Removes the caller's own photo file(s) from storage and clears 
 
 **Response `data`**: `null`
 
-**Errors**: `401` unauthenticated
+**Errors**: `401` unauthenticated, or no profile row (was `200` until 2026-10-14) · `500` remove or clear failure
 
 ---
 
@@ -1316,7 +1320,7 @@ RLS-scoped direct read of the caller's own `notification_preferences` row. Retur
 
 **Response `data`**: `{ "key_issued_in_app": true, "overdue_email": true, "weekend_decided_email": true, "weekend_submitted_in_app": true, "weekend_submitted_email": true, "signature_mismatch_email": true, "digest_email": false }`
 
-**Errors**: `401` unauthenticated · `500` read failure
+**Errors**: `401` unauthenticated, or no profile row (until 2026-10-14 it answered `200` with the defaults) · `500` read failure
 
 ---
 
@@ -1339,7 +1343,9 @@ All fields are individually optional but at least one is required. Upserts the c
 
 **Response `data`**: echoes the saved fields (only the ones sent).
 
-**Errors**: `401` unauthenticated · `422` validation (empty body) · `500` write failure
+Unknown keys are stripped by the schema, so a `profile_id` in the body is ignored; the row is always the session user's.
+
+**Errors**: `401` unauthenticated, or no profile row (was `200` until 2026-10-14) · `422` unparseable body, a non-boolean value, or no known field · `500` write failure
 
 ---
 

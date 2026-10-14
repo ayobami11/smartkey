@@ -1,153 +1,137 @@
-import { NextRequest, NextResponse } from 'next/server';
-
-import { uploadExtension } from '@/lib/storage/extension';
+import { USER_ROLES } from '@/lib/constants';
+import { respond } from '@/lib/http/respond';
+import { route } from '@/lib/http/route';
 import { logger } from '@/lib/logger';
+import { uploadExtension } from '@/lib/storage/extension';
 import { toProxyUrl } from '@/lib/storage/object-url';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createServerClient } from '@/lib/supabase/server';
-import { err, ok } from '@/types/api';
 
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024; // 5 MB
+const BUCKET = 'passport-photos';
 
 // Lets a signed-in user replace their own profile photo from account settings.
-// The namespace is resolved from the calling page (header/referer), so this one
-// route serves every role's settings screen.
-export const POST = async (request: NextRequest) => {
-  const supabase = await createServerClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
-  }
-
-  let formData: FormData;
-  try {
-    formData = await request.formData();
-  } catch {
-    return NextResponse.json(err('Invalid form data', 422), { status: 422 });
-  }
-
-  const photo = formData.get('photo');
-  if (!(photo instanceof File)) {
-    return NextResponse.json(err('A photo file is required', 422), {
-      status: 422,
-    });
-  }
-  if (!photo.type.startsWith('image/')) {
-    return NextResponse.json(err('File must be an image', 422), {
-      status: 422,
-    });
-  }
-  if (photo.size > MAX_PHOTO_BYTES) {
-    return NextResponse.json(err('Photo must be under 5 MB', 413), {
-      status: 413,
-    });
-  }
-
-  const userId = user.id;
-
-  // Upload via the service-role client. The user is verified above and the path
-  // is built from their verified id, so this is safe and avoids the storage RLS
-  // auth-context fragility of the cookie-based server client (same pattern as
-  // the registration flow).
-  const adminClient = createAdminClient();
-  const photoBytes = await photo.arrayBuffer();
-  const ext = uploadExtension(photo.name, 'jpg');
-  const photoPath = `${userId}/passport.${ext}`;
-
-  const { error: uploadError } = await adminClient.storage
-    .from('passport-photos')
-    .upload(photoPath, photoBytes, { contentType: photo.type, upsert: true });
-
-  if (uploadError) {
-    logger.error('profile photo: upload failed', {
-      userId,
-      err: uploadError.message,
-    });
-    return NextResponse.json(err('Photo upload failed', 500), { status: 500 });
-  }
-
-  const { data: urlData } = adminClient.storage
-    .from('passport-photos')
-    .getPublicUrl(photoPath);
-  const photoUrl = urlData.publicUrl;
-
-  // profiles columns other than full_name are server-written only: the
-  // protect_profile_columns trigger rejects them from a user session.
-  const { error: profileError } = await adminClient
-    .from('profiles')
-    .update({ photo_url: photoUrl })
-    .eq('id', userId);
-
-  if (profileError) {
-    logger.error('profile photo: profile update failed', {
-      userId,
-      err: profileError.message,
-    });
-    return NextResponse.json(err('Failed to save photo', 500), { status: 500 });
-  }
-
-  // The object path is stable across replacements (`{id}/passport.ext`), so
-  // the proxy URL carries a version param to bust the browser cache. Done
-  // server-side because the caller can't safely append to a query string it
-  // doesn't own.
-  return NextResponse.json(
-    ok({ photo_url: toProxyUrl(photoUrl, { version: Date.now() }) }),
-    { status: 200 }
-  );
-};
-
-// Removes the authenticated user's profile photo from storage and clears photo_url.
-export const DELETE = async () => {
-  const supabase = await createServerClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user)
-    return NextResponse.json(err('Unauthorized', 401), { status: 401 });
-
-  const userId = user.id;
-  const adminClient = createAdminClient();
-
-  // List files under the user's folder (extension varies — upsert on upload)
-  const { data: files } = await adminClient.storage
-    .from('passport-photos')
-    .list(userId);
-
-  if (files && files.length > 0) {
-    const paths = files.map((f) => `${userId}/${f.name}`);
-    const { error: removeError } = await adminClient.storage
-      .from('passport-photos')
-      .remove(paths);
-
-    if (removeError) {
-      logger.error('profile photo: delete failed', {
-        userId,
-        err: removeError.message,
-      });
-      return NextResponse.json(err('Failed to delete photo', 500), {
-        status: 500,
-      });
+// The storage folder is keyed by the caller's id, so this one route serves
+// every role's settings screen.
+//
+// `roles` lists every role so route() confirms a profile row exists: without
+// it, a session with no profile would upload a file and "save" it to a row
+// that is not there.
+export const POST = route({
+  name: 'profile/photo',
+  auth: 'user',
+  roles: USER_ROLES,
+  handler: async ({ user, request }) => {
+    let formData: FormData;
+    try {
+      formData = await request.formData();
+    } catch {
+      return respond.fail(422, 'Invalid form data');
     }
-  }
 
-  const { error: profileError } = await adminClient
-    .from('profiles')
-    .update({ photo_url: null })
-    .eq('id', userId);
+    const photo = formData.get('photo');
+    if (!(photo instanceof File)) {
+      return respond.fail(422, 'A photo file is required');
+    }
+    if (!photo.type.startsWith('image/')) {
+      return respond.fail(422, 'File must be an image');
+    }
+    if (photo.size > MAX_PHOTO_BYTES) {
+      return respond.fail(413, 'Photo must be under 5 MB');
+    }
 
-  if (profileError) {
-    logger.error('profile photo: clear photo_url failed', {
-      userId,
-      err: profileError.message,
+    const userId = user.id;
+
+    // Upload via the service-role client. The user is verified above and the
+    // path is built from their verified id, so this is safe and avoids the
+    // storage RLS auth-context fragility of the cookie-based server client
+    // (same pattern as the registration flow).
+    const admin = createAdminClient();
+    const photoBytes = await photo.arrayBuffer();
+    const ext = uploadExtension(photo.name, 'jpg');
+    const photoPath = `${userId}/passport.${ext}`;
+
+    const { error: uploadError } = await admin.storage
+      .from(BUCKET)
+      .upload(photoPath, photoBytes, { contentType: photo.type, upsert: true });
+
+    if (uploadError) {
+      logger.error('profile/photo: upload failed', {
+        userId,
+        err: uploadError.message,
+      });
+      return respond.fail(500, 'Photo upload failed');
+    }
+
+    const photoUrl = admin.storage.from(BUCKET).getPublicUrl(photoPath)
+      .data.publicUrl;
+
+    // profiles columns other than full_name are server-written only: the
+    // protect_profile_columns trigger rejects them from a user session.
+    const { error: profileError } = await admin
+      .from('profiles')
+      .update({ photo_url: photoUrl })
+      .eq('id', userId);
+
+    if (profileError) {
+      logger.error('profile/photo: profile update failed', {
+        userId,
+        err: profileError.message,
+      });
+      return respond.fail(500, 'Failed to save photo');
+    }
+
+    // The object path is stable across replacements (`{id}/passport.ext`), so
+    // the proxy URL carries a version param to bust the browser cache. Done
+    // server-side because the caller can't safely append to a query string it
+    // doesn't own.
+    return respond.ok({
+      photo_url: toProxyUrl(photoUrl, { version: Date.now() }),
     });
-    return NextResponse.json(err('Failed to clear photo', 500), {
-      status: 500,
-    });
-  }
+  },
+});
 
-  return NextResponse.json(ok(null), { status: 200 });
-};
+// Removes the authenticated user's profile photo from storage and clears
+// photo_url.
+export const DELETE = route({
+  name: 'profile/photo',
+  auth: 'user',
+  roles: USER_ROLES,
+  handler: async ({ user }) => {
+    const userId = user.id;
+    const admin = createAdminClient();
+
+    // List files under the user's folder (the extension varies between
+    // uploads, and each upload upserts its own name).
+    const { data: files } = await admin.storage.from(BUCKET).list(userId);
+
+    if (files && files.length > 0) {
+      const paths = files.map((f) => `${userId}/${f.name}`);
+      const { error: removeError } = await admin.storage
+        .from(BUCKET)
+        .remove(paths);
+
+      if (removeError) {
+        logger.error('profile/photo: delete failed', {
+          userId,
+          err: removeError.message,
+        });
+        return respond.fail(500, 'Failed to delete photo');
+      }
+    }
+
+    const { error: profileError } = await admin
+      .from('profiles')
+      .update({ photo_url: null })
+      .eq('id', userId);
+
+    if (profileError) {
+      logger.error('profile/photo: clear photo_url failed', {
+        userId,
+        err: profileError.message,
+      });
+      return respond.fail(500, 'Failed to clear photo');
+    }
+
+    return respond.ok(null);
+  },
+});
