@@ -6,6 +6,21 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-10-14 — `cron/*` routes move onto `route()`
+
+- **Why**: the five cron routes run with the service role and send email, yet each hand-rolled its own bearer-secret check — a plain `!==` string compare — and its own ref'd 500, and a throw anywhere in them escaped as Next's bare, unenveloped 500. This is batch 5 of the `src/lib/http/` migration (batches 1–4 are merged).
+- **Contract tests first**: `src/tests/cron/routes-contract.test.ts` on the shared fake client in `src/tests/http/contract-harness.ts` (now with `gt` and RPC answers that can depend on the call's arguments). It pins, for every route, the secret gate (missing, wrong, unprefixed or truncated bearer → `401` with no query; unset `CRON_SECRET` → ref'd `500` with no query), every query-failure branch (ref'd `500`, no DB text), the counters pg_cron receives, which rows get `reminder_sent_at` / `overdue_reminder_sent_at`, per-row failure handling (one failed send, RPC or Gemini call does not stop the rest), the caps (shift-report `limit(5)`, audit-export `limit(20000)`) and audit-export's stop-at-the-failed-day watermark. Committed passing against the unchanged routes; the only assertions changed afterwards are marked `BEHAVIOUR CHANGE`.
+- **Routes migrated** to `route({ auth: 'cron' })` + `respond.*`: `cron/weekend-reminders`, `cron/overdue-reminders`, `cron/daily-digest`, `cron/shift-report`, `cron/audit-export`. Each still creates the admin client itself. Response bodies are unchanged.
+- **Behaviour changes** (bug fixes only):
+  - The bearer secret is compared in constant time (`timingSafeEqual` over SHA-256 digests) instead of with `!==`. Statuses and messages are unchanged.
+  - Any uncaught throw: Next's bare 500 → enveloped `500 "Internal error. Ref: <ref>"`.
+  - The envelope `status` already matched HTTP on every path, and no route leaked DB text; nothing changed there.
+- **Not changed, flagged for follow-up** (pinned in the tests):
+  - `daily-digest` ignores a `notification_preferences` query error: nobody counts as opted in and the run answers `200 { sent: 0, skipped: 0, failed: 0 }`, so a failed read silently skips every digest.
+  - `weekend-reminders` counts `suppressed` and `no_recipient` as `failed` and leaves them unstamped (the job runs once a morning, so they are not retried that day either).
+  - Both reminder routes select, send, then stamp. A stamp failure, or two overlapping runs, re-sends the same reminder; nothing claims rows before sending.
+- **Docs**: `docs/API.md` auth conventions (batch status) and §6a.
+
 ### 2026-10-13 — `admin/*` routes and the AI alert reads move onto `route()`
 
 - **Why**: the CSO's user, key, unit, configuration and signature-reference routes and the Dean/CSO collector-slot routes act on other people's accounts and keys, yet nine of them hand-rolled auth, the role check, body parsing and the ref'd 500, and six carried a private `mapRpcError` matching RPC errors by substring. The collector-slot routes had no role check at all, told a Dean acting on an Administration key it was "not in your department", and reported an empty RPC result as a created slot. Two `201`s carried an envelope `status` of `200`, four routes answered `403` instead of `401` for a session with no profile, and a throw in `resolve` escaped as Next's bare 500. This is batch 4 of the `src/lib/http/` migration (batches 1–3, `requests/*`, `public/*` and `keys`/`shifts`/`reports`/`incidents`, are merged).

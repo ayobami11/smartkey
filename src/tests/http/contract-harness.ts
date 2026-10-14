@@ -1,11 +1,12 @@
 // Shared fake Supabase client for the route contract tests (keys, shifts,
 // reports, incidents, admin, ai). Adapted from the requests/* harness in
 // batch 1, with insert/update/is added for the routes that write tables
-// directly, and neq + auth.admin (generateLink, updateUserById) for admin/*.
+// directly, neq + auth.admin (generateLink, updateUserById) for admin/*, and
+// gt + per-call RPC answers (a function of the args) for cron/*.
 //
 // The fake records every query a route builds and answers it from `fake`,
 // which each test configures. It is deliberately loose: any chain of
-// select/eq/neq/in/is/gte/lte/lt/order/limit/insert/update is accepted, and the answer is chosen by
+// select/eq/neq/in/is/gt/gte/lte/lt/order/limit/insert/update is accepted, and the answer is chosen by
 // table (or by a function of the recorded ops when one table is read twice).
 import { NextRequest } from 'next/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -41,7 +42,9 @@ const freshState = () => ({
     full_name: 'Dr. Bakare',
   } as { role: string; unit_id: string | null; full_name: string } | null,
   tables: {} as Record<string, Answer>,
-  rpc: {} as Record<string, Result>,
+  // A function answer sees the call's args, for an RPC called more than once
+  // with different arguments in one request (cron/daily-digest).
+  rpc: {} as Record<string, Result | ((args: unknown) => Result)>,
   queries: [] as QueryCall[],
   rpcCalls: [] as { name: string; args: unknown }[],
   // What the service-role client's auth.admin methods answer, and a record
@@ -90,6 +93,7 @@ const builder = (client: QueryCall['client'], table: string) => {
     'neq',
     'in',
     'is',
+    'gt',
     'gte',
     'lte',
     'lt',
@@ -135,7 +139,9 @@ export const makeClient = (client: QueryCall['client']) => ({
   from: (table: string) => builder(client, table),
   rpc: async (name: string, args: unknown) => {
     fake.rpcCalls.push({ name, args });
-    return fake.rpc[name] ?? { data: null, error: null };
+    const answer = fake.rpc[name];
+    if (!answer) return { data: null, error: null };
+    return typeof answer === 'function' ? answer(args) : answer;
   },
 });
 
