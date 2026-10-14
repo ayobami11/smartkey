@@ -1,13 +1,15 @@
 // Shared fake Supabase client for the route contract tests (keys, shifts,
-// reports, incidents, admin, ai). Adapted from the requests/* harness in
-// batch 1, with insert/update/is added for the routes that write tables
-// directly, neq + auth.admin (generateLink, updateUserById) for admin/*, and
-// gt + per-call RPC answers (a function of the args) for cron/*.
+// reports, incidents, admin, ai, cron, profile). Adapted from the requests/*
+// harness in batch 1, with insert/update/is added for the routes that write
+// tables directly, neq + auth.admin (generateLink, updateUserById) for
+// admin/*, gt + per-call RPC answers (a function of the args) for cron/*, and
+// upsert + storage (upload/getPublicUrl/list/remove/download) for profile/*.
 //
 // The fake records every query a route builds and answers it from `fake`,
 // which each test configures. It is deliberately loose: any chain of
-// select/eq/neq/in/is/gt/gte/lte/lt/order/limit/insert/update is accepted, and the answer is chosen by
-// table (or by a function of the recorded ops when one table is read twice).
+// select/eq/neq/in/is/gt/gte/lte/lt/order/limit/insert/update/upsert is
+// accepted, and the answer is chosen by table (or by a function of the
+// recorded ops when one table is read twice).
 import { NextRequest } from 'next/server';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -62,7 +64,30 @@ const freshState = () => ({
     },
   },
   authAdminCalls: [] as { method: string; args: unknown[] }[],
+  // What `client.storage.from(bucket).<method>()` answers, and every call.
+  storage: {
+    upload: { data: {}, error: null } as StorageAnswer,
+    list: { data: [], error: null } as StorageAnswer,
+    remove: { data: [], error: null } as StorageAnswer,
+    download: {
+      data: new Blob([new Uint8Array([1, 2, 3])]),
+      error: null,
+    } as StorageAnswer,
+  },
+  storageCalls: [] as StorageCall[],
 });
+
+type StorageAnswer = { data: unknown; error: { message: string } | null };
+export type StorageCall = {
+  client: QueryCall['client'];
+  bucket: string;
+  method: string;
+  args: unknown[];
+};
+
+/** What the fake's getPublicUrl returns: a canonical public storage URL. */
+export const publicUrl = (bucket: string, path: string) =>
+  `https://project.supabase.co/storage/v1/object/public/${bucket}/${path}`;
 
 export const fake = freshState();
 
@@ -101,6 +126,7 @@ const builder = (client: QueryCall['client'], table: string) => {
     'limit',
     'insert',
     'update',
+    'upsert',
   ]) {
     chain[method] = (...args: unknown[]) => {
       call.ops.push([method, args]);
@@ -137,6 +163,34 @@ export const makeClient = (client: QueryCall['client']) => ({
     },
   },
   from: (table: string) => builder(client, table),
+  storage: {
+    from: (bucket: string) => {
+      const record = (method: string, args: unknown[]) =>
+        fake.storageCalls.push({ client, bucket, method, args });
+      return {
+        upload: async (...args: unknown[]) => {
+          record('upload', args);
+          return fake.storage.upload;
+        },
+        list: async (...args: unknown[]) => {
+          record('list', args);
+          return fake.storage.list;
+        },
+        remove: async (...args: unknown[]) => {
+          record('remove', args);
+          return fake.storage.remove;
+        },
+        download: async (...args: unknown[]) => {
+          record('download', args);
+          return fake.storage.download;
+        },
+        getPublicUrl: (path: string) => {
+          record('getPublicUrl', [path]);
+          return { data: { publicUrl: publicUrl(bucket, path) } };
+        },
+      };
+    },
+  },
   rpc: async (name: string, args: unknown) => {
     fake.rpcCalls.push({ name, args });
     const answer = fake.rpc[name];
@@ -191,6 +245,17 @@ export const send = (method: string, path: string, body?: unknown) =>
           headers: { 'content-type': 'application/json' },
         }),
   });
+
+/** A multipart request (the upload routes). */
+export const multipart = (
+  method: string,
+  path: string,
+  fields: Record<string, string | File>
+) => {
+  const form = new FormData();
+  for (const [name, value] of Object.entries(fields)) form.append(name, value);
+  return new NextRequest(`http://localhost${path}`, { method, body: form });
+};
 
 /** The `{ data: null, error, status }` envelope an error response carries. */
 export const failure = (status: number, error: string) => ({
