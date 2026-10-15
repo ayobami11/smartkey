@@ -6,6 +6,11 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-10-15 — Read routes validate their query params; letter route scoped explicitly
+
+- **Why**: the read routes cast raw search params straight into PostgREST. A non-numeric `limit` became `NaN` in `.limit()`, an unknown `status`/`type`/`severity` was cast to the enum, and a garbage `cursor`/`from`/`to`/`key_id` reached a `timestamptz`/`uuid` column, so a typo'd URL answered with a Postgres cast error as a `500` instead of a `422`. Separately, several reads answered a query failure with an un-ref'd `500 "Failed to fetch …"`, which leaves support nothing to correlate.
+- **`route()` gains `query`** (`src/lib/http/route.ts`): an optional zod schema for the search params, checked after params and before the body. Failure → `queryError`, default `422 Invalid query parameters`. Helpers in `src/lib/http/query.ts`: `pageLimit(default, max)` (positive integer, clamped to `max` as the routes always did, so `?limit=500` still means the cap rather than a `422`), `timestamp` (an ISO date or timestamp Postgres can cast), `csvEnum(values)`.
+
 ### 2026-10-15 — E2E workflow: wire every env var into the build, fail fast when missing
 
 - **Why**: E2E failed on every PR with `Error: supabaseUrl is required` in the Playwright webServer log. The repository has no `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` secret (nor `SUPABASE_SERVICE_ROLE_KEY`, `TEST_REQUESTER_EMAIL`, `TEST_REQUESTER_PASSWORD`), and the workflow never passed `SUPABASE_SERVICE_ROLE_KEY` at all, so even with the URL set no MFA login could complete. The failure surfaced only after a full build, as a login-screen timeout.

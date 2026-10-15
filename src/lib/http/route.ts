@@ -32,52 +32,83 @@ export type RouteHandler = (
   context: { params: Promise<unknown> }
 ) => Promise<Response>;
 
-type BaseCtx<B, P> = { request: NextRequest; body: B; params: P };
+type BaseCtx<B, P, Q> = {
+  request: NextRequest;
+  body: B;
+  params: P;
+  query: Q;
+};
 
-export type PublicCtx<B = undefined, P = undefined> = BaseCtx<B, P>;
+export type PublicCtx<B = undefined, P = undefined, Q = undefined> = BaseCtx<
+  B,
+  P,
+  Q
+>;
 
-export type UserCtx<B = undefined, P = undefined> = BaseCtx<B, P> & {
+export type UserCtx<B = undefined, P = undefined, Q = undefined> = BaseCtx<
+  B,
+  P,
+  Q
+> & {
   supabase: ServerClient;
   user: User;
 };
 
-export type RoleCtx<B = undefined, P = undefined> = UserCtx<B, P> & {
+export type RoleCtx<B = undefined, P = undefined, Q = undefined> = UserCtx<
+  B,
+  P,
+  Q
+> & {
   profile: RouteProfile;
 };
 
 type HandlerResult = Response | Promise<Response>;
 
-type BaseOptions<B extends Schema | undefined, P extends Schema | undefined> = {
+type BaseOptions<
+  B extends Schema | undefined,
+  P extends Schema | undefined,
+  Q extends Schema | undefined,
+> = {
   /** Log prefix, e.g. `'requests/hod-decision'`. */
   name: string;
   body?: B;
   params?: P;
   /** Response when `params` fails validation. Default 404 'Not found'. */
   paramsError?: HttpError;
+  /**
+   * Schema for the URL search params, parsed from a plain object (one string
+   * per key; a repeated key keeps its last value). Failure → `queryError`.
+   */
+  query?: Q;
+  /** Response when `query` fails validation. Default 422 'Invalid query parameters'. */
+  queryError?: HttpError;
 };
 
 type RoleOptions<
   B extends Schema | undefined,
   P extends Schema | undefined,
-> = BaseOptions<B, P> & {
+  Q extends Schema | undefined,
+> = BaseOptions<B, P, Q> & {
   auth: 'user';
   roles: readonly Role[];
-  handler: (ctx: RoleCtx<Parsed<B>, Parsed<P>>) => HandlerResult;
+  handler: (ctx: RoleCtx<Parsed<B>, Parsed<P>, Parsed<Q>>) => HandlerResult;
 };
 
 type UserOptions<
   B extends Schema | undefined,
   P extends Schema | undefined,
-> = BaseOptions<B, P> & {
+  Q extends Schema | undefined,
+> = BaseOptions<B, P, Q> & {
   auth: 'user';
   roles?: undefined;
-  handler: (ctx: UserCtx<Parsed<B>, Parsed<P>>) => HandlerResult;
+  handler: (ctx: UserCtx<Parsed<B>, Parsed<P>, Parsed<Q>>) => HandlerResult;
 };
 
 type OpenOptions<
   B extends Schema | undefined,
   P extends Schema | undefined,
-> = BaseOptions<B, P> & {
+  Q extends Schema | undefined,
+> = BaseOptions<B, P, Q> & {
   /**
    * 'public': no session. 'cron': `Authorization: Bearer ${CRON_SECRET}`.
    * Neither gets a Supabase client — handlers that need one call
@@ -85,16 +116,24 @@ type OpenOptions<
    */
   auth: 'public' | 'cron';
   roles?: undefined;
-  handler: (ctx: PublicCtx<Parsed<B>, Parsed<P>>) => HandlerResult;
+  handler: (ctx: PublicCtx<Parsed<B>, Parsed<P>, Parsed<Q>>) => HandlerResult;
 };
 
-type AnyOptions = BaseOptions<Schema | undefined, Schema | undefined> & {
+type AnyOptions = BaseOptions<
+  Schema | undefined,
+  Schema | undefined,
+  Schema | undefined
+> & {
   auth: 'user' | 'public' | 'cron';
   roles?: readonly Role[];
   handler: (ctx: never) => HandlerResult;
 };
 
 const NOT_FOUND: HttpError = { status: 404, message: 'Not found' };
+const BAD_QUERY: HttpError = {
+  status: 422,
+  message: 'Invalid query parameters',
+};
 
 const digest = (value: string) => createHash('sha256').update(value).digest();
 
@@ -172,6 +211,13 @@ const run = async (
     ctx.params = parsed.data;
   }
 
+  if (options.query) {
+    const raw = Object.fromEntries(request.nextUrl.searchParams);
+    const parsed = options.query.safeParse(raw);
+    if (!parsed.success) return respond.error(options.queryError ?? BAD_QUERY);
+    ctx.query = parsed.data;
+  }
+
   if (options.body) {
     const raw: unknown = await request.json().catch(() => null);
     const parsed = options.body.safeParse(raw);
@@ -185,7 +231,7 @@ const run = async (
 /**
  * Wraps an App Router handler with the checks every SmartKey route repeats,
  * in a fixed order: auth (session or cron secret) → profile, status + role → params
- * → JSON body → handler. Any throw becomes an enveloped 500 with a ref.
+ * → query → JSON body → handler. Any throw becomes an enveloped 500 with a ref.
  *
  * `roles` omitted means no profile query at all — the handler gets `user` but
  * no `profile`. Routes that read multipart bodies omit `body` and read
@@ -194,15 +240,18 @@ const run = async (
 export function route<
   B extends Schema | undefined = undefined,
   P extends Schema | undefined = undefined,
->(options: RoleOptions<B, P>): RouteHandler;
+  Q extends Schema | undefined = undefined,
+>(options: RoleOptions<B, P, Q>): RouteHandler;
 export function route<
   B extends Schema | undefined = undefined,
   P extends Schema | undefined = undefined,
->(options: UserOptions<B, P>): RouteHandler;
+  Q extends Schema | undefined = undefined,
+>(options: UserOptions<B, P, Q>): RouteHandler;
 export function route<
   B extends Schema | undefined = undefined,
   P extends Schema | undefined = undefined,
->(options: OpenOptions<B, P>): RouteHandler;
+  Q extends Schema | undefined = undefined,
+>(options: OpenOptions<B, P, Q>): RouteHandler;
 export function route(options: AnyOptions): RouteHandler {
   return async (request, context) => {
     try {

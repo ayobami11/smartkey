@@ -63,8 +63,9 @@ The handler only ever sees a validated `body`, an authenticated `user`, and (bec
    - `auth: 'public'`: nothing. Use it only for token-authorised routes such as `/api/public/*`.
 2. **Role**, if `roles` is given. Reads `profiles.role`, never the JWT claim. No profile, or a `DEACTIVATED` one → `401`; wrong role → `403 Forbidden`. Omitting `roles` skips the profile query (and the status check) entirely.
 3. **Params**, if a `params` schema is given (dynamic segments). Failure → `paramsError`, default `404 Not found`.
-4. **Body**, if a `body` schema is given. Bad JSON or schema failure → `422 Invalid request body`. Multipart routes omit `body` and read `ctx.request.formData()` themselves; a file is stored under the type `checkUpload` (`src/lib/storage/upload-type.ts`) detects from its bytes, never `File.type` or the filename.
-5. **Handler.** Anything thrown anywhere becomes `500 "Internal error. Ref: <ref>"`, logged as `<name>: unhandled error`.
+4. **Query**, if a `query` schema is given. Search params parse as a plain object of strings; failure → `queryError`, default `422 Invalid query parameters`. Build the schema from `pageLimit` / `timestamp` / `csvEnum` (`src/lib/http/query.ts`) and `z.uuid()` / `z.enum(...)`: never cast a raw search param to an enum or hand it to `.limit()` unparsed.
+5. **Body**, if a `body` schema is given. Bad JSON or schema failure → `422 Invalid request body`. Multipart routes omit `body` and read `ctx.request.formData()` themselves; a file is stored under the type `checkUpload` (`src/lib/storage/upload-type.ts`) detects from its bytes, never `File.type` or the filename.
+6. **Handler.** Anything thrown anywhere becomes `500 "Internal error. Ref: <ref>"`, logged as `<name>: unhandled error`.
 
 A dynamic route:
 

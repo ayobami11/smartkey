@@ -49,8 +49,9 @@ Route handlers are wrapped in `route()` from `src/lib/http/route.ts`. Every rout
    The `DEACTIVATED` check exists because deactivation bans the user in Supabase Auth, but a session issued before the ban stays valid until its access token expires. It answers `401` rather than `403` because the account no longer has a usable session: a `401` sends the client to sign in, where the ban stops them, while a `403` reads as "wrong page". `PENDING_ACTIVATION` is not refused — activation runs through the unwrapped `auth/*` routes. `GET /api/storage/object` applies the same check itself.
 
 3. **Path params**, when a `params` schema is given. Failure → the route's `paramsError`, by default `404 Not found`.
-4. **JSON body**, when a `body` schema is given. Unparseable JSON or a schema failure → `422 Invalid request body`. Multipart routes omit `body` and read `ctx.request` themselves.
-5. **Handler.** Any throw, from the handler or from the checks above, becomes an enveloped `500 Internal error. Ref: <ref>`, logged as `<name>: unhandled error`.
+4. **Query params**, when a `query` schema is given (since 2026-10-15). The search params are parsed as a plain object of strings (a repeated key keeps its last value). Failure → the route's `queryError`, by default `422 Invalid query parameters`. The shared pieces — `pageLimit`, `timestamp`, `csvEnum` — live in `src/lib/http/query.ts`; their job is to stop a malformed value before PostgREST turns it into a Postgres cast error and a `500`.
+5. **JSON body**, when a `body` schema is given. Unparseable JSON or a schema failure → `422 Invalid request body`. Multipart routes omit `body` and read `ctx.request` themselves.
+6. **Handler.** Any throw, from the handler or from the checks above, becomes an enveloped `500 Internal error. Ref: <ref>`, logged as `<name>: unhandled error`.
 
 Not wrapped, by design: the `auth/*` routes (they establish sessions and set cookies or redirect), `GET /api/health`, `GET /api/storage/object` (returns bytes) and `POST /api/ai/verify-signature`. They still build their envelopes through `respond.*`.
 
