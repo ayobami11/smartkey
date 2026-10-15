@@ -1,8 +1,21 @@
+import * as z from 'zod';
+
+import { csvEnum, pageLimit, timestamp } from '@/lib/http/query';
 import { respond } from '@/lib/http/respond';
 import { route } from '@/lib/http/route';
-import type { Database } from '@/types/database';
+import { Constants } from '@/types/database';
 
-type RequestStatus = Database['public']['Enums']['request_status'];
+// The cursor this route issues: base64 of the last row's created_at.
+const cursor = z
+  .string()
+  .transform((s) => Buffer.from(s, 'base64').toString('utf-8'))
+  .pipe(timestamp);
+
+const querySchema = z.object({
+  status: csvEnum(Constants.public.Enums.request_status).optional(),
+  limit: pageLimit(20, 50),
+  cursor: cursor.optional(),
+});
 
 // The caller's own request history, newest first, cursor-paginated on
 // created_at.
@@ -10,14 +23,9 @@ export const GET = route({
   name: 'requests/my',
   auth: 'user',
   roles: ['REQUESTER'],
-  handler: async ({ supabase, user, request }) => {
-    const { searchParams } = request.nextUrl;
-    const statusParam = searchParams.get('status');
-    const statusFilter = statusParam
-      ? (statusParam.split(',') as RequestStatus[])
-      : undefined;
-    const limit = Math.min(Number(searchParams.get('limit') ?? '20'), 50);
-    const cursor = searchParams.get('cursor');
+  query: querySchema,
+  handler: async ({ supabase, user, query: params }) => {
+    const { status: statusFilter, limit, cursor: decodedCursor } = params;
 
     let query = supabase
       .from('requests')
@@ -32,10 +40,7 @@ export const GET = route({
       query = query.in('status', statusFilter);
     }
 
-    if (cursor) {
-      const decodedCursor = Buffer.from(cursor, 'base64').toString('utf-8');
-      query = query.lt('created_at', decodedCursor);
-    }
+    if (decodedCursor) query = query.lt('created_at', decodedCursor);
 
     const { data, error } = await query;
 

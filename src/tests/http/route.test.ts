@@ -300,6 +300,69 @@ describe('route — body and params', () => {
   });
 });
 
+describe('route — query', () => {
+  const query = z.object({ n: z.coerce.number().int().min(1) });
+  const at = (qs: string) =>
+    new NextRequest(`http://localhost/api/test${qs}`, { method: 'GET' });
+
+  it('422s on query params that fail the schema', async () => {
+    const res = await route({
+      name: 't',
+      auth: 'public',
+      query,
+      handler: () => respond.ok(null),
+    })(at('?n=abc'), ctx());
+    expect(await read(res)).toEqual({
+      status: 422,
+      body: { data: null, error: 'Invalid query parameters', status: 422 },
+    });
+  });
+
+  it('uses queryError when given', async () => {
+    const res = await route({
+      name: 't',
+      auth: 'public',
+      query,
+      queryError: { status: 400, message: 'Bad query' },
+      handler: () => respond.ok(null),
+    })(at('?n=0'), ctx());
+    expect(res.status).toBe(400);
+  });
+
+  it('hands the parsed query to the handler', async () => {
+    const res = await route({
+      name: 't',
+      auth: 'public',
+      query,
+      handler: ({ query: q }) => respond.ok({ n: q.n }),
+    })(at('?n=7'), ctx());
+    expect((await read(res)).body.data).toEqual({ n: 7 });
+  });
+
+  it('checks the role before the query', async () => {
+    mocks.single.mockResolvedValue({ data: { ...PROFILE, role: 'VERIFIER' } });
+    const res = await route({
+      name: 't',
+      auth: 'user',
+      roles: ['DEAN'],
+      query,
+      handler: () => respond.ok(null),
+    })(at('?n=abc'), ctx());
+    expect(res.status).toBe(403);
+  });
+
+  it('checks params before the query', async () => {
+    const res = await route({
+      name: 't',
+      auth: 'public',
+      params: z.object({ id: z.uuid() }),
+      query,
+      handler: () => respond.ok(null),
+    })(at('?n=abc'), ctx({ id: 'nope' }));
+    expect(res.status).toBe(404);
+  });
+});
+
 describe('route — public', () => {
   it('creates no session client', async () => {
     const res = await route({

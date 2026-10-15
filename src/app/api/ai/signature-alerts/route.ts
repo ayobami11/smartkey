@@ -27,8 +27,6 @@ type MismatchPayload = {
   threshold_pct?: number;
 };
 
-const FAILED = 'Failed to fetch signature alerts';
-
 export const GET = route({
   name: 'ai/signature-alerts',
   auth: 'user',
@@ -53,7 +51,9 @@ export const GET = route({
       .eq('status', 'PENDING_HOD');
 
     if (requestsError) {
-      return respond.fail(500, FAILED);
+      return respond.internal('ai/signature-alerts: requests query failed', {
+        err: requestsError.message,
+      });
     }
 
     // With no pending request there is nothing to look up, but the held
@@ -74,7 +74,9 @@ export const GET = route({
             .order('occurred_at', { ascending: false });
 
     if (auditError) {
-      return respond.fail(500, FAILED);
+      return respond.internal('ai/signature-alerts: audit query failed', {
+        err: auditError.message,
+      });
     }
 
     // Keep only the most recent mismatch per request (rows are already ordered
@@ -120,7 +122,12 @@ export const GET = route({
       .order('submitted_at', { ascending: false });
 
     if (pendingRefsError) {
-      return respond.fail(500, FAILED);
+      return respond.internal(
+        'ai/signature-alerts: pending references query failed',
+        {
+          err: pendingRefsError.message,
+        }
+      );
     }
 
     const reference_replacements = (pendingRefs ?? []).map((row) => {

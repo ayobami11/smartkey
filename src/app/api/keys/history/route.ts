@@ -1,35 +1,55 @@
+import * as z from 'zod';
+
+import { pageLimit, timestamp } from '@/lib/http/query';
 import { respond } from '@/lib/http/respond';
 import { route } from '@/lib/http/route';
+
+const querySchema = z.object({
+  key_id: z.uuid().optional(),
+  requester_id: z.uuid().optional(),
+  from: timestamp.optional(),
+  to: timestamp.optional(),
+  limit: pageLimit(50, 100),
+  // The created_at of the last row on the previous page.
+  cursor: timestamp.optional(),
+});
+
+const EMPTY_PAGE = { transactions: [], next_cursor: null };
 
 export const GET = route({
   name: 'keys/history',
   auth: 'user',
   roles: ['CSO', 'DEAN'],
-  handler: async ({ request, supabase, profile }) => {
-    const { searchParams } = new URL(request.url);
-    const keyId = searchParams.get('key_id');
-    const requesterId = searchParams.get('requester_id');
-    const from = searchParams.get('from');
-    const to = searchParams.get('to');
-    const limit = Math.min(
-      parseInt(searchParams.get('limit') ?? '50', 10),
-      100
-    );
-    const cursor = searchParams.get('cursor');
+  query: querySchema,
+  handler: async ({ supabase, profile, query: params }) => {
+    const {
+      key_id: keyId,
+      requester_id: requesterId,
+      from,
+      to,
+      limit,
+      cursor,
+    } = params;
 
     // Dean: resolve the unit's key IDs upfront so we can filter with .in().
     // PostgREST does not support filtering by embedded resource columns directly.
+    // The filter is the route's own scope, not left to RLS: a Dean with no
+    // unit owns no keys, so they get an empty page rather than an unfiltered
+    // query (an empty page, not a 403, so their dashboard still renders).
     let unitKeyIds: string[] | null = null;
-    if (profile.role === 'DEAN' && profile.unit_id) {
+    if (profile.role === 'DEAN') {
+      if (!profile.unit_id) return respond.ok(EMPTY_PAGE);
       const { data: deptKeys, error: deptErr } = await supabase
         .from('keys')
         .select('id')
         .eq('unit_id', profile.unit_id);
-      if (deptErr) return respond.fail(500, 'Failed to fetch key history');
-      unitKeyIds = (deptKeys ?? []).map((k) => k.id);
-      if (unitKeyIds.length === 0) {
-        return respond.ok({ transactions: [], next_cursor: null });
+      if (deptErr) {
+        return respond.internal('keys/history: unit key lookup failed', {
+          err: deptErr.message,
+        });
       }
+      unitKeyIds = (deptKeys ?? []).map((k) => k.id);
+      if (unitKeyIds.length === 0) return respond.ok(EMPTY_PAGE);
     }
 
     let query = supabase
@@ -58,7 +78,11 @@ export const GET = route({
 
     const { data, error } = await query;
 
-    if (error) return respond.fail(500, 'Failed to fetch key history');
+    if (error) {
+      return respond.internal('keys/history: query failed', {
+        err: error.message,
+      });
+    }
 
     const rows = data ?? [];
     const hasMore = rows.length > limit;

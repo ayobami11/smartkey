@@ -1,17 +1,25 @@
+import * as z from 'zod';
+
+import { pageLimit, timestamp } from '@/lib/http/query';
 import { respond } from '@/lib/http/respond';
 import { route } from '@/lib/http/route';
+
+const querySchema = z.object({
+  shift_id: z.uuid().optional(),
+  from: timestamp.optional(),
+  to: timestamp.optional(),
+  limit: pageLimit(20, 50),
+  // The generated_at of the last row on the previous page.
+  cursor: timestamp.optional(),
+});
 
 export const GET = route({
   name: 'reports',
   auth: 'user',
   roles: ['CSO'],
-  handler: async ({ request, supabase }) => {
-    const { searchParams } = new URL(request.url);
-    const shiftId = searchParams.get('shift_id');
-    const from = searchParams.get('from');
-    const to = searchParams.get('to');
-    const limit = Math.min(parseInt(searchParams.get('limit') ?? '20', 10), 50);
-    const cursor = searchParams.get('cursor');
+  query: querySchema,
+  handler: async ({ supabase, query: params }) => {
+    const { shift_id: shiftId, from, to, limit, cursor } = params;
 
     let query = supabase
       .from('shift_reports')
@@ -29,7 +37,9 @@ export const GET = route({
 
     const { data, error } = await query;
 
-    if (error) return respond.fail(500, 'Failed to fetch reports');
+    if (error) {
+      return respond.internal('reports: query failed', { err: error.message });
+    }
 
     const rows = data ?? [];
     const hasMore = rows.length > limit;

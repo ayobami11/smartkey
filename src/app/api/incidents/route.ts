@@ -1,14 +1,24 @@
 import * as z from 'zod';
 
+import { pageLimit, timestamp } from '@/lib/http/query';
 import { respond } from '@/lib/http/respond';
 import { route } from '@/lib/http/route';
 import { rpcFail } from '@/lib/http/rpc-errors';
 import { callRpc } from '@/lib/rpc/call-rpc';
-import type {
-  IncidentSeverity,
-  IncidentStatus,
-  IncidentType,
-} from '@/types/database';
+import { Constants } from '@/types/database';
+
+const ENUMS = Constants.public.Enums;
+
+const getQuerySchema = z.object({
+  type: z.enum(ENUMS.incident_type).optional(),
+  severity: z.enum(ENUMS.incident_severity).optional(),
+  status: z.enum(ENUMS.incident_status).optional(),
+  from: timestamp.optional(),
+  to: timestamp.optional(),
+  limit: pageLimit(50, 100),
+  // The logged_at of the last row on the previous page.
+  cursor: timestamp.optional(),
+});
 
 const postBodySchema = z.object({
   type: z.enum([
@@ -29,18 +39,9 @@ export const GET = route({
   name: 'incidents',
   auth: 'user',
   roles: ['CSO'],
-  handler: async ({ request, supabase }) => {
-    const { searchParams } = new URL(request.url);
-    const type = searchParams.get('type');
-    const severity = searchParams.get('severity');
-    const status = searchParams.get('status');
-    const from = searchParams.get('from');
-    const to = searchParams.get('to');
-    const limit = Math.min(
-      parseInt(searchParams.get('limit') ?? '50', 10),
-      100
-    );
-    const cursor = searchParams.get('cursor');
+  query: getQuerySchema,
+  handler: async ({ supabase, query: params }) => {
+    const { type, severity, status, from, to, limit, cursor } = params;
 
     let query = supabase
       .from('incidents')
@@ -53,16 +54,20 @@ export const GET = route({
       .order('logged_at', { ascending: false })
       .limit(limit + 1);
 
-    if (type) query = query.eq('type', type as IncidentType);
-    if (severity) query = query.eq('severity', severity as IncidentSeverity);
-    if (status) query = query.eq('status', status as IncidentStatus);
+    if (type) query = query.eq('type', type);
+    if (severity) query = query.eq('severity', severity);
+    if (status) query = query.eq('status', status);
     if (from) query = query.gte('occurred_at', from);
     if (to) query = query.lte('occurred_at', to);
     if (cursor) query = query.lt('logged_at', cursor);
 
     const { data, error } = await query;
 
-    if (error) return respond.fail(500, 'Failed to fetch incidents');
+    if (error) {
+      return respond.internal('incidents: query failed', {
+        err: error.message,
+      });
+    }
 
     const rows = data ?? [];
     const hasMore = rows.length > limit;

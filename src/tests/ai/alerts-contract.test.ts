@@ -14,6 +14,7 @@ import {
   asRole,
   call,
   describeAuth,
+  expectRef,
   failure,
   fake,
   get,
@@ -167,13 +168,15 @@ describe('GET /api/ai/signature-alerts', () => {
     };
   });
 
+  // CHANGED: a query failure is a ref'd 500 (was an un-ref'd
+  // "Failed to fetch signature alerts"), and the DB text never reaches the body.
   it.each(['audit_log', 'requests', 'pending_signature_references'])(
-    '500 Failed to fetch signature alerts when %s fails',
+    "ref'd 500 when %s fails",
     async (table) => {
       fake.tables[table] = { data: null, error: { message: 'boom' } };
-      expect(await call(signatureAlerts, get(path))).toEqual(
-        failure(500, 'Failed to fetch signature alerts')
-      );
+      const res = await call(signatureAlerts, get(path));
+      expectRef(res);
+      expect(res.body.error).not.toContain('boom');
     }
   );
 

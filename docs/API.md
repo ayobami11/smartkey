@@ -49,8 +49,9 @@ Route handlers are wrapped in `route()` from `src/lib/http/route.ts`. Every rout
    The `DEACTIVATED` check exists because deactivation bans the user in Supabase Auth, but a session issued before the ban stays valid until its access token expires. It answers `401` rather than `403` because the account no longer has a usable session: a `401` sends the client to sign in, where the ban stops them, while a `403` reads as "wrong page". `PENDING_ACTIVATION` is not refused — activation runs through the unwrapped `auth/*` routes. `GET /api/storage/object` applies the same check itself.
 
 3. **Path params**, when a `params` schema is given. Failure → the route's `paramsError`, by default `404 Not found`.
-4. **JSON body**, when a `body` schema is given. Unparseable JSON or a schema failure → `422 Invalid request body`. Multipart routes omit `body` and read `ctx.request` themselves.
-5. **Handler.** Any throw, from the handler or from the checks above, becomes an enveloped `500 Internal error. Ref: <ref>`, logged as `<name>: unhandled error`.
+4. **Query params**, when a `query` schema is given (since 2026-10-15). The search params are parsed as a plain object of strings (a repeated key keeps its last value). Failure → the route's `queryError`, by default `422 Invalid query parameters`. The shared pieces — `pageLimit`, `timestamp`, `csvEnum` — live in `src/lib/http/query.ts`; their job is to stop a malformed value before PostgREST turns it into a Postgres cast error and a `500`.
+5. **JSON body**, when a `body` schema is given. Unparseable JSON or a schema failure → `422 Invalid request body`. Multipart routes omit `body` and read `ctx.request` themselves.
+6. **Handler.** Any throw, from the handler or from the checks above, becomes an enveloped `500 Internal error. Ref: <ref>`, logged as `<name>: unhandled error`.
 
 Not wrapped, by design: the `auth/*` routes (they establish sessions and set cookies or redirect), `GET /api/health`, `GET /api/storage/object` (returns bytes) and `POST /api/ai/verify-signature`. They still build their envelopes through `respond.*`.
 
@@ -327,9 +328,11 @@ After the response, sends a request notification through `notifyAfterResponse` (
 **File**: `src/app/api/requests/my/route.ts`
 **Roles**: REQUESTER
 
-**Query params**: `status` (optional, comma-separated enum values) · `limit` · `cursor`
+**Query params**: `status` (optional, comma-separated `request_status` values) · `limit` (positive integer, default 20, values above 50 clamp to 50) · `cursor` (the opaque `next_cursor` from a previous page: base64 of a `created_at` timestamp)
 
 **Response `data`**: `{ "requests": [...], "next_cursor": "<opaque>" }`
+
+**Errors**: `422 Invalid query parameters` for a non-integer or non-positive `limit`, an unknown `status`, or a `cursor` that does not decode to a timestamp (since 2026-10-15; these used to reach Postgres and answer `500`) · `500` query failure, with a correlation reference
 
 ---
 
@@ -414,7 +417,9 @@ Until 2026-10-13 a decline on a `KEY_ISSUED` request (the queue shows those too)
 
 Returns all requests with `status = 'CODE_ISSUED'`, ordered by `created_at` ascending. This is the initial load for the verifier dashboard; ongoing updates come via Supabase Realtime.
 
-**Response `data`**: `{ "requests": [...] }`
+**Query params**: `id` (optional). With `id`, returns just that request — `{ "request": {...} }`, or `{ "request": null }` when it is no longer `CODE_ISSUED` or does not exist. The Realtime INSERT handler uses this and drops a `null`. A malformed (non-uuid) `id` answers `{ "request": null }` without querying, exactly like an unknown one (since 2026-10-15; it used to reach Postgres and answer `500`).
+
+**Response `data`**: `{ "requests": [...] }`, or `{ "request": {...} | null }` with `id`
 
 ---
 
@@ -676,13 +681,24 @@ Fired automatically by the status page when the collection code's countdown reac
 **File**: `src/app/api/requests/[id]/letter/route.ts`
 **Roles**: DEAN, CSO
 
-Returns a short-lived (5-minute) signed URL for a request's uploaded authorisation letter or stamp image, so the authoriser can preview it before deciding. The file lives in the private `weekend-letters` bucket; signing happens server-side with the admin client. Access is gated to the Dean whose unit owns the request (RLS plus a unit check) or the CSO (admin client, for Administration-routed requests).
+Returns a short-lived (5-minute) signed URL for a request's uploaded authorisation letter or stamp image, so the authoriser can preview it before deciding. The file lives in the private `weekend-letters` bucket; signing happens server-side with the admin client.
 
-**Query params**: `type` (`'letter' | 'stamp'`, default `'letter'`) — selects `letter_url` or `stamp_url` on the request row.
+Scope, enforced by the route itself (since 2026-10-15) and not left to RLS:
+
+- **Dean** — reads through their session (RLS), then the route requires every unit governing the request — the key's unit for a registered request, `requested_unit_id` for a guest, both when both are set — to be the Dean's own. A Dean with no unit, or a request resolving to no unit, is refused. Until 2026-10-15 the unit check ran only for guest requests; registered requests relied on RLS alone.
+- **CSO** — reads with the admin client (its RLS policy does not cover every request type), so the route bounds it: a request governed by an Administration (`authoriser = 'CSO'`) unit, **or** a Dean-authorised request with a `SIGNATURE_MISMATCH` audit entry — the held approvals the CSO resolves in the Dean's place, the same condition `approve_weekend`'s `cso_override` requires. Until 2026-10-15 the CSO could sign any request's letter. In practice the only CSO caller is `/cso/weekend-requests`, which lists Administration requests; the dashboard's mismatch dialog reads the submitted image through `GET /api/storage/object` instead.
+
+The scope check runs before the file lookup, so a `404` never tells a caller outside the scope whether a letter exists.
+
+The stored `letter_url`/`stamp_url` is parsed with `parseStorageUrl` (`src/lib/storage/object-url.ts`). Anything that is not a well-formed `weekend-letters` object — another bucket, a nested path, or a URL that merely contains `/weekend-letters/` somewhere — is a bad row: logged and answered with a ref'd `500`, never signed. (The route used to find the path with `indexOf('/weekend-letters/')`.)
+
+**Path params**: `id` — a non-uuid id answers the same `404` as an unknown one, without querying.
+
+**Query params**: `type` (`'letter' | 'stamp'`, default `'letter'`) — selects `letter_url` or `stamp_url` on the request row. Any other value → `422 Invalid query parameters` (it used to fall back to `'letter'`).
 
 **Response `data`**: `{ "url": "<signed-url>" }`
 
-**Errors**: `403` not a Dean/CSO, or not the request's unit · `404` request has no letter/stamp for the requested `type` · `500` signing failure
+**Errors**: `403` not a Dean/CSO, or outside the scope above · `404` unknown or malformed request id, or no letter/stamp for the requested `type` (`Letter not found` / `Stamp not found`) · `422` unknown `type` · `500` with a correlation reference: query, mismatch-lookup or signing failure, or a stored URL that is not a `weekend-letters` object
 
 ---
 
@@ -810,7 +826,9 @@ The verifier is the server-verified session user (`user.id`), never a client-sup
 
 Returns every request with `status = 'KEY_ISSUED'` — every copy physically out — joined with requester and key details. There is no `KEY_OVERDUE` request status in the database; an overdue key is a `KEY_ISSUED` request past its `return_deadline`.
 
-**Query params**: `zone` (`NEW_SENATE | OLD_SENATE`) · `overdue_only` (`boolean` — filters on `return_deadline < now`)
+**Query params**: `zone` (`NEW_SENATE | OLD_SENATE`) · `overdue_only` (`'true' | 'false'` — `true` filters on `return_deadline < now`). Anything else → `422 Invalid query parameters` (since 2026-10-15).
+
+**Errors**: `422` invalid query params · `500` query failure, with a correlation reference (was an un-ref'd `500 Failed to fetch outstanding keys` until 2026-10-15)
 
 **Response `data`**: `{ "outstanding": [...] }`. Each row is shaped by `shapeOutstanding` (`src/lib/keys/outstanding.ts`):
 
@@ -880,9 +898,11 @@ Read-only, so no audit entry — `audit_log` records consequential actions, not 
 **File**: `src/app/api/keys/history/route.ts`
 **Roles**: CSO, DEAN
 
-**Query params**: `key_id` · `requester_id` · `from` (ISO date) · `to` (ISO date) · `limit` · `cursor`
+**Query params**: `key_id` (uuid) · `requester_id` (uuid) · `from` / `to` (ISO date or timestamp) · `limit` (positive integer, default 50, clamped to 100) · `cursor` (the `next_cursor` from a previous page: a `created_at` timestamp). A malformed value → `422 Invalid query parameters` (since 2026-10-15; these used to reach Postgres and answer `500`).
 
-Dean sees only their faculty's keys (RLS enforced). CSO sees all.
+A Dean sees only their faculty's keys. The route scopes this itself — it reads the unit's key ids and filters on them — rather than relying on RLS alone. A Dean with no `unit_id` gets an empty page without any query (until 2026-10-15 they got no filter at all, leaving RLS as the only scope); an empty page rather than a `403` so the Dean dashboard's activity feed still renders. CSO sees all.
+
+**Errors**: `422` invalid query params · `500` query failure, with a correlation reference
 
 **Response `data`**: `{ "transactions": [...], "next_cursor": "<opaque>" }`
 
@@ -1202,6 +1222,8 @@ Returns the active shift record with officer identities and elapsed time.
 
 **Response `data`**: `{ "shift": { "id": "<uuid>", "shift_number": 2, "started_at": "<iso>", "primary_officer": {...} } }`
 
+**Errors**: `500` query failure, with a correlation reference
+
 ---
 
 ### POST /api/shifts/handover
@@ -1379,9 +1401,11 @@ Unknown keys are stripped by the schema, so a `profile_id` in the body is ignore
 **File**: `src/app/api/reports/route.ts`
 **Roles**: CSO
 
-**Query params**: `shift_id` · `from` (ISO date) · `to` (ISO date) · `limit` · `cursor`
+**Query params**: `shift_id` (uuid) · `from` / `to` (ISO date or timestamp) · `limit` (positive integer, default 20, clamped to 50) · `cursor` (a `generated_at` timestamp from `next_cursor`)
 
 **Response `data`**: `{ "reports": [...], "next_cursor": "<opaque>" }`
+
+**Errors**: `422 Invalid query parameters` for any malformed param (since 2026-10-15) · `500` query failure, with a correlation reference
 
 ---
 
@@ -1434,9 +1458,11 @@ Comment is immutable after insert.
 
 Read-only. No update or delete endpoint exists — the incident log is append-only.
 
-**Query params**: `type` · `severity` · `status` · `from` · `to` · `limit` · `cursor`
+**Query params**: `type` (`incident_type`) · `severity` (`LOW | MEDIUM | HIGH`) · `status` (`OPEN | RESOLVED | ESCALATED`) · `from` / `to` (ISO date or timestamp, on `occurred_at`) · `limit` (positive integer, default 50, clamped to 100) · `cursor` (a `logged_at` timestamp from `next_cursor`)
 
 **Response `data`**: `{ "incidents": [...], "next_cursor": "<opaque>" }`
+
+**Errors**: `422 Invalid query parameters` for an unknown enum value or a malformed date, limit or cursor (since 2026-10-15; these were cast straight into the query and answered `500`) · `500` query failure, with a correlation reference
 
 ---
 

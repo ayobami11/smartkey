@@ -252,11 +252,20 @@ describe('GET /api/keys/out', () => {
 
   beforeEach(() => asRole('VERIFIER'));
 
-  it('500 when the query fails', async () => {
+  // CHANGED: was an un-ref'd 500 'Failed to fetch outstanding keys'.
+  it('500 with a ref when the query fails', async () => {
     fake.tables.requests = { data: null, error: { message: 'boom' } };
-    expect(await call(out, get(path))).toEqual(
-      failure(500, 'Failed to fetch outstanding keys')
+    expectRef(await call(out, get(path)));
+  });
+
+  it.each([
+    ['an unknown zone', '?zone=BASEMENT'],
+    ['a non-boolean overdue_only', '?overdue_only=yes'],
+  ])('422 for %s, before querying', async (_label, qs) => {
+    expect(await call(out, get(`${path}${qs}`))).toEqual(
+      failure(422, 'Invalid query parameters')
     );
+    expect(fake.queries.some((q) => q.table === 'requests')).toBe(false);
   });
 
   it('returns the shaped outstanding rows', async () => {
@@ -297,10 +306,11 @@ describe('GET /api/keys/out', () => {
 
     const query = fake.queries.find((q) => q.table === 'requests')!;
     expect(query.client).toBe('admin');
-    expect(query.ops).toContainEqual([
-      'eq',
-      ['key:keys!key_id.zone', 'NEW_SENATE'],
-    ]);
+    // CHANGED: the zone filter targets the embed alias over an inner join,
+    // so it actually drops other zones (it used to filter nothing).
+    expect(query.ops).toContainEqual(['eq', ['key.zone', 'NEW_SENATE']]);
+    const select = query.ops.find(([m]) => m === 'select')?.[1][0] as string;
+    expect(select).toContain('key:keys!key_id!inner(');
     expect(
       query.ops.some(([m, a]) => m === 'lt' && a[0] === 'return_deadline')
     ).toBe(true);
@@ -316,20 +326,55 @@ describe('GET /api/keys/history', () => {
 
   describeAuth('keys/history', history, () => get(path), ['CSO', 'DEAN']);
 
-  it('500 when the history query fails', async () => {
+  // CHANGED: both were an un-ref'd 500 'Failed to fetch key history'.
+  it('500 with a ref when the history query fails', async () => {
     asRole('CSO');
     fake.tables.requests = { data: null, error: { message: 'boom' } };
-    expect(await call(history, get(path))).toEqual(
-      failure(500, 'Failed to fetch key history')
-    );
+    expectRef(await call(history, get(path)));
   });
 
-  it("500 when a Dean's unit key lookup fails", async () => {
+  it("500 with a ref when a Dean's unit key lookup fails", async () => {
     asRole('DEAN');
     fake.tables.keys = { data: null, error: { message: 'boom' } };
-    expect(await call(history, get(path))).toEqual(
-      failure(500, 'Failed to fetch key history')
+    expectRef(await call(history, get(path)));
+  });
+
+  it.each([
+    ['a non-uuid key_id', '?key_id=NS-304'],
+    ['a non-uuid requester_id', '?requester_id=me'],
+    ['a malformed from', '?from=today'],
+    ['a malformed to', '?to=2026-02-30T00:00:00Z'],
+    ['a non-numeric limit', '?limit=ten'],
+    ['a malformed cursor', '?cursor=abc'],
+  ])('422 for %s, before querying', async (_label, qs) => {
+    asRole('CSO');
+    expect(await call(history, get(`${path}${qs}`))).toEqual(
+      failure(422, 'Invalid query parameters')
     );
+    expect(fake.queries.some((q) => q.table === 'requests')).toBe(false);
+  });
+
+  it('a Dean with no unit gets an empty page, with no query at all', async () => {
+    fake.profile = { role: 'DEAN', unit_id: null, full_name: 'Test User' };
+    fake.tables.requests = { data: [{ id: 'leak' }], error: null };
+    expect(await call(history, get(path))).toEqual(
+      success({ transactions: [], next_cursor: null })
+    );
+    expect(fake.queries.some((q) => q.table === 'requests')).toBe(false);
+    expect(fake.queries.some((q) => q.table === 'keys')).toBe(false);
+  });
+
+  it('applies the key and requester filters', async () => {
+    asRole('CSO');
+    fake.tables.requests = { data: [], error: null };
+    await call(
+      history,
+      get(`${path}?key_id=${KEY_ID}&requester_id=${USER_ID}&limit=10`)
+    );
+    const query = fake.queries.find((q) => q.table === 'requests')!;
+    expect(query.ops).toContainEqual(['eq', ['key_id', KEY_ID]]);
+    expect(query.ops).toContainEqual(['eq', ['requester_id', USER_ID]]);
+    expect(query.ops).toContainEqual(['limit', [11]]);
   });
 
   it('a Dean whose unit has no keys gets an empty page', async () => {
