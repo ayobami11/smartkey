@@ -99,6 +99,16 @@ const NOT_FOUND: HttpError = { status: 404, message: 'Not found' };
 const digest = (value: string) => createHash('sha256').update(value).digest();
 
 /**
+ * Compares a caller-supplied credential with the expected one in constant
+ * time. Hashing first gives both sides the same length, which
+ * timingSafeEqual requires, without leaking the secret's length through an
+ * early return. Use this for every shared-secret check; `===` leaks how many
+ * leading characters matched.
+ */
+export const secretMatches = (provided: string, expected: string): boolean =>
+  timingSafeEqual(digest(provided), digest(expected));
+
+/**
  * Checks `Authorization: Bearer ${CRON_SECRET}` in constant time. Returns the
  * rejection response, or null when the caller is the scheduler.
  */
@@ -108,9 +118,7 @@ export const cronAuth = (request: NextRequest, name: string) => {
     return respond.internal(`${name}: CRON_SECRET not configured`);
   }
   const header = request.headers.get('authorization') ?? '';
-  // Hashing first gives both sides the same length, which timingSafeEqual
-  // requires, without leaking the secret's length through an early return.
-  if (!timingSafeEqual(digest(header), digest(`Bearer ${secret}`))) {
+  if (!secretMatches(header, `Bearer ${secret}`)) {
     return respond.fail(401, 'Unauthorized');
   }
   return null;

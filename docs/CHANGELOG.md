@@ -6,6 +6,15 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-10-15 — verify-signature: dedicated secret, constant-time, off by default
+
+- **Why**: `POST /api/ai/verify-signature` authenticated callers by comparing an `x-internal-secret` header with `===` against `SUPABASE_SERVICE_ROLE_KEY`. That sent the one credential that bypasses all RLS over HTTP to a calibration tool, leaked match progress through timing, and left a production endpoint live that nothing in the app calls (decisions run `verifySignature()` in-process).
+- **Dedicated secret, fail closed**: the header is now compared against a new `SIGNATURE_DIAGNOSTIC_SECRET`. Unset, or shorter than 32 characters, the route answers `403` for every call — the same response as a wrong secret — so it is effectively disabled unless someone opts in. Production should leave it unset. The service-role key is no longer accepted. `.env.local.example` and the Postman collection (`{{signatureDiagnosticSecret}}`, replacing `{{serviceRoleKey}}`) are updated.
+- **Constant time**: `secretMatches(provided, expected)` is now exported from `src/lib/http/route.ts` (SHA-256 both sides, then `timingSafeEqual`) and `cronAuth` uses it too, so there is one implementation.
+- **Bucket allowlist**: `submitted_signature_url` must parse (`parseStorageUrl`) to an object in `weekend-letters` or `hod-signatures`; anything else is `422` and nothing is fetched. `downloadStorageObject` already never fetched an arbitrary URL — it only reads objects in the three proxied buckets through the Storage API — but that set includes `passport-photos`, which this route has no reason to read.
+- **`'use server'` removed**: the file opened with `'use server'`, which marks every export as a Server Action. It was not reachable in practice: Next.js only registers actions imported by a client component or used in a server component, nothing imports a route file, and `POST` would have thrown on a non-`Request` argument anyway. It does not belong in a route handler, and leaving it risked exactly that registration if anything ever imported the module.
+- **Body and envelope**: the body goes through `route()` with a zod schema (after the secret check, so an unauthenticated caller learns nothing about the schema); responses use `respond.*`. Tests: `src/tests/ai/verify-signature-route.test.ts` (16) and a `secretMatches` case in `src/tests/http/route.test.ts`.
+
 ### 2026-10-15 — RPC grants and actor checks: no caller-chosen actor, risk tier or audit bypass
 
 - **Why**: several `SECURITY DEFINER` RPCs granted to `authenticated` trusted values the caller chose, and four RLS write policies let a user session skip the audited RPC altogether. Any signed-in user could approve a weekend request as any Dean (with `signature_verified = true`), issue or return a key as a verifier, dismiss a request as any Dean, mint a guest's collection or return code, store their own request's risk tier — or insert a `CODE_ISSUED` request with a code of their choosing straight into `requests`. `create_request`'s risk-tier gap was the known follow-up from 2026-10-13.

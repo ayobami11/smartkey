@@ -1627,18 +1627,24 @@ Returns two independent lists of held signature/stamp mismatches. Read-only.
 ### POST /api/ai/verify-signature
 
 **File**: `src/app/api/ai/verify-signature/route.ts`
-**Roles**: SYSTEM — not session-authenticated at all. Gated by a header check (`x-internal-secret === SUPABASE_SERVICE_ROLE_KEY`), never reachable from a browser. Despite the name, `POST /api/requests/hod-decision` does **not** call this route — it imports and runs `verifySignature()` from `src/lib/ai/signature/verifier.ts` directly in-process (see `docs/AI.md` §3). This route is a standalone diagnostic/calibration endpoint for exercising the same pipeline over HTTP, e.g. from Postman.
+**Roles**: SYSTEM — not session-authenticated. A diagnostic/calibration endpoint for exercising the signature pipeline over HTTP (e.g. from Postman); nothing in the app calls it. `POST /api/requests/hod-decision` and the one-click Dean decision run `verifySignature()` from `src/lib/ai/signature/verifier.ts` in-process instead (see `docs/AI.md` §3).
+
+**Disabled unless `SIGNATURE_DIAGNOSTIC_SECRET` is set.** The caller sends that value in the `x-internal-secret` header; it is compared in constant time (`secretMatches` in `src/lib/http/route.ts`, the same SHA-256 + `timingSafeEqual` check `cronAuth` uses). An unset secret, or one shorter than 32 characters, fails closed with the same `403` as a wrong one — leave it unset in production. Until 2026-10-15 the header was compared with `===` against `SUPABASE_SERVICE_ROLE_KEY`, so the RLS-bypassing key travelled as an HTTP header; that key is no longer accepted. The secret is checked before the body is read.
 
 | Field                     | Type            | Required |
 | ------------------------- | --------------- | -------- |
 | `hod_id`                  | `string` (uuid) | yes      |
 | `submitted_signature_url` | `string`        | yes      |
 
-Retrieves the Dean's reference signature from Supabase Storage, runs Sharp preprocessing on both, and runs Pixelmatch. Returns the raw mismatch ratio and whether it passes `SIGNATURE_DIFF_THRESHOLD` (default 0.55, scored over the ink region — see `docs/AI.md` §3).
+`submitted_signature_url` must be a Supabase Storage object URL in the `weekend-letters` or `hod-signatures` bucket (checked with `parseStorageUrl`). Anything else — an arbitrary URL, a `passport-photos` object, a nested or traversal path — is a `422`, and nothing is fetched. Both images are read through the Storage API with the admin client, never over HTTP.
+
+Retrieves the Dean's reference signature, runs Sharp preprocessing on both images, and runs Pixelmatch. Returns the raw mismatch ratio and whether it passes `SIGNATURE_DIFF_THRESHOLD` (default 0.55, scored over the ink region — see `docs/AI.md` §3). Read-only: no audit entry.
 
 **Response `data`**: `{ "mismatch_ratio": 0.04, "passed": true }`
 
-## **Errors**: `403` missing/incorrect `x-internal-secret` · `422` request body fails validation, or the Dean has no `signature_ref_url` on file · `500` image fetch or verification failure
+**Errors**: `403` route disabled, or missing/incorrect `x-internal-secret` · `422` body fails validation (including a URL outside the two allowed buckets), or the Dean has no `signature_ref_url` on file · `500` image fetch or verification failure, with a correlation reference
+
+---
 
 ## 7a. Storage
 

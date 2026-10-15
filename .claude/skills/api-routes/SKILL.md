@@ -185,7 +185,7 @@ Rules:
 
 ## Not wrapped by `route()`
 
-Every other route under `src/app/api/` is on `route()`; the migration finished on 2026-10-14. These routes keep their own flow but still build responses with `respond.*`: the `auth/*` routes (they establish sessions, set cookies and redirect), `health`, `storage/object` (it returns bytes), and `ai/verify-signature`.
+Every other route under `src/app/api/` is on `route()`; the migration finished on 2026-10-14. These routes keep their own flow but still build responses with `respond.*`: the `auth/*` routes (they establish sessions, set cookies and redirect), `health`, `storage/object` (it returns bytes), and `ai/verify-signature` (its shared-secret gate runs before `route()`; use `secretMatches` for any shared-secret check, never `===`).
 
 ## Route checklist
 
