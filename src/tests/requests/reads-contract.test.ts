@@ -389,16 +389,37 @@ describe('live-queue', () => {
 describe('letter', () => {
   const STORED = (name: string) =>
     `https://x.supabase.co/storage/v1/object/public/weekend-letters/${USER_ID}/${name}`;
+  const unitRef = (authoriser: 'DEAN' | 'CSO') => ({ authoriser });
+  // CHANGED: the row now carries the units that govern it (the key's for a
+  // registered request, requested_unit_id for a guest), which the route
+  // checks itself instead of trusting RLS alone.
   const ROW = {
     letter_url: STORED('letter.png'),
     stamp_url: STORED('stamp.png'),
     requested_unit_id: null as string | null,
+    key: { unit_id: 'unit-1', unit: unitRef('DEAN') } as {
+      unit_id: string;
+      unit: { authoriser: 'DEAN' | 'CSO' } | null;
+    } | null,
+    requested_unit: null as { authoriser: 'DEAN' | 'CSO' } | null,
+  };
+  const ADMIN_ROW = {
+    ...ROW,
+    key: { unit_id: 'admin', unit: unitRef('CSO') },
+  };
+  const ADMIN_GUEST_ROW = {
+    ...ROW,
+    key: null,
+    requested_unit_id: 'admin',
+    requested_unit: unitRef('CSO'),
   };
 
-  const send = (query = '') =>
-    call(letter, get(`/api/requests/${REQUEST_ID}/letter${query}`), {
-      id: REQUEST_ID,
-    });
+  const send = (query = '', id = REQUEST_ID) =>
+    call(letter, get(`/api/requests/${id}/letter${query}`), { id });
+
+  const mismatchHeld = (held: boolean) => {
+    fake.tables.audit_log = { data: held ? [{ id: 'a1' }] : [], error: null };
+  };
 
   beforeEach(() => {
     asRole('DEAN', 'unit-1');
@@ -430,7 +451,8 @@ describe('letter', () => {
     );
     resetFake();
     asRole('CSO', null);
-    fake.tables.requests = { data: ROW, error: null };
+    // CHANGED: an Administration request, which the CSO may read.
+    fake.tables.requests = { data: ADMIN_ROW, error: null };
     await send();
     expect(fake.queries.find((q) => q.table === 'requests')?.client).toBe(
       'admin'
@@ -450,21 +472,137 @@ describe('letter', () => {
     expect(await send()).toEqual(failure(404, 'Letter not found'));
   });
 
+  it.each([
+    ['', 'Letter not found'],
+    ['?type=stamp', 'Stamp not found'],
+  ])(
+    '404s a malformed id like an unknown one, without querying (%s)',
+    async (query, message) => {
+      expect(await send(query, 'not-a-uuid')).toEqual(failure(404, message));
+      expect(fake.queries.some((q) => q.table === 'requests')).toBe(false);
+    }
+  );
+
+  it.each([['?type=letterhead'], ['?type=']])(
+    '422s an unknown type %j',
+    async (query) => {
+      expect(await send(query)).toEqual(
+        failure(422, 'Invalid query parameters')
+      );
+      expect(fake.queries.some((q) => q.table === 'requests')).toBe(false);
+    }
+  );
+
   it("403s a Dean on another faculty's guest request", async () => {
     fake.tables.requests = {
-      data: { ...ROW, requested_unit_id: 'unit-2' },
+      data: {
+        ...ROW,
+        key: null,
+        requested_unit_id: 'unit-2',
+        requested_unit: unitRef('DEAN'),
+      },
       error: null,
     };
     expect(await send()).toEqual(failure(403, 'Forbidden'));
   });
 
-  it('500s a stored URL outside weekend-letters', async () => {
+  it("403s a Dean on another faculty's registered request, even if RLS let it through", async () => {
     fake.tables.requests = {
-      data: { ...ROW, letter_url: 'https://elsewhere.example/x.png' },
+      data: { ...ROW, key: { unit_id: 'unit-2', unit: unitRef('DEAN') } },
       error: null,
     };
-    expectRef(await send());
+    expect(await send()).toEqual(failure(403, 'Forbidden'));
+    expect(fake.signCalls).toEqual([]);
   });
+
+  it('403s a Dean with no unit', async () => {
+    asRole('DEAN', null);
+    expect(await send()).toEqual(failure(403, 'Forbidden'));
+  });
+
+  it('403s a Dean when the request resolves to no unit at all', async () => {
+    fake.tables.requests = {
+      data: { ...ROW, key: null, requested_unit_id: null },
+      error: null,
+    };
+    expect(await send()).toEqual(failure(403, 'Forbidden'));
+  });
+
+  it("checks the Dean's scope before saying whether a file exists", async () => {
+    fake.tables.requests = {
+      data: {
+        ...ROW,
+        letter_url: null,
+        key: { unit_id: 'unit-2', unit: unitRef('DEAN') },
+      },
+      error: null,
+    };
+    expect(await send()).toEqual(failure(403, 'Forbidden'));
+  });
+
+  describe('as the CSO', () => {
+    beforeEach(() => asRole('CSO', null));
+
+    it.each([
+      ['a keyed Administration request', ADMIN_ROW],
+      ['a guest Administration request', ADMIN_GUEST_ROW],
+    ])('signs %s', async (_label, row) => {
+      fake.tables.requests = { data: row, error: null };
+      expect(await send()).toEqual(
+        success({ url: 'https://signed.example/letter' })
+      );
+    });
+
+    it('403s a Dean-authorised request with no held mismatch', async () => {
+      mismatchHeld(false);
+      expect(await send()).toEqual(failure(403, 'Forbidden'));
+      expect(fake.signCalls).toEqual([]);
+      const audit = fake.queries.find((q) => q.table === 'audit_log')!;
+      expect(audit.client).toBe('admin');
+      expect(audit.ops).toContainEqual(['eq', ['event', 'SIGNATURE_MISMATCH']]);
+      expect(audit.ops).toContainEqual(['eq', ['target_id', REQUEST_ID]]);
+    });
+
+    it('signs a Dean-authorised request held on a signature mismatch', async () => {
+      mismatchHeld(true);
+      expect(await send('?type=stamp')).toEqual(
+        success({ url: 'https://signed.example/letter' })
+      );
+    });
+
+    it('500s with a ref when the mismatch lookup fails', async () => {
+      fake.tables.audit_log = {
+        data: null,
+        error: { message: 'audit exploded' },
+      };
+      expectRef(await send());
+    });
+  });
+
+  it.each([
+    ['another host, no storage path', 'https://elsewhere.example/x.png'],
+    [
+      'another bucket',
+      `https://x.supabase.co/storage/v1/object/public/hod-signatures/${USER_ID}/signature.png`,
+    ],
+    [
+      'a nested path inside weekend-letters',
+      `https://x.supabase.co/storage/v1/object/public/weekend-letters/${USER_ID}/a/b.png`,
+    ],
+    [
+      'a URL that only mentions the bucket in its query',
+      'https://elsewhere.example/x.png?p=/weekend-letters/u/letter.png',
+    ],
+  ])(
+    '500s a stored URL that is not a weekend-letters object: %s',
+    async (_l, url) => {
+      // CHANGED: was only the first case; the last one used to be signed, since
+      // the route found the bucket with indexOf('/weekend-letters/').
+      fake.tables.requests = { data: { ...ROW, letter_url: url }, error: null };
+      expectRef(await send());
+      expect(fake.signCalls).toEqual([]);
+    }
+  );
 
   it('500s a signing failure', async () => {
     fake.signedUrl = { data: null, error: { message: 'storage down' } };

@@ -681,13 +681,24 @@ Fired automatically by the status page when the collection code's countdown reac
 **File**: `src/app/api/requests/[id]/letter/route.ts`
 **Roles**: DEAN, CSO
 
-Returns a short-lived (5-minute) signed URL for a request's uploaded authorisation letter or stamp image, so the authoriser can preview it before deciding. The file lives in the private `weekend-letters` bucket; signing happens server-side with the admin client. Access is gated to the Dean whose unit owns the request (RLS plus a unit check) or the CSO (admin client, for Administration-routed requests).
+Returns a short-lived (5-minute) signed URL for a request's uploaded authorisation letter or stamp image, so the authoriser can preview it before deciding. The file lives in the private `weekend-letters` bucket; signing happens server-side with the admin client.
 
-**Query params**: `type` (`'letter' | 'stamp'`, default `'letter'`) — selects `letter_url` or `stamp_url` on the request row.
+Scope, enforced by the route itself (since 2026-10-15) and not left to RLS:
+
+- **Dean** — reads through their session (RLS), then the route requires every unit governing the request — the key's unit for a registered request, `requested_unit_id` for a guest, both when both are set — to be the Dean's own. A Dean with no unit, or a request resolving to no unit, is refused. Until 2026-10-15 the unit check ran only for guest requests; registered requests relied on RLS alone.
+- **CSO** — reads with the admin client (its RLS policy does not cover every request type), so the route bounds it: a request governed by an Administration (`authoriser = 'CSO'`) unit, **or** a Dean-authorised request with a `SIGNATURE_MISMATCH` audit entry — the held approvals the CSO resolves in the Dean's place, the same condition `approve_weekend`'s `cso_override` requires. Until 2026-10-15 the CSO could sign any request's letter. In practice the only CSO caller is `/cso/weekend-requests`, which lists Administration requests; the dashboard's mismatch dialog reads the submitted image through `GET /api/storage/object` instead.
+
+The scope check runs before the file lookup, so a `404` never tells a caller outside the scope whether a letter exists.
+
+The stored `letter_url`/`stamp_url` is parsed with `parseStorageUrl` (`src/lib/storage/object-url.ts`). Anything that is not a well-formed `weekend-letters` object — another bucket, a nested path, or a URL that merely contains `/weekend-letters/` somewhere — is a bad row: logged and answered with a ref'd `500`, never signed. (The route used to find the path with `indexOf('/weekend-letters/')`.)
+
+**Path params**: `id` — a non-uuid id answers the same `404` as an unknown one, without querying.
+
+**Query params**: `type` (`'letter' | 'stamp'`, default `'letter'`) — selects `letter_url` or `stamp_url` on the request row. Any other value → `422 Invalid query parameters` (it used to fall back to `'letter'`).
 
 **Response `data`**: `{ "url": "<signed-url>" }`
 
-**Errors**: `403` not a Dean/CSO, or not the request's unit · `404` request has no letter/stamp for the requested `type` · `500` signing failure
+**Errors**: `403` not a Dean/CSO, or outside the scope above · `404` unknown or malformed request id, or no letter/stamp for the requested `type` (`Letter not found` / `Stamp not found`) · `422` unknown `type` · `500` with a correlation reference: query, mismatch-lookup or signing failure, or a stored URL that is not a `weekend-letters` object
 
 ---
 
