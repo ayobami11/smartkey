@@ -910,6 +910,10 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      _assert_session_actor: {
+        Args: { p_actor_id: string };
+        Returns: undefined;
+      };
       _write_audit: {
         Args: {
           p_actor_id: string;
@@ -1017,6 +1021,7 @@ export type Database = {
         Args: {
           p_key_id: string;
           p_letter_url?: string;
+          p_requester_id: string;
           p_return_deadline: string;
           p_risk_factors?: Json;
           p_risk_tier?: Database['public']['Enums']['risk_tier'];

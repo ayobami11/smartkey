@@ -43,6 +43,9 @@ const freshState = () => ({
   } as Result,
   queries: [] as QueryCall[],
   rpcCalls: [] as { name: string; args: unknown }[],
+  // Which client made each RPC call, in order. Kept apart from rpcCalls so
+  // the many exact `rpcCalls` assertions do not have to name a client.
+  rpcClients: [] as { name: string; client: QueryCall['client'] }[],
   signCalls: [] as { bucket: string; path: string; ttl: number }[],
   // What storage download() answers, by object path. Unlisted paths answer
   // a small PNG, so a stored letter reads back as a real image by default.
@@ -108,6 +111,7 @@ export const makeClient = (client: QueryCall['client']) => ({
   from: (table: string) => builder(client, table),
   rpc: async (name: string, args: unknown) => {
     fake.rpcCalls.push({ name, args });
+    fake.rpcClients.push({ name, client });
     return fake.rpc[name] ?? { data: null, error: null };
   },
   storage: {

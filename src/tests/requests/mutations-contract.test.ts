@@ -603,6 +603,19 @@ describe('submit', () => {
     expect(await send()).toEqual(failure(status, message));
   });
 
+  // CHANGED: create_request is service-only (20261015090000_grant_hardening),
+  // so the route calls it through the admin client and names the requester.
+  it('calls create_request as service_role with the session user as requester', async () => {
+    expect((await send()).status).toBe(201);
+    expect(fake.rpcClients).toEqual([
+      { name: 'create_request', client: 'admin' },
+    ]);
+    expect(fake.rpcCalls[0].args).toMatchObject({
+      p_requester_id: USER_ID,
+      p_key_id: KEY_ID,
+    });
+  });
+
   it('201s a weekday request with its code', async () => {
     expect(await send()).toEqual(
       success(
