@@ -32,7 +32,7 @@ export const GET = route({
         `id, status, issued_at, return_deadline, created_at,
          requester:profiles!requester_id(id, full_name, photo_url),
          guest:guest_requesters!guest_id(id, full_name),
-         key:keys!key_id(id, code, room_name, zone, status, key_count)`
+         key:keys!key_id${zone ? '!inner' : ''}(id, code, room_name, zone, status, key_count)`
       )
       .in('status', ['KEY_ISSUED']);
 
@@ -40,8 +40,11 @@ export const GET = route({
       query = query.lt('return_deadline', new Date().toISOString());
     }
 
+    // A filter on an embedded table only drops parent rows when the embed is
+    // an inner join; with the default left join (and the alias-less path used
+    // until 2026-10-15) every outstanding key came back whatever the zone.
     if (zone) {
-      query = query.eq('key:keys!key_id.zone', zone);
+      query = query.eq('key.zone', zone);
     }
 
     query = query.order('return_deadline', { ascending: true });

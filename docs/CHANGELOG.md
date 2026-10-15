@@ -21,6 +21,8 @@ Each entry: date, brief title, what changed, why.
   - **Dean**: the unit check only ran for guest requests (`requested_unit_id`); registered requests relied on RLS alone. Every governing unit (the key's, and `requested_unit_id` when set) must now be the Dean's own, a Dean with no unit is refused, and the check runs before the file lookup, so a `404` no longer reveals whether another faculty's request has a letter.
   - **Storage path**: `indexOf('/weekend-letters/')` became `parseStorageUrl`, and anything that is not a well-formed `weekend-letters` object (another bucket, a nested path, a URL that only mentions the bucket in its query string) is a ref'd `500`, never signed.
   - **Input**: a non-uuid `id` answers the same `404` as an unknown one without querying; `type` must be `letter` or `stamp` (`422` otherwise — it used to fall back to `letter`). A failing request query is now a ref'd `500` rather than a silent `404`.
+- **`GET /api/keys/out?zone=` now filters.** It used `.eq('key:keys!key_id.zone', …)` against a left-joined embed, which drops no parent rows, so every outstanding key came back whatever the zone. The embed is now `!inner` when `zone` is given and the filter targets the `key.zone` alias. No UI sends `zone` today.
+- **`GET /api/ai/signature-alerts`** answered its three query failures with an un-ref'd `500 "Failed to fetch signature alerts"`; they are now `respond.internal` (ref'd 500, logged with the error).
 - **`GET /api/requests/live-queue?id=`**: a non-uuid `id` now answers `200 { request: null }` without querying — the same as an id that matches nothing, which the verifier queue already drops. Before: a Postgres uuid cast error, `500`.
 
 ### 2026-10-15 — E2E workflow: wire every env var into the build, fail fast when missing

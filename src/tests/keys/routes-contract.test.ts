@@ -306,10 +306,11 @@ describe('GET /api/keys/out', () => {
 
     const query = fake.queries.find((q) => q.table === 'requests')!;
     expect(query.client).toBe('admin');
-    expect(query.ops).toContainEqual([
-      'eq',
-      ['key:keys!key_id.zone', 'NEW_SENATE'],
-    ]);
+    // CHANGED: the zone filter targets the embed alias over an inner join,
+    // so it actually drops other zones (it used to filter nothing).
+    expect(query.ops).toContainEqual(['eq', ['key.zone', 'NEW_SENATE']]);
+    const select = query.ops.find(([m]) => m === 'select')?.[1][0] as string;
+    expect(select).toContain('key:keys!key_id!inner(');
     expect(
       query.ops.some(([m, a]) => m === 'lt' && a[0] === 'return_deadline')
     ).toBe(true);
