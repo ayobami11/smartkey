@@ -29,7 +29,11 @@ export const GET = route({
       .limit(1)
       .maybeSingle();
 
-    if (error) return respond.fail(500, 'Failed to fetch current shift');
+    if (error) {
+      return respond.internal('shifts/current: query failed', {
+        err: error.message,
+      });
+    }
 
     return respond.ok(rewriteStorageUrls({ shift }));
   },

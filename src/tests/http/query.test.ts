@@ -31,12 +31,17 @@ describe('timestamp', () => {
     expect(timestamp.safeParse(value).success).toBe(true);
   });
 
-  it.each(['1', 'yesterday', '2026-13-45', '2026-10-13T25:00:00Z', ''])(
-    'refuses %j',
-    (value) => {
-      expect(timestamp.safeParse(value).success).toBe(false);
-    }
-  );
+  it.each([
+    '1',
+    'yesterday',
+    '2026-13-45',
+    '2026-02-30',
+    '2026-04-31T00:00:00Z',
+    '2026-10-13T25:00:00Z',
+    '',
+  ])('refuses %j', (value) => {
+    expect(timestamp.safeParse(value).success).toBe(false);
+  });
 });
 
 describe('csvEnum', () => {

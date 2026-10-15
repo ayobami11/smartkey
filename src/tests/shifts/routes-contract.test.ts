@@ -56,11 +56,10 @@ describe('GET /api/shifts/current', () => {
 
   beforeEach(() => asRole('VERIFIER'));
 
-  it('500 when the shift query fails', async () => {
+  // CHANGED: was an un-ref'd 500 'Failed to fetch current shift'.
+  it('500 with a ref when the shift query fails', async () => {
     fake.tables.shifts = { data: null, error: { message: 'boom' } };
-    expect(await call(current, get(path))).toEqual(
-      failure(500, 'Failed to fetch current shift')
-    );
+    expectRef(await call(current, get(path)));
   });
 
   // CHANGED by the route() migration: a throw used to escape the handler, so

@@ -815,7 +815,9 @@ The verifier is the server-verified session user (`user.id`), never a client-sup
 
 Returns every request with `status = 'KEY_ISSUED'` — every copy physically out — joined with requester and key details. There is no `KEY_OVERDUE` request status in the database; an overdue key is a `KEY_ISSUED` request past its `return_deadline`.
 
-**Query params**: `zone` (`NEW_SENATE | OLD_SENATE`) · `overdue_only` (`boolean` — filters on `return_deadline < now`)
+**Query params**: `zone` (`NEW_SENATE | OLD_SENATE`) · `overdue_only` (`'true' | 'false'` — `true` filters on `return_deadline < now`). Anything else → `422 Invalid query parameters` (since 2026-10-15).
+
+**Errors**: `422` invalid query params · `500` query failure, with a correlation reference (was an un-ref'd `500 Failed to fetch outstanding keys` until 2026-10-15)
 
 **Response `data`**: `{ "outstanding": [...] }`. Each row is shaped by `shapeOutstanding` (`src/lib/keys/outstanding.ts`):
 
@@ -885,9 +887,11 @@ Read-only, so no audit entry — `audit_log` records consequential actions, not 
 **File**: `src/app/api/keys/history/route.ts`
 **Roles**: CSO, DEAN
 
-**Query params**: `key_id` · `requester_id` · `from` (ISO date) · `to` (ISO date) · `limit` · `cursor`
+**Query params**: `key_id` (uuid) · `requester_id` (uuid) · `from` / `to` (ISO date or timestamp) · `limit` (positive integer, default 50, clamped to 100) · `cursor` (the `next_cursor` from a previous page: a `created_at` timestamp). A malformed value → `422 Invalid query parameters` (since 2026-10-15; these used to reach Postgres and answer `500`).
 
-Dean sees only their faculty's keys (RLS enforced). CSO sees all.
+A Dean sees only their faculty's keys. The route scopes this itself — it reads the unit's key ids and filters on them — rather than relying on RLS alone. A Dean with no `unit_id` gets an empty page without any query (until 2026-10-15 they got no filter at all, leaving RLS as the only scope); an empty page rather than a `403` so the Dean dashboard's activity feed still renders. CSO sees all.
+
+**Errors**: `422` invalid query params · `500` query failure, with a correlation reference
 
 **Response `data`**: `{ "transactions": [...], "next_cursor": "<opaque>" }`
 
@@ -1207,6 +1211,8 @@ Returns the active shift record with officer identities and elapsed time.
 
 **Response `data`**: `{ "shift": { "id": "<uuid>", "shift_number": 2, "started_at": "<iso>", "primary_officer": {...} } }`
 
+**Errors**: `500` query failure, with a correlation reference
+
 ---
 
 ### POST /api/shifts/handover
@@ -1384,9 +1390,11 @@ Unknown keys are stripped by the schema, so a `profile_id` in the body is ignore
 **File**: `src/app/api/reports/route.ts`
 **Roles**: CSO
 
-**Query params**: `shift_id` · `from` (ISO date) · `to` (ISO date) · `limit` · `cursor`
+**Query params**: `shift_id` (uuid) · `from` / `to` (ISO date or timestamp) · `limit` (positive integer, default 20, clamped to 50) · `cursor` (a `generated_at` timestamp from `next_cursor`)
 
 **Response `data`**: `{ "reports": [...], "next_cursor": "<opaque>" }`
+
+**Errors**: `422 Invalid query parameters` for any malformed param (since 2026-10-15) · `500` query failure, with a correlation reference
 
 ---
 
@@ -1439,9 +1447,11 @@ Comment is immutable after insert.
 
 Read-only. No update or delete endpoint exists — the incident log is append-only.
 
-**Query params**: `type` · `severity` · `status` · `from` · `to` · `limit` · `cursor`
+**Query params**: `type` (`incident_type`) · `severity` (`LOW | MEDIUM | HIGH`) · `status` (`OPEN | RESOLVED | ESCALATED`) · `from` / `to` (ISO date or timestamp, on `occurred_at`) · `limit` (positive integer, default 50, clamped to 100) · `cursor` (a `logged_at` timestamp from `next_cursor`)
 
 **Response `data`**: `{ "incidents": [...], "next_cursor": "<opaque>" }`
+
+**Errors**: `422 Invalid query parameters` for an unknown enum value or a malformed date, limit or cursor (since 2026-10-15; these were cast straight into the query and answered `500`) · `500` query failure, with a correlation reference
 
 ---
 

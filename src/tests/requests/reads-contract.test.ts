@@ -186,7 +186,8 @@ describe('my', () => {
     expectRef(await call(my, get('/api/requests/my')));
   });
 
-  const b64 = (s: string) => encodeURIComponent(Buffer.from(s).toString('base64'));
+  const b64 = (s: string) =>
+    encodeURIComponent(Buffer.from(s).toString('base64'));
 
   it.each([
     ['a non-numeric limit', '?limit=abc'],
@@ -375,13 +376,10 @@ describe('live-queue', () => {
     ['/api/requests/live-queue'],
     // CHANGED: a uuid, so the single fetch actually runs.
     [`/api/requests/live-queue?id=${REQUEST_ID}`],
-  ])(
-    '500s a query failure with a ref (%s)',
-    async (path) => {
-      fake.tables.requests = QUERY_FAILED;
-      expectRef(await call(liveQueue, get(path)));
-    }
-  );
+  ])('500s a query failure with a ref (%s)', async (path) => {
+    fake.tables.requests = QUERY_FAILED;
+    expectRef(await call(liveQueue, get(path)));
+  });
 });
 
 // ---------------------------------------------------------------------------

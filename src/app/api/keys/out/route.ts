@@ -1,3 +1,5 @@
+import * as z from 'zod';
+
 import {
   shapeOutstanding,
   type OutstandingSourceRow,
@@ -6,15 +8,21 @@ import { respond } from '@/lib/http/respond';
 import { route } from '@/lib/http/route';
 import { rewriteStorageUrls } from '@/lib/storage/object-url';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { Constants } from '@/types/database';
+
+const querySchema = z.object({
+  zone: z.enum(Constants.public.Enums.zone).optional(),
+  overdue_only: z.enum(['true', 'false']).optional(),
+});
 
 export const GET = route({
   name: 'keys/out',
   auth: 'user',
   roles: ['CSO', 'VERIFIER'],
-  handler: async ({ request }) => {
-    const { searchParams } = new URL(request.url);
-    const zone = searchParams.get('zone');
-    const overdueOnly = searchParams.get('overdue_only') === 'true';
+  query: querySchema,
+  handler: async ({ query: params }) => {
+    const { zone } = params;
+    const overdueOnly = params.overdue_only === 'true';
 
     // Use admin client so the requester profile join is not blocked by RLS.
     // route() has already checked the session and role.
@@ -40,7 +48,11 @@ export const GET = route({
 
     const { data, error } = await query;
 
-    if (error) return respond.fail(500, 'Failed to fetch outstanding keys');
+    if (error) {
+      return respond.internal('keys/out: query failed', {
+        err: error.message,
+      });
+    }
 
     // `is_overdue` (and the deprecated `status: 'KEY_OVERDUE'`) come from the
     // shared overdue rule; see src/lib/keys/outstanding.ts.

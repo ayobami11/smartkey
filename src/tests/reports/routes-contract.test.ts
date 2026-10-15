@@ -69,11 +69,39 @@ describe('GET /api/reports', () => {
 
   beforeEach(() => asRole('CSO'));
 
-  it('500 when the query fails', async () => {
+  // CHANGED: was an un-ref'd 500 'Failed to fetch reports'.
+  it('500 with a ref when the query fails', async () => {
     fake.tables.shift_reports = { data: null, error: { message: 'boom' } };
-    expect(await call(reports, get(path))).toEqual(
-      failure(500, 'Failed to fetch reports')
+    expectRef(await call(reports, get(path)));
+  });
+
+  it.each([
+    ['a non-numeric limit', '?limit=abc'],
+    ['a zero limit', '?limit=0'],
+    ['a non-uuid shift id', '?shift_id=nope'],
+    ['a malformed from', '?from=yesterday'],
+    ['a malformed to', '?to=1'],
+    ['a malformed cursor', '?cursor=abc'],
+  ])('422 for %s, before querying', async (_label, qs) => {
+    expect(await call(reports, get(`${path}${qs}`))).toEqual(
+      failure(422, 'Invalid query parameters')
     );
+    expect(fake.queries.some((q) => q.table === 'shift_reports')).toBe(false);
+  });
+
+  it('clamps the limit to 50 and applies the date range', async () => {
+    fake.tables.shift_reports = { data: [], error: null };
+    await call(
+      reports,
+      get(`${path}?limit=500&from=2026-10-01T00:00:00.000Z&to=2026-10-14`)
+    );
+    const query = fake.queries.find((q) => q.table === 'shift_reports')!;
+    expect(query.ops).toContainEqual(['limit', [51]]);
+    expect(query.ops).toContainEqual([
+      'gte',
+      ['generated_at', '2026-10-01T00:00:00.000Z'],
+    ]);
+    expect(query.ops).toContainEqual(['lte', ['generated_at', '2026-10-14']]);
   });
 
   it('pages with limit + 1 and a generated_at cursor', async () => {
@@ -295,11 +323,45 @@ describe('GET /api/incidents', () => {
 
   beforeEach(() => asRole('CSO'));
 
-  it('500 when the query fails', async () => {
+  // CHANGED: was an un-ref'd 500 'Failed to fetch incidents'.
+  it('500 with a ref when the query fails', async () => {
     fake.tables.incidents = { data: null, error: { message: 'boom' } };
-    expect(await call(listIncidents, get(path))).toEqual(
-      failure(500, 'Failed to fetch incidents')
+    expectRef(await call(listIncidents, get(path)));
+  });
+
+  it.each([
+    ['an unknown type', '?type=FIRE'],
+    ['an unknown severity', '?severity=CRITICAL'],
+    ['an unknown status', '?status=CLOSED'],
+    ['a non-numeric limit', '?limit=abc'],
+    ['a negative limit', '?limit=-5'],
+    ['a malformed from', '?from=last-week'],
+    ['a malformed to', '?to=2026-13-01'],
+    ['a malformed cursor', '?cursor=abc'],
+  ])('422 for %s, before querying', async (_label, qs) => {
+    expect(await call(listIncidents, get(`${path}${qs}`))).toEqual(
+      failure(422, 'Invalid query parameters')
     );
+    expect(fake.queries.some((q) => q.table === 'incidents')).toBe(false);
+  });
+
+  it('applies every filter the CSO screens send', async () => {
+    fake.tables.incidents = { data: [], error: null };
+    const cursor = '2026-10-13T09:00:00.123456+00:00';
+    const qs = new URLSearchParams({
+      type: 'MISSING_KEY',
+      status: 'OPEN',
+      from: '2026-10-01T00:00:00.000Z',
+      to: '2026-10-14T23:59:59.999Z',
+      limit: '100',
+      cursor,
+    });
+    expect((await call(listIncidents, get(`${path}?${qs}`))).status).toBe(200);
+    const query = fake.queries.find((q) => q.table === 'incidents')!;
+    expect(query.ops).toContainEqual(['eq', ['type', 'MISSING_KEY']]);
+    expect(query.ops).toContainEqual(['eq', ['status', 'OPEN']]);
+    expect(query.ops).toContainEqual(['lt', ['logged_at', cursor]]);
+    expect(query.ops).toContainEqual(['limit', [101]]);
   });
 
   it('pages with limit + 1 and a logged_at cursor', async () => {

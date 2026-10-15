@@ -26,11 +26,19 @@ export const pageLimit = (fallback: number, max: number) =>
 const TIMESTAMP_PATTERN =
   /^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,6})?)?(?:Z|[+-]\d{2}(?::?\d{2})?)?)?$/;
 
+// Date.parse rolls an impossible day over (2026-02-30 → 2 March) where
+// Postgres refuses it, so the calendar date is checked on its own.
+const isRealDate = (s: string) => {
+  const [y, m, d] = s.slice(0, 10).split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
+};
+
 /** An ISO-8601 date or timestamp that Postgres can cast to timestamptz. */
 export const timestamp = z
   .string()
   .regex(TIMESTAMP_PATTERN)
-  .refine((s) => !Number.isNaN(Date.parse(s)));
+  .refine((s) => isRealDate(s) && !Number.isNaN(Date.parse(s)));
 
 /** A comma-separated list where every item is one of `values`. */
 export const csvEnum = <T extends string>(values: readonly [T, ...T[]]) =>
