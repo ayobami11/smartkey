@@ -2,8 +2,8 @@
 // Contract for the CSO's AI read routes, ai/risk-alerts and
 // ai/signature-alerts: auth outcomes, query failures and success shapes.
 // Written against the routes before they moved onto route(); kept as the
-// regression net after. ai/verify-signature is deliberately not wrapped and
-// not covered here.
+// regression net after. ai/verify-signature has its own shared-secret gate
+// and is covered in verify-signature-route.test.ts.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GET as riskAlerts } from '@/app/api/ai/risk-alerts/route';

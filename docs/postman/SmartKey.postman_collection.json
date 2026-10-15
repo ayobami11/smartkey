@@ -67,9 +67,9 @@
       "description": "<div style=\"color:#111827;\">CRON_SECRET from .env.local. System folder only.</div>"
     },
     {
-      "key": "serviceRoleKey",
+      "key": "signatureDiagnosticSecret",
       "value": "",
-      "description": "<div style=\"color:#111827;\">SUPABASE_SERVICE_ROLE_KEY. System folder only — never ships to a browser.</div>"
+      "description": "<div style=\"color:#111827;\">SIGNATURE_DIAGNOSTIC_SECRET (32+ chars). System folder only; the verify-signature route is off when it is unset.</div>"
     },
     {
       "key": "decisionToken",
@@ -4088,7 +4088,7 @@
     },
     {
       "name": "08 — System (secret-guarded)",
-      "description": "<div style=\"color:#111827;\">Not user-facing and not called from a browser. Both routes authenticate with a shared secret rather than a session. Populate {{cronSecret}} / {{serviceRoleKey}} from .env.local before running.</div>",
+      "description": "<div style=\"color:#111827;\">Not user-facing and not called from a browser. Both routes authenticate with a shared secret rather than a session. Populate {{cronSecret}} / {{signatureDiagnosticSecret}} from .env.local before running.</div>",
       "item": [
         {
           "name": "Weekend reminders (cron)",
@@ -4297,8 +4297,8 @@
               },
               {
                 "key": "x-internal-secret",
-                "value": "{{serviceRoleKey}}",
-                "description": "<div style=\"color:#111827;\">SUPABASE_SERVICE_ROLE_KEY. Never reachable from a browser.</div>"
+                "value": "{{signatureDiagnosticSecret}}",
+                "description": "<div style=\"color:#111827;\">SIGNATURE_DIAGNOSTIC_SECRET. The route returns 403 when it is unset.</div>"
               }
             ],
             "body": {

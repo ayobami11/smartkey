@@ -59,8 +59,25 @@ Verifier specs time out on the OTP screen exactly as documented in
 Four separate GitHub Actions workflows, not one combined pipeline:
 
 - **`.github/workflows/ci.yml`** — runs on every push/PR to `main`: `bun run typecheck` → `bun run lint` → `bun run test` → `supabase start` + `bun run test:db` → `bun run build`.
-- **`.github/workflows/e2e.yml`** — PR-only. Skipped when every changed file matches `docs/**`, `supabase/**`, or `**/*.md` (a PR that also touches app code still runs). Builds the app, then runs `bun run test:e2e -- --project=chromium` (Chromium only in CI; the `mobile`/Pixel 5 project defined in `playwright.config.ts` is not run in CI) against test-account credentials injected as secrets.
+- **`.github/workflows/e2e.yml`** — PR-only. Skipped when every changed file matches `docs/**`, `supabase/**`, or `**/*.md` (a PR that also touches app code still runs). Builds the app, then runs `bun run test:e2e -- --project=chromium` (Chromium only in CI; the `mobile`/Pixel 5 project defined in `playwright.config.ts` is not run in CI) against test-account credentials injected as secrets. The public Supabase URL and anon key are set at job level, because `next build` inlines them; the service-role key, SMTP, test-account and IMAP secrets are set only on the check step and the test step (whose env the `bun run start` webServer Playwright spawns inherits), so third-party actions never see them; a first step fails the job within seconds, naming each missing one, rather than letting it build and then time out on the login screen. See "E2E secrets" below.
 - **`.github/workflows/changelog.yml`** — PR gate enforcing CLAUDE.md's "every push needs a `docs/CHANGELOG.md` entry" rule. Fails a PR that changes any file outside `docs/` without also touching `docs/CHANGELOG.md`, unless the PR carries the `skip-changelog` label.
 - **`.github/workflows/post-deploy-smoke.yml`** — fires on the Vercel `deployment_status` event once a deployment is live (or via manual `workflow_dispatch` against any URL). Runs `tests/smoke/smoke.mjs` (zero dependencies by design) against the deployed URL and gates production promotion on the result; auto-promote is opt-in via the `SMOKE_AUTO_PROMOTE` repo variable and disabled by default.
 
 None of the four workflows runs `design:lint`. The script does exist (`bunx @google/design.md lint design-system/DESIGN.md`, passing with 0 errors and 30 warnings as of 2026-09-03) — it is simply a manual check, not a gate. Lighthouse CI was considered and deliberately not pursued — see `docs/CHANGELOG.md`.
+
+## E2E secrets
+
+`.github/workflows/e2e.yml` reads these from **Settings → Secrets and variables → Actions** on the repository. The first step, _Check required secrets_, fails the job and lists every one that is empty.
+
+| Name                                                     | Kind               | Used by                                                                                                        |
+| -------------------------------------------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_SUPABASE_URL`                               | secret or variable | Inlined into the build; every Supabase client. Missing → `Error: supabaseUrl is required` in the webServer log |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY`                          | secret or variable | Inlined into the build; browser and server session clients                                                     |
+| `SUPABASE_SERVICE_ROLE_KEY`                              | secret             | The app under test: `/api/auth/login` and `/api/auth/verify-otp` store and check the OTP with the admin client |
+| `GMAIL_USER`, `GMAIL_APP_PASSWORD`                       | secret             | The app under test sends the OTP email                                                                         |
+| `TEST_{CSO,DEAN,VERIFIER,REQUESTER}_EMAIL` / `_PASSWORD` | secret             | `tests/e2e/utils/auth.ts` — one ACTIVE account per role; `auth.setup.ts` logs in as all four                   |
+| `E2E_OTP_IMAP_USER`, `E2E_OTP_IMAP_APP_PASSWORD`         | secret             | `tests/e2e/utils/otp.ts` reads the CSO/Dean/Verifier codes back out of the shared mailbox                      |
+
+`NEXT_PUBLIC_*` values are inlined at `next build` time, so setting them only for the test step (as the workflow did before 2026-10-15) leaves the built app without them. The URL and anon key are public by design, so either a secret or a repository variable of that name works (`secrets.X || vars.X`). `NEXT_PUBLIC_SITE_URL` is fixed to `http://localhost:3000` in the workflow.
+
+Point these at a project whose test accounts exist and are `ACTIVE`; E2E specs sign in for real and some create rows. GitHub does not pass secrets to workflows triggered from forks, so a fork PR fails at the check step by design.

@@ -4,8 +4,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as z from 'zod';
 
 import { respond } from '@/lib/http/respond';
-import { route } from '@/lib/http/route';
+import { route, secretMatches } from '@/lib/http/route';
 import { logger } from '@/lib/logger';
+
+describe('secretMatches', () => {
+  it('matches only the exact secret, whatever the lengths', () => {
+    expect(secretMatches('s3cret', 's3cret')).toBe(true);
+    expect(secretMatches('s3cre', 's3cret')).toBe(false);
+    expect(secretMatches('s3cretX', 's3cret')).toBe(false);
+    expect(secretMatches('', 's3cret')).toBe(false);
+  });
+});
 
 const mocks = vi.hoisted(() => {
   const getUser = vi.fn();
