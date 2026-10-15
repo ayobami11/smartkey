@@ -278,7 +278,7 @@ Verifies `current_password` by re-authenticating (`signInWithPassword`) before a
 
 **File**: `src/app/api/requests/submit/route.ts`
 **Roles**: REQUESTER
-**RPC**: `create_request(key_id, type, return_deadline, weekend_date?, risk_tier?, risk_factors?, letter_url?, stamp_url?)`
+**RPC**: `create_request(requester_id, key_id, type, return_deadline, weekend_date?, risk_tier?, risk_factors?, letter_url?, stamp_url?)` — service-only, called through the admin client with the session user as `requester_id`
 
 | Field             | Type                       | Required                                                                                                                                                                   |
 | ----------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -290,6 +290,8 @@ Verifies `current_password` by re-authenticating (`signInWithPassword`) before a
 | `stamp_url`       | `string`                   | no — optional stamp close-up, same rules as `letter_url`                                                                                                                   |
 
 The route runs the risk engine and passes the result to the RPC, which writes the request (with `risk_tier`, `risk_factors` and, for a weekend request, `letter_url`/`stamp_url`), the code and the `REQUEST_CREATED` entry (carrying the tier) in one transaction. Until 2026-10-13 the tier and the letter/stamp were back-filled after the RPC by two best-effort admin-client UPDATEs, so a failure could leave a HIGH-risk request stored as LOW. A `letter_url`/`stamp_url` outside the requester's own `weekend-letters/{uid}/` folder is refused (`422`) by the route and again by the RPC; on a weekday request the route drops them. The browser uploads these straight to Storage, so no route sees the bytes at upload time; since 2026-10-14 the route reads each stored object back (service role) and refuses one that is not a PNG, JPEG or WebP — or that is missing — with the same `422 Invalid letter or stamp upload`, before `create_request` runs.
+
+Since 2026-10-15 `create_request` is executable by `service_role` only, and the route calls it through the admin client, passing the server-verified `user.id` as `p_requester_id`. Before, the RPC was granted to `authenticated`, so a requester could call it with a session and store any risk tier (and an RLS INSERT policy let them insert a request row directly); both are closed by `20261015090000_grant_hardening.sql`.
 
 **Response `data`** (WEEKDAY):
 
@@ -346,7 +348,7 @@ Returns requests for the Dean's faculty with `status = 'PENDING_HOD'`, including
 
 **File**: `src/app/api/requests/hod-decision/route.ts`
 **Roles**: Dean (role: DEAN), CSO
-**RPC**: `approve_weekend(request_id, hod_id, note?, signature_verified?, signature_mismatch_pct?, cso_override?)`, `approve_guest_weekend(request_id, hod_id, key_id, note?)`, or `decline_weekend(request_id, hod_id, note?, cso_override?)`
+**RPC**: `approve_weekend(request_id, hod_id, note?, signature_verified?, signature_mismatch_pct?, cso_override?)`, `approve_guest_weekend(request_id, hod_id, key_id, note?)`, or `decline_weekend(request_id, hod_id, note?, cso_override?)` — all three service-only since 2026-10-15; `decideWeekend` calls them through the admin client with the session user (or, on the one-click page, the unit's current Dean) as `hod_id`
 
 | Field        | Type                       | Required             |
 | ------------ | -------------------------- | -------------------- |
@@ -420,7 +422,7 @@ Returns all requests with `status = 'CODE_ISSUED'`, ordered by `created_at` asce
 
 **File**: `src/app/api/requests/collect/route.ts`
 **Roles**: VERIFIER
-**RPC**: `issue_key(request_id, verifier_id)`
+**RPC**: `issue_key(request_id, verifier_id)` — since 2026-10-15 the RPC itself refuses a `verifier_id` that is not the session user, or not a `VERIFIER` (`FORBIDDEN` → the catalogue default)
 
 | Field  | Type                | Required |
 | ------ | ------------------- | -------- |
