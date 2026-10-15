@@ -328,9 +328,11 @@ After the response, sends a request notification through `notifyAfterResponse` (
 **File**: `src/app/api/requests/my/route.ts`
 **Roles**: REQUESTER
 
-**Query params**: `status` (optional, comma-separated enum values) · `limit` · `cursor`
+**Query params**: `status` (optional, comma-separated `request_status` values) · `limit` (positive integer, default 20, values above 50 clamp to 50) · `cursor` (the opaque `next_cursor` from a previous page: base64 of a `created_at` timestamp)
 
 **Response `data`**: `{ "requests": [...], "next_cursor": "<opaque>" }`
+
+**Errors**: `422 Invalid query parameters` for a non-integer or non-positive `limit`, an unknown `status`, or a `cursor` that does not decode to a timestamp (since 2026-10-15; these used to reach Postgres and answer `500`) · `500` query failure, with a correlation reference
 
 ---
 
@@ -415,7 +417,9 @@ Until 2026-10-13 a decline on a `KEY_ISSUED` request (the queue shows those too)
 
 Returns all requests with `status = 'CODE_ISSUED'`, ordered by `created_at` ascending. This is the initial load for the verifier dashboard; ongoing updates come via Supabase Realtime.
 
-**Response `data`**: `{ "requests": [...] }`
+**Query params**: `id` (optional). With `id`, returns just that request — `{ "request": {...} }`, or `{ "request": null }` when it is no longer `CODE_ISSUED` or does not exist. The Realtime INSERT handler uses this and drops a `null`. A malformed (non-uuid) `id` answers `{ "request": null }` without querying, exactly like an unknown one (since 2026-10-15; it used to reach Postgres and answer `500`).
+
+**Response `data`**: `{ "requests": [...] }`, or `{ "request": {...} | null }` with `id`
 
 ---
 

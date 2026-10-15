@@ -185,6 +185,45 @@ describe('my', () => {
     fake.tables.requests = QUERY_FAILED;
     expectRef(await call(my, get('/api/requests/my')));
   });
+
+  const b64 = (s: string) => encodeURIComponent(Buffer.from(s).toString('base64'));
+
+  it.each([
+    ['a non-numeric limit', '?limit=abc'],
+    ['a zero limit', '?limit=0'],
+    ['a fractional limit', '?limit=2.5'],
+    ['an unknown status', '?status=BOGUS'],
+    ['one unknown status in the list', '?status=KEY_ISSUED,BOGUS'],
+    ['an empty status', '?status='],
+    ['a cursor that is not a timestamp', `?cursor=${b64('not a date')}`],
+    ['a cursor that is not base64 of anything', '?cursor=%25%25%25'],
+  ])('422s %s before querying', async (_label, qs) => {
+    expect(await call(my, get(`/api/requests/my${qs}`))).toEqual(
+      failure(422, 'Invalid query parameters')
+    );
+    expect(fake.queries.some((q) => q.table === 'requests')).toBe(false);
+  });
+
+  it('accepts every real request status', async () => {
+    const all =
+      'PENDING_HOD,APPROVED,CODE_ISSUED,KEY_ISSUED,KEY_RETURNED,EXPIRED,CANCELLED,DECLINED';
+    expect((await call(my, get(`/api/requests/my?status=${all}`))).status).toBe(
+      200
+    );
+  });
+
+  it('accepts the cursor it issued', async () => {
+    const res = await call(my, get('/api/requests/my?limit=2'));
+    const cursor = res.body.data.next_cursor as string;
+    resetFake();
+    asRole('REQUESTER');
+    fake.tables.requests = { data: ROWS, error: null };
+    await call(
+      my,
+      get(`/api/requests/my?cursor=${encodeURIComponent(cursor)}`)
+    );
+    expect(ops()).toContainEqual(['lt', ['created_at', ROWS[1].created_at]]);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -301,22 +340,42 @@ describe('live-queue', () => {
   });
 
   it('returns one request for ?id=', async () => {
-    fake.tables.requests = { data: { id: 'r9' }, error: null };
+    fake.tables.requests = { data: { id: REQUEST_ID }, error: null };
+    // CHANGED: the id is a real uuid; a malformed one no longer reaches the query.
     expect(
-      await call(liveQueue, get('/api/requests/live-queue?id=r9'))
-    ).toEqual(success({ request: { id: 'r9' } }));
+      await call(liveQueue, get(`/api/requests/live-queue?id=${REQUEST_ID}`))
+    ).toEqual(success({ request: { id: REQUEST_ID } }));
     const q = fake.queries.find((x) => x.table === 'requests');
-    expect(q?.ops).toContainEqual(['eq', ['id', 'r9']]);
+    expect(q?.ops).toContainEqual(['eq', ['id', REQUEST_ID]]);
   });
 
   it('returns a null request for an id no longer in the queue', async () => {
     fake.tables.requests = { data: null, error: null };
+    // CHANGED: a uuid that matches nothing, rather than the string 'gone'.
     expect(
-      await call(liveQueue, get('/api/requests/live-queue?id=gone'))
+      await call(liveQueue, get(`/api/requests/live-queue?id=${REQUEST_ID}`))
     ).toEqual(success({ request: null }));
   });
 
-  it.each([['/api/requests/live-queue'], ['/api/requests/live-queue?id=r9']])(
+  it.each([['gone'], ['r9'], [''], ["1' or '1'='1"]])(
+    'answers a malformed id %j like an unknown one, without querying',
+    async (id) => {
+      fake.tables.requests = QUERY_FAILED;
+      expect(
+        await call(
+          liveQueue,
+          get(`/api/requests/live-queue?id=${encodeURIComponent(id)}`)
+        )
+      ).toEqual(success({ request: null }));
+      expect(fake.queries.some((q) => q.table === 'requests')).toBe(false);
+    }
+  );
+
+  it.each([
+    ['/api/requests/live-queue'],
+    // CHANGED: a uuid, so the single fetch actually runs.
+    [`/api/requests/live-queue?id=${REQUEST_ID}`],
+  ])(
     '500s a query failure with a ref (%s)',
     async (path) => {
       fake.tables.requests = QUERY_FAILED;

@@ -1,3 +1,5 @@
+import * as z from 'zod';
+
 import { respond } from '@/lib/http/respond';
 import { route } from '@/lib/http/route';
 import { rewriteStorageUrls } from '@/lib/storage/object-url';
@@ -16,6 +18,8 @@ const REQUEST_SELECT = `
   key:keys!key_id(id, code, room_name, zone)
 `;
 
+const querySchema = z.object({ id: z.string().optional() });
+
 // The verifier's queue of CODE_ISSUED requests. Read with the service role:
 // the verifier must see every pending collection, guests included, and the
 // route's VERIFIER gate is the check.
@@ -23,11 +27,19 @@ export const GET = route({
   name: 'requests/live-queue',
   auth: 'user',
   roles: ['VERIFIER'],
-  handler: async ({ request }) => {
-    const singleId = request.nextUrl.searchParams.get('id');
+  query: querySchema,
+  handler: async ({ query }) => {
+    const singleId = query.id;
     const admin = createAdminClient();
 
-    if (singleId) {
+    if (singleId !== undefined) {
+      // A malformed id can match no request, so answer it exactly like an
+      // unknown one (the client drops a null) instead of letting Postgres
+      // refuse the uuid cast with a 500.
+      if (!z.uuid().safeParse(singleId).success) {
+        return respond.ok({ request: null });
+      }
+
       // Targeted fetch for a single request (used by the Realtime INSERT
       // handler to avoid refetching the whole queue on each new item).
       const { data: row, error } = await admin
