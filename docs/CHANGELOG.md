@@ -6,6 +6,13 @@ Record material changes to the project so Claude has historical context for "why
 
 Each entry: date, brief title, what changed, why.
 
+### 2026-10-15 — E2E workflow: wire every env var into the build, fail fast when missing
+
+- **Why**: E2E failed on every PR with `Error: supabaseUrl is required` in the Playwright webServer log. The repository has no `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` secret (nor `SUPABASE_SERVICE_ROLE_KEY`, `TEST_REQUESTER_EMAIL`, `TEST_REQUESTER_PASSWORD`), and the workflow never passed `SUPABASE_SERVICE_ROLE_KEY` at all, so even with the URL set no MFA login could complete. The failure surfaced only after a full build, as a login-screen timeout.
+- **`.github/workflows/e2e.yml`**: every variable now sits in one job-level `env:` block, so `next build` (which inlines `NEXT_PUBLIC_*`) and the `bun run start` webServer that inherits the test step's env see identical values. Added `SUPABASE_SERVICE_ROLE_KEY` and a fixed `NEXT_PUBLIC_SITE_URL=http://localhost:3000`. The two public Supabase values accept a repository variable as well as a secret.
+- **Fail fast**: a first step, _Check required secrets_, exits with a `::error` annotation naming each empty variable before checkout or install.
+- **Still to do by hand**: add the missing repository secrets listed in `docs/TESTING.md` → "E2E secrets". No secret values were added by this change. `docs/E2E_OTP_SETUP.md`, which several files reference for the IMAP mailbox setup, does not exist in the repo.
+
 ### 2026-10-15 — verify-signature: dedicated secret, constant-time, off by default
 
 - **Why**: `POST /api/ai/verify-signature` authenticated callers by comparing an `x-internal-secret` header with `===` against `SUPABASE_SERVICE_ROLE_KEY`. That sent the one credential that bypasses all RLS over HTTP to a calibration tool, leaked match progress through timing, and left a production endpoint live that nothing in the app calls (decisions run `verifySignature()` in-process).
