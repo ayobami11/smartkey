@@ -22,10 +22,12 @@
 --     those tests set `request.jwt.claims`.
 --   * approve_weekend / decline_weekend / dismiss_expired_request take the
 --     actor as a *parameter* (p_hod_id / p_actor_id) and look the role up from
---     it. approve_weekend/decline_weekend compute
---     `coalesce(auth.uid(), p_hod_id)` but then never use it — the gate is
---     entirely parameter-driven. The route handlers are what bind that
---     parameter to the verified session; the database does not re-derive it.
+--     it. Since 20261015090000_grant_hardening, approve_weekend and
+--     decline_weekend are service-only (decideWeekend calls them through the
+--     admin client), and dismiss_expired_request refuses an actor that is not
+--     the session user. These tests call them with no session claims — the
+--     trusted-caller path, like service_role — so the parameter names the
+--     actor; 17_grant_hardening_test.sql covers the session checks.
 --
 -- Everything runs inside one transaction and is rolled back at the end.
 -- ---------------------------------------------------------------------------
@@ -197,6 +199,12 @@ select lives_ok(
 -- ---------------------------------------------------------------------------
 -- approve_weekend — actor comes from p_hod_id
 -- ---------------------------------------------------------------------------
+
+do $$
+begin
+  perform set_config('request.jwt.claims', '{}', true);
+end;
+$$;
 
 select throws_ok(
   $$ select * from public.approve_weekend(

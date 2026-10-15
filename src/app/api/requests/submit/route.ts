@@ -200,7 +200,11 @@ export const POST = route({
 
     // The risk result and the weekend letter/stamp are written by the same
     // INSERT as the request, and the tier is recorded in REQUEST_CREATED.
-    const result = await callRpc(supabase, 'create_request', {
+    // create_request is service-only: called with a user session, a requester
+    // could pass its own risk tier. The admin client names the requester —
+    // the server-verified session user, never a client-supplied id.
+    const result = await callRpc(createAdminClient(), 'create_request', {
+      p_requester_id: user.id,
       p_key_id: key_id,
       p_type: type,
       p_return_deadline: return_deadline,

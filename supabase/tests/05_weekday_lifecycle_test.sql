@@ -60,6 +60,7 @@ $$;
 
 select throws_ok(
   $$ select * from public.create_request(
+       '55555555-5555-4555-8555-000000000001',
        '55555555-5555-4555-8555-000000000020', 'WEEKDAY', now() + interval '1 day', null) $$,
   'P0002',
   'FORBIDDEN: only REQUESTER role can create requests',
@@ -75,6 +76,7 @@ $$;
 
 select throws_ok(
   $$ select * from public.create_request(
+       '55555555-5555-4555-8555-000000000004',
        '55555555-5555-4555-8555-000000000020', 'WEEKDAY', now() + interval '1 day', null) $$,
   'P0005',
   'NOT_AUTHORISED: requester is not whitelisted for this key',
@@ -90,6 +92,7 @@ $$;
 
 create temp table t_a3 as
 select * from public.create_request(
+  '55555555-5555-4555-8555-000000000003',
   '55555555-5555-4555-8555-000000000020', 'WEEKDAY', now() + interval '1 day', null);
 
 select is(
@@ -110,6 +113,7 @@ select ok(
 
 select throws_ok(
   $$ select * from public.create_request(
+       '55555555-5555-4555-8555-000000000003',
        '55555555-5555-4555-8555-000000000020', 'WEEKDAY', now() + interval '1 day', null) $$,
   'P0006',
   'CONFLICT: an active request already exists for this key',
@@ -122,6 +126,7 @@ where  id = (select request_id from t_a3);
 
 create temp table t_a5 as
 select * from public.create_request(
+  '55555555-5555-4555-8555-000000000003',
   '55555555-5555-4555-8555-000000000020', 'WEEKDAY', now() + interval '1 day', null);
 
 select is(
@@ -139,6 +144,7 @@ select is(
 
 create temp table t_a6 as
 select * from public.create_request(
+  '55555555-5555-4555-8555-000000000003',
   '55555555-5555-4555-8555-000000000021', 'WEEKEND', now() + interval '2 days', current_date + 2);
 
 select is((select status from t_a6), 'PENDING_HOD', 'a WEEKEND request starts PENDING_HOD');
@@ -167,6 +173,7 @@ insert into public.authorisations (key_id, profile_id, authorised_by) values
 
 create temp table t_a6_admin as
 select * from public.create_request(
+  '55555555-5555-4555-8555-000000000003',
   '55555555-5555-4555-8555-00000000002e', 'WEEKEND', now() + interval '2 days', current_date + 2);
 
 select is(
@@ -202,6 +209,7 @@ select is(
 
 create temp table t_r1 as
 select * from public.create_request(
+  p_requester_id    := '55555555-5555-4555-8555-000000000003',
   p_key_id          := '55555555-5555-4555-8555-00000000002f',
   p_type            := 'WEEKDAY',
   p_return_deadline := now() + interval '1 day',
@@ -229,6 +237,7 @@ select is(
 
 select throws_ok(
   $$ select * from public.create_request(
+       p_requester_id    := '55555555-5555-4555-8555-000000000003',
        p_key_id          := '55555555-5555-4555-8555-000000000030',
        p_type            := 'WEEKDAY',
        p_return_deadline := now() + interval '1 day',
@@ -240,6 +249,7 @@ select throws_ok(
 
 select throws_ok(
   $$ select * from public.create_request(
+       p_requester_id    := '55555555-5555-4555-8555-000000000003',
        p_key_id          := '55555555-5555-4555-8555-000000000030',
        p_type            := 'WEEKEND',
        p_return_deadline := now() + interval '2 days',
@@ -252,6 +262,7 @@ select throws_ok(
 
 select throws_ok(
   $$ select * from public.create_request(
+       p_requester_id    := '55555555-5555-4555-8555-000000000003',
        p_key_id          := '55555555-5555-4555-8555-000000000030',
        p_type            := 'WEEKEND',
        p_return_deadline := now() + interval '2 days',
@@ -264,6 +275,7 @@ select throws_ok(
 
 create temp table t_r2 as
 select * from public.create_request(
+  p_requester_id    := '55555555-5555-4555-8555-000000000003',
   p_key_id          := '55555555-5555-4555-8555-000000000030',
   p_type            := 'WEEKEND',
   p_return_deadline := now() + interval '2 days',
@@ -284,6 +296,15 @@ values
   ('55555555-5555-4555-8555-000000000040', '55555555-5555-4555-8555-000000000003', '55555555-5555-4555-8555-000000000022', 'WEEKDAY', current_date, 'CODE_ISSUED', '111111', now() + interval '5 minutes', now() + interval '1 day'),
   ('55555555-5555-4555-8555-000000000041', '55555555-5555-4555-8555-000000000003', '55555555-5555-4555-8555-000000000022', 'WEEKDAY', current_date, 'CODE_ISSUED', '222222', now() - interval '1 minute',  now() + interval '1 day'),
   ('55555555-5555-4555-8555-000000000042', '55555555-5555-4555-8555-000000000003', '55555555-5555-4555-8555-00000000002b', 'WEEKDAY', current_date, 'KEY_ISSUED',  null,     null,                              now() + interval '1 day');
+
+-- issue_key / return_key assert the named verifier is the session user
+-- (20261015090000_grant_hardening), so act as the verifier from here on.
+do $$
+begin
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', '55555555-5555-4555-8555-000000000002', 'role', 'authenticated')::text, true);
+end;
+$$;
 
 select public.issue_key(
   '55555555-5555-4555-8555-000000000040', '55555555-5555-4555-8555-000000000002');
@@ -548,6 +569,14 @@ values
   ('55555555-5555-4555-8555-000000000070', '55555555-5555-4555-8555-000000000003', '55555555-5555-4555-8555-000000000027', 'WEEKDAY', current_date, 'KEY_ISSUED',  now() + interval '1 day'),
   ('55555555-5555-4555-8555-000000000071', '55555555-5555-4555-8555-000000000003', '55555555-5555-4555-8555-00000000002d', 'WEEKDAY', current_date, 'CODE_ISSUED', now() + interval '1 day'),
   ('55555555-5555-4555-8555-000000000072', '55555555-5555-4555-8555-000000000004', '55555555-5555-4555-8555-000000000029', 'WEEKDAY', current_date, 'KEY_ISSUED',  now() + interval '1 day');
+
+-- request_return asserts the named requester is the session user.
+do $$
+begin
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', '55555555-5555-4555-8555-000000000003', 'role', 'authenticated')::text, true);
+end;
+$$;
 
 create temp table t_d1 as
 select * from public.request_return(
