@@ -421,7 +421,8 @@ select throws_ok(
 select throws_ok(
   $$ select * from public.request_return(
        '17171717-1717-4171-8171-000000000040', '17171717-1717-4171-8171-000000000004') $$,
-  'P0010', 'FORBIDDEN: request does not belong to the caller',
+  -- CHANGED (20261019090000): one ownership message for every lifecycle step.
+  'P0010', 'FORBIDDEN: not your request',
   'a requester cannot mint the return code of a guest request'
 );
 

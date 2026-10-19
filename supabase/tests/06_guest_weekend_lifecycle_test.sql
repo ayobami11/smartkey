@@ -420,8 +420,9 @@ select throws_ok(
 
 select throws_ok(
   $$ select * from public.request_return_guest('66666666-cccc-4ccc-8ccc-000000000002') $$,
-  'P0006',
-  'CONFLICT: request is not in KEY_ISSUED state (current: CODE_ISSUED)',
+  -- CHANGED (20261019090000): NOT_ISSUED, as request_return raises. Was CONFLICT (P0006).
+  'P0009',
+  'NOT_ISSUED: request is not in KEY_ISSUED state (current: CODE_ISSUED)',
   'request_return_guest refuses a request that is not yet KEY_ISSUED'
 );
 
