@@ -33,6 +33,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { GuestBadge } from '@/components/smartkey/guest-badge';
+import { KeyCopiesAvailable } from '@/components/smartkey/key-copies-available';
 import {
   KEY_AVAILABILITY_CONFIG,
   UNREQUESTABLE_STATES,
@@ -352,10 +353,6 @@ export const AuthorizedKeys = () => {
               0,
               (availability?.holders.length ?? 0) - 1
             );
-            // Only worth showing for a real bunch; for a single key the pill
-            // already says everything.
-            const bunch =
-              availability && availability.key_count > 1 ? availability : null;
             const blocked = unavailable || isOffline;
 
             return (
@@ -371,7 +368,7 @@ export const AuthorizedKeys = () => {
                   <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                     {/* min-h reserves the pill's row so its arrival after the
                         availability query resolves causes no layout shift. */}
-                    <div className="flex min-h-5 items-center gap-2">
+                    <div className="flex min-h-5 flex-wrap items-center gap-x-2 gap-y-1">
                       <span className="font-mono text-sm font-medium text-foreground">
                         {key.code}
                       </span>
@@ -384,18 +381,17 @@ export const AuthorizedKeys = () => {
                           {config.label}
                         </span>
                       )}
+                      {/* Renders only for a room with several copies. */}
+                      {availability && (
+                        <KeyCopiesAvailable
+                          available={availability.available_count}
+                          total={availability.key_count}
+                        />
+                      )}
                     </div>
                     <p className="truncate text-xs text-muted-foreground">
                       {key.room_name}
                     </p>
-                    {bunch && (
-                      <p className="text-xs text-muted-foreground">
-                        <span className="font-medium text-foreground">
-                          {bunch.available_count} of {bunch.key_count}
-                        </span>{' '}
-                        keys available
-                      </p>
-                    )}
                     {holder && (
                       <p className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
                         <span className="truncate">

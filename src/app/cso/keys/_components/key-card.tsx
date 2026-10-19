@@ -6,6 +6,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { KeyCopiesAvailable } from '@/components/smartkey/key-copies-available';
 
 import { type KeyStatus, type Zone } from '@/lib/constants';
 
@@ -32,11 +33,21 @@ const statusConfig: Record<KeyStatus, { label: string; cls: string }> = {
 
 type Props = {
   keyItem: Key;
+  /**
+   * Copies free right now, from get_key_occupancy(). Absent until that loads,
+   * or if it fails; the card then shows only how many copies exist.
+   */
+  available?: number | null;
   onMarkLost: (key: { id: string; code: string }) => void;
 };
 
-export const KeyCard = ({ keyItem, onMarkLost }: Props) => {
+export const KeyCard = ({ keyItem, available, onMarkLost }: Props) => {
   const statusCfg = statusConfig[keyItem.status];
+  const copies = keyItem.key_count ?? 1;
+  // A retired key has no copies to hand out; "0 of 12" would only repeat
+  // the pill.
+  const showAvailability =
+    copies > 1 && available != null && keyItem.status !== 'RETIRED';
 
   return (
     <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-5 shadow-[0_2px_4px_rgba(15,23,42,0.06)]">
@@ -85,7 +96,7 @@ export const KeyCard = ({ keyItem, onMarkLost }: Props) => {
         <span className="text-xs text-muted-foreground">
           {keyItem.department}
         </span>
-        {(keyItem.key_count ?? 1) > 1 && (
+        {copies > 1 && !showAvailability && (
           <span className="text-xs text-muted-foreground">
             <span className="font-medium text-foreground">
               {keyItem.key_count} keys
@@ -95,12 +106,17 @@ export const KeyCard = ({ keyItem, onMarkLost }: Props) => {
         )}
       </div>
 
-      <span
-        className={`inline-flex w-fit items-center rounded-full px-2 py-0.5 text-xs font-semibold ${statusCfg.cls}`}
-        aria-label={`Status: ${statusCfg.label}`}
-      >
-        {statusCfg.label}
-      </span>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span
+          className={`inline-flex w-fit items-center rounded-full px-2 py-0.5 text-xs font-semibold ${statusCfg.cls}`}
+          aria-label={`Status: ${statusCfg.label}`}
+        >
+          {statusCfg.label}
+        </span>
+        {showAvailability && (
+          <KeyCopiesAvailable available={available} total={copies} />
+        )}
+      </div>
     </div>
   );
 };

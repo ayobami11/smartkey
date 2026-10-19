@@ -116,6 +116,21 @@ export const KeysView = () => {
     staleTime: 5 * 60_000,
   });
 
+  // Copies free per key, for "3 of 12 available" on multi-copy cards. The
+  // same rule as the dashboard chart (get_key_occupancy). Enrichment only: if
+  // it fails, cards show how many copies exist and nothing else changes.
+
+  const { data: availableByKey } = useQuery<ReadonlyMap<string, number>>({
+    queryKey: ['cso', 'keys', 'occupancy'],
+    queryFn: async () => {
+      const supabase = createBrowserClient();
+      const { data, error } = await supabase.rpc('get_key_occupancy');
+      if (error) throw new Error('Failed to load key availability.');
+      return new Map((data ?? []).map((row) => [row.key_id, row.available]));
+    },
+    staleTime: 30_000,
+  });
+
   // Outstanding keys query — only fetches when the Outstanding tab is active
 
   const {
@@ -371,7 +386,11 @@ export const KeysView = () => {
                       description="No keys match the selected filter."
                     />
                   ) : (
-                    <KeyCards keys={deptFiltered} onMarkLost={setLostTarget} />
+                    <KeyCards
+                      keys={deptFiltered}
+                      availableByKey={availableByKey}
+                      onMarkLost={setLostTarget}
+                    />
                   ))}
               </TabsContent>
             ))}
