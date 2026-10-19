@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Controller, useForm } from 'react-hook-form';
 import {
@@ -19,7 +18,7 @@ import {
   XCircleIcon,
 } from 'lucide-react';
 
-import { useRealtime } from '@/hooks/use-realtime';
+import { useLiveQuery } from '@/hooks/use-live-query';
 import { useConnectionStatus } from '@/hooks/use-connection-status';
 import { RiskTierBadge } from '@/components/smartkey/risk-tier-badge';
 import { GuestBadge } from '@/components/smartkey/guest-badge';
@@ -117,7 +116,6 @@ const initials = (name: string) =>
     .toUpperCase();
 
 export const WeekendRequestsView = () => {
-  const queryClient = useQueryClient();
   const connectionStatus = useConnectionStatus();
   const isOffline = connectionStatus === 'offline';
   const [selected, setSelected] = useState<PendingRequest | null>(null);
@@ -147,9 +145,9 @@ export const WeekendRequestsView = () => {
     isLoading: loading,
     error: fetchError,
     refetch,
-  } = useQuery({
+    invalidate,
+  } = useLiveQuery({
     queryKey: ['requests', 'pending-weekend'],
-    refetchInterval: connectionStatus !== 'connected' ? 10_000 : false,
     queryFn: async () => {
       const result = await apiFetch<{ requests: PendingRequest[] }>(
         '/api/requests/pending'
@@ -158,6 +156,13 @@ export const WeekendRequestsView = () => {
         throw new Error(result.error ?? 'Failed to load requests.');
       return result.data.requests ?? [];
     },
+    subscriptions: [
+      {
+        table: 'requests',
+        filter: { column: 'type', value: 'WEEKEND' },
+        events: ['INSERT', 'UPDATE'],
+      },
+    ],
   });
 
   // Load the HOD's department keys once, for the guest key picker.
@@ -184,19 +189,6 @@ export const WeekendRequestsView = () => {
       );
     });
   }, []);
-
-  useRealtime({
-    table: 'requests',
-    filter: { column: 'type', value: 'WEEKEND' },
-    onInsert: () =>
-      queryClient.invalidateQueries({
-        queryKey: ['requests', 'pending-weekend'],
-      }),
-    onUpdate: () =>
-      queryClient.invalidateQueries({
-        queryKey: ['requests', 'pending-weekend'],
-      }),
-  });
 
   const handleSelect = (req: PendingRequest) => {
     setSelected(req);
@@ -295,9 +287,7 @@ export const WeekendRequestsView = () => {
     }
     setDecidedIds((prev) => new Set(prev).add(requestId));
     if (fromSheet) setDecision('dismissed');
-    queryClient.invalidateQueries({
-      queryKey: ['requests', 'pending-weekend'],
-    });
+    void invalidate();
   };
 
   const visibleRequests = pendingRequests.filter((r) => !decidedIds.has(r.id));
