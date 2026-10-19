@@ -23,17 +23,16 @@ review were failures of exactly these rules.
 | `15_audited_incidents_test.sql`       | `mark_key_lost` (CSO-only; retirement, `MISSING_KEY` incident and `KEY_MARKED_LOST` with `open_requests` in one transaction; `NOT_FOUND`, already-retired `CONFLICT`, blank note) and `log_incident` (CSO or VERIFIER; incident on the open shift plus one `INCIDENT_LOGGED`), and their grants.                                                                                                                                                                                                                                                                                                                                                                    |
 | `16_admin_audit_gaps_test.sql`        | `reinstate_user` (CSO-only; `DEACTIVATED` → `PENDING_ACTIVATION`, name/unit correction, one-active-Dean `CONFLICT`, `units.hod_id` restored, one `USER_REINSTATED`), `record_invite_resent` (`PENDING_ACTIVATION` only, optional correction, one `USER_INVITE_RESENT`), `create_key` (validation, duplicate-code `CONFLICT`, one `KEY_CREATED`), their grants, and the dropped `incidents` / `keys` INSERT policies (a CSO session's direct insert is refused).                                                                                                                                                                                                     |
 | `17_grant_hardening_test.sql`         | `20261015090000_grant_hardening.sql`: service-only `create_request` / `approve_weekend` / `decline_weekend` / `approve_guest_weekend` (grants, and a user session refused with `42501`), cron-only functions not executable by `anon`/`authenticated`, the session-actor check on `create_request`, `dismiss_expired_request`, `issue_key`, `return_key`, `request_return`, `generate_weekend_code`, `expire_request` (mismatch refused, `anon` refused, `service_role` names the actor), the `VERIFIER` requirement on `issue_key`/`return_key`, the guest-request ownership fix, and the dropped write policies on `keys`, `units`, `authorisations`, `requests`. |
+| `18_lifecycle_parity_test.sql` | `20261019090000_merge_guest_registered_lifecycle.sql`: for every state the weekend-code, return-code and expire steps distinguish, a registered and a guest request in that state go through `generate_weekend_code` / `generate_guest_weekend_code`, `request_return` / `request_return_guest`, `expire_request` / `expire_guest_request`, and come out the same — same error kind and SQLSTATE (`CONFLICT`, `TOO_EARLY`, `NO_KEYS_AVAILABLE`, `NOT_FOUND`, `NOT_ISSUED`, `NOT_EXPIRED`), same transition (including the same-day rollback and the idempotent no-op), exactly one audit entry each with the same payload (the guest's plus `external`, under the plain guest name). Also: the internal step functions are executable by no API role, the wrappers keep their grants, a step refuses the wrong kind of actor, and a registered RPC refuses a NULL requester. |
 
-Still uncovered: registered-user weekend gaps (`generate_weekend_code`,
-`expire_request` — the non-guest analogues of what `06` now covers for guests),
-admin/config RPCs (`update_risk_config`, `update_operational_config`,
+Still uncovered: admin/config RPCs (`update_risk_config`, `update_operational_config`,
 `provision_user`, `resolve_pending_signature_reference`), shift/report RPCs
 (`acknowledge_shift_handover`, `generate_shift_report`, `add_report_comment`),
 and the remaining batch/cron RPCs' behaviour (`mark_key_overdue`,
 `schedule_pending_shift_report`, `expire_lapsed_codes` — `17` checks only their grants; `get_digest_stats` only has its `overdue_count` covered, by `11`).
 This list itself drifted before `06` was written — it omitted
 `generate_weekend_code`, `expire_request`, and `resolve_pending_signature_reference`
-entirely; cross-check against `docs/DATABASE.md`'s RPC list, not just this file,
+entirely (the first two are covered by `18` since 2026-10-19); cross-check against `docs/DATABASE.md`'s RPC list, not just this file,
 before assuming it's exhaustive.
 
 Each file is self-contained: it creates its own fixtures inside a single transaction

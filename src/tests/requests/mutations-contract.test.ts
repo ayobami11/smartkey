@@ -114,11 +114,8 @@ const SIMPLE_ROUTES: SimpleRoute[] = [
         404,
         'Request not found',
       ],
-      [
-        'FORBIDDEN: request does not belong to the caller',
-        403,
-        'This is not your request',
-      ],
+      // CHANGED: the RPC's detail since 20261019090000 (same kind, same copy).
+      ['FORBIDDEN: not your request', 403, 'This is not your request'],
       [
         'NOT_ISSUED: request is not in KEY_ISSUED state (current: KEY_RETURNED)',
         409,
@@ -165,7 +162,8 @@ const SIMPLE_ROUTES: SimpleRoute[] = [
       [
         'CONFLICT: request is not in APPROVED state (current: PENDING_HOD)',
         409,
-        'This request is not awaiting collection.',
+        // CHANGED: one copy for the registered and guest weekend-code routes.
+        'This request is not approved for collection.',
       ],
     ],
     okRow: {

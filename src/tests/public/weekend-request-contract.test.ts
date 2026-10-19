@@ -486,13 +486,17 @@ const TOKEN_ROUTES: TokenRoute[] = [
     handler: returnCode,
     suffix: 'return-code',
     rpc: 'request_return_guest',
-    notFound: 'Request not found.',
+    // CHANGED: no trailing full stop, like every other guest route.
+    notFound: 'Request not found',
     errors: [
-      ['NOT_FOUND: request does not exist', 404, 'Request not found.'],
+      // CHANGED: no trailing full stop.
+      ['NOT_FOUND: request does not exist', 404, 'Request not found'],
+      // CHANGED: request_return_guest raises NOT_ISSUED (was CONFLICT) since
+      // 20261019090000, with the registered route's copy. Still 409.
       [
-        'CONFLICT: request is not in KEY_ISSUED state (current: KEY_RETURNED)',
+        'NOT_ISSUED: request is not in KEY_ISSUED state (current: KEY_RETURNED)',
         409,
-        'Key is not currently issued.',
+        'This key is not currently issued to you',
       ],
     ],
     okRow: {
@@ -517,7 +521,8 @@ const TOKEN_ROUTES: TokenRoute[] = [
       [
         'NOT_EXPIRED: the code has not expired yet',
         409,
-        'The code has not expired yet.',
+        // CHANGED: the catalogue copy the registered route already used.
+        'This code has not expired yet.',
       ],
     ],
     okRow: { request_id: REQUEST_ID, status: 'EXPIRED' },

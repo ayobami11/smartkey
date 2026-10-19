@@ -492,11 +492,30 @@ Cancellable from any pre-collection state the requester owns: `CODE_ISSUED` (wee
 
 ---
 
+### Request lifecycle steps (registered and guest)
+
+Three steps a holder takes on their own request exist as a registered route and a guest route: the collection code (`weekend-code` / `[token]/code`), the return code (`request-return` / `[token]/return-code`) and code expiry (`expire` / `[token]/expire`). Since 2026-10-19 each pair goes through one function in the Request lifecycle module, `src/lib/requests/lifecycle.ts` — `generateCollectionCode`, `generateReturnCode`, `expireCollectionCode`. A route builds a `LifecycleTarget` (`{ kind: 'registered', requestId, requesterId: user.id }`, or `{ kind: 'guest', accessToken }` with the admin client) and shapes the response; the module calls the RPC, maps its errors and, for the collection code, sends the `CODE_ISSUED` email. Below the module, each RPC pair is a thin wrapper around one SQL implementation (`docs/DATABASE.md`), so both paths raise the same kinds for the same state, and the module gives each kind the same copy:
+
+| Kind                | Status | Copy (both routes)                                                    | Steps                    |
+| ------------------- | ------ | --------------------------------------------------------------------- | ------------------------ |
+| `NOT_AUTHENTICATED` | 401    | Not authenticated                                                     | all (registered only)    |
+| `FORBIDDEN`         | 403    | This is not your request                                              | all (registered only)    |
+| `NOT_FOUND`         | 404    | Request not found                                                     | all                      |
+| `CONFLICT`          | 409    | This request is not approved for collection.                          | collection code          |
+| `NO_KEYS_AVAILABLE` | 409    | catalogue default                                                     | collection code          |
+| `TOO_EARLY`         | 422    | catalogue default                                                     | collection code          |
+| `NOT_ISSUED`        | 409    | This key is not currently issued to you                               | return code              |
+| `NOT_EXPIRED`       | 409    | This code has not expired yet. (catalogue default)                    | expire                   |
+
+Until 2026-10-19 the copies differed: the registered collection-code `409` said "This request is not awaiting collection.", the guest return-code route said "Key is not currently issued." (and its `404`s "Request not found." with a full stop), and the guest expire `409` said "The code has not expired yet." Every status code is unchanged. The response shapes are unchanged too, including the guest return-code response, which has never carried `request_id`.
+
+---
+
 ### POST /api/requests/request-return
 
 **File**: `src/app/api/requests/request-return/route.ts`
 **Roles**: REQUESTER
-**RPC**: `request_return(request_id, requester_id)`
+**RPC**: `request_return(request_id, requester_id)`, via `generateReturnCode` (see "Request lifecycle steps" above)
 
 Requester-initiated. Generates a 6-digit **return code** (15-minute expiry) for one of the requester's own keys that is currently issued, so the verifier can confirm the handover. The request stays in `KEY_ISSUED`; the code is written to `requests.return_code` / `return_code_expires_at`. Writes a `RETURN_CODE_GENERATED` audit entry.
 
@@ -514,7 +533,7 @@ Requester-initiated. Generates a 6-digit **return code** (15-minute expiry) for 
 
 **File**: `src/app/api/requests/weekend-code/route.ts`
 **Roles**: REQUESTER
-**RPC**: `generate_weekend_code(request_id, requester_id)`
+**RPC**: `generate_weekend_code(request_id, requester_id)`, via `generateCollectionCode` (see "Request lifecycle steps" above)
 
 Requester-initiated. For an `APPROVED` weekend request, on the requested date only, mints a short-lived 6-digit collection code (10-min expiry) and moves the request to `CODE_ISSUED` — mirroring the weekday flow so the code is never long-lived. Writes a `CODE_ISSUED` audit entry.
 
@@ -532,7 +551,7 @@ Requester-initiated. For an `APPROVED` weekend request, on the requested date on
 
 **File**: `src/app/api/requests/expire/route.ts`
 **Roles**: REQUESTER
-**RPC**: `expire_request(request_id, requester_id)`
+**RPC**: `expire_request(request_id, requester_id)`, via `expireCollectionCode` (see "Request lifecycle steps" above)
 
 Requester-initiated and fired automatically by the UI when a collection code's countdown reaches 0. Flips a genuinely-expired `CODE_ISSUED` request to `EXPIRED`, clears the code, and writes a `REQUEST_EXPIRED` audit entry — **except** for a weekend request whose requested date is today, which instead rolls back to `APPROVED` (so the requester can mint a fresh code via `POST /api/requests/weekend-code`) and writes `CODE_EXPIRED` instead. Idempotent — returns the current status with no error if the request already moved on.
 
@@ -636,7 +655,7 @@ Returns safe status fields for the guest's status/code page, read by `access_tok
 
 **File**: `src/app/api/public/weekend-request/[token]/code/route.ts`
 **Roles**: ALL (unauthenticated)
-**RPC**: `generate_guest_weekend_code(access_token)`
+**RPC**: `generate_guest_weekend_code(access_token)`, via `generateCollectionCode` (see "Request lifecycle steps" under §2)
 
 Mints a short-lived 6-digit collection code (10-min expiry) for an `APPROVED` guest request, on the requested date only, and moves it to `CODE_ISSUED`. Writes a `CODE_ISSUED` audit entry.
 
@@ -650,7 +669,7 @@ Mints a short-lived 6-digit collection code (10-min expiry) for an `APPROVED` gu
 
 **File**: `src/app/api/public/weekend-request/[token]/return-code/route.ts`
 **Roles**: ALL (unauthenticated)
-**RPC**: `request_return_guest(access_token)`
+**RPC**: `request_return_guest(access_token)`, via `generateReturnCode` (see "Request lifecycle steps" under §2)
 
 Guest analogue of `POST /api/requests/request-return`. Generates a 6-digit return code (15-minute expiry) for the guest's own `KEY_ISSUED` request so the verifier can confirm the handover. The request stays in `KEY_ISSUED`; the code is written to `requests.return_code` / `return_code_expires_at`. Writes a `RETURN_CODE_GENERATED` audit entry.
 
@@ -658,7 +677,7 @@ No request body.
 
 **Response `data`**: `{ "return_code": "123456", "return_code_expires_at": "<iso>" }`
 
-**Errors**: `404` token not found · `409` key not currently issued
+**Errors**: `404` token not found, or malformed (`Request not found`; until 2026-10-19 `Request not found.`) · `409` key not currently issued (`NOT_ISSUED` since 2026-10-19 — the RPC raised `CONFLICT` before; the status was `409` either way)
 
 ---
 
@@ -666,7 +685,7 @@ No request body.
 
 **File**: `src/app/api/public/weekend-request/[token]/expire/route.ts`
 **Roles**: ALL (unauthenticated)
-**RPC**: `expire_guest_request(access_token)`
+**RPC**: `expire_guest_request(access_token)`, via `expireCollectionCode` (see "Request lifecycle steps" under §2)
 
 Fired automatically by the status page when the collection code's countdown reaches 0. Flips a genuinely-expired `CODE_ISSUED` request to `EXPIRED`, clears the code, and writes a `REQUEST_EXPIRED` audit entry — **except** for a weekend request whose requested date is today, which instead rolls back to `APPROVED` (so the guest can mint a fresh code) and writes `CODE_EXPIRED` instead. Idempotent — returns the current status with no error if the request already moved on.
 

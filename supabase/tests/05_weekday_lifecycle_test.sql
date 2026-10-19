@@ -613,7 +613,8 @@ select throws_ok(
   $$ select * from public.request_return(
        '55555555-5555-4555-8555-000000000072', '55555555-5555-4555-8555-000000000003') $$,
   'P0010',
-  'FORBIDDEN: request does not belong to the caller',
+  -- CHANGED (20261019090000): one ownership message for every lifecycle step.
+  'FORBIDDEN: not your request',
   'request_return refuses a request that belongs to someone else'
 );
 
