@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Controller, useForm } from 'react-hook-form';
 import {
@@ -19,7 +18,7 @@ import {
   XCircleIcon,
 } from 'lucide-react';
 
-import { useRealtime } from '@/hooks/use-realtime';
+import { useLiveQuery } from '@/hooks/use-live-query';
 import { useConnectionStatus } from '@/hooks/use-connection-status';
 import { RiskTierBadge } from '@/components/smartkey/risk-tier-badge';
 import { GuestBadge } from '@/components/smartkey/guest-badge';
@@ -116,7 +115,6 @@ const initials = (name: string) =>
     .toUpperCase();
 
 export const WeekendRequestsView = () => {
-  const queryClient = useQueryClient();
   const connectionStatus = useConnectionStatus();
   const isOffline = connectionStatus === 'offline';
   const [selected, setSelected] = useState<PendingRequest | null>(null);
@@ -144,9 +142,9 @@ export const WeekendRequestsView = () => {
     isLoading: loading,
     error: fetchError,
     refetch,
-  } = useQuery({
+    invalidate,
+  } = useLiveQuery({
     queryKey: ['cso', 'requests', 'pending-weekend'],
-    refetchInterval: connectionStatus !== 'connected' ? 10_000 : false,
     queryFn: async () => {
       const supabase = createBrowserClient();
 
@@ -209,6 +207,13 @@ export const WeekendRequestsView = () => {
             }) as PendingRequest
         );
     },
+    subscriptions: [
+      {
+        table: 'requests',
+        filter: { column: 'type', value: 'WEEKEND' },
+        events: ['INSERT', 'UPDATE'],
+      },
+    ],
   });
 
   // Load the CSO's administrative keys once, for the guest key picker.
@@ -247,19 +252,6 @@ export const WeekendRequestsView = () => {
     };
     void loadKeys();
   }, []);
-
-  useRealtime({
-    table: 'requests',
-    filter: { column: 'type', value: 'WEEKEND' },
-    onInsert: () =>
-      queryClient.invalidateQueries({
-        queryKey: ['cso', 'requests', 'pending-weekend'],
-      }),
-    onUpdate: () =>
-      queryClient.invalidateQueries({
-        queryKey: ['cso', 'requests', 'pending-weekend'],
-      }),
-  });
 
   const handleSelect = (req: PendingRequest) => {
     setSelected(req);
@@ -337,9 +329,7 @@ export const WeekendRequestsView = () => {
     }
     setDecidedIds((prev) => new Set(prev).add(requestId));
     if (fromSheet) setDecision('dismissed');
-    queryClient.invalidateQueries({
-      queryKey: ['cso', 'requests', 'pending-weekend'],
-    });
+    void invalidate();
   };
 
   const visibleRequests = pendingRequests.filter((r) => !decidedIds.has(r.id));
