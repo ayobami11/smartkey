@@ -1,6 +1,5 @@
 'use client';
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { Cell, Label, Pie, PieChart } from 'recharts';
 
@@ -13,7 +12,7 @@ import {
 } from '@/components/ui/chart';
 import { Skeleton } from '@/components/ui/skeleton';
 import { KEY_AVAILABILITY_CONFIG } from '@/components/smartkey/key-availability-status';
-import { useRealtime } from '@/hooks/use-realtime';
+import { useLiveQuery } from '@/hooks/use-live-query';
 import {
   summariseByZone,
   type KeyOccupancyRow,
@@ -82,8 +81,6 @@ const describeZone = (zone: ZoneOccupancy): string =>
   ).join(', ')}, of ${zone.total} keys`;
 
 export const KeysChart = () => {
-  const queryClient = useQueryClient();
-
   // Counts copies, not key records: a room with twelve copies contributes
   // twelve, and a copy reserved by a live collection code is "being
   // collected", not available. The rule lives in get_key_occupancy().
@@ -92,35 +89,19 @@ export const KeysChart = () => {
     isLoading,
     error,
     refetch,
-  } = useQuery({
+  } = useLiveQuery({
     queryKey: QUERY_KEY,
     // Overdue is derived from the clock, so nothing in the database changes
     // at the moment a deadline passes. The poll picks that up.
-    refetchInterval: 60_000,
+    poll: 60_000,
     queryFn: async (): Promise<ZoneOccupancy[]> => {
       const supabase = createBrowserClient();
       const { data, error: rpcError } = await supabase.rpc('get_key_occupancy');
       if (rpcError) throw new Error('Failed to load key counts.');
       return summariseByZone((data ?? []) as KeyOccupancyRow[]);
     },
-  });
-
-  // Any request or key change can move a copy between slices; re-read.
-  const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: QUERY_KEY });
-
-  useRealtime({
-    table: 'requests',
-    onInsert: invalidate,
-    onUpdate: invalidate,
-    onDelete: invalidate,
-  });
-
-  useRealtime({
-    table: 'keys',
-    onInsert: invalidate,
-    onUpdate: invalidate,
-    onDelete: invalidate,
+    // Any request or key change can move a copy between slices; re-read.
+    subscriptions: [{ table: 'requests' }, { table: 'keys' }],
   });
 
   return (
