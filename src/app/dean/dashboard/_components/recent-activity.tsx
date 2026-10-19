@@ -2,13 +2,10 @@
 
 import { useEffect, useState } from 'react';
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-
 import { ClockIcon } from 'lucide-react';
 
 import { apiFetch } from '@/lib/api';
-import { useRealtime } from '@/hooks/use-realtime';
-import { useConnectionStatus } from '@/hooks/use-connection-status';
+import { useLiveQuery } from '@/hooks/use-live-query';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -32,23 +29,13 @@ const PAGE_LIMIT = 10;
 type HistoryPage = { transactions: Transaction[]; next_cursor: string | null };
 
 export const RecentActivity = () => {
-  const queryClient = useQueryClient();
-  const connectionStatus = useConnectionStatus();
-
-  useRealtime({
-    table: 'requests',
-    onInsert: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
-    onUpdate: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
-  });
-
   const {
     data: firstPage,
     isLoading,
     error,
     refetch,
-  } = useQuery({
+  } = useLiveQuery({
     queryKey: QUERY_KEY,
-    refetchInterval: connectionStatus !== 'connected' ? 10_000 : false,
     queryFn: async (): Promise<HistoryPage> => {
       const result = await apiFetch<HistoryPage>(
         `/api/keys/history?limit=${PAGE_LIMIT}`
@@ -57,10 +44,11 @@ export const RecentActivity = () => {
         throw new Error(result.error ?? 'Failed to load recent activity.');
       return result.data;
     },
+    subscriptions: [{ table: 'requests', events: ['INSERT', 'UPDATE'] }],
   });
 
   // Extra pages loaded via "Load more", kept separate from the react-query
-  // cache so a realtime-triggered refetch of the first page (see useRealtime
+  // cache so a realtime-triggered refetch of the first page (see useLiveQuery
   // above) doesn't fight with locally-accumulated pages. Reset whenever the
   // first page changes — its own cursor is no longer valid otherwise.
   const [extraTransactions, setExtraTransactions] = useState<Transaction[]>([]);
