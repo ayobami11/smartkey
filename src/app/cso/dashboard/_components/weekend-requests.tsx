@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   CalendarIcon,
   CheckCircleIcon,
@@ -10,8 +9,7 @@ import {
   UserRoundIcon,
 } from 'lucide-react';
 
-import { useRealtime } from '@/hooks/use-realtime';
-import { useConnectionStatus } from '@/hooks/use-connection-status';
+import { useLiveQuery } from '@/hooks/use-live-query';
 import { isPastDate } from '@/lib/dates';
 import { createBrowserClient } from '@/lib/supabase/client';
 
@@ -38,17 +36,13 @@ type WeekendRequest = {
 };
 
 export const WeekendRequests = () => {
-  const queryClient = useQueryClient();
-  const connectionStatus = useConnectionStatus();
-
   const {
     data: requests = [],
     isLoading,
     error,
     refetch,
-  } = useQuery({
+  } = useLiveQuery({
     queryKey: ['cso', 'dashboard-weekend-requests'],
-    refetchInterval: connectionStatus !== 'connected' ? 10_000 : false,
     queryFn: async (): Promise<WeekendRequest[]> => {
       const supabase = createBrowserClient();
 
@@ -99,19 +93,13 @@ export const WeekendRequests = () => {
           };
         });
     },
-  });
-
-  useRealtime({
-    table: 'requests',
-    filter: { column: 'type', value: 'WEEKEND' },
-    onInsert: () =>
-      queryClient.invalidateQueries({
-        queryKey: ['cso', 'dashboard-weekend-requests'],
-      }),
-    onUpdate: () =>
-      queryClient.invalidateQueries({
-        queryKey: ['cso', 'dashboard-weekend-requests'],
-      }),
+    subscriptions: [
+      {
+        table: 'requests',
+        filter: { column: 'type', value: 'WEEKEND' },
+        events: ['INSERT', 'UPDATE'],
+      },
+    ],
   });
 
   return (
