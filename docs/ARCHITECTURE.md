@@ -48,6 +48,7 @@ src/
 │   ├── ui/              # shadcn primitives (do not edit by hand)
 │   └── smartkey/        # SmartKey-specific components
 ├── hooks/               # file names are kebab-case; this list is illustrative, not exhaustive
+│   ├── use-live-query.ts
 │   ├── use-realtime.ts
 │   ├── use-connection-status.ts
 │   ├── use-debounce.ts
@@ -112,15 +113,66 @@ Dashboards subscribe on mount to the tables their live surfaces depend on. Four 
 
 Connection state is exposed via `useConnectionStatus()` and rendered as the green/amber/red dot in the app bar. It is backed by a module-level emitter in `src/hooks/use-connection-status.ts` written to by the subscription layer below, so every consumer reads one shared status rather than a per-component one.
 
+### Live queries — how a surface subscribes a query
+
+A dashboard surface that shows server data and keeps it fresh with Realtime uses **`useLiveQuery`** (`src/hooks/use-live-query.ts`). The caller declares what to fetch and which tables to watch; the hook owns the rest:
+
+```ts
+const {
+  data = [],
+  isLoading,
+  error,
+  refetch,
+  invalidate,
+} = useLiveQuery({
+  queryKey: ['cso', 'pending-review'],
+  queryFn: fetchQueue,
+  subscriptions: [
+    {
+      table: 'requests',
+      events: ['INSERT', 'UPDATE'], // default: all three
+      on: (payload, live) => {
+        // default: live.invalidate()
+        if ((payload.new as { risk_tier?: string }).risk_tier === 'HIGH')
+          live.invalidate();
+      },
+    },
+  ],
+});
+```
+
+| Option                 | Meaning                                                                                                                                                                                                              |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `queryKey`, `queryFn`  | The TanStack query. Every invalidation and patch the hook makes targets this key.                                                                                                                                    |
+| `initialData`          | Server-rendered seed for first paint; counts as fresh, so no fetch on mount. (A server `prefetchQuery` + `HydrationBoundary` under the same key works too.)                                                          |
+| `enabled`, `staleTime` | Passed to `useQuery`. Omitted means the `QueryClient` default.                                                                                                                                                       |
+| `subscriptions`        | `{ table, filter?, events?, on? }[]`. `filter` is the same single-column equality filter as `useRealtime`, and is part of the channel key.                                                                           |
+| `on(payload, live)`    | The reaction. `live.invalidate()` (debounced when `debounceMs` is set) and `live.setData(updater)` (patch the cache, no refetch) are bound to `queryKey`. Read through a ref, so inline closures do not resubscribe. |
+| `poll`                 | `'whileDisconnected'` (default): every 10s while the status is not `connected`. A number: always at that interval. `false`: never.                                                                                   |
+| `debounceMs`           | Collapse a burst of event-driven invalidations into one, trailing edge.                                                                                                                                              |
+| `invalidatePrefix`     | Invalidate the first N segments of `queryKey` (e.g. every cached date range of a chart). Still derived from the declared key.                                                                                        |
+
+It returns the `useQuery` result plus `invalidate()`, bound to the same key, for mutation handlers.
+
+What the hook guarantees:
+
+- **The invalidated key is the declared key.** A surface cannot name a different one, which is the bug PR #59/#60 fixed by hand (the CSO weekend-requests page invalidated the Dean page's key, `['requests', 'pending-weekend']`, instead of its own, so it never updated live).
+- **Refetch on reconnect.** Realtime does not replay events missed while the socket was down. When the shared status goes from `reconnecting`/`offline` back to `connected`, every mounted live query refetches once.
+- **Channels come from the registry below.** The hook attaches through `subscribeRealtime()` in `use-realtime.ts`; it never calls `supabase.channel()`.
+
+Announcements (`aria-live` regions) and reduced-motion handling stay in the surface's JSX; the hook only manages data.
+
+`useRealtime` is still exported for a subscription that does not feed a TanStack query. One caller remains: the verifier live request queue (`src/app/verifier/_components/live-request-queue.tsx`), which keeps rows in local state and patches them with a per-row fetch. It does not refetch on reconnect.
+
 ### Channel multiplexing — read this before adding a subscription
 
-`src/hooks/use-realtime.ts` holds a **module-level channel registry** keyed by `realtime:<table>[:<column>=eq.<value>]`. Every `useRealtime()` call resolves to that key: the first caller opens the websocket channel, later callers with the same key attach to it as additional subscribers. The registry ref-counts — when the last subscriber for a key unmounts, the channel is removed and the entry deleted.
+`src/hooks/use-realtime.ts` holds a **module-level channel registry** keyed by `realtime:<table>[:<column>=eq.<value>]` (`realtimeChannelKey()`). Every subscription, from `useLiveQuery` or `useRealtime`, goes through `subscribeRealtime()` and resolves to that key: the first caller opens the websocket channel, later callers with the same key attach to it as additional subscribers. The registry ref-counts — when the last subscriber for a key unmounts, the channel is removed and the entry deleted.
 
-This is why ~18 subscription call sites across the app cost four or five websocket channels rather than eighteen. Concurrent channels are a Realtime quota, and the server re-evaluates RLS per channel on every change, so the count is worth keeping low. This goes beyond what `docs/BACKEND.md` §8 specifies; it is deliberate.
+This is why ~20 subscriptions across the app (17 live queries and one `useRealtime`) cost four or five websocket channels rather than twenty. Concurrent channels are a Realtime quota, and the server re-evaluates RLS per channel on every change, so the count is worth keeping low. This goes beyond what `docs/BACKEND.md` §8 specifies; it is deliberate.
 
 Rules:
 
-- **Never call `supabase.channel()` in a component.** `use-realtime.ts` is the only place a channel is created. A per-component channel silently multiplies the connection count.
+- **Never call `supabase.channel()` in a component.** `subscribeRealtime()` in `use-realtime.ts` is the only place a channel is created. A per-component channel silently multiplies the connection count.
 - A channel subscribes with `event: '*'` and fans payloads out to subscribers by `eventType`. Narrow with `onInsert` / `onUpdate` / `onDelete`, not with separate channels.
 - Only single-column equality filters are supported (`filter: { column, value }`), and the filter is part of the channel key. A filter that varies per user creates one channel per user — filter inside the callback instead unless the cardinality is genuinely small.
 - Callbacks are read through a ref, so inline closures do not cause a resubscribe. Only `table` and the filter column/value are effect dependencies.
