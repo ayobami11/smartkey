@@ -46,14 +46,16 @@ describe('withOverdueFlag', () => {
 });
 
 describe('shapeOutstanding', () => {
-  it('adds is_overdue and the deprecated KEY_OVERDUE status together', () => {
+  // CHANGED 2026-10-19: an overdue row used to carry a synthetic
+  // status: 'KEY_OVERDUE'. It now keeps its real status; read is_overdue.
+  it('adds is_overdue and keeps the real KEY_ISSUED status', () => {
     const [late, onTime] = shapeOutstanding(
       [source({ return_deadline: PAST }), source()],
       NOW
     );
 
     expect(late.is_overdue).toBe(true);
-    expect(late.status).toBe('KEY_OVERDUE');
+    expect(late.status).toBe('KEY_ISSUED');
     expect(onTime.is_overdue).toBe(false);
     expect(onTime.status).toBe('KEY_ISSUED');
   });

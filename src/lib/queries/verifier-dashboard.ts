@@ -4,7 +4,6 @@ import type { RiskFactor, RiskTier } from '@/lib/ai/risk/types';
 import {
   shapeOutstanding,
   type OutstandingSourceRow,
-  type OutstandingStatus,
 } from '@/lib/keys/outstanding';
 import { rewriteStorageUrls } from '@/lib/storage/object-url';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -48,8 +47,8 @@ export type OutstandingKey = {
   id: string;
   /** True once a KEY_ISSUED request is past its return deadline. */
   is_overdue: boolean;
-  /** @deprecated read `is_overdue`; `KEY_OVERDUE` is not a request status. */
-  status: OutstandingStatus;
+  /** Always KEY_ISSUED: an overdue key is `is_overdue`, not a status. */
+  status: 'KEY_ISSUED';
   issued_at: string;
   return_deadline: string;
   created_at: string;
@@ -125,7 +124,7 @@ export const getOutstandingKeysSeed = async (): Promise<
   return rewriteStorageUrls(
     shapeOutstanding(
       (data ?? []) as unknown as (OutstandingSourceRow &
-        Omit<OutstandingKey, 'requester' | 'status' | 'is_overdue'>)[]
+        Omit<OutstandingKey, 'requester' | 'is_overdue'>)[]
     )
   ) as OutstandingKey[];
 };

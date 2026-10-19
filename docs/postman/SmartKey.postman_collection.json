@@ -1756,7 +1756,7 @@
                 }
               ]
             },
-            "description": "<div style=\"color:#111827;\">Everything currently out. Shared with the CSO.\n\nEvery row is a `KEY_ISSUED` request. Overdue is **derived** from the clock, not read from `keys.status` (which only flips on the hourly `mark_key_overdue` job): each row carries `is_overdue: true` once its `return_deadline` has passed, using the same rule as `public.request_is_overdue` (`src/lib/keys/outstanding.ts`). Read `is_overdue`.\n\n**Deprecated**: rows also carry `status: 'KEY_OVERDUE'` when overdue (else `'KEY_ISSUED'`). `KEY_OVERDUE` is not a request status; this field is kept for one release and will be removed.</div>"
+            "description": "<div style=\"color:#111827;\">Everything currently out. Shared with the CSO.\n\nEvery row is a `KEY_ISSUED` request. Overdue is **derived** from the clock, not read from `keys.status` (which only flips on the hourly `mark_key_overdue` job): each row carries `is_overdue: true` once its `return_deadline` has passed, using the same rule as `public.request_is_overdue` (`src/lib/keys/outstanding.ts`). Read `is_overdue`.\n\n`status` is always the row's real `'KEY_ISSUED'`. Until 2026-10-19 an overdue row carried a synthetic `status: 'KEY_OVERDUE'`; that deprecated value is gone.</div>"
           },
           "response": [
             {

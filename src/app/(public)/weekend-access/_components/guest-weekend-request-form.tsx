@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { CheckCircleIcon, CheckIcon, CopyIcon } from 'lucide-react';
+import { CheckCircleIcon, CheckIcon, ClockIcon, CopyIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
@@ -39,6 +39,9 @@ export const GuestWeekendRequestForm = ({
   departments,
 }: GuestWeekendRequestFormProps) => {
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // A 429 is not a mistake on the guest's part, so it gets a calm notice
+  // rather than the red error box.
+  const [rateLimited, setRateLimited] = useState<string | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [returnDeadlineTime, setReturnDeadlineTime] = useState(
@@ -80,6 +83,7 @@ export const GuestWeekendRequestForm = ({
 
   const handleSubmit = async (values: GuestWeekendRequestFormInput) => {
     setSubmitError(null);
+    setRateLimited(null);
 
     const formData = new FormData();
     formData.append('full_name', values.full_name);
@@ -100,6 +104,13 @@ export const GuestWeekendRequestForm = ({
       '/api/public/weekend-request',
       { method: 'POST', body: formData }
     );
+    if (result.status === 429) {
+      setRateLimited(
+        result.error ??
+          'You have sent several requests in a short time. Please wait a while and try again.'
+      );
+      return;
+    }
     if (result.error || !result.data) {
       setSubmitError(
         result.error ?? 'Could not submit your request. Please try again.'
@@ -425,6 +436,21 @@ export const GuestWeekendRequestForm = ({
           invalid={!!form.formState.errors.letter}
         />
       </Field>
+
+      {rateLimited && (
+        <div
+          className="flex items-start gap-2 rounded-md border border-warning/50 bg-warning/10 p-3 text-sm text-foreground"
+          role="alert"
+        >
+          <ClockIcon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <p>
+            <span className="font-medium">
+              Please wait before trying again.
+            </span>{' '}
+            {rateLimited}
+          </p>
+        </div>
+      )}
 
       {submitError && (
         <div

@@ -57,8 +57,8 @@ export const GET = route({
       });
     }
 
-    // `is_overdue` (and the deprecated `status: 'KEY_OVERDUE'`) come from the
-    // shared overdue rule; see src/lib/keys/outstanding.ts.
+    // `is_overdue` comes from the shared overdue rule; `status` stays the
+    // row's own KEY_ISSUED. See src/lib/keys/outstanding.ts.
     const outstanding = shapeOutstanding(
       (data ?? []) as unknown as OutstandingSourceRow[]
     );

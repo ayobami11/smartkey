@@ -7,6 +7,10 @@ import {
 import { respond } from '@/lib/http/respond';
 import { route } from '@/lib/http/route';
 import { rpcFail } from '@/lib/http/rpc-errors';
+import {
+  checkGuestSubmission,
+  describeWait,
+} from '@/lib/http/rate-limit';
 import { notifyAfterResponse } from '@/lib/notifications/notify';
 import { callRpc } from '@/lib/rpc/call-rpc';
 import { checkUpload } from '@/lib/storage/upload-type';
@@ -19,8 +23,9 @@ import { fullName } from '@/lib/validation/primitives';
 // service-role admin client to upload the letter and call the SECURITY DEFINER
 // guest RPC. The service key never reaches the browser.
 //
-// Follow-up: add rate-limiting (per-IP / per-email) to this endpoint to prevent
-// abuse, since it is unauthenticated and writes rows + uploads files.
+// Rate limited per client address and per guest email (rate-limit.ts),
+// checked after validation and before anything is stored or sent, so a
+// rejected form costs the guest nothing and a refused one costs us nothing.
 
 const MAX_LETTER_BYTES = 5 * 1024 * 1024; // 5MB
 
@@ -92,6 +97,19 @@ export const POST = route({
     }
 
     const admin = createAdminClient();
+
+    const limit = await checkGuestSubmission(admin, {
+      headers: request.headers,
+      email: fields.email,
+    });
+    if (!limit.allowed) {
+      const res = respond.fail(
+        429,
+        `You have sent several requests in a short time. Please wait ${describeWait(limit.retryAfterSeconds)} and try again. If your access is urgent, contact the Senate Building security desk.`
+      );
+      res.headers.set('Retry-After', String(limit.retryAfterSeconds));
+      return res;
+    }
 
     // Upload the letter to the existing weekend-letters bucket. Guest letters
     // live under a guest/ prefix to keep them separate from registered

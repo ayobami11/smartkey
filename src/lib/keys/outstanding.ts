@@ -22,9 +22,6 @@ export const withOverdueFlag = <T extends OverdueInput>(
 ): (T & { is_overdue: boolean })[] =>
   rows.map((row) => ({ ...row, is_overdue: isOverdue(row, now) }));
 
-/** A deprecated, display-only status. Read `is_overdue` instead. */
-export type OutstandingStatus = 'KEY_ISSUED' | 'KEY_OVERDUE';
-
 type Person = { id: string; full_name: string; photo_url: string | null };
 type Guest = { id: string; full_name: string };
 
@@ -36,22 +33,18 @@ export type OutstandingSourceRow = OverdueInput & {
 
 export type ShapedOutstanding<T extends OutstandingSourceRow> = Omit<
   T,
-  'guest' | 'status' | 'requester'
+  'guest' | 'requester'
 > & {
   requester: Person | null;
   is_overdue: boolean;
-  /**
-   * @deprecated `KEY_OVERDUE` is not a request status. Read `is_overdue`.
-   * Kept for one release so older clients keep rendering.
-   */
-  status: OutstandingStatus;
 };
 
 /**
  * The `GET /api/keys/out` row shape:
  *
  * - `is_overdue` from the shared overdue rule;
- * - deprecated `status: 'KEY_OVERDUE' | 'KEY_ISSUED'` mirroring it;
+ * - the row's real `status` (`KEY_ISSUED`), unchanged. Until 2026-10-19 an
+ *   overdue row carried a synthetic `status: 'KEY_OVERDUE'` instead;
  * - a guest holder folded into `requester` (`photo_url: null`) so consumers
  *   render one person field. A registered requester takes precedence.
  */
@@ -61,7 +54,6 @@ export const shapeOutstanding = <T extends OutstandingSourceRow>(
 ): ShapedOutstanding<T>[] =>
   rows.map((row) => {
     const { guest, requester, ...rest } = row;
-    const overdue = isOverdue(row, now);
     return {
       ...rest,
       requester:
@@ -69,7 +61,6 @@ export const shapeOutstanding = <T extends OutstandingSourceRow>(
         (guest
           ? { id: guest.id, full_name: guest.full_name, photo_url: null }
           : null),
-      is_overdue: overdue,
-      status: overdue ? 'KEY_OVERDUE' : 'KEY_ISSUED',
+      is_overdue: isOverdue(row, now),
     } as ShapedOutstanding<T>;
   });
