@@ -1,10 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { XCircleIcon } from 'lucide-react';
 
-import { useRealtime } from '@/hooks/use-realtime';
+import { useLiveQuery } from '@/hooks/use-live-query';
 import { useConnectionStatus } from '@/hooks/use-connection-status';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -30,7 +29,6 @@ type ActiveRequestBannerProps = {
 };
 
 export const ActiveRequestBanner = ({ userId }: ActiveRequestBannerProps) => {
-  const queryClient = useQueryClient();
   const connectionStatus = useConnectionStatus();
   const isOffline = connectionStatus === 'offline';
   const [tick, setTick] = useState(0);
@@ -39,10 +37,13 @@ export const ActiveRequestBanner = ({ userId }: ActiveRequestBannerProps) => {
   // Guards the auto-expire call so it fires once per request, not every tick.
   const expiredFiredRef = useRef<string | null>(null);
 
-  const { data: request = null, isLoading: loading } = useQuery({
+  const {
+    data: request = null,
+    isLoading: loading,
+    invalidate,
+  } = useLiveQuery({
     queryKey: ['active-request', userId],
     enabled: !!userId,
-    refetchInterval: connectionStatus !== 'connected' ? 10_000 : false,
     queryFn: async () => {
       const supabase = createBrowserClient();
       const { data } = await supabase
@@ -57,29 +58,22 @@ export const ActiveRequestBanner = ({ userId }: ActiveRequestBannerProps) => {
         .maybeSingle();
       return (data as ActiveRequest | null) ?? null;
     },
+    // No server-side filter; check requester_id client-side. Weekday
+    // requests start as CODE_ISSUED, so an INSERT matters as well as an UPDATE.
+    subscriptions: [
+      {
+        table: 'requests',
+        events: ['INSERT', 'UPDATE'],
+        on: (payload, live) => {
+          const row = payload.new as { requester_id?: string };
+          if (row.requester_id === userId) live.invalidate();
+        },
+      },
+    ],
   });
 
   const activeExpiry =
     request?.status === 'CODE_ISSUED' ? request.code_expires_at : null;
-
-  // Real-time subscription — no server-side filter; check requester_id client-side
-
-  useRealtime({
-    table: 'requests',
-    onInsert: (payload) => {
-      // Weekday requests start as CODE_ISSUED — an INSERT, not an UPDATE
-      const row = payload.new as { requester_id?: string };
-      if (row.requester_id === userId) {
-        queryClient.invalidateQueries({ queryKey: ['active-request', userId] });
-      }
-    },
-    onUpdate: (payload) => {
-      const row = payload.new as { requester_id?: string };
-      if (row.requester_id === userId) {
-        queryClient.invalidateQueries({ queryKey: ['active-request', userId] });
-      }
-    },
-  });
 
   useEffect(() => {
     if (!activeExpiry) return;
@@ -113,9 +107,7 @@ export const ActiveRequestBanner = ({ userId }: ActiveRequestBannerProps) => {
         body: { request_id: request.id },
       }).then((result) => {
         if (!result.error) {
-          queryClient.invalidateQueries({
-            queryKey: ['active-request', userId],
-          });
+          void invalidate();
         } else {
           expiredFiredRef.current = null;
         }
@@ -126,8 +118,7 @@ export const ActiveRequestBanner = ({ userId }: ActiveRequestBannerProps) => {
     request?.status,
     request?.code_expires_at,
     tick,
-    queryClient,
-    userId,
+    invalidate,
   ]);
 
   const handleCancel = async () => {
@@ -137,7 +128,7 @@ export const ActiveRequestBanner = ({ userId }: ActiveRequestBannerProps) => {
       method: 'POST',
       body: { request_id: request.id },
     });
-    queryClient.invalidateQueries({ queryKey: ['active-request', userId] });
+    void invalidate();
     setCancelling(false);
   };
 
