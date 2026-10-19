@@ -2,11 +2,9 @@
 
 import Link from 'next/link';
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CalendarIcon, CheckCircleIcon, ExternalLinkIcon } from 'lucide-react';
 
-import { useConnectionStatus } from '@/hooks/use-connection-status';
-import { useRealtime } from '@/hooks/use-realtime';
+import { useLiveQuery } from '@/hooks/use-live-query';
 import { apiFetch } from '@/lib/api';
 import { isPastDate } from '@/lib/dates';
 
@@ -35,17 +33,13 @@ type PendingRequest = {
 const QUERY_KEY = ['requests', 'pending-weekend'];
 
 export const WeekendRequests = () => {
-  const queryClient = useQueryClient();
-  const connectionStatus = useConnectionStatus();
-
   const {
     data: pendingRequests = [],
     isLoading,
     error,
     refetch,
-  } = useQuery({
+  } = useLiveQuery({
     queryKey: QUERY_KEY,
-    refetchInterval: connectionStatus !== 'connected' ? 10_000 : false,
     queryFn: async (): Promise<PendingRequest[]> => {
       const result = await apiFetch<{ requests: PendingRequest[] }>(
         '/api/requests/pending'
@@ -54,13 +48,13 @@ export const WeekendRequests = () => {
         throw new Error(result.error ?? 'Failed to load weekend requests.');
       return result.data.requests ?? [];
     },
-  });
-
-  useRealtime({
-    table: 'requests',
-    filter: { column: 'type', value: 'WEEKEND' },
-    onInsert: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
-    onUpdate: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
+    subscriptions: [
+      {
+        table: 'requests',
+        filter: { column: 'type', value: 'WEEKEND' },
+        events: ['INSERT', 'UPDATE'],
+      },
+    ],
   });
 
   return (
