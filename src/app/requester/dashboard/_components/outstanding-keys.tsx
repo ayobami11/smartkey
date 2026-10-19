@@ -1,10 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ClockIcon, InboxIcon, KeyRoundIcon, XCircleIcon } from 'lucide-react';
 
-import { useRealtime } from '@/hooks/use-realtime';
+import { useLiveQuery } from '@/hooks/use-live-query';
 import { useConnectionStatus } from '@/hooks/use-connection-status';
 import { Button } from '@/components/ui/button';
 import {
@@ -148,7 +147,6 @@ type OutstandingKeysProps = {
 };
 
 export const OutstandingKeys = ({ userId }: OutstandingKeysProps) => {
-  const queryClient = useQueryClient();
   const connectionStatus = useConnectionStatus();
   const isOffline = connectionStatus === 'offline';
 
@@ -164,10 +162,10 @@ export const OutstandingKeys = ({ userId }: OutstandingKeysProps) => {
     isLoading: loading,
     error: fetchError,
     refetch,
-  } = useQuery({
+    invalidate,
+  } = useLiveQuery({
     queryKey: ['outstanding-keys', userId],
     enabled: !!userId,
-    refetchInterval: connectionStatus !== 'connected' ? 10_000 : false,
     queryFn: async () => {
       const supabase = createBrowserClient();
       const { data, error } = await supabase
@@ -184,33 +182,30 @@ export const OutstandingKeys = ({ userId }: OutstandingKeysProps) => {
 
       return withOverdueFlag(data ?? []) as OutstandingKey[];
     },
-  });
-
-  // Live updates — KEY_RETURNED on the selected key transitions to returned phase;
-  // KEY_ISSUED / KEY_RETURNED transitions refresh the list.
-
-  useRealtime({
-    table: 'requests',
-    onUpdate: (payload) => {
-      const row = payload.new as {
-        id?: string;
-        status?: string;
-        requester_id?: string;
-      };
-      if (row.requester_id === userId) {
-        if (
-          row.status === 'KEY_RETURNED' &&
-          row.id === selectedKeyIdRef.current
-        ) {
-          setSheetPhase({ phase: 'returned' });
-        }
-        if (['KEY_ISSUED', 'KEY_RETURNED'].includes(row.status ?? '')) {
-          queryClient.invalidateQueries({
-            queryKey: ['outstanding-keys', userId],
-          });
-        }
-      }
-    },
+    // KEY_RETURNED on the selected key moves the sheet to its returned
+    // phase; KEY_ISSUED / KEY_RETURNED transitions refresh the list.
+    subscriptions: [
+      {
+        table: 'requests',
+        events: ['UPDATE'],
+        on: (payload, live) => {
+          const row = payload.new as {
+            id?: string;
+            status?: string;
+            requester_id?: string;
+          };
+          if (row.requester_id !== userId) return;
+          if (
+            row.status === 'KEY_RETURNED' &&
+            row.id === selectedKeyIdRef.current
+          ) {
+            setSheetPhase({ phase: 'returned' });
+          }
+          if (['KEY_ISSUED', 'KEY_RETURNED'].includes(row.status ?? ''))
+            live.invalidate();
+        },
+      },
+    ],
   });
 
   const openReturnSheet = (item: OutstandingKey) => {
@@ -261,7 +256,7 @@ export const OutstandingKeys = ({ userId }: OutstandingKeysProps) => {
       code: result.data.return_code,
       expires_at: result.data.return_code_expires_at,
     });
-    queryClient.invalidateQueries({ queryKey: ['outstanding-keys', userId] });
+    void invalidate();
   };
 
   const isOverdue = (item: OutstandingKey) => item.is_overdue;

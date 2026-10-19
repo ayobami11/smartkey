@@ -2,12 +2,10 @@
 
 import { useState } from 'react';
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircleIcon, FileWarningIcon } from 'lucide-react';
 
 import { apiFetch } from '@/lib/api';
-import { useRealtime } from '@/hooks/use-realtime';
-import { useConnectionStatus } from '@/hooks/use-connection-status';
+import { useLiveQuery } from '@/hooks/use-live-query';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -71,30 +69,17 @@ type RawReferenceReplacementMismatch = Omit<
 const QUERY_KEY = ['cso', 'signature-alerts'];
 
 export const SignatureMismatchAlerts = () => {
-  const queryClient = useQueryClient();
-  const connectionStatus = useConnectionStatus();
   const [selectedAlert, setSelectedAlert] =
     useState<SignatureMismatchAlert | null>(null);
-
-  // Filter server-side rather than in the callback. `event` is a single-column
-  // equality filter with one fixed value, so it costs exactly one extra channel
-  // (the filter is part of the registry's channel key) and the Realtime server
-  // stops sending every unrelated audit row down the socket just to have it
-  // discarded on arrival. Mismatches are rare, so this channel is near-silent.
-  useRealtime({
-    table: 'audit_log',
-    filter: { column: 'event', value: 'SIGNATURE_MISMATCH' },
-    onInsert: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
-  });
 
   const {
     data: alerts = [],
     isLoading,
     error,
     refetch,
-  } = useQuery({
+    invalidate,
+  } = useLiveQuery({
     queryKey: QUERY_KEY,
-    refetchInterval: connectionStatus !== 'connected' ? 10_000 : false,
     queryFn: async () => {
       const result = await apiFetch<{
         alerts: RawWeekendRequestMismatch[];
@@ -116,11 +101,23 @@ export const SignatureMismatchAlerts = () => {
 
       return [...weekendAlerts, ...referenceAlerts];
     },
+    // Filter server-side rather than in the callback. `event` is a single-column
+    // equality filter with one fixed value, so it costs exactly one extra channel
+    // (the filter is part of the registry's channel key) and the Realtime server
+    // stops sending every unrelated audit row down the socket just to have it
+    // discarded on arrival. Mismatches are rare, so this channel is near-silent.
+    subscriptions: [
+      {
+        table: 'audit_log',
+        filter: { column: 'event', value: 'SIGNATURE_MISMATCH' },
+        events: ['INSERT'],
+      },
+    ],
   });
 
   const handleResolved = () => {
     setSelectedAlert(null);
-    queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+    void invalidate();
   };
 
   return (

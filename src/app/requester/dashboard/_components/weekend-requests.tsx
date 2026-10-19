@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   CalendarClockIcon,
   CalendarOffIcon,
@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
-import { useRealtime } from '@/hooks/use-realtime';
+import { useLiveQuery } from '@/hooks/use-live-query';
 import { useConnectionStatus } from '@/hooks/use-connection-status';
 import { Button } from '@/components/ui/button';
 import {
@@ -78,10 +78,13 @@ export const WeekendRequests = ({ userId }: WeekendRequestsProps) => {
     message: string;
   } | null>(null);
 
-  const { data: requests = [], isLoading: loading } = useQuery({
+  const {
+    data: requests = [],
+    isLoading: loading,
+    invalidate,
+  } = useLiveQuery({
     queryKey: ['weekend-requests', userId],
     enabled: !!userId,
-    refetchInterval: connectionStatus !== 'connected' ? 10_000 : false,
     queryFn: async () => {
       const supabase = createBrowserClient();
       const { data } = await supabase
@@ -93,26 +96,16 @@ export const WeekendRequests = ({ userId }: WeekendRequestsProps) => {
         .order('requested_for', { ascending: true });
       return (data as WeekendRequest[] | null) ?? [];
     },
-  });
-
-  useRealtime({
-    table: 'requests',
-    onInsert: (payload) => {
-      const row = payload.new as { requester_id?: string };
-      if (row.requester_id === userId) {
-        queryClient.invalidateQueries({
-          queryKey: ['weekend-requests', userId],
-        });
-      }
-    },
-    onUpdate: (payload) => {
-      const row = payload.new as { requester_id?: string };
-      if (row.requester_id === userId) {
-        queryClient.invalidateQueries({
-          queryKey: ['weekend-requests', userId],
-        });
-      }
-    },
+    subscriptions: [
+      {
+        table: 'requests',
+        events: ['INSERT', 'UPDATE'],
+        on: (payload, live) => {
+          const row = payload.new as { requester_id?: string };
+          if (row.requester_id === userId) live.invalidate();
+        },
+      },
+    ],
   });
 
   const handleGenerate = async (requestId: string) => {
@@ -127,7 +120,8 @@ export const WeekendRequests = ({ userId }: WeekendRequestsProps) => {
       setErrorId({ id: requestId, message: result.error });
       return;
     }
-    queryClient.invalidateQueries({ queryKey: ['weekend-requests', userId] });
+    void invalidate();
+    // The banner's query: a minted code makes this request the active one.
     queryClient.invalidateQueries({ queryKey: ['active-request', userId] });
     router.push(`/requester/request/${requestId}/code`);
   };
@@ -141,11 +135,7 @@ export const WeekendRequests = ({ userId }: WeekendRequestsProps) => {
         <WeekendAccessSheet
           userId={userId}
           isOffline={isOffline}
-          onSubmitted={() =>
-            queryClient.invalidateQueries({
-              queryKey: ['weekend-requests', userId],
-            })
-          }
+          onSubmitted={() => void invalidate()}
         />
       </div>
 

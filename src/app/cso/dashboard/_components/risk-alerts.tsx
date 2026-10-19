@@ -1,11 +1,9 @@
 'use client';
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangleIcon, CheckCircleIcon } from 'lucide-react';
 
 import { apiFetch } from '@/lib/api';
-import { useRealtime } from '@/hooks/use-realtime';
-import { useConnectionStatus } from '@/hooks/use-connection-status';
+import { useLiveQuery } from '@/hooks/use-live-query';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -33,31 +31,13 @@ type RiskAlert = {
 };
 
 export const RiskAlerts = () => {
-  const queryClient = useQueryClient();
-  const connectionStatus = useConnectionStatus();
-
-  useRealtime({
-    table: 'requests',
-    onInsert: (payload) => {
-      const row = payload.new as { risk_tier?: string };
-      if (row.risk_tier === 'HIGH')
-        queryClient.invalidateQueries({ queryKey: ['cso', 'risk-alerts'] });
-    },
-    onUpdate: (payload) => {
-      const row = payload.new as { risk_tier?: string };
-      if (row.risk_tier === 'HIGH')
-        queryClient.invalidateQueries({ queryKey: ['cso', 'risk-alerts'] });
-    },
-  });
-
   const {
     data: alerts = [],
     isLoading,
     error,
     refetch,
-  } = useQuery({
+  } = useLiveQuery({
     queryKey: ['cso', 'risk-alerts'],
-    refetchInterval: connectionStatus !== 'connected' ? 10_000 : false,
     queryFn: async () => {
       const result = await apiFetch<{ alerts: RiskAlert[] }>(
         '/api/ai/risk-alerts'
@@ -66,6 +46,16 @@ export const RiskAlerts = () => {
         throw new Error(result.error ?? 'Failed to load risk alerts.');
       return result.data.alerts ?? [];
     },
+    subscriptions: [
+      {
+        table: 'requests',
+        events: ['INSERT', 'UPDATE'],
+        on: (payload, live) => {
+          const row = payload.new as { risk_tier?: string };
+          if (row.risk_tier === 'HIGH') live.invalidate();
+        },
+      },
+    ],
   });
 
   return (

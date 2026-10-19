@@ -1,9 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useConnectionStatus } from '@/hooks/use-connection-status';
-import { useRealtime } from '@/hooks/use-realtime';
+import { useLiveQuery } from '@/hooks/use-live-query';
 import { useRouter } from 'next/navigation';
 import { InboxIcon, KeyRoundIcon } from 'lucide-react';
 import { Controller, useForm } from 'react-hook-form';
@@ -113,7 +113,6 @@ const unavailableReason = (availability: KeyAvailability): string | null => {
 
 export const AuthorizedKeys = () => {
   const router = useRouter();
-  const queryClient = useQueryClient();
   const connectionStatus = useConnectionStatus();
   const isOffline = connectionStatus === 'offline';
 
@@ -175,7 +174,14 @@ export const AuthorizedKeys = () => {
   // Availability is enrichment, never a gate. If this query fails the tiles
   // still render exactly as they did before this feature existed — no second
   // error box, no empty list. The keys list must not depend on it.
-  const { data: availabilityData } = useQuery({
+  //
+  // One subscription, no filter — `use-realtime.ts` ref-counts a module-level
+  // registry keyed `realtime:requests`, and three sibling components on this
+  // screen already subscribe to it, so this attaches to the existing channel
+  // rather than opening another. Any issue/return/code transition anywhere can
+  // change what a co-authorised colleague sees, so this deliberately does not
+  // filter on requester_id the way the sibling components do.
+  const { data: availabilityData } = useLiveQuery({
     queryKey: ['requester', 'key-availability'],
     queryFn: async () => {
       const result = await apiFetch<{ keys: KeyAvailability[] }>(
@@ -185,30 +191,12 @@ export const AuthorizedKeys = () => {
       return result.data?.keys ?? [];
     },
     staleTime: 30_000,
-    refetchInterval: connectionStatus !== 'connected' ? 10_000 : false,
+    subscriptions: [{ table: 'requests', events: ['INSERT', 'UPDATE'] }],
   });
 
   const availabilityByKey = new Map(
     (availabilityData ?? []).map((entry) => [entry.key_id, entry])
   );
-
-  // One subscription, no filter — `use-realtime.ts` ref-counts a module-level
-  // registry keyed `realtime:requests`, and three sibling components on this
-  // screen already subscribe to it, so this attaches to the existing channel
-  // rather than opening another. Any issue/return/code transition anywhere can
-  // change what a co-authorised colleague sees, so this deliberately does not
-  // filter on requester_id the way the sibling components do.
-  const invalidateAvailability = () => {
-    queryClient.invalidateQueries({
-      queryKey: ['requester', 'key-availability'],
-    });
-  };
-
-  useRealtime({
-    table: 'requests',
-    onInsert: invalidateAvailability,
-    onUpdate: invalidateAvailability,
-  });
 
   const openWeekdaySheet = (keyId: string) => {
     setSelectedKeyId(keyId);

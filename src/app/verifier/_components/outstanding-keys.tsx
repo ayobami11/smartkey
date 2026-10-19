@@ -1,10 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { InboxIcon, KeyRoundIcon } from 'lucide-react';
 
-import { useRealtime } from '@/hooks/use-realtime';
+import { useLiveQuery } from '@/hooks/use-live-query';
 import { apiFetch } from '@/lib/api';
 import { useConnectionStatus } from '@/hooks/use-connection-status';
 import { Button } from '@/components/ui/button';
@@ -55,7 +54,6 @@ type ReturnMode = 'code' | 'override';
 export const OutstandingKeys = () => {
   const status = useConnectionStatus();
   const isOffline = status === 'offline';
-  const queryClient = useQueryClient();
 
   // Return Sheet state
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -65,16 +63,16 @@ export const OutstandingKeys = () => {
   const [verified, setVerified] = useState(true);
   const [returnError, setReturnError] = useState<string | null>(null);
 
-  // Fetch outstanding keys via TanStack Query
+  // Fetch outstanding keys, kept live by Realtime
 
   const {
     data: keys = [],
     isLoading: loading,
     error: fetchError,
     refetch,
-  } = useQuery({
+    invalidate,
+  } = useLiveQuery({
     queryKey: ['keys', 'outstanding'],
-    refetchInterval: status !== 'connected' ? 10_000 : false,
     queryFn: async () => {
       const result = await apiFetch<{ outstanding: OutstandingKey[] }>(
         '/api/keys/out'
@@ -83,39 +81,35 @@ export const OutstandingKeys = () => {
         throw new Error(result.error ?? 'Failed to load outstanding keys.');
       return result.data.outstanding ?? [];
     },
-  });
-
-  // Live updates. Overdue is derived from the clock on the server, so no
-  // event marks it; what changes the list is a request moving into or out of
-  // KEY_ISSUED. There is no KEY_OVERDUE request status to listen for.
-  const invalidateOutstanding = () =>
-    queryClient.invalidateQueries({ queryKey: ['keys', 'outstanding'] });
-
-  useRealtime({
-    table: 'requests',
-    onInsert: (payload) => {
-      const row = payload.new as { status?: string };
-      if (row.status === 'KEY_ISSUED') invalidateOutstanding();
-    },
-    onUpdate: (payload) => {
-      const next = payload.new as { status?: string };
-      // payload.old carries only the primary key unless the table has
-      // REPLICA IDENTITY FULL, so KEY_RETURNED is matched on `next` too.
-      const prev = payload.old as { status?: string } | null;
-      if (
-        next.status === 'KEY_ISSUED' ||
-        prev?.status === 'KEY_ISSUED' ||
-        next.status === 'KEY_RETURNED'
-      )
-        invalidateOutstanding();
-    },
-  });
-
-  // keys.status flips on issue/return and on the hourly overdue job; any of
-  // those is a cheap prompt to re-read, and keeps the overdue flag fresh.
-  useRealtime({
-    table: 'keys',
-    onUpdate: () => invalidateOutstanding(),
+    subscriptions: [
+      // Overdue is derived from the clock on the server, so no event marks
+      // it; what changes the list is a request moving into or out of
+      // KEY_ISSUED. There is no KEY_OVERDUE request status to listen for.
+      {
+        table: 'requests',
+        events: ['INSERT', 'UPDATE'],
+        on: (payload, live) => {
+          const next = payload.new as { status?: string };
+          if (payload.eventType === 'INSERT') {
+            if (next.status === 'KEY_ISSUED') live.invalidate();
+            return;
+          }
+          // payload.old carries only the primary key unless the table has
+          // REPLICA IDENTITY FULL, so KEY_RETURNED is matched on `next` too.
+          const prev = payload.old as { status?: string } | null;
+          if (
+            next.status === 'KEY_ISSUED' ||
+            prev?.status === 'KEY_ISSUED' ||
+            next.status === 'KEY_RETURNED'
+          )
+            live.invalidate();
+        },
+      },
+      // keys.status flips on issue/return and on the hourly overdue job; any
+      // of those is a cheap prompt to re-read, and keeps the overdue flag
+      // fresh.
+      { table: 'keys', events: ['UPDATE'] },
+    ],
   });
 
   // Sheet helpers
@@ -159,7 +153,7 @@ export const OutstandingKeys = () => {
       return;
     }
     setVerified(Boolean(result.data?.verified));
-    queryClient.invalidateQueries({ queryKey: ['keys', 'outstanding'] });
+    void invalidate();
     setReturnStep('success');
   };
 

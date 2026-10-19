@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from 'react';
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   eachDayOfInterval,
   eachHourOfInterval,
@@ -26,9 +25,7 @@ import {
   type DateRange,
 } from '@/lib/date-range';
 import { createBrowserClient } from '@/lib/supabase/client';
-import { useConnectionStatus } from '@/hooks/use-connection-status';
-import { useDebouncedCallback } from '@/hooks/use-debounce';
-import { useRealtime } from '@/hooks/use-realtime';
+import { useLiveQuery } from '@/hooks/use-live-query';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -130,35 +127,16 @@ const bucketEvents = (
 };
 
 export const EventsChart = ({ range }: EventsChartProps) => {
-  const connectionStatus = useConnectionStatus();
-  const queryClient = useQueryClient();
   const [selectedType, setSelectedType] = useState<EventTypeFilter>('ALL');
   const unit = bucketUnitForRange(range);
-
-  // This chart genuinely wants every audit event, so it cannot narrow with a
-  // server-side filter the way the signature-mismatch panel does. Debounce
-  // instead: `audit_log` records one row per consequential action, and bursts are
-  // routine (a bulk shift handover writes one row per outstanding key). Without
-  // this, publishing `audit_log` to Realtime would refetch the whole aggregate
-  // once per row. Trailing edge, so a burst costs exactly one refetch.
-  const invalidateEvents = useDebouncedCallback(
-    () => queryClient.invalidateQueries({ queryKey: QUERY_KEY_BASE }),
-    1500
-  );
-
-  useRealtime({
-    table: 'audit_log',
-    onInsert: invalidateEvents,
-  });
 
   const {
     data: rawBuckets = [],
     isLoading,
     error,
     refetch,
-  } = useQuery({
+  } = useLiveQuery({
     queryKey: [...QUERY_KEY_BASE, range.from, range.to],
-    refetchInterval: connectionStatus !== 'connected' ? 10_000 : false,
     queryFn: async (): Promise<RawBucket[]> => {
       const supabase = createBrowserClient();
       const { data, error: queryError } = await supabase
@@ -172,6 +150,17 @@ export const EventsChart = ({ range }: EventsChartProps) => {
 
       return bucketEvents(data ?? [], range, unit);
     },
+    // This chart genuinely wants every audit event, so it cannot narrow with
+    // a server-side filter the way the signature-mismatch panel does.
+    // Debounce instead: `audit_log` records one row per consequential action,
+    // and bursts are routine (a bulk shift handover writes one row per
+    // outstanding key). Without this, publishing `audit_log` to Realtime
+    // would refetch the whole aggregate once per row. Trailing edge, so a
+    // burst costs exactly one refetch.
+    subscriptions: [{ table: 'audit_log', events: ['INSERT'] }],
+    debounceMs: 1500,
+    // Every cached range goes stale, not just the one on screen.
+    invalidatePrefix: QUERY_KEY_BASE.length,
   });
 
   // Switching the dropdown never refetches — every category's count for

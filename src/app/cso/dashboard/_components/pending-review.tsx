@@ -2,12 +2,10 @@
 
 import { useState } from 'react';
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircleIcon, ShieldAlertIcon } from 'lucide-react';
 
 import { apiFetch } from '@/lib/api';
-import { useRealtime } from '@/hooks/use-realtime';
-import { useConnectionStatus } from '@/hooks/use-connection-status';
+import { useLiveQuery } from '@/hooks/use-live-query';
 import { Button } from '@/components/ui/button';
 import {
   Empty,
@@ -35,8 +33,6 @@ type CsoRequest = {
 };
 
 export const PendingReview = () => {
-  const queryClient = useQueryClient();
-  const connectionStatus = useConnectionStatus();
   const [decidingId, setDecidingId] = useState<string | null>(null);
   const [decisionError, setDecisionError] = useState<string | null>(null);
 
@@ -45,9 +41,9 @@ export const PendingReview = () => {
     isLoading: queueLoading,
     error: queueError,
     refetch,
-  } = useQuery({
+    invalidate,
+  } = useLiveQuery({
     queryKey: ['cso', 'pending-review'],
-    refetchInterval: connectionStatus !== 'connected' ? 10_000 : false,
     queryFn: async () => {
       const result = await apiFetch<{ requests: CsoRequest[] }>(
         '/api/requests/cso-queue'
@@ -56,20 +52,16 @@ export const PendingReview = () => {
         throw new Error(result.error ?? 'Failed to load pending requests.');
       return result.data.requests ?? [];
     },
-  });
-
-  useRealtime({
-    table: 'requests',
-    onInsert: (payload) => {
-      const row = payload.new as { risk_tier?: string };
-      if (row.risk_tier === 'HIGH')
-        queryClient.invalidateQueries({ queryKey: ['cso', 'pending-review'] });
-    },
-    onUpdate: (payload) => {
-      const row = payload.new as { risk_tier?: string };
-      if (row.risk_tier === 'HIGH')
-        queryClient.invalidateQueries({ queryKey: ['cso', 'pending-review'] });
-    },
+    subscriptions: [
+      {
+        table: 'requests',
+        events: ['INSERT', 'UPDATE'],
+        on: (payload, live) => {
+          const row = payload.new as { risk_tier?: string };
+          if (row.risk_tier === 'HIGH') live.invalidate();
+        },
+      },
+    ],
   });
 
   const handleDecision = async (
@@ -87,7 +79,7 @@ export const PendingReview = () => {
       setDecisionError(result.error);
       return;
     }
-    queryClient.invalidateQueries({ queryKey: ['cso', 'pending-review'] });
+    void invalidate();
   };
 
   return (

@@ -7,46 +7,33 @@ description: Use this skill when building screens or features that subscribe to 
 
 SmartKey runs at the security desk where connectivity is not always stable. The UI must communicate connection state clearly and never let users believe a destructive action succeeded if it has not.
 
-## Realtime via Supabase
+## Realtime via Supabase: use `useLiveQuery`
 
-Use Supabase Realtime (Postgres changes streamed via websocket). Pattern:
+Supabase Realtime streams Postgres changes over a websocket. A surface that shows server data and keeps it live declares a **live query** (`src/hooks/use-live-query.ts`) instead of wiring `useQuery` + `useRealtime` + `invalidateQueries` + a polling interval by hand:
 
-```ts
-// src/hooks/useRealtimeRequests.ts
-import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase/client';
-
-export const useRealtimeRequests = () => {
-  const [requests, setRequests] = useState<Request[]>([]);
-  const [status, setStatus] = useState<
-    'connecting' | 'connected' | 'reconnecting' | 'offline'
-  >('connecting');
-
-  useEffect(() => {
-    const channel = supabase
-      .channel('requests')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'requests' },
-        (payload) => {
-          // update local state from payload
-        }
-      )
-      .subscribe((s) => {
-        if (s === 'SUBSCRIBED') setStatus('connected');
-        if (s === 'CHANNEL_ERROR' || s === 'TIMED_OUT')
-          setStatus('reconnecting');
-        if (s === 'CLOSED') setStatus('offline');
-      });
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, []);
-
-  return { requests, status };
-};
+```tsx
+const {
+  data = [],
+  isLoading,
+  error,
+  refetch,
+  invalidate,
+} = useLiveQuery({
+  queryKey: ['dean', 'collectors'],
+  queryFn: fetchCollectors,
+  subscriptions: [{ table: 'authorisations' }], // any event → invalidate
+});
 ```
+
+- **Reaction**: by default any event on a subscribed table invalidates the query. Narrow with `events: ['INSERT', 'UPDATE']`, or pass `on: (payload, live) => …` and call `live.invalidate()` only when the row matters (e.g. `requester_id === userId`), or `live.setData(updater)` to patch the cache without a refetch.
+- **Keys**: `live.invalidate`, `live.setData` and the returned `invalidate()` all target the declared `queryKey`. Use the returned `invalidate()` after a mutation instead of `queryClient.invalidateQueries({ queryKey: [...] })` — retyping the key is how PR #59/#60 happened.
+- **Filters**: `filter: { column, value }` is a single-column equality filter and part of the channel key (see "Channel multiplexing" in `docs/ARCHITECTURE.md`). Prefer filtering in `on` unless the value is fixed and the channel would otherwise be noisy.
+- **Seed**: pass `initialData` for a server-rendered first paint, or prefetch the same key on the server and wrap in `HydrationBoundary`.
+- **Polling**: defaults to every 10s while the connection is not `connected` (`poll: 'whileDisconnected'`). `poll: 60_000` polls always (for clock-derived data); `poll: false` never.
+- **Bursts**: `debounceMs` collapses a burst of events into one refetch.
+- **Reconnect**: when the status returns to `connected`, every mounted live query refetches once, so changes missed while offline appear. Nothing to write per surface.
+
+Never call `supabase.channel()` in a component. `useLiveQuery` and `useRealtime` both attach through the shared registry in `src/hooks/use-realtime.ts`. Use `useRealtime` directly only for a subscription that does not feed a TanStack query.
 
 The connection state is rendered as a small dot in the app bar:
 
@@ -65,7 +52,7 @@ When connection state is `offline` for more than 30 seconds, the `OfflineBanner`
 Use the `useConnectionStatus` hook to gate behaviour:
 
 ```tsx
-const { isOffline } = useConnectionStatus();
+const isOffline = useConnectionStatus() === 'offline';
 <Button disabled={isOffline} onClick={handleIssueKey}>
   Issue key
 </Button>;
@@ -97,7 +84,7 @@ When a new item arrives via Realtime, animate it in (slide-in, 200ms).
 On reconnect after an offline period:
 
 - Banner replaced by a 3-second success toast: "Reconnected. Live updates resumed."
-- Any items missed during offline period are fetched (the realtime subscription does not replay; you must fetch the gap manually).
+- Any items missed during the offline period are fetched. The realtime subscription does not replay, so `useLiveQuery` refetches each mounted live query once on reconnect. A surface on bare `useRealtime` (today only the verifier live request queue) does not get this.
 - If destructive actions were attempted while offline, they are queued in memory only — never persisted to localStorage. The user must re-confirm them after reconnect.
 
 ## Verification

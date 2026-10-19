@@ -2,11 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircleIcon, KeyRoundIcon, XCircleIcon } from 'lucide-react';
 
-import { useRealtime } from '@/hooks/use-realtime';
-import { useConnectionStatus } from '@/hooks/use-connection-status';
+import { useLiveQuery } from '@/hooks/use-live-query';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -64,8 +62,6 @@ const statusMessage: Record<string, string> = {
 
 export const CodeView = () => {
   const { requestId } = useParams<{ requestId: string }>();
-  const queryClient = useQueryClient();
-  const connectionStatus = useConnectionStatus();
 
   const [userId, setUserId] = useState<string | null>(null);
   const [, forceUpdate] = useState(0);
@@ -80,10 +76,13 @@ export const CodeView = () => {
       });
   }, []);
 
-  const { data: request = null, isLoading: loading } = useQuery({
+  const {
+    data: request = null,
+    isLoading: loading,
+    invalidate,
+  } = useLiveQuery({
     queryKey: ['request', requestId, userId],
     enabled: !!userId,
-    refetchInterval: connectionStatus !== 'connected' ? 10_000 : false,
     queryFn: async () => {
       const supabase = createBrowserClient();
       const { data } = await supabase
@@ -96,23 +95,21 @@ export const CodeView = () => {
         .maybeSingle();
       return (data as RequestDetail | null) ?? null;
     },
+    // No server-side filter; check request ID and requester ID client-side.
+    subscriptions: [
+      {
+        table: 'requests',
+        events: ['UPDATE'],
+        on: (payload, live) => {
+          const row = payload.new as { id?: string; requester_id?: string };
+          if (row.id === requestId && row.requester_id === userId)
+            live.invalidate();
+        },
+      },
+    ],
   });
 
   const notFound = !loading && request === null && !!userId;
-
-  // Real-time subscription — check request ID and requester ID client-side
-
-  useRealtime({
-    table: 'requests',
-    onUpdate: (payload) => {
-      const row = payload.new as { id?: string; requester_id?: string };
-      if (row.id === requestId && row.requester_id === userId) {
-        queryClient.invalidateQueries({
-          queryKey: ['request', requestId, userId],
-        });
-      }
-    },
-  });
 
   useEffect(() => {
     if (!request?.code_expires_at) return;
@@ -142,9 +139,7 @@ export const CodeView = () => {
         body: JSON.stringify({ request_id: request.id }),
       })
         .then(() => {
-          queryClient.invalidateQueries({
-            queryKey: ['request', requestId, userId],
-          });
+          void invalidate();
         })
         .catch(() => {
           expiredFiredRef.current = null;
@@ -155,9 +150,7 @@ export const CodeView = () => {
     request?.status,
     request?.code_expires_at,
     countdown,
-    queryClient,
-    requestId,
-    userId,
+    invalidate,
   ]);
 
   // Generate a fresh weekend code (only reachable when status = APPROVED,
@@ -176,9 +169,7 @@ export const CodeView = () => {
         setGenerateError(json.error ?? 'Could not generate a new code.');
         return;
       }
-      queryClient.invalidateQueries({
-        queryKey: ['request', requestId, userId],
-      });
+      void invalidate();
     } catch {
       setGenerateError('Could not generate a new code. Try again.');
     } finally {
