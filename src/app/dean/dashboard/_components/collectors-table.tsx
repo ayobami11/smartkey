@@ -1,8 +1,6 @@
 'use client';
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-
-import { useRealtime } from '@/hooks/use-realtime';
+import { useLiveQuery } from '@/hooks/use-live-query';
 import { createBrowserClient } from '@/lib/supabase/client';
 import { formatDate, formatTime } from '@/lib/dates';
 
@@ -52,21 +50,12 @@ type SummaryRow = KeyGroup & {
 type SlotRow = CollectorRow | SummaryRow;
 
 export const CollectorsTable = () => {
-  const queryClient = useQueryClient();
-
-  useRealtime({
-    table: 'authorisations',
-    onInsert: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
-    onUpdate: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
-    onDelete: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
-  });
-
   const {
     data: rows = [],
     isLoading,
     error,
     refetch,
-  } = useQuery({
+  } = useLiveQuery({
     queryKey: QUERY_KEY,
     queryFn: async (): Promise<SlotRow[]> => {
       const supabase = createBrowserClient();
@@ -136,6 +125,10 @@ export const CollectorsTable = () => {
         return [...collectorRows, ...summaryRow];
       });
     },
+    // No poll: authorisations change rarely, and Realtime plus the
+    // reconnect refetch keep the table current.
+    poll: false,
+    subscriptions: [{ table: 'authorisations' }],
   });
 
   const hasKeys = new Set(rows.map((r) => r.keyId)).size > 0;
