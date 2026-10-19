@@ -618,7 +618,18 @@ Multipart form. Uploads the Dean authorisation letter to the `weekend-letters` b
 
 The letter's type is detected from its bytes — PNG, JPEG, WebP or PDF — and it is stored as `guest/{uuid}.{ext}` under that type, never the declared one (a file labelled `application/pdf` that is really SVG or HTML is refused). `full_name` is at most 120 characters (200 until 2026-10-14).
 
-**Errors**: `404` department not found · `422` validation, a letter that is not an image or PDF, or `weekend_date` is not a Saturday/Sunday from today onwards (Lagos date) · `413` letter too large
+**Rate limit** (since 2026-10-19). The route needs no login, and each accepted submission stores a row pair and a letter of up to 5 MB and sends two emails, so it is limited per client and per guest:
+
+| Limit    | Key                                                                                             | Constant                           |
+| -------- | ----------------------------------------------------------------------------------------------- | ---------------------------------- |
+| 5 / hour | client address: first `x-forwarded-for` hop (Vercel sets it), else `x-real-ip`; IPv6 by its /64 | `GUEST_SUBMISSION_LIMITS.perIp`    |
+| 3 / day  | the guest email, trimmed and lower-cased                                                        | `GUEST_SUBMISSION_LIMITS.perEmail` |
+
+Both live in `src/lib/http/rate-limit.ts`. The check runs after every validation above and before the upload, so a form that fails validation does not count and a refused one stores and sends nothing. The count is kept in Postgres by the service-only `check_rate_limit` RPC (`docs/DATABASE.md`), because serverless instances share no memory. Keys are HMAC-SHA-256 digests under the `RATE_LIMIT_SALT` env var; no raw address or email is stored. Over either limit → `429` with a `Retry-After` header (seconds) and the message "You have sent several requests in a short time. Please wait about N minutes and try again. If your access is urgent, contact the Senate Building security desk." The guest form shows it as a notice rather than an error.
+
+The limiter **fails open**: with `RATE_LIMIT_SALT` unset it is skipped and `rate-limit: RATE_LIMIT_SALT is not set…` is logged as a warning on every submission; if the RPC errors (for example before the migration is applied) the submission goes through and the error is logged. A misconfiguration must not stop every guest from requesting weekend access, and every request still needs a Dean's or the CSO's approval. With no client address at all, only the email limit applies.
+
+**Errors**: `404` department not found · `422` validation, a letter that is not an image or PDF, or `weekend_date` is not a Saturday/Sunday from today onwards (Lagos date) · `413` letter too large · `429` rate limited (`Retry-After` set)
 
 ---
 
@@ -1786,6 +1797,7 @@ Liveness probe for external uptime monitoring (e.g. UptimeRobot). The landing pa
 | `nominate_collector`                  | POST /api/admin/authorisations                       | yes                     |
 | `remove_collector`                    | DELETE /api/admin/authorisations/[k]/[r]             | yes                     |
 | `create_guest_weekend_request`        | POST /api/public/weekend-request                     | yes                     |
+| `check_rate_limit`                    | POST /api/public/weekend-request (service role)      | no — not an action      |
 | `generate_guest_weekend_code`         | POST /api/public/weekend-request/[token]/code        | yes                     |
 | `expire_guest_request`                | POST /api/public/weekend-request/[token]/expire      | yes                     |
 | `acknowledge_shift_handover`          | POST /api/shifts/handover                            | yes — per key           |
@@ -1814,5 +1826,6 @@ All RPCs are defined in `supabase/migrations/`. See `docs/DATABASE.md` for param
 | 404  | Resource not found                                                        |
 | 409  | State conflict (already issued, already cancelled, slots full)            |
 | 422  | Zod validation failure — `error` field lists the failing fields           |
+| 429  | Rate limited (guest form only) — `Retry-After` header gives the wait      |
 | 500  | RPC or internal failure — `error` field contains a correlation reference  |
 | 503  | External dependency unavailable (Gemini quota exhausted with no fallback) |

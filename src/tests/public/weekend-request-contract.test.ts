@@ -5,8 +5,10 @@
 // kind each route maps, malformed and unknown tokens, and success shapes.
 // Written against the routes before they moved onto route(); kept as the
 // regression net after.
+import { NextRequest } from 'next/server';
 import {
   afterAll,
+  afterEach,
   beforeAll,
   beforeEach,
   describe,
@@ -314,6 +316,90 @@ describe('POST /api/public/weekend-request', () => {
     );
     expect(fake.uploads).toHaveLength(0);
     expect(fake.rpcCalls).toHaveLength(0);
+  });
+
+  describe('rate limit', () => {
+    const submitFrom = (form: FormData, ip = '203.0.113.7') =>
+      submit(
+        new NextRequest('http://localhost/api/public/weekend-request', {
+          method: 'POST',
+          body: form,
+          headers: { 'x-forwarded-for': `${ip}, 10.0.0.1` },
+        }),
+        { params: Promise.resolve({}) }
+      );
+
+    beforeEach(() => {
+      vi.stubEnv('RATE_LIMIT_SALT', 'contract-test-salt-0123456789');
+    });
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it('checks the limit before uploading, then submits as before', async () => {
+      fake.rpc.check_rate_limit = { data: 0, error: null };
+      const res = await submitFrom(formWith());
+
+      expect(res.status).toBe(201);
+      expect(fake.rpcCalls.map((c) => c.name)).toEqual([
+        'check_rate_limit',
+        'check_rate_limit',
+        'create_guest_weekend_request',
+      ]);
+      const [byIp, byEmail] = fake.rpcCalls as {
+        args: Record<string, unknown>;
+      }[];
+      expect(byIp.args).toMatchObject({
+        p_bucket: 'guest-submit:ip',
+        p_limit: 5,
+        p_window: '3600 seconds',
+      });
+      expect(byEmail.args).toMatchObject({
+        p_bucket: 'guest-submit:email',
+        p_limit: 3,
+        p_window: '86400 seconds',
+      });
+      // Hashed, never the raw address or email.
+      for (const { args } of [byIp, byEmail]) {
+        expect(args.p_key).toMatch(/^[0-9a-f]{64}$/);
+      }
+    });
+
+    it('429 with Retry-After, and nothing stored or sent, over the limit', async () => {
+      fake.rpc.check_rate_limit = { data: 2400, error: null };
+      const res = await submitFrom(formWith());
+
+      expect(res.status).toBe(429);
+      expect(res.headers.get('Retry-After')).toBe('2400');
+      expect(await res.json()).toEqual({
+        data: null,
+        status: 429,
+        error:
+          'You have sent several requests in a short time. Please wait about 40 minutes and try again. If your access is urgent, contact the Senate Building security desk.',
+      });
+      expect(fake.uploads).toHaveLength(0);
+      expect(fake.rpcCalls.map((c) => c.name)).toEqual(['check_rate_limit']);
+      expect(notifyAfterResponse).not.toHaveBeenCalled();
+    });
+
+    it('does not count a submission that fails validation', async () => {
+      fake.rpc.check_rate_limit = { data: 0, error: null };
+      const res = await submitFrom(formWith({ email: 'nope' }));
+
+      expect(res.status).toBe(422);
+      expect(fake.rpcCalls).toHaveLength(0);
+    });
+
+    it('lets the submission through when the limiter itself fails', async () => {
+      fake.rpc.check_rate_limit = rpcError('function does not exist');
+      const res = await submitFrom(formWith());
+
+      expect(res.status).toBe(201);
+      expect(logger.error).toHaveBeenCalledWith(
+        'rate-limit: check failed, allowing the request',
+        expect.objectContaining({ bucket: 'guest-submit:ip' })
+      );
+    });
   });
 });
 

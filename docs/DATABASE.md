@@ -250,6 +250,17 @@ A held reference-replacement mismatch from `POST /api/profile/signature`, awaiti
 - `threshold_pct` numeric
 - `submitted_at` timestamptz
 
+### rate_limit_hits
+
+Hits counted by `check_rate_limit` for the guest weekend-request form's rate limit (`20261019100000_guest_rate_limit.sql`, see `docs/API.md` → `POST /api/public/weekend-request`). One row per accepted hit. RLS enabled with **no policies**, and every grant revoked from `anon` and `authenticated`: only the `SECURITY DEFINER` function and the cleanup job touch it.
+
+- `id` bigint identity PK
+- `bucket` text, 1–64 characters — what is being counted (`guest-submit:ip`, `guest-submit:email`)
+- `key_hash` text, `CHECK (key_hash ~ '^[0-9a-f]{64}$')` — an HMAC-SHA-256 digest of the client address or email, computed in the route under `RATE_LIMIT_SALT`. The CHECK makes storing a raw IP or email impossible, not just unlikely
+- `hit_at` timestamptz default `now()`
+- Indexes: `(bucket, key_hash, hit_at)` for the count, `(hit_at)` for the cleanup
+- Cleanup: `check_rate_limit` deletes the key's rows that have left the window on every call; the `rate-limit-hits-cleanup` pg_cron job (03:30 UTC daily) deletes every row older than 2 days, which is longer than any window in use (the longest is a day). Raise it if a longer window is added
+
 ## RPCs (Postgres functions)
 
 These wrap multi-table mutations in transactions and enforce business rules.
@@ -290,6 +301,7 @@ These wrap multi-table mutations in transactions and enforce business rules.
 - `provision_user(name, email, role, department_id?)` — creates profile, generates activation token, queues email, audit entry.
 - `update_risk_config(rules, medium_min, high_min)` — CSO-only. `rules` is a JSON array of exactly 5 `{rule_key, weight, enabled}` objects, one per `risk_rule_key`. Updates `risk_rule_config` and the `risk_tier_config` singleton in one transaction, writes one `RISK_CONFIG_UPDATED` audit entry (not one per rule). Raises `INVALID_TIER_BOUNDS` if `high_min <= medium_min`, `INVALID_RULES` if `rules` isn't exactly 5 entries or contains an unknown `rule_key`.
 - `update_operational_config(zone_hours, return_deadline_time, code_expiry_minutes)` — CSO-only. `zone_hours` is a JSON array of exactly 2 `{zone, weekday_open, weekday_close, weekend_closed, weekend_open, weekend_close}` objects, one per `public.zone` value. Updates `zone_hours` and the `operational_config` singleton in one transaction, writes one `OPERATIONAL_CONFIG_UPDATED` audit entry. Raises `INVALID_ZONE_HOURS` for a bad/incomplete zone entry (open ≥ close, or missing weekend hours while not closed) and `INVALID_CONFIG` for an out-of-range `code_expiry_minutes` or a null `return_deadline_time`. `create_request`, `generate_weekend_code`, and `generate_guest_weekend_code` all read `code_expiry_minutes` from here instead of each hardcoding their own expiry.
+- `check_rate_limit(bucket, key, limit, window)` — **service-only** (revoked from `public`/`anon`/`authenticated`, granted to `service_role`), `SECURITY DEFINER`. Takes a transaction advisory lock on `(bucket, key)`, deletes that key's rows older than `window`, counts the rest, and either records a hit and returns `0` (under `limit`) or records nothing and returns the seconds until enough hits leave the window (at or over it). Concurrent calls for one key therefore cannot both slip in at the limit, and a refused caller does not push their own window out. `VALIDATION` (`P0004`) for a null argument, `limit < 1` or a non-positive window. No audit entry: it is a counter, not an action. Called by `POST /api/public/weekend-request` through `src/lib/http/rate-limit.ts`.
 - `resolve_pending_signature_reference(profile_id, type, decision, note?)` — CSO-only. Resolves a `pending_signature_references` row: on `'APPROVED'`, sets `profiles.signature_ref_url`/`stamp_ref_url` (whichever `type` says) to the pending upload's URL and writes a `SIGNATURE_REFERENCE_UPDATED` audit entry (`resolved_by_cso: true`); on `'DECLINED'`, writes a `SIGNATURE_REFERENCE_DECLINED` entry with no profile change. Either way the pending row is deleted first. Raises `NOT_FOUND` if no pending row exists for that `profile_id`/`type`, `INVALID_DECISION` for a bad `type`/`decision` value.
 
 ### External (guest) weekend RPCs

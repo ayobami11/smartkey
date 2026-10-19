@@ -500,6 +500,27 @@ export type Database = {
           },
         ];
       };
+      rate_limit_hits: {
+        Row: {
+          bucket: string;
+          hit_at: string;
+          id: number;
+          key_hash: string;
+        };
+        Insert: {
+          bucket: string;
+          hit_at?: string;
+          id?: never;
+          key_hash: string;
+        };
+        Update: {
+          bucket?: string;
+          hit_at?: string;
+          id?: never;
+          key_hash?: string;
+        };
+        Relationships: [];
+      };
       requests: {
         Row: {
           access_token: string | null;
@@ -986,6 +1007,15 @@ export type Database = {
           request_id: string;
           status: string;
         }[];
+      };
+      check_rate_limit: {
+        Args: {
+          p_bucket: string;
+          p_key: string;
+          p_limit: number;
+          p_window: unknown;
+        };
+        Returns: number;
       };
       create_guest_weekend_request: {
         Args: {
