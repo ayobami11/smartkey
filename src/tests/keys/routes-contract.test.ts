@@ -303,6 +303,12 @@ describe('GET /api/keys/out', () => {
         })
       )
     );
+    // CHANGED 2026-10-19: an overdue row keeps its real status (it used to
+    // come back as the synthetic 'KEY_OVERDUE').
+    expect(res.body.data.outstanding[0]).toMatchObject({
+      status: 'KEY_ISSUED',
+      is_overdue: true,
+    });
 
     const query = fake.queries.find((q) => q.table === 'requests')!;
     expect(query.client).toBe('admin');

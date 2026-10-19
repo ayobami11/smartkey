@@ -863,7 +863,7 @@ Returns every request with `status = 'KEY_ISSUED'` — every copy physically out
 **Response `data`**: `{ "outstanding": [...] }`. Each row is shaped by `shapeOutstanding` (`src/lib/keys/outstanding.ts`):
 
 - `is_overdue` — `true` once the row's `return_deadline` has passed. The same rule as `public.request_is_overdue(status, return_deadline)`, derived from the clock rather than read from `keys.status` (which only flips on the hourly `mark_key_overdue()` cron). **Read this.**
-- `status` — **deprecated**. `'KEY_OVERDUE'` when `is_overdue`, else `'KEY_ISSUED'`. A display-only value kept for one release so older clients keep rendering; it will be removed.
+- `status` — always `'KEY_ISSUED'`, the row's real status. Until 2026-10-19 an overdue row carried a synthetic, deprecated `status: 'KEY_OVERDUE'`, kept for one release; it is removed, and every in-app consumer reads `is_overdue`.
 - `requester` — the registered requester, or a guest holder folded in with `photo_url: null`.
 
 The verifier dashboard's first paint (`getOutstandingKeysSeed` in `src/lib/queries/verifier-dashboard.ts`) shapes its rows through the same function.
