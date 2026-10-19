@@ -10,7 +10,7 @@ Authoritative schema lives in `supabase/migrations/`. This document is a human-r
 
 - `id` UUID PK (= auth.users.id)
 - `role` enum `user_role`: 'CSO' | 'DEAN' | 'VERIFIER' | 'REQUESTER' — internal identifiers elsewhere (routes, RPCs, audit events, e.g. `hod_decisions`, `HOD_APPROVED`) retain the old `hod` name for historical continuity, but the enum value itself is `DEAN`
-- `full_name` text
+- `full_name` text, `CHECK (char_length(btrim(full_name)) between 1 and 120)` (`profiles_full_name_length`, since `20261019100100_full_name_length.sql`) — the same limit as `FULL_NAME_MAX` in the app. Before it, `provision_user`, `update_user_profile`, `reinstate_user` and `record_invite_resent` stored any length. A violating write is `23514`, which an RPC caller sees as `INTERNAL` (`500` with a ref); the routes validate first, so only a caller bypassing them reaches it
 - `institutional_email` text unique
 - `unit_id` UUID FK units (Deans and Requesters only)
 - `photo_url` text nullable
@@ -37,7 +37,7 @@ The grouping unit for keys (formerly named `departments`; the table was renamed 
 An external (non-registered) person who may collect a key for a single weekend. Guests are never a `profiles`/`auth.users` row (that would require an auth user and break the `invited_by` chain-of-trust); they are modelled as their own entity. RLS: CSO reads all. Dean reads guests whose request is routed to their unit (`requested_unit_id` or key's `unit_id`). VERIFIER reads guests where a `CODE_ISSUED` or `KEY_ISSUED` request exists (operational need only).
 
 - `id` UUID PK
-- `full_name` text
+- `full_name` text, `CHECK (char_length(btrim(full_name)) between 1 and 120)` (`guest_requesters_full_name_length`, since `20261019100100_full_name_length.sql`; `create_guest_weekend_request` stored any length before)
 - `email` text
 - `phone` text nullable
 - `id_document_type` text (ID document the guest declares at submit; the verifier checks the physical ID at the desk)
