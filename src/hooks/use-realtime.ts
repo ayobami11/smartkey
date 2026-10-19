@@ -11,33 +11,191 @@ import { setConnectionStatus } from '@/hooks/use-connection-status';
 const BACKOFF_DELAYS = [1_000, 2_000, 4_000, 8_000, 16_000, 30_000];
 const MAX_BACKOFF_MS = 30_000;
 
-type RealtimePayload<
+export type RealtimePayload<
   T extends Record<string, unknown> = Record<string, unknown>,
 > = RealtimePostgresChangesPayload<T>;
+
+export type RealtimeEvent = 'INSERT' | 'UPDATE' | 'DELETE';
+
+/** Single-column equality filter. Part of the channel key. */
+export type RealtimeFilter = { column: string; value: string };
 
 export type UseRealtimeOptions<
   T extends Record<string, unknown> = Record<string, unknown>,
 > = {
   table: string;
-  filter?: { column: string; value: string };
+  filter?: RealtimeFilter;
   onInsert?: (payload: RealtimePayload<T>) => void;
   onUpdate?: (payload: RealtimePayload<T>) => void;
   onDelete?: (payload: RealtimePayload<T>) => void;
 };
 
 // --- Module-level Registry for Multiplexing ---
-type Subscriber = {
+export type RealtimeSubscriber = {
   onInsert?: (payload: RealtimePayload) => void;
   onUpdate?: (payload: RealtimePayload) => void;
   onDelete?: (payload: RealtimePayload) => void;
 };
 
 type RegistryEntry = {
-  subscribers: Set<Subscriber>;
+  subscribers: Set<RealtimeSubscriber>;
   cleanup: () => void;
 };
 
 const channelRegistry = new Map<string, RegistryEntry>();
+
+/**
+ * The registry key, and the Supabase channel name, for a table and optional
+ * filter. Two subscriptions with the same key share one websocket channel.
+ */
+export const realtimeChannelKey = (
+  table: string,
+  filter?: RealtimeFilter
+): string =>
+  `realtime:${table}${filter ? `:${filter.column}=eq.${filter.value}` : ''}`;
+
+/**
+ * Attach a subscriber to the shared channel for `table` (+ `filter`), opening
+ * the channel if this is the first subscriber for that key. Returns the
+ * detach function; the channel is removed when its last subscriber detaches.
+ *
+ * This is the only place a Supabase channel is created. `useRealtime` and
+ * `useLiveQuery` both go through it.
+ */
+export const subscribeRealtime = (
+  table: string,
+  filter: RealtimeFilter | undefined,
+  subscriber: RealtimeSubscriber
+): (() => void) => {
+  const channelName = realtimeChannelKey(table, filter);
+
+  let registry = channelRegistry.get(channelName);
+
+  if (!registry) {
+    const supabase = createBrowserClient();
+    let retryCount = 0;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let destroyed = false;
+    let channelRef: ReturnType<typeof supabase.channel> | null = null;
+
+    const filterStr = filter
+      ? `${filter.column}=eq.${filter.value}`
+      : undefined;
+
+    const subscribe = () => {
+      if (destroyed) return;
+
+      const channel = supabase.channel(channelName);
+      channelRef = channel;
+
+      channel
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table,
+            ...(filterStr ? { filter: filterStr } : {}),
+          },
+          (payload) => {
+            const currentRegistry = channelRegistry.get(channelName);
+            if (!currentRegistry) return;
+
+            currentRegistry.subscribers.forEach((sub) => {
+              if (payload.eventType === 'INSERT') sub.onInsert?.(payload);
+              else if (payload.eventType === 'UPDATE') sub.onUpdate?.(payload);
+              else if (payload.eventType === 'DELETE') sub.onDelete?.(payload);
+            });
+          }
+        )
+        .subscribe((status, err) => {
+          if (destroyed) return;
+
+          if (status === 'SUBSCRIBED') {
+            logger.info('Realtime subscribed', { table, channelName });
+            setConnectionStatus('connected');
+            retryCount = 0;
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            retryCount += 1;
+            const delay =
+              BACKOFF_DELAYS[Math.min(retryCount, BACKOFF_DELAYS.length - 1)];
+            logger.warn('Realtime channel error; scheduling reconnect', {
+              table,
+              channelName,
+              status,
+              err: err?.message,
+              retryCount,
+              delayMs: delay,
+            });
+
+            if (delay >= MAX_BACKOFF_MS) {
+              setConnectionStatus('offline');
+            } else {
+              setConnectionStatus('reconnecting');
+            }
+
+            supabase.removeChannel(channel).catch(() => {});
+
+            if (retryCount < BACKOFF_DELAYS.length) {
+              timeoutId = setTimeout(subscribe, delay);
+            } else {
+              logger.warn('Realtime max backoff reached; staying offline', {
+                table,
+              });
+              setConnectionStatus('offline');
+            }
+          } else if (status === 'CLOSED') {
+            logger.info('Realtime channel closed', { table, channelName });
+          }
+        });
+    };
+
+    // Register the entry immediately (synchronously) so that other callers
+    // subscribing to the same table while we are awaiting auth do not create
+    // a second channel.
+    registry = {
+      subscribers: new Set(),
+      cleanup: () => {
+        destroyed = true;
+        if (timeoutId !== null) clearTimeout(timeoutId);
+        if (channelRef) {
+          supabase.removeChannel(channelRef).catch(() => {});
+        }
+      },
+    };
+    channelRegistry.set(channelName, registry);
+
+    // A channel that joins the WebSocket before setAuth fires connects as
+    // `anon`. Even after setAuth() is called on an already-joined channel
+    // the Realtime server does NOT retroactively start delivering
+    // postgres_changes events — the RLS check is locked at join time.
+    // So we MUST call setAuth before we create the channel. getSession()
+    // reads from the in-memory session cache (populated from cookies during
+    // client construction) and resolves in one microtask tick, so this adds
+    // no perceptible latency.
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session?.access_token) {
+        supabase.realtime.setAuth(data.session.access_token);
+      }
+      subscribe();
+    });
+  }
+
+  registry.subscribers.add(subscriber);
+
+  return () => {
+    const currentRegistry = channelRegistry.get(channelName);
+    if (currentRegistry) {
+      currentRegistry.subscribers.delete(subscriber);
+
+      // Ref-counting: Destroy channel if no one is listening anymore
+      if (currentRegistry.subscribers.size === 0) {
+        currentRegistry.cleanup();
+        channelRegistry.delete(channelName);
+      }
+    }
+  };
+};
 
 export const useRealtime = <
   T extends Record<string, unknown> = Record<string, unknown>,
@@ -61,150 +219,17 @@ export const useRealtime = <
   useEffect(() => {
     const { table, filter } = optionsRef.current;
 
-    const channelName = `realtime:${table}${
-      filter ? `:${filter.column}=eq.${filter.value}` : ''
-    }`;
-
     // The registry is non-generic (it holds subscribers from callers with
     // different T), so bridge its base payload to this instance's generic
     // callbacks. The cast is sound: T is the row shape for `table`, which is
     // exactly what the payload carries.
-    const subscriber: Subscriber = {
+    return subscribeRealtime(table, filter, {
       onInsert: (payload) =>
         optionsRef.current.onInsert?.(payload as RealtimePayload<T>),
       onUpdate: (payload) =>
         optionsRef.current.onUpdate?.(payload as RealtimePayload<T>),
       onDelete: (payload) =>
         optionsRef.current.onDelete?.(payload as RealtimePayload<T>),
-    };
-
-    let registry = channelRegistry.get(channelName);
-
-    if (!registry) {
-      const supabase = createBrowserClient();
-      let retryCount = 0;
-      let timeoutId: ReturnType<typeof setTimeout> | null = null;
-      let destroyed = false;
-      let channelRef: ReturnType<typeof supabase.channel> | null = null;
-
-      const filterStr = filter
-        ? `${filter.column}=eq.${filter.value}`
-        : undefined;
-
-      const subscribe = () => {
-        if (destroyed) return;
-
-        const channel = supabase.channel(channelName);
-        channelRef = channel;
-
-        channel
-          .on(
-            'postgres_changes',
-            {
-              event: '*',
-              schema: 'public',
-              table,
-              ...(filterStr ? { filter: filterStr } : {}),
-            },
-            (payload) => {
-              const currentRegistry = channelRegistry.get(channelName);
-              if (!currentRegistry) return;
-
-              currentRegistry.subscribers.forEach((sub) => {
-                if (payload.eventType === 'INSERT') sub.onInsert?.(payload);
-                else if (payload.eventType === 'UPDATE')
-                  sub.onUpdate?.(payload);
-                else if (payload.eventType === 'DELETE')
-                  sub.onDelete?.(payload);
-              });
-            }
-          )
-          .subscribe((status, err) => {
-            if (destroyed) return;
-
-            if (status === 'SUBSCRIBED') {
-              logger.info('Realtime subscribed', { table, channelName });
-              setConnectionStatus('connected');
-              retryCount = 0;
-            } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-              retryCount += 1;
-              const delay =
-                BACKOFF_DELAYS[Math.min(retryCount, BACKOFF_DELAYS.length - 1)];
-              logger.warn('Realtime channel error; scheduling reconnect', {
-                table,
-                channelName,
-                status,
-                err: err?.message,
-                retryCount,
-                delayMs: delay,
-              });
-
-              if (delay >= MAX_BACKOFF_MS) {
-                setConnectionStatus('offline');
-              } else {
-                setConnectionStatus('reconnecting');
-              }
-
-              supabase.removeChannel(channel).catch(() => {});
-
-              if (retryCount < BACKOFF_DELAYS.length) {
-                timeoutId = setTimeout(subscribe, delay);
-              } else {
-                logger.warn('Realtime max backoff reached; staying offline', {
-                  table,
-                });
-                setConnectionStatus('offline');
-              }
-            } else if (status === 'CLOSED') {
-              logger.info('Realtime channel closed', { table, channelName });
-            }
-          });
-      };
-
-      // Register the entry immediately (synchronously) so that other hook
-      // instances that call useRealtime for the same table while we are
-      // awaiting auth do not create a second channel.
-      registry = {
-        subscribers: new Set(),
-        cleanup: () => {
-          destroyed = true;
-          if (timeoutId !== null) clearTimeout(timeoutId);
-          if (channelRef) {
-            supabase.removeChannel(channelRef).catch(() => {});
-          }
-        },
-      };
-      channelRegistry.set(channelName, registry);
-
-      // A channel that joins the WebSocket before setAuth fires connects as
-      // `anon`. Even after setAuth() is called on an already-joined channel
-      // the Realtime server does NOT retroactively start delivering
-      // postgres_changes events — the RLS check is locked at join time.
-      // So we MUST call setAuth before we create the channel. getSession()
-      // reads from the in-memory session cache (populated from cookies during
-      // client construction) and resolves in one microtask tick, so this adds
-      // no perceptible latency.
-      supabase.auth.getSession().then(({ data }) => {
-        if (data.session?.access_token) {
-          supabase.realtime.setAuth(data.session.access_token);
-        }
-        subscribe();
-      });
-    }
-
-    registry.subscribers.add(subscriber);
-
-    return () => {
-      const currentRegistry = channelRegistry.get(channelName);
-      if (currentRegistry) {
-        currentRegistry.subscribers.delete(subscriber);
-
-        // Ref-counting: Destroy channel if no one is listening anymore
-        if (currentRegistry.subscribers.size === 0) {
-          currentRegistry.cleanup();
-          channelRegistry.delete(channelName);
-        }
-      }
-    };
+    });
   }, [tableDep, filterColumnDep, filterValueDep]);
 };
