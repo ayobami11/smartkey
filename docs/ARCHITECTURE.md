@@ -67,7 +67,7 @@ src/
 │   ├── email/           # html.ts (escaping `markup` template), transport.ts (Gmail SMTP), templates/
 │   ├── notifications/   # request-lifecycle emails: notify(event) → who, preferences, send
 │   ├── queries/         # TanStack Query client + role-specific query builders
-│   ├── requests/        # shared request-decision logic (e.g. decide-weekend.ts)
+│   ├── requests/        # shared request logic: decide-weekend.ts, lifecycle.ts (registered + guest steps)
 │   ├── validation/      # shared zod primitives and schemas
 │   └── logger.ts        # structured logging
 ├── types/               # shared types and zod schemas
